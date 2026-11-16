@@ -2,13 +2,13 @@ package flood_server
 
 import "core:fmt"
 import "core:log"
-import "core:math"
 import "core:strings"
 
 import "common:base"
 import "common:game"
 import "games:flood"
 import "server:core"
+import "server:play"
 
 // Flood's server part (the game: games/flood): it runs the rounds in the home world. A
 // round is built (arena.odin), counted down, played while the water rises under its
@@ -31,21 +31,20 @@ GAME :: core.Game {
 
 // Flood: the rounds.
 Flood :: struct {
-	phase:      flood.Phase,
-	rule:       flood.Rule,
-	forced:     Maybe(flood.Rule), // the next round's (/flood rule)
-	result:     flood.Result,
-	round:      u16,
-	seed:       u32, // the arena's
-	rng:        base.Rng, // the rounds' seeds and rules (from the universe's seed)
-	phase_tick: u64, // the server tick the phase began
-	built:      bool, // the round's arena is there
-	level:      i32, // the water's top layer (0: the floor's, none)
-	goal:       [2]i32, // the goal platform's corner (x, z)
-	wet_at:     [flood.HEIGHT]f32, // Rot: seconds into play each layer got wet (-1: dry)
-	rot_last:   f32, // Rot: seconds into play of the last pass
-	rotted:     int, // Rot: blocks crumbled this round
-	made_it:    int,
+	phase:    play.Phase(flood.Phase),
+	rule:     flood.Rule,
+	forced:   Maybe(flood.Rule), // the next round's (/flood rule)
+	result:   flood.Result,
+	round:    u16,
+	seed:     u32, // the arena's
+	rng:      base.Rng, // the rounds' seeds and rules (from the universe's seed)
+	built:    bool, // the round's arena is there
+	level:    i32, // the water's top layer (0: the floor's, none)
+	goal:     [2]i32, // the goal platform's corner (x, z)
+	wet_at:   [flood.HEIGHT]f32, // Rot: seconds into play each layer got wet (-1: dry)
+	rot_last: f32, // Rot: seconds into play of the last pass
+	rotted:   int, // Rot: blocks crumbled this round
+	made_it:  int,
 }
 
 // Runner: a player's part in the rounds.
@@ -69,10 +68,7 @@ NODE_ROUND :: "flood.round"
 // configure: a flat world with nothing wandering in it, arriving at the arena's spawn,
 // watching until the next round places a player.
 configure :: proc(config: ^core.Config) {
-	config.generator = .Flat
-	config.no_natural_spawns = true
-	config.spawn = flood.SPAWN
-	if config.mode == "" {config.mode = flood.OUT_MODE}
+	play.configure_flat(config, flood.SPAWN, flood.OUT_MODE)
 }
 
 // start: the home world stands at noon with nothing changing by itself and nothing
@@ -80,12 +76,8 @@ configure :: proc(config: ^core.Config) {
 start :: proc(s: ^core.Server) -> bool {
 	f := state(s)
 	f.rng = base.rng_make(u64(s.config.seed) ~ 0xf100d)
-	w := s.home
-	core.game_rule(s, w, "daylight_cycle", "false")
-	core.game_rule(s, w, "drops", "false")
-	core.game_rule(s, w, "random_tick_speed", "0")
-	w.clock = 0.5
-	core.world_keep(w, ARENA)
+	play.world_still(s, s.home)
+	core.world_keep(s.home, play.arena_area(ARENA))
 	log.infof("flood started seed=%d", s.config.seed)
 	return true
 }
@@ -100,14 +92,9 @@ joined :: proc(s: ^core.Server, c: ^core.Client) {
 }
 
 // seconds: whole and part seconds into the phase.
-seconds :: proc(s: ^core.Server) -> f32 {
-	return f32(s.tick - state(s).phase_tick) / f32(game.TICK_RATE)
-}
+seconds :: proc(s: ^core.Server) -> f32 {return f32(play.phase_seconds(s, &state(s).phase))}
 
-set_phase :: proc(s: ^core.Server, phase: flood.Phase) {
-	f := state(s)
-	f.phase, f.phase_tick = phase, s.tick
-}
+set_phase :: proc(s: ^core.Server, phase: flood.Phase) {play.phase_set(s, &state(s).phase, phase)}
 
 // new_round: a new seed and rule (the forced one, if any); the arena is built in the
 // countdown. Under Heavy the world's explosions are larger and throw harder.
@@ -122,16 +109,11 @@ new_round :: proc(s: ^core.Server) {
 	}
 	heavy := f.rule == .Heavy
 	size, throw := flood.HEAVY_SIZE if heavy else 1, flood.HEAVY_THROW if heavy else 1
-	core.game_rule(s, s.home, "explosion_size", fmt.tprint(size))
-	core.game_rule(s, s.home, "explosion_throw", fmt.tprint(throw))
+	play.world_rule(s, s.home, "explosion_size", size)
+	play.world_rule(s, s.home, "explosion_throw", throw)
 	f.result, f.made_it, f.built = .None, 0, false
 	set_phase(s, .Countdown)
 	log.infof("flood round=%d seed=%d rule=%s", f.round, f.seed, flood.RULE_NAMES[f.rule])
-}
-
-// here: c is playing in the home world, where the rounds are.
-here :: proc(s: ^core.Server, c: ^core.Client) -> bool {
-	return c.state == .Playing && c.world == s.home
 }
 
 // LAUNCHER: what a runner holds when a round starts.
@@ -147,14 +129,7 @@ enlist :: proc(s: ^core.Server, c: ^core.Client, seat: int) {
 	}
 	core.game_mode(s, c, flood.RUNNER_MODE)
 	core.kit_give(s, c)
-	if launcher, known := game.registry_item(s.registry, LAUNCHER); known {
-		for st, slot in c.inventory.slots[:game.HOTBAR_SLOTS] {
-			if st.item == launcher {
-				core.hotbar_select(s, c, slot)
-				break
-			}
-		}
-	}
+	play.hold(s, c, LAUNCHER)
 	jitter := [3]f64{f64(seat % 3) - 1, 0, f64(seat / 3 % 3) - 1}
 	core.teleport(s, c, flood.SPAWN + jitter, {0, 0})
 }
@@ -164,8 +139,7 @@ enlist :: proc(s: ^core.Server, c: ^core.Client, seat: int) {
 spectate :: proc(s: ^core.Server, c: ^core.Client) {
 	r := runner(s, c)
 	r.round, r.out, r.under = state(s).round, true, 0
-	core.game_mode(s, c, flood.OUT_MODE)
-	core.teleport(s, c, flood.SPECTATE, {0, -1.2}, flying = true)
+	play.watch(s, c, flood.OUT_MODE, flood.SPECTATE, {flood.SIZE / 2, 0, flood.SIZE / 2 + 8})
 }
 
 // on_goal: c stands on the goal platform.
@@ -183,14 +157,13 @@ on_goal :: proc(f: ^Flood, c: ^core.Client) -> bool {
 
 // outside: c is outside the arena's walls (or above them).
 outside :: proc(c: ^core.Client) -> bool {
-	p := c.player.position
-	return p.x < 0 || p.z < 0 || p.x >= flood.SIZE || p.z >= flood.SIZE || p.y > flood.WALL_TOP
+	return !play.arena_holds(ARENA, c.player.position, below = f64(ARENA.depth))
 }
 
 // in_round: c plays the round now running.
 in_round :: proc(s: ^core.Server, c: ^core.Client) -> bool {
 	r := runner(s, c)
-	return here(s, c) && r.round == state(s).round && r.playing
+	return play.here(s, c) && r.round == state(s).round && r.playing
 }
 
 end_round :: proc(s: ^core.Server, result: flood.Result, made_it: int) {
@@ -235,17 +208,16 @@ end_round :: proc(s: ^core.Server, result: flood.Result, made_it: int) {
 // tick: once a tick, after the players moved and the entities ran.
 tick :: proc(s: ^core.Server) {
 	f := state(s)
-	present := 0
-	for &c in s.clients {if here(s, &c) {present += 1}}
+	present := play.present(s)
 	t := seconds(s)
-	switch f.phase {
+	switch f.phase.now {
 	case .Waiting:
 		if present > 0 {new_round(s)}
 	case .Countdown:
 		if !f.built {
 			if !build(s, force = t >= flood.BUILD_WAIT) {break}
 			set_phase(s, .Countdown) // (counted from the build)
-			for &c, seat in s.clients {if here(s, &c) {enlist(s, &c, seat)}}
+			for &c, seat in s.clients {if play.here(s, &c) {enlist(s, &c, seat)}}
 			core.announce(
 				s,
 				fmt.tprintf(
@@ -256,7 +228,7 @@ tick :: proc(s: ^core.Server) {
 			break
 		}
 		for &c, seat in s.clients {
-			if here(s, &c) && runner(s, &c).round != f.round {enlist(s, &c, seat)}
+			if play.here(s, &c) && runner(s, &c).round != f.round {enlist(s, &c, seat)}
 		}
 		if present == 0 {
 			set_phase(s, .Waiting)
@@ -264,7 +236,7 @@ tick :: proc(s: ^core.Server) {
 			set_phase(s, .Playing)
 		}
 	case .Playing:
-		play(s, t)
+		playing(s, t)
 	case .Reveal:
 		if t >= flood.REVEAL {
 			if present > 0 {new_round(s)} else {set_phase(s, .Waiting)}
@@ -273,12 +245,12 @@ tick :: proc(s: ^core.Server) {
 	round_put(s)
 }
 
-// play: a tick of play, t seconds in: the water, the rule, who is out, and whether the
+// playing: a tick of play, t seconds in: the water, the rule, who is out, and whether the
 // round is over.
-play :: proc(s: ^core.Server, t: f32) {
+playing :: proc(s: ^core.Server, t: f32) {
 	f := state(s)
 	for &c in s.clients {
-		if r := runner(s, &c); here(s, &c) && r.round != f.round {
+		if r := runner(s, &c); play.here(s, &c) && r.round != f.round {
 			r.playing = false // (arrived during it: watches, and is not counted)
 			spectate(s, &c)
 		}
@@ -337,7 +309,7 @@ round_put :: proc(s: ^core.Server) {
 	f := state(s)
 	t := seconds(s)
 	round := flood.Round {
-		phase   = f.phase,
+		phase   = f.phase.now,
 		rule    = f.rule,
 		result  = f.result,
 		round   = f.round,
@@ -348,12 +320,12 @@ round_put :: proc(s: ^core.Server) {
 		goal_z  = i16(f.goal.y),
 		made_it = u8(f.made_it),
 	}
-	#partial switch f.phase {
+	#partial switch f.phase.now {
 	case .Countdown:
-		round.countdown =
-			u8(math.ceil(max(flood.COUNTDOWN - t, 0))) if f.built else u8(flood.COUNTDOWN)
+		left := play.phase_left(s, &f.phase, flood.COUNTDOWN)
+		round.countdown = u8(left) if f.built else u8(flood.COUNTDOWN)
 	case .Reveal:
-		round.countdown = u8(math.ceil(max(flood.REVEAL - t, 0)))
+		round.countdown = u8(play.phase_left(s, &f.phase, flood.REVEAL))
 	}
 	for &c in s.clients {
 		if !in_round(s, &c) {continue}
@@ -385,7 +357,7 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 			fmt.tprintf(
 				"Flood round %d, %v, rule %s, seed %d, water at y=%d (rules: baseline tide rot heavy)",
 				f.round,
-				f.phase,
+				f.phase.now,
 				flood.RULE_NAMES[f.rule],
 				f.seed,
 				f.level,

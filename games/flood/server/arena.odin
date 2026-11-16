@@ -5,52 +5,34 @@ import "core:log"
 import "common:game"
 import "games:flood"
 import "server:core"
+import "server:play"
 
 // The arena: built for each round from its seed, then flooded a layer at a time. Every
 // block goes through the edit journal under a cause of the game's (core.game_act).
 
-// ARENA: what the game keeps loaded and builds in: the walls around the inside and the
-// stone under its floor.
-ARENA :: core.Box{{-1, -3, -1}, {flood.SIZE, flood.WALL_TOP, flood.SIZE}}
+// ARENA: the walled ground the rounds are built in: SIZE square, HEIGHT from the floor,
+// bedrock walls to WALL_TOP and stone under the floor (blasting through it finds stone,
+// not the open flat world).
+ARENA :: play.Arena {
+	size     = {flood.SIZE, flood.HEIGHT, flood.SIZE},
+	wall_top = flood.WALL_TOP,
+	depth    = 3,
+}
 
-// INSIDE: the arena's inside, floor to ceiling.
-INSIDE :: core.Box{{0, 0, 0}, {flood.SIZE - 1, flood.HEIGHT - 1, flood.SIZE - 1}}
-
-// build: the walls, the stone under the floor (blasting through it finds stone, not the
-// open flat world) and the round's arena, with no water; false while its chunks are not
+// build: the round's arena, walls and all, with no water; false while its chunks are not
 // all loaded, unless force (the wait is over: what is there is built, and said).
 build :: proc(s: ^core.Server, force: bool) -> bool {
-	w := s.home
 	f := state(s)
-	ready := core.world_ready(w, ARENA)
-	if !ready && !force {return false}
-	act := core.game_act(s, w, .Structure)
-	lo, hi := ARENA.lo, ARENA.hi
-	walls := [4]core.Box {
-		{{lo.x, lo.y, lo.z}, {lo.x, hi.y, hi.z}},
-		{{hi.x, lo.y, lo.z}, {hi.x, hi.y, hi.z}},
-		{{0, lo.y, lo.z}, {flood.SIZE - 1, hi.y, lo.z}},
-		{{0, lo.y, hi.z}, {flood.SIZE - 1, hi.y, hi.z}},
-	}
-	for wall in walls {
-		core.bulk_edit(w, {shape = wall, op = .Set, block = .Bedrock, partial = true}, act)
-	}
-	under := core.Box{{0, lo.y, 0}, {flood.SIZE - 1, -1, flood.SIZE - 1}}
-	core.bulk_edit(w, {shape = under, op = .Set, block = .Stone, partial = true}, act)
 	t := arena_template(f.seed, &f.goal)
-	changed, _, _ := core.bulk_edit(
-		w,
-		{shape = INSIDE, op = .Paste, template = &t, partial = true},
-		act,
-	)
+	built, loaded := play.arena_build(s, s.home, ARENA, &t, force)
+	if !built {return false}
 	log.infof(
-		"flood arena built round=%d seed=%d rule=%s goal=%v changed=%d all_loaded=%v",
+		"flood arena built round=%d seed=%d rule=%s goal=%v all_loaded=%v",
 		f.round,
 		f.seed,
 		flood.RULE_NAMES[f.rule],
 		f.goal,
-		changed,
-		ready,
+		loaded,
 	)
 	f.level, f.rot_last, f.rotted = 0, 0, 0
 	for &at in f.wet_at {at = -1}
@@ -84,19 +66,8 @@ arena_int :: proc(r: ^Arena_Rng, lo, hi: i32) -> i32 {
 // double jump sometimes does, and the hook and the rockets always do. The spawn stays
 // clear, and the goal is a lamp platform in a corner with nothing over it.
 arena_template :: proc(seed: u32, goal: ^[2]i32) -> game.Template {
-	t := game.Template {
-		size  = {flood.SIZE, flood.HEIGHT, flood.SIZE},
-		cells = make([]u16, flood.SIZE * flood.HEIGHT * flood.SIZE, context.temp_allocator),
-	}
-	box :: proc(t: ^game.Template, lo, hi: [3]i32, b: game.Block) {
-		for y in max(lo.y, 0) ..= min(hi.y, flood.HEIGHT - 1) {
-			for z in max(lo.z, 0) ..= min(hi.z, flood.SIZE - 1) {
-				for x in max(lo.x, 0) ..= min(hi.x, flood.SIZE - 1) {
-					t.cells[game.template_index(t, {x, y, z})] = u16(b)
-				}
-			}
-		}
-	}
+	t := game.template_make({flood.SIZE, flood.HEIGHT, flood.SIZE}, context.temp_allocator)
+	box :: game.template_fill
 	in_spawn :: proc(x, z: i32) -> bool {return x >= 12 && x <= 20 && z >= 12 && z <= 20}
 	r := Arena_Rng{u64(seed) * 0x2545f4914f6cdd1d + 1}
 	box(&t, {0, 0, 0}, {flood.SIZE - 1, 0, flood.SIZE - 1}, .Stone)

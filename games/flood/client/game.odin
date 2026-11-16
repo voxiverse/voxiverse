@@ -60,60 +60,33 @@ status :: proc(f: flood.Round, you_y: int) -> string {
 	return ""
 }
 
-// banner: a line of big text across the screen, centred on y, with a shadow.
-banner :: proc(ctx: ^ui.Context, y: f32, text: string, size: f32, color: ui.Color) {
-	r := ui.Rect{ctx.screen.x, y - size, ctx.screen.w, size * 2}
-	ui.draw_text(ctx, {r.x + 3, r.y + 3, r.w, r.h}, text, size, ctx.theme.text_shadow, .Center)
-	ui.draw_text(ctx, r, text, size, color, .Center)
-}
-
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	f := view(s).round
 	if f.round == 0 {return}
 	t := &ctx.theme
-	screen := ctx.screen
-	top := ui.cut_top(&screen, t.row_height + t.padding)
-	ui.fill_rect(ctx, top, t.hud_fill)
-	ui.draw_text(ctx, top, status(f, int(s.camera.position.y)), t.font_size, t.text, .Center)
-
-	// The banners are laid out for a 720-high screen and shrink with a smaller one (the
-	// engine gives the HUD only the screen below F3 while it is open).
-	k := min(1, ctx.screen.h / 720)
-	mid := ctx.screen.y + ctx.screen.h / 2
-	big := t.title_size * 1.5 * k
-	size := t.title_size * k
+	rest := ctx.screen
+	engine.top_bar(ctx, &rest, status(f, int(s.camera.position.y)))
 	switch f.phase {
 	case .Waiting:
 	case .Countdown:
-		banner(ctx, mid - 140 * k, fmt.tprintf("ROUND %d", f.round), big, t.focus_ring)
-		banner(ctx, mid - 60 * k, fmt.tprintf("%d", f.countdown), big, t.text)
-		banner(
-			ctx,
-			mid + 40 * k,
-			"Reach the glowing platform. Something is different.",
-			size * 0.6,
-			t.text,
-		)
+		engine.banner(ctx, -140, fmt.tprintf("ROUND %d", f.round), 1.5, t.focus_ring)
+		engine.banner(ctx, -60, fmt.tprintf("%d", f.countdown), 1.5, t.text)
+		engine.banner(ctx, 40, "Reach the glowing platform. Something is different.", 0.6, t.text)
 	case .Playing:
 		switch {
 		case f.out:
-			banner(ctx, mid - 140 * k, "WATCHING: out of this round (fly)", size, t.log_error)
+			engine.banner(ctx, -140, "WATCHING: out of this round (fly)", 1, t.log_error)
 		case f.under > 0:
-			banner(
+			engine.banner(
 				ctx,
-				mid - 140 * k,
+				-140,
 				fmt.tprintf("DROWNING %.1f", f32(f.under) / 10),
-				size,
+				1,
 				t.log_error,
 			)
 		case f.seconds < u16(flood.GRACE):
-			banner(
-				ctx,
-				mid - 140 * k,
-				fmt.tprintf("Water in %d", int(flood.GRACE) - int(f.seconds)),
-				size,
-				t.focus_ring,
-			)
+			left := int(flood.GRACE) - int(f.seconds)
+			engine.banner(ctx, -140, fmt.tprintf("Water in %d", left), 1, t.focus_ring)
 		}
 	case .Reveal:
 		head, color := "ROUND OVER", t.text
@@ -126,24 +99,12 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			head, color = "TIME UP", t.log_warn
 		case .None:
 		}
-		banner(ctx, mid - 180 * k, head, big, color)
-		banner(
-			ctx,
-			mid - 90 * k,
-			fmt.tprintf("%d of %d made it", f.made_it, f.players),
-			size * 0.8,
-			t.text,
-		)
-		banner(ctx, mid - 10 * k, "The rule was", size * 0.6, t.text_muted)
+		engine.banner(ctx, -180, head, 1.5, color)
+		engine.banner(ctx, -90, fmt.tprintf("%d of %d made it", f.made_it, f.players), 0.8, t.text)
+		engine.banner(ctx, -10, "The rule was", 0.6, t.text_muted)
 		title := strings.to_upper(flood.RULE_TITLES[f.rule], context.temp_allocator)
-		banner(ctx, mid + 60 * k, title, size, t.log_warn)
-		banner(
-			ctx,
-			mid + 140 * k,
-			fmt.tprintf("next round in %d", f.countdown),
-			size * 0.6,
-			t.text_muted,
-		)
+		engine.banner(ctx, 60, title, 1, t.log_warn)
+		engine.banner(ctx, 140, fmt.tprintf("next round in %d", f.countdown), 0.6, t.text_muted)
 	}
 }
 

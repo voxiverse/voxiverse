@@ -6,75 +6,35 @@ import "core:testing"
 import "common:game"
 import "games:flood"
 import "server:core"
+import "server:playtest"
 
 // Flood on a stepped server with the local player (the harness's mirror client): a round
 // is built, counted down and played; the water rises by its rule; a head under water puts
 // the player out; the goal wins; the commands start rounds; and the mirror is told.
 
-// Rig: the session and the shortcuts every test takes.
-Rig :: struct {
-	sess: core.Session,
-}
-
 // rig_start: Flood on a stepped server, the player welcomed and the first round placed.
-rig_start :: proc(t: ^testing.T, rig: ^Rig) -> bool {
-	config := core.harness_world()
-	config.game = GAME
-	// (Not the engine's tests' kit, a hotbar of blocks the runner's kit could not join: a
-	// Flood world gives none of its own, and the launcher is the runner kit's first.)
-	config.kit = "rocket_launcher 1"
-	if !testing.expect(t, core.session_start(&rig.sess, {}, false, with = config)) {return false}
-	welcomed :: proc(data: rawptr) -> bool {return (^core.Session)(data).mirror.welcomed}
-	_, ok := core.harness_step_until(&rig.sess.h, welcomed, &rig.sess, 600)
-	return testing.expect(t, ok, "the player never joined")
+// (Not the engine's tests' kit, a hotbar of blocks the runner's kit could not join: a
+// Flood world gives none of its own, and the launcher is the runner kit's first.)
+rig_start :: proc(t: ^testing.T, rig: ^playtest.Rig) -> bool {
+	return playtest.start(t, rig, GAME, {kit = "rocket_launcher 1"})
 }
-
-srv :: proc(rig: ^Rig) -> ^core.Server {return &rig.sess.h.srv}
-player :: proc(rig: ^Rig) -> ^core.Client {return &rig.sess.h.srv.clients[0]}
 
 // until_phase steps until the round is in phase (false: not within seconds).
-until_phase :: proc(rig: ^Rig, phase: flood.Phase, seconds := 20) -> bool {
-	Wait :: struct {
-		rig:   ^Rig,
-		phase: flood.Phase,
-	}
-	wait := Wait{rig, phase}
-	_, ok := core.harness_step_until(&rig.sess.h, proc(data: rawptr) -> bool {
-			w := (^Wait)(data)
-			return state(srv(w.rig)).phase == w.phase
-		}, &wait, seconds * game.TICK_RATE)
-	return ok
+until_phase :: proc(rig: ^playtest.Rig, phase: flood.Phase, seconds := 20.0) -> bool {
+	return playtest.until_phase(rig, &state(srv(rig)).phase, phase, seconds)
 }
 
-// until_seconds steps until the phase has run seconds (at most that long: a phase that
-// ends first starts the count again).
-until_seconds :: proc(rig: ^Rig, seconds: f32) {
-	for _ in 0 ..< int(seconds * game.TICK_RATE) + 1 {
-		if core_seconds(rig) >= seconds {return}
-		core.harness_step(&rig.sess.h)
-	}
+until_seconds :: proc(rig: ^playtest.Rig, seconds: f32) {
+	playtest.until_seconds(rig, &state(srv(rig)).phase, f64(seconds))
 }
 
-core_seconds :: proc(rig: ^Rig) -> f32 {return seconds(srv(rig))}
+core_seconds :: proc(rig: ^playtest.Rig) -> f32 {return seconds(srv(rig))}
 
-// say: the player's command, and the ticks for it to be done.
-say :: proc(rig: ^Rig, text: string) {
-	core.command(&rig.sess.mirror, text)
-	core.harness_step(&rig.sess.h, 2)
-}
-
-// told: the server told the player text, at the start of a Notice.
-told :: proc(rig: ^Rig, text: string) -> bool {
-	for n in rig.sess.mirror.notices {
-		if strings.has_prefix(n, text) {return true}
-	}
-	return false
-}
-
-mode_of :: proc(rig: ^Rig) -> string {
-	s := srv(rig)
-	return s.registry.game_modes[player(rig).mode].id
-}
+srv :: playtest.srv
+player :: playtest.host
+say :: playtest.say
+told :: playtest.told
+mode_of :: proc(rig: ^playtest.Rig) -> string {return playtest.mode_of(rig, player(rig))}
 
 // A round runs through its phases: built and counted down, the player placed as a runner
 // with the kit; played while the water rises (baseline: a layer every 2.4 s after the
@@ -82,16 +42,16 @@ mode_of :: proc(rig: ^Rig) -> string {
 // left the round is lost and revealed, and the next begins. The mirror is told each step.
 @(test)
 test_flood_round :: proc(t: ^testing.T) {
-	rig := new(Rig)
+	rig := new(playtest.Rig)
 	defer free(rig)
 	if !rig_start(t, rig) {return}
-	defer core.session_stop(&rig.sess)
+	defer playtest.stop(rig)
 	s := srv(rig)
 	f := state(s)
 	c := player(rig)
 	say(rig, "flood rule baseline")
 	testing.expect(t, told(rig, "Flood: new round under baseline"))
-	testing.expect_value(t, f.phase, flood.Phase.Countdown)
+	testing.expect_value(t, f.phase.now, flood.Phase.Countdown)
 	testing.expect_value(t, f.rule, flood.Rule.Baseline)
 	round := f.round
 	if !testing.expect(t, until_phase(rig, .Playing), "the round never started") {return}
@@ -107,8 +67,8 @@ test_flood_round :: proc(t: ^testing.T) {
 	testing.expect_value(t, b, game.Block.Lamp)
 
 	// The mirror is told the round.
-	core.harness_step(&rig.sess.h, 2)
-	r := core.mirror_game_record(&rig.sess.mirror, flood.Round)
+	playtest.step(rig, 2)
+	r := playtest.host_record(rig, flood.Round)
 	if !testing.expect(t, r != nil, "the mirror was not told the round") {return}
 	testing.expect_value(t, r.phase, flood.Phase.Playing)
 	testing.expect_value(t, r.round, round)
@@ -134,13 +94,13 @@ test_flood_round :: proc(t: ^testing.T) {
 	testing.expect(t, c.player.flying, "an out player does not fly")
 	testing.expect_value(t, f.result, flood.Result.Lost)
 	testing.expect(t, f.level >= 2 && f.level <= 3, "drowned at the wrong height")
-	core.harness_step(&rig.sess.h, 2)
-	r = core.mirror_game_record(&rig.sess.mirror, flood.Round)
+	playtest.step(rig, 2)
+	r = playtest.host_record(rig, flood.Round)
 	testing.expect(t, r.out && r.phase == .Reveal && r.result == .Lost && r.alive == 0)
 
 	// The next round places the player again, the launcher in hand whatever it held.
 	core.inventory(&rig.sess.mirror, .Select, 0, game.HOTBAR_SLOTS - 1)
-	core.harness_step(&rig.sess.h, 2)
+	playtest.step(rig, 2)
 	testing.expect_value(t, c.inventory.selected, game.HOTBAR_SLOTS - 1)
 	if !testing.expect(t, until_phase(rig, .Countdown), "no next round") {return}
 	testing.expect_value(t, f.round, round + 1)
@@ -148,7 +108,7 @@ test_flood_round :: proc(t: ^testing.T) {
 	testing.expect(t, !runner(s, c).out)
 	testing.expect_value(t, mode_of(rig), flood.RUNNER_MODE)
 	testing.expect_value(t, game.inventory_held(&c.inventory).item, launcher)
-	core.harness_step(&rig.sess.h, 2)
+	playtest.step(rig, 2)
 	testing.expect_value(t, game.inventory_held(&rig.sess.mirror.inventory).item, launcher)
 	testing.expect_value(t, f.level, 0)
 	testing.expect_value(t, len(rig.sess.failures), 0)
@@ -157,10 +117,10 @@ test_flood_round :: proc(t: ^testing.T) {
 // Everyone still in on the goal wins the round.
 @(test)
 test_flood_goal_wins :: proc(t: ^testing.T) {
-	rig := new(Rig)
+	rig := new(playtest.Rig)
 	defer free(rig)
 	if !rig_start(t, rig) {return}
-	defer core.session_stop(&rig.sess)
+	defer playtest.stop(rig)
 	f := state(srv(rig))
 	if !testing.expect(t, until_phase(rig, .Playing), "the round never started") {return}
 	say(rig, "flood goal")
@@ -178,10 +138,10 @@ test_flood_goal_wins :: proc(t: ^testing.T) {
 // a rule that is none is refused.
 @(test)
 test_flood_commands :: proc(t: ^testing.T) {
-	rig := new(Rig)
+	rig := new(playtest.Rig)
 	defer free(rig)
 	if !rig_start(t, rig) {return}
-	defer core.session_stop(&rig.sess)
+	defer playtest.stop(rig)
 	f := state(srv(rig))
 	if !testing.expect(t, until_phase(rig, .Playing), "the round never started") {return}
 	round := f.round
@@ -190,7 +150,7 @@ test_flood_commands :: proc(t: ^testing.T) {
 	say(rig, "flood restart")
 	testing.expect(t, told(rig, "Flood: new round"))
 	testing.expect_value(t, f.round, round + 1)
-	testing.expect_value(t, f.phase, flood.Phase.Countdown)
+	testing.expect_value(t, f.phase.now, flood.Phase.Countdown)
 	for rule in flood.Rule {
 		say(
 			rig,
@@ -230,10 +190,10 @@ test_flood_water_levels :: proc(t: ^testing.T) {
 	rise: f32 = 120.0 / flood.RISE_TIDE // (the net rise over the 120 s looked at)
 	testing.expect(t, f32(highest) >= rise - 1, "the tide did not rise overall")
 	// A falling tide drains the top layer of the arena.
-	rig := new(Rig)
+	rig := new(playtest.Rig)
 	defer free(rig)
 	if !rig_start(t, rig) {return}
-	defer core.session_stop(&rig.sess)
+	defer playtest.stop(rig)
 	s := srv(rig)
 	if !testing.expect(t, until_phase(rig, .Playing), "the round never started") {return}
 	water_tick(s, 1)
@@ -250,10 +210,10 @@ test_flood_water_levels :: proc(t: ^testing.T) {
 // into water).
 @(test)
 test_flood_rot :: proc(t: ^testing.T) {
-	rig := new(Rig)
+	rig := new(playtest.Rig)
 	defer free(rig)
 	if !rig_start(t, rig) {return}
-	defer core.session_stop(&rig.sess)
+	defer playtest.stop(rig)
 	s := srv(rig)
 	f := state(s)
 	say(rig, "flood rule rot")
@@ -284,10 +244,10 @@ test_flood_rot :: proc(t: ^testing.T) {
 // as large as ever under any other rule.
 @(test)
 test_flood_heavy :: proc(t: ^testing.T) {
-	rig := new(Rig)
+	rig := new(playtest.Rig)
 	defer free(rig)
 	if !rig_start(t, rig) {return}
-	defer core.session_stop(&rig.sess)
+	defer playtest.stop(rig)
 	s := srv(rig)
 	w := s.home
 	// air: the air blocks in the cube of side 15 around p (deep under the arena's floor).
