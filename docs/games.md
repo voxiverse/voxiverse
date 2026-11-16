@@ -326,6 +326,14 @@ thousands of machines cost what the due ones cost, not a scan of all. The time i
 age (its persistent tick), so a machine thinks on after a restart where it left off. What a
 machine makes or uses up is booked with `items_made` and `items_used`.
 
+What a machine makes is pack data both parts read, a recipe of `"type": "process"`
+(`data/recipes`): its `inputs` (items or `#tags` with counts, at most
+`game.MAX_PROCESS_INPUTS` in all), its `output`, the `time` it takes in seconds and the
+`machine` that makes it, a name of the game's own (`"foundry:furnace"`; the engine reads
+nothing into it). `game.recipe_by_id`, `game.recipe_needs` (the inputs as one stack an item)
+and the registry's `recipes` (both sides' `s.registry` / `s.reg`) are what a game's machines
+and its panels read; the crafting grid never matches a process.
+
 ### Belts
 
 A block declared `"entity": {"kind": "belt", "speed": 1.5}` (blocks a second, at most 7.5,

@@ -176,7 +176,16 @@ MODE_FIELDS := []string{"abilities", "kit", "rules", "override"}
 @(private)
 MODEL_FIELDS := []string{"size", "palette", "slices", "grip", "override"}
 @(private)
-RECIPE_FIELDS := []string{"type", "inputs", "pattern", "key", "output", "override"}
+RECIPE_FIELDS := []string {
+	"type",
+	"inputs",
+	"pattern",
+	"key",
+	"output",
+	"override",
+	"machine",
+	"time",
+}
 @(private)
 PACK_FIELDS := []string{"format", "namespace", "version", "title", "description", "requires"}
 

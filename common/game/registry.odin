@@ -366,12 +366,46 @@ Recipe_Input :: struct {
 Recipe_Id :: distinct u32
 
 Recipe_Def :: struct {
-	id:     string,
-	shaped: bool,
-	width:  int, // shaped: the pattern's size
-	height: int,
-	inputs: []Recipe_Input, // shaped: width*height cells, row by row; else one per cell used
-	output: Stack,
+	id:      string,
+	shaped:  bool,
+	width:   int, // shaped: the pattern's size
+	height:  int,
+	inputs:  []Recipe_Input, // shaped: width*height cells, row by row; else one per item used
+	output:  Stack,
+	machine: string, // a process's: the kind of machine that makes it (its game's name: "foundry:furnace"); "": a crafting grid's
+	time:    f32, // a process's: seconds it takes
+}
+
+// MAX_PROCESS_INPUTS: the most items a process uses in all (its inputs, counted).
+MAX_PROCESS_INPUTS :: 32
+
+// recipe_needs: a recipe's inputs as stacks, each item once with how many it takes (a tag:
+// NO_ITEM, its count kept). n: how many.
+recipe_needs :: proc(
+	r: ^Recipe_Def,
+) -> (
+	out: [MAX_PROCESS_INPUTS]Stack,
+	tags: [MAX_PROCESS_INPUTS]i32,
+	n: int,
+) {
+	next: for in_ in r.inputs {
+		if in_.item == NO_ITEM && in_.tag == NO_TAG {continue}
+		for i in 0 ..< n {
+			if out[i].item == in_.item && tags[i] == in_.tag {
+				out[i].count += 1
+				continue next
+			}
+		}
+		out[n], tags[n] = {in_.item, 1, 0, 0}, in_.tag
+		n += 1
+	}
+	return
+}
+
+// recipe_by_id: the recipe of this id ("foundry:gear"; false: none).
+recipe_by_id :: proc(reg: ^Registry, id: string) -> (Recipe_Id, bool) {
+	for r, i in reg.recipes {if r.id == id {return Recipe_Id(i), true}}
+	return 0, false
 }
 
 Structure_Def :: struct {
@@ -647,6 +681,7 @@ recipe_match :: proc(
 	if filled == 0 {return}
 	bw, bh := hi_x - lo_x + 1, hi_y - lo_y + 1
 	for r, ri in reg.recipes {
+		if r.machine != "" {continue} 	// (a process is a machine's, not the grid's)
 		if r.shaped {
 			if r.width != bw || r.height != bh {continue}
 			matched := true

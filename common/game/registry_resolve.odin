@@ -1292,12 +1292,43 @@ read_recipe :: proc(b: ^Reg_Build, m: ^Merged_Def, item_numbers: []Item) -> Reci
 			m.file,
 			m.line,
 			m.column,
-			"\"type\" is missing; it is \"shapeless\" or \"shaped\"",
+			"\"type\" is missing; it is \"shapeless\", \"shaped\" or \"process\"",
 		)
 		return r
 	}
-	kind := choice_of(b, typ, typ.value, "type", []string{"shapeless", "shaped"}, 0)
+	kind := choice_of(b, typ, typ.value, "type", []string{"shapeless", "shaped", "process"}, 0)
 	r.shaped = kind == 1
+	// A process: what a machine makes of its inputs in a time (a furnace, an assembler).
+	process := kind == 2
+	if process {
+		mf, tf := field_of(m, "machine"), field_of(m, "time")
+		if mf == nil || mf.value.kind != .String || !strings.contains(mf.value.s, ":") {
+			fail(
+				b,
+				m.pack,
+				m.file,
+				m.line,
+				m.column,
+				"a process names its \"machine\": \"<game>:<kind>\"",
+			)
+			return r
+		}
+		r.machine = mf.value.s
+		if tf == nil ||
+		   !(tf.value.kind == .Int || tf.value.kind == .Float) ||
+		   !(tf.value.f >= 0.05 && tf.value.f <= 600) {
+			fail(
+				b,
+				m.pack,
+				m.file,
+				m.line,
+				m.column,
+				"a process takes a \"time\" of 0.05 to 600 seconds",
+			)
+			return r
+		}
+		r.time = f32(tf.value.f)
+	}
 	input_of :: proc(
 		b: ^Reg_Build,
 		f: ^Def_Field,
@@ -1412,8 +1443,15 @@ read_recipe :: proc(b: ^Reg_Build, m: ^Merged_Def, item_numbers: []Item) -> Reci
 				case "item":
 					in_, have = input_of(b, f, em.value, item_numbers)
 				case "count":
-					if em.value.kind != .Int || em.value.i < 1 || em.value.i > 9 {
-						fail_field(b, f, em.value, "count is 1..9")
+					if em.value.kind != .Int ||
+					   em.value.i < 1 ||
+					   em.value.i > (MAX_PROCESS_INPUTS if process else 9) {
+						fail_field(
+							b,
+							f,
+							em.value,
+							fmt.aprintf("count is 1..%d", MAX_PROCESS_INPUTS if process else 9),
+						)
 					} else {
 						count = int(em.value.i)
 					}
@@ -1432,12 +1470,13 @@ read_recipe :: proc(b: ^Reg_Build, m: ^Merged_Def, item_numbers: []Item) -> Reci
 			}
 			if have {for _ in 0 ..< count {append(&list, in_)}}
 		}
-		if (len(list) < 1 || len(list) > 9) && len(b.errs) == errors_before {
+		most := MAX_PROCESS_INPUTS if process else 9
+		if (len(list) < 1 || len(list) > most) && len(b.errs) == errors_before {
 			fail_field(
 				b,
 				f,
 				f.value,
-				fmt.aprintf("a recipe uses 1 to 9 inputs in all, got %d", len(list)),
+				fmt.aprintf("a recipe uses 1 to %d inputs in all, got %d", most, len(list)),
 			)
 		}
 		r.inputs = list[:]

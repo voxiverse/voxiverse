@@ -52,3 +52,34 @@ test_a_machine_holds_at_most_a_chests_slots :: proc(t: ^testing.T) {
 	testing.expect(t, reg == nil)
 	testing.expect(t, strings.contains(errors_text(errs), "a machine holds 0 to 25 slots"))
 }
+
+// A process recipe is pack data both sides read: what a kind of machine makes of its inputs
+// in a time; the crafting grid never matches one.
+@(test)
+test_a_process_is_a_recipe_for_a_machine :: proc(t: ^testing.T) {
+	text := `{"bar": {"type": "process", "machine": "works:oven", "time": 3.2,
+		"inputs": [{"item": "voxiverse:cobblestone", "count": 12}, {"item": "voxiverse:planks", "count": 1}],
+		"output": {"item": "voxiverse:stone", "count": 2}}}`
+	reg, errs := build_with(pack_of("works", {{"data/recipes/works.json", text}}))
+	testing.expect(t, reg != nil, errors_text(errs))
+	if reg == nil {return}
+	id, ok := recipe_by_id(reg, "works:bar")
+	if !testing.expect(t, ok) {return}
+	r := &reg.recipes[id]
+	testing.expect_value(t, r.machine, "works:oven")
+	testing.expect_value(t, r.time, 3.2)
+	testing.expect_value(t, r.output.count, 2)
+	needs, _, n := recipe_needs(r)
+	testing.expect_value(t, n, 2)
+	testing.expect_value(t, needs[0], Stack{item_of_block(reg, .Cobblestone), 12, 0, 0})
+	testing.expect_value(t, needs[1].count, 1)
+	grid: [9]Stack
+	grid[0] = {item_of_block(reg, .Planks), 1, 0, 0}
+	for i in 1 ..< 9 {grid[i] = {item_of_block(reg, .Cobblestone), 1, 0, 0}}
+	if found, matched := recipe_match(reg, grid, 3, 3); matched {
+		testing.expect(t, reg.recipes[found].machine == "", "the grid matched a process")
+	}
+	bad := `{"bar": {"type": "process", "time": 1, "inputs": [{"item": "voxiverse:planks"}], "output": {"item": "voxiverse:stone"}}}`
+	_, errs = build_with(pack_of("works", {{"data/recipes/works.json", bad}}))
+	testing.expect(t, strings.contains(errors_text(errs), "a process names its \"machine\""))
+}
