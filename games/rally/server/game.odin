@@ -40,28 +40,27 @@ MAX_KEPT :: 64 // racers' bests kept, by name
 
 // Rally: the races.
 Rally :: struct {
-	phase:      play.Phase(rally.Phase),
-	race:       u16,
-	seed:       u32, // the course's (the universe's)
-	course:     rally.Course,
-	built:      bool,
-	countdown:  f64, // this race's count, seconds
-	record:     Best, // the course record (ticks 0: none)
-	kept:       [MAX_KEPT]Best, // each racer's personal best, by name
-	kept_count: int,
-	pad, gate:  game.Block,
-	hazard:     game.Block,
+	phase:     play.Phase(rally.Phase),
+	race:      u16,
+	seed:      u32, // the course's (the universe's)
+	course:    rally.Course,
+	built:     bool,
+	countdown: f64, // this race's count, seconds
+	record:    Best, // the course record (ticks 0: none)
+	kept:      play.By_Name(Run, MAX_KEPT), // each racer's personal best, by name
+	pad, gate: game.Block,
+	hazard:    game.Block,
 }
 
-// Best: a run kept: whose, its time and its splits at each gate (ticks).
-Best :: struct {
-	name:     [game.MAX_NAME_LENGTH]u8,
-	name_len: int,
-	ticks:    u32,
-	splits:   [rally.CHECKPOINTS + 1]u32,
+// Run: a run kept: its time and its splits at each gate (ticks); a Best is whose it is too.
+Run :: struct {
+	ticks:  u32,
+	splits: [rally.CHECKPOINTS + 1]u32,
 }
 
-best_name :: proc(b: ^Best) -> string {return string(b.name[:b.name_len])}
+Best :: play.Named(Run)
+
+best_name :: proc(b: ^Best) -> string {return play.named_name(b)}
 
 // Runner: a player's part in the race now.
 Runner :: struct {
@@ -284,10 +283,8 @@ finish :: proc(s: ^core.Server, c: ^core.Client, ticks: u32) {
 		news.personal = true
 	}
 	if d.record.ticks == 0 || ticks < d.record.ticks {
-		d.record = {
-			ticks  = ticks,
-			splits = r.splits,
-		}
+		d.record = {}
+		d.record.ticks, d.record.splits = ticks, r.splits
 		d.record.name_len = copy(d.record.name[:], name)
 		news.record = true
 	}
@@ -312,14 +309,7 @@ results :: proc(s: ^core.Server) {
 // kept: the best kept for a racer's name (nil: none; make_it: a new one, while there is
 // room).
 kept :: proc(s: ^core.Server, name: string, make_it := false) -> ^Best {
-	d := state(s)
-	for &b in d.kept[:d.kept_count] {if best_name(&b) == name {return &b}}
-	if !make_it || d.kept_count >= MAX_KEPT {return nil}
-	b := &d.kept[d.kept_count]
-	d.kept_count += 1
-	b^ = {}
-	b.name_len = copy(b.name[:], name)
-	return b
+	return play.by_name(&state(s).kept, name, make_it)
 }
 
 // editing: the course is not the racers' to change.
@@ -433,48 +423,47 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 }
 
 // save: the course record and every racer's best with its splits, by name:
-// "record <ticks> <name>", "best <ticks> <split>... <name>".
+// "record <ticks> <name>", "best = <ticks> <split>... <name>" (play.by_name_save).
 save :: proc(s: ^core.Server, out: ^strings.Builder) {
 	d := state(s)
 	if d.record.ticks >
 	   0 {fmt.sbprintfln(out, "record %d %s", d.record.ticks, best_name(&d.record))}
-	for &b in d.kept[:d.kept_count] {
-		if b.ticks == 0 {continue}
-		fmt.sbprintf(out, "best %d", b.ticks)
-		for split in b.splits[1:] {fmt.sbprintf(out, " %d", split)}
-		fmt.sbprintfln(out, " %s", best_name(&b))
-	}
+	play.by_name_save(&d.kept, "best", out, proc(b: ^strings.Builder, run: ^Run) -> bool {
+		if run.ticks == 0 {return false}
+		fmt.sbprintf(b, "%d", run.ticks)
+		for split in run.splits[1:] {fmt.sbprintf(b, " %d", split)}
+		return true
+	})
 }
 
-// load: what the universe kept; a line Rally does not know is not Rally's.
+// load: what the universe kept (a best's line as before by_name, `best <numbers> <name>`,
+// reads as one written by it); a line Rally does not know is not Rally's.
 load :: proc(s: ^core.Server, text: string) -> bool {
 	d := state(s)
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		f := strings.fields(line, context.temp_allocator)
-		if len(f) == 0 {continue}
-		switch {
-		case f[0] == "record" && len(f) == 3:
-			ticks, ok := strconv.parse_u64(f[1])
+	for l in play.saved_lines(text) {
+		switch l.key {
+		case "record":
+			f := strings.fields(l.value, context.temp_allocator)
+			if len(f) != 2 {return false}
+			ticks, ok := strconv.parse_u64(f[0])
 			if !ok ||
 			   ticks == 0 ||
 			   ticks > u64(max(u32)) ||
-			   len(f[2]) > game.MAX_NAME_LENGTH {return false}
-			d.record = {
-				ticks = u32(ticks),
-			}
-			d.record.name_len = copy(d.record.name[:], f[2])
-			if b := kept(s, f[2]); b != nil {d.record.splits = b.splits}
-		case f[0] == "best" && len(f) == 3 + rally.CHECKPOINTS:
-			name := f[len(f) - 1]
-			if len(name) > game.MAX_NAME_LENGTH {return false}
-			b := kept(s, name, make_it = true)
-			if b == nil {return false}
-			for n, i in f[1:len(f) - 1] {
-				v, ok := strconv.parse_u64(n)
-				if !ok || v > u64(max(u32)) {return false}
-				if i == 0 {b.ticks = u32(v)} else {b.splits[i] = u32(v)}
-			}
+			   len(f[1]) > game.MAX_NAME_LENGTH {return false}
+			d.record = {}
+			d.record.ticks = u32(ticks)
+			d.record.name_len = copy(d.record.name[:], f[1])
+			if b := kept(s, f[1]); b != nil {d.record.splits = b.splits}
+		case "best":
+			play.by_name_read(&d.kept, "best", l, proc(fields: []string, run: ^Run) -> bool {
+				if len(fields) != 1 + rally.CHECKPOINTS {return false}
+				for n, i in fields {
+					v, ok := strconv.parse_u64(n)
+					if !ok || v > u64(max(u32)) {return false}
+					if i == 0 {run.ticks = u32(v)} else {run.splits[i] = u32(v)}
+				}
+				return true
+			}) or_return
 		case:
 			return false
 		}

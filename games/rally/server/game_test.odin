@@ -1,6 +1,8 @@
 package rally_server
 
+import "core:fmt"
 import "core:os"
+import "core:strings"
 import "core:testing"
 
 import "common:game"
@@ -215,4 +217,28 @@ test_rally_bests_kept :: proc(t: ^testing.T) {
 	testing.expect_value(t, state(s).record.ticks, second)
 	b = kept(s, best_name(&state(s).record))
 	testing.expect(t, b != nil && b.ticks == second && b.splits[rally.CHECKPOINTS] == second)
+}
+
+// A universe's bests as written before they were play.By_Name's (`best <numbers> <name>`)
+// read as those written since (`best = <numbers> <name>`), and are written in the new form.
+@(test)
+test_bests_of_either_form_are_read :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, GAME) {return}
+	defer playtest.stop(rig)
+	s := srv(rig)
+	splits := strings.repeat(" 7", rally.CHECKPOINTS, context.temp_allocator)
+	old := fmt.tprintf("record 90 ana\nbest 90%s ana\nbest = 120%s bo\n", splits, splits)
+	testing.expect(t, load(s, old))
+	a, b := kept(s, "ana"), kept(s, "bo")
+	testing.expect(t, a != nil && a.ticks == 90 && a.splits[1] == 7, "the old form was not read")
+	testing.expect(t, b != nil && b.ticks == 120, "the new form was not read")
+	out := strings.builder_make(context.temp_allocator)
+	save(s, &out)
+	testing.expect(
+		t,
+		strings.contains(strings.to_string(out), "best = 90"),
+		strings.to_string(out),
+	)
 }
