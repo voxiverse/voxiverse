@@ -63,11 +63,8 @@ test_koppen_names :: proc(t: ^testing.T) {
 
 @(test)
 test_planet_earth :: proc(t: ^testing.T) {
-	data := #load("../../assets/planet/earth_relief.bin")
-	r, ok := relief_decode(data)
+	p, r := chronicle_planet()
 	defer relief_destroy(&r)
-	testing.expect(t, ok)
-	p := planet_build(r)
 	defer planet_destroy(&p)
 
 	// Where the model puts each station (printed to look at; the fitting is a later part).
@@ -109,9 +106,7 @@ test_planet_earth :: proc(t: ^testing.T) {
 	b := planet_climate_at(p, 40, 10, 0.01).temperature
 	testing.expect(t, abs(a - b) < 0.5)
 
-	// A second build hashes the same (the cross-OS value is pinned in a later part).
-	q := planet_build(r)
-	defer planet_destroy(&q)
-	testing.expect_value(t, planet_hash(q), planet_hash(p))
+	// (That a build is the same every time is test_earth_climate_file's: a fresh build
+	// against the committed file, array by array.)
 	fmt.printf("planet hash: %#x\n", planet_hash(p))
 }

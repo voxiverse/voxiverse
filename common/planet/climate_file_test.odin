@@ -6,6 +6,19 @@ import "core:testing"
 
 EARTH_CLIMATE :: "assets/planet/earth_climate.bin"
 
+// earth_climate: Earth's model as the game has it, decoded from the committed climate
+// file. test_earth_climate_file holds that file to exactly what planet_build and
+// rivers_build make from the committed relief, so the tests that study Earth's climate
+// read it rather than each build it again (a minute and a half apiece unoptimised).
+earth_climate :: proc() -> (p: Planet, rv: Rivers, r: Relief) {
+	ok: bool
+	r, ok = relief_decode(#load("../../assets/planet/earth_relief.bin"))
+	assert(ok, "earth_relief.bin does not decode")
+	p, rv, ok = climate_decode(#load("../../assets/planet/earth_climate.bin"), r)
+	assert(ok, "earth_climate.bin is stale: run ./build.sh planet climate")
+	return
+}
+
 // test_earth_climate_file: the committed climate file decodes to exactly what planet_build
 // and rivers_build make from the committed relief (stale means: run `./build.sh planet
 // climate`).

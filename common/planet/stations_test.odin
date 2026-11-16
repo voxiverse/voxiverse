@@ -83,10 +83,8 @@ station_score :: proc(p: Planet, show: bool) -> (first, two: int) {
 
 @(test)
 test_stations :: proc(t: ^testing.T) {
-	r, ok := relief_decode(#load("../../assets/planet/earth_relief.bin"))
+	p, r := chronicle_planet()
 	defer relief_destroy(&r)
-	testing.expect(t, ok)
-	p := planet_build(r)
 	defer planet_destroy(&p)
 	first, two := station_score(p, true)
 	fmt.printfln("stations: %d/34 first letter, %d/34 two letters", first, two)

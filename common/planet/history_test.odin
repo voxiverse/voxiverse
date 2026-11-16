@@ -91,10 +91,8 @@ likeliest_regions :: proc(raw: []f32, w, h, n: int, apart_km: f64) -> [dynamic][
 
 @(test)
 test_history_earth :: proc(t: ^testing.T) {
-	r, ok := relief_decode(#load("../../assets/planet/earth_relief.bin"))
+	p, r := chronicle_planet()
 	defer relief_destroy(&r)
-	testing.expect(t, ok)
-	p := planet_build(r)
 	defer planet_destroy(&p)
 
 	// The validation: of the 10 likeliest farming regions, at least 5 lie within 1 200 km of a
@@ -129,10 +127,8 @@ test_history_earth :: proc(t: ^testing.T) {
 
 @(test)
 test_history_deterministic :: proc(t: ^testing.T) {
-	r, ok := relief_decode(#load("../../assets/planet/earth_relief.bin"))
+	p, r := chronicle_planet()
 	defer relief_destroy(&r)
-	testing.expect(t, ok)
-	p := planet_build(r)
 	defer planet_destroy(&p)
 
 	day := i64(6000 * DAYS_PER_YEAR)
@@ -163,9 +159,11 @@ test_history_deterministic :: proc(t: ^testing.T) {
 	for pe in a.peoples {testing.expect(t, pe.population >= 0)}
 }
 
+// chronicle_planet: Earth's climate model (from the climate file: earth_climate).
 chronicle_planet :: proc() -> (p: Planet, r: Relief) {
-	r, _ = relief_decode(#load("../../assets/planet/earth_relief.bin"))
-	p = planet_build(r)
+	rv: Rivers
+	p, rv, r = earth_climate()
+	rivers_destroy(&rv)
 	return
 }
 

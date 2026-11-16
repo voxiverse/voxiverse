@@ -11,11 +11,8 @@ Earth :: struct {
 
 @(private = "file")
 earth_rivers :: proc() -> (e: Earth, ok: bool) {
-	e.rel, ok = relief_decode(#load("../../assets/planet/earth_relief.bin"))
-	if !ok {return}
-	e.p = planet_build(e.rel)
-	e.r = rivers_build(e.p.land, e.p.precip)
-	return
+	e.p, e.r, e.rel = earth_climate()
+	return e, true
 }
 
 @(private = "file")
