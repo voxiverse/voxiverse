@@ -67,6 +67,35 @@ What it tells its players: `sandbox.market` (the market of the town a player sta
 none), the events `sandbox.trade_refused` (why) and `sandbox.market_open`; what they ask:
 `sandbox.trade`.
 
+## Its files
+
+What the sandbox keeps of a world beside the engine's files ([docs/saves.md](../../docs/saves.md)),
+staged in the same save transaction when it changed, and checked by `voxiverse-server --check`:
+
+- `sandbox.economy.vxe`: what the server computed of a planet world's markets that the
+  history does not give back: `"VXEC"`, `u32 version` (1), `u64` key of the placement it was
+  made for, `f64` market month, `u32` market count, `u32` memory count, then per detailed town
+  its climate cell (`u32`) and each good's stock and inbound goods (`f32`, in the order of
+  `sandbox.Good`), per lazy memory its cell, each good's relative gap to the lazy price (`f32`)
+  and the month it was left (`f64`), and last the CRC-32 of everything before it (all
+  little-endian). Normal prices, the kernel and the settlements are not stored: they come from
+  the history. A file made for another placement (the history changed) is read and ignored, so
+  the markets are recomputed; one that is cut, has a bad CRC or a number that is negative or
+  not finite is moved aside (`.bad`) and the markets are recomputed. News and caravans in
+  flight are not saved.
+- `sandbox.interventions.vxi`: the interventions log, in time order: `"VXIV"`, `u32 version`
+  (1), `u32 count`, then per intervention its day (`f64`), place (3 x `i32`), kind (`u8`,
+  append-only: `Founded_Settlement`, `Built`, `Destroyed`, `Taught`, `Traded`), the actor's
+  name (`u8` length, bytes) and 16 data bytes, and last the CRC-32 of everything before it (all
+  little-endian). A file that is cut, has a bad CRC, an unknown kind or records out of order is
+  refused whole: the world moves it aside and starts with an empty log.
+
+A character's trader is the sandbox's record on it, in its file's `game` member: `cash`,
+`cargo.<i>` (by the order of `sandbox.Good`), `seen.<i>.cell`, `.price`, `.month` (the month the
+price was true) and `.good`, `count` (at most 192 prices, the oldest forgotten first) and
+`given` (the starting purse was given). Universes from before (save format 8) had these as the
+engine's files and the character's `trader`: the save migration made them the sandbox's.
+
 ## The code
 
 `rules.odin` (its name and description), `genetics.odin` (the sheep's genes), `pack.odin`
