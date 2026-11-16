@@ -1,5 +1,7 @@
 package arena
 
+import "core:fmt"
+
 import "common:game"
 
 // Arena: a free-for-all deathmatch. Everyone spawns with the same kit in a walled
@@ -79,4 +81,9 @@ farthest :: proc(points: [][3]f64, others: [][3]f64, start: int) -> int {
 		if nearest > best_d {best, best_d = i, nearest}
 	}
 	return best
+}
+
+// frags_text: "1 frag", "3 frags", "-1 frags".
+frags_text :: proc(n: int) -> string {
+	return "1 frag" if n == 1 else fmt.tprintf("%d frags", n)
 }

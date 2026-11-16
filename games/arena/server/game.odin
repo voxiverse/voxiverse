@@ -70,8 +70,10 @@ fighter :: proc(s: ^core.Server, c: ^core.Client) -> ^Fighter {return core.game_
 // start, restart; the host has it).
 NODE_ADMIN :: "arena.admin"
 
-// OVERLOOK: where a watcher floats between matches, above the keep looking down.
+// OVERLOOK: where watchers float between matches, above the north wall looking down
+// into the courtyard, side by side (each its seat's place along the wall).
 OVERLOOK :: [3]f64{arena.SIZE / 2 + 0.5, arena.HEIGHT - 2, 2.5}
+OVERLOOK_SPACING :: 2.0
 
 // LAUNCHER: what a fighter holds when it comes in.
 LAUNCHER :: "voxiverse:rocket_launcher"
@@ -181,7 +183,9 @@ place :: proc(s: ^core.Server, c: ^core.Client) {
 // watch: c floats above the courtyard between matches, unharmed, looking into it.
 watch :: proc(s: ^core.Server, c: ^core.Client) {
 	core.game_mode(s, c, arena.WATCHING_MODE)
-	core.teleport(s, c, OVERLOOK, {math.PI, -0.6}, flying = true)
+	seat := f64(core.player_id(s, c) % 16)
+	along := (seat - 7.5) * OVERLOOK_SPACING // (16 seats fit the wall)
+	core.teleport(s, c, OVERLOOK + {along, 0, 0}, {math.PI, -0.6}, flying = true)
 }
 
 // countdown: the next match: a new courtyard, built while everyone watches.
@@ -248,10 +252,18 @@ end :: proc(s: ^core.Server) {
 	if winner != "" {
 		core.announce(
 			s,
-			fmt.tprintf("&e%s wins match %d&r with %d frags", winner, a.match, a.top_frags),
+			fmt.tprintf(
+				"&e%s wins match %d&r with %s",
+				winner,
+				a.match,
+				arena.frags_text(a.top_frags),
+			),
 		)
 	} else {
-		core.announce(s, fmt.tprintf("&eMatch %d is a draw&r at %d frags", a.match, a.top_frags))
+		core.announce(
+			s,
+			fmt.tprintf("&eMatch %d is a draw&r at %s", a.match, arena.frags_text(a.top_frags)),
+		)
 	}
 	log.infof("arena match over match=%d winner=%q frags=%d", a.match, winner, a.top_frags)
 	for &c in s.clients {if here(s, &c) {watch(s, &c)}}
@@ -284,6 +296,7 @@ tick :: proc(s: ^core.Server) {
 			break
 		}
 		if present < needed {
+			a.match -= 1 // (it never began: the next countdown is its number again)
 			set_phase(s, .Warmup)
 			for &c in s.clients {if here(s, &c) {enlist(s, &c)}}
 		} else if t >= arena.COUNTDOWN {

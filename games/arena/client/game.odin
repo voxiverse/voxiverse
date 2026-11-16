@@ -219,7 +219,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			color = t.success if seat_name(&mine) == m.winner else t.log_warn
 		}
 		banner(ctx, mid - 160 * k, head, big, color)
-		banner(ctx, mid - 80 * k, fmt.tprintf("%d frags", m.top_frags), size * 0.8, t.text)
+		banner(ctx, mid - 80 * k, arena.frags_text(int(m.top_frags)), size * 0.8, t.text)
 		banner(
 			ctx,
 			mid + 100 * k,

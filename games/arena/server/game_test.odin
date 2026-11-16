@@ -194,6 +194,9 @@ test_arena_match :: proc(t: ^testing.T) {
 	m := core.harness_player_record(&rig.guest, arena.Match)
 	testing.expect(t, m != nil && m.phase == .Results && m.winner == core.client_name(h))
 	testing.expect_value(t, mode_of(rig, h), arena.WATCHING_MODE)
+	core.harness_step(&rig.sess.h, 5)
+	apart := h.player.position - g.player.position
+	testing.expect(t, abs(apart.x) >= 1, "the watchers float inside each other")
 
 	// The next match: a new courtyard, every score at nought.
 	seed := a.seed
@@ -263,4 +266,28 @@ test_arena_farthest_spawn :: proc(t: ^testing.T) {
 	testing.expect_value(t, arena.farthest(points, {{19, 0, 0}}, 0), 0)
 	testing.expect_value(t, arena.farthest(points, {{0, 0, 0}, {20, 0, 0}}, 0), 1)
 	testing.expect_value(t, arena.farthest(points, {}, 2), 2)
+}
+
+// A countdown that loses its players (here: the world was opened to others, and two are
+// needed now) goes back to the warm-up, and the match it counted down keeps its number
+// for the next.
+@(test)
+test_arena_countdown_given_up :: proc(t: ^testing.T) {
+	sess := new(core.Session)
+	defer free(sess)
+	config := core.harness_world()
+	config.game = GAME
+	config.kit = "rocket_launcher 1"
+	if !testing.expect(t, core.session_start(sess, {}, false, with = config)) {return}
+	defer core.session_stop(sess)
+	s := &sess.h.srv
+	counting :: proc(data: rawptr) -> bool {return state((^core.Server)(data)).phase == .Countdown}
+	_, ok := core.harness_step_until(&sess.h, counting, s, 20 * game.TICK_RATE)
+	if !testing.expect(t, ok, "alone, no countdown") {return}
+	testing.expect_value(t, state(s).match, 1)
+	s.listening = true // (as opening to the LAN does)
+	core.harness_step(&sess.h, 2)
+	testing.expect_value(t, state(s).phase, arena.Phase.Warmup)
+	testing.expect_value(t, state(s).match, 0)
+	s.listening = false
 }
