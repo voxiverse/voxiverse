@@ -45,7 +45,7 @@ The toolbar's speeds (Pause, 1x, 2x, 4x) step the village's life (its citizens, 
 the houses growing) that many times a tick; only the host, or a player with
 `hamlet.speed`, may change it. The camera pans at its own pace whatever the speed. The
 overlay button shows the roads' reach (green: within 2 tiles of a road) or each house's
-happiness (red to green; grey: empty).
+happiness (green: 70 and over; yellow: 40 and over; red: below; grey: empty).
 
 ## Playing it
 

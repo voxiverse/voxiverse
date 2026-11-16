@@ -40,7 +40,7 @@ CAMERA :: engine.Game_Camera {
 	distance = 44,
 	near     = 12,
 	far      = 110,
-	angle    = 52,
+	angle    = 62,
 	heading  = 0,
 }
 
@@ -315,14 +315,15 @@ mark_color :: proc(v: ^View, x, z: i32) -> (color: [4]u8, shown: bool) {
 	case .Happiness:
 		if t != .House {return}
 		h := v.happy[z][x]
-		if h == 0 {return {160, 160, 160, 110}, true} 	// (empty)
-		return {
-				u8(clamp(255 - int(h) * 2, 40, 255)),
-				u8(clamp(int(h) * 2 + 40, 40, 255)),
-				60,
-				140,
-			},
-			true
+		switch {
+		case h == 0:
+			return {150, 150, 150, 170}, true // (empty)
+		case h >= 70:
+			return {50, 220, 70, 200}, true
+		case h >= 40:
+			return {240, 210, 50, 200}, true
+		}
+		return {235, 50, 40, 210}, true
 	}
 	return
 }
@@ -505,7 +506,7 @@ lower :: proc(s: string) -> string {
 	return string(b)
 }
 
-LABEL_REACH :: 14 // tiles from the camera's focus: a workplace this near has its label
+LABEL_REACH :: 8 // tiles from the camera's focus: a workplace this near has its label
 
 // lit: a button in use, underlined.
 lit :: proc(ctx: ^ui.Context, r: ui.Rect, color: ui.Color) {
