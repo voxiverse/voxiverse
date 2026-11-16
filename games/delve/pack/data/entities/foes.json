@@ -63,10 +63,10 @@
 		]}
 	},
 	"warden": {
-		"box": [1.6, 3.0], "health": 160, "hittable": true, "physics": "walker",
+		"box": [1.6, 3.0], "health": 140, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 2.2, "run_speed": 2.2, "jump": 1.2, "step": 0},
 		"brain": "steered",
-		"attack": {"damage": 9, "reach": 1.6, "cooldown": 1.5, "shot": "delve:spit"},
+		"attack": {"damage": 6, "reach": 1.6, "cooldown": 1.5, "shot": "delve:spit"},
 		"looks": ["striking"],
 		"model": {"parts": [
 			{"box": [-0.6, 0, -0.2, -0.15, 1.2, 0.25], "color": [40, 42, 54], "skin": "legs", "swing": "walk"},

@@ -244,8 +244,12 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		)
 	}
 	if text := held_text(s); text != "" {
+		// (on a plate of its own, under the line: not a label in the world)
 		line := ui.cut_top(&screen, t.row_height)
-		ui.draw_text(ctx, line, text, t.font_size, t.text, .Center)
+		width := ui.measure_text(ctx, text, t.font_size) + 2 * t.padding
+		plate := ui.Rect{line.x + (line.w - width) / 2, line.y, width, line.h}
+		ui.fill_rect(ctx, plate, t.hud_fill)
+		ui.draw_text(ctx, plate, text, t.font_size, t.text, .Center)
 	}
 
 	// In the world: every creature's health, the names of the elites and the warden.

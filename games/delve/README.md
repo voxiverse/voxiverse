@@ -33,12 +33,13 @@ the damage, and better loot.
 | Husk | 12 | 2.9 | 3 | Walks up and strikes |
 | Spitter | 9 | 2.6 | 2 (spit) | Keeps 5 to 8 blocks away and spits from there |
 | Brute | 36 | 1.8 | 7 | Slow, hard to kill, hits hard |
-| The Warden | 160 | 2.2 | 9, or spit | Strikes near, spits from further, calls two biters every 12 s |
+| The Warden | 140 | 2.2 | 6, or spit | Strikes near, spits from further, calls two biters every 12 s |
 
 ## You
 
 A sword (4 a swing, 110 degrees, 0.45 s), a bow (3 a shot, 30 shots then 1.5 s to restring)
-and three potions to start; no health comes back by itself. A kill gives experience to its
+and three potions to start; health comes back slowly, out of a fight (the world's natural
+regeneration). A kill gives experience to its
 killer and to every delver within 24 blocks; a level adds 2 health and 10% damage. One blow
 in ten is a critical hit, doubled. Dying, you wake in the start room: your level stays, the
 experience towards the next is lost, and half your coins.
