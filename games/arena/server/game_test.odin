@@ -4,6 +4,7 @@ import "core:os"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "games:arena"
 import "server:core"
 import "server:playtest"
@@ -95,12 +96,12 @@ test_arena_match :: proc(t: ^testing.T) {
 	testing.expect_value(t, fighter(s, g).deaths, 1)
 	testing.expect_value(t, fighter(s, g).frags, 0)
 	playtest.step(rig, 3)
-	key := game.key_player(core.player_id(s, h))
+	key := protocol.key_player(core.player_id(s, h))
 	mine := playtest.host_record(rig, arena.Score, key)
 	theirs := playtest.guest_record(rig, arena.Score, key)
 	testing.expect(t, mine != nil && mine.frags == 1 && mine.name == core.client_name(h))
 	testing.expect(t, theirs != nil && theirs.frags == 1, "the guest was not told the host's frag")
-	victim := playtest.guest_record(rig, arena.Score, game.key_player(core.player_id(s, g)))
+	victim := playtest.guest_record(rig, arena.Score, protocol.key_player(core.player_id(s, g)))
 	testing.expect(t, victim != nil && victim.deaths == 1)
 
 	// The guest comes back by itself after the delay, at a spawn point, with the kit.

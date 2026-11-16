@@ -7,6 +7,7 @@ import "core:strings"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 import "games:arena"
 
 // Arena's client part (the game: games/arena): it keeps the match, every fighter's
@@ -59,7 +60,7 @@ view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
 seat_name :: proc(seat: ^Seat) -> string {return string(seat.name[:seat.name_len])}
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if m, ok := engine.game_value(s, r, arena.Match); ok && m != nil {
 		v.match = m^

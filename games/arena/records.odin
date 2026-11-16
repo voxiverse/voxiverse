@@ -1,6 +1,7 @@
 package arena
 
 import "common:game"
+import "common:protocol"
 
 // What the game replicates besides the engine's kinds (docs/games.md): the match (a
 // singleton, the same for everyone), every fighter's score (keyed by player id, put to
@@ -36,7 +37,7 @@ Kill :: struct {
 	weapon: string `net:"max=24"`, // a shot's weapon ("": none)
 }
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states = {
 		{name = "arena.match", value = Match},
 		{name = "arena.score", value = Score, key = .Player, max_records = game.MAX_PLAYERS},

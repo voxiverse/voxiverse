@@ -6,6 +6,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "games:arena"
 import "server:core"
 import "server:play"
@@ -372,7 +373,7 @@ match_put :: proc(s: ^core.Server, present, needed: int) {
 			f := fighter(s, &o)
 			score := arena.Score{core.client_name(&o), 0, 0}
 			if counted(s, &o) {score.frags, score.deaths = i16(f.frags), u16(f.deaths)}
-			core.game_put(s, &c, &score, game.key_player(core.player_id(s, &o)))
+			core.game_put(s, &c, &score, protocol.key_player(core.player_id(s, &o)))
 		}
 	}
 }
