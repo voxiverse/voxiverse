@@ -6,53 +6,27 @@ import "core:testing"
 import "common:game"
 import "games:towers"
 import "server:core"
+import "server:playtest"
 
 // Towers on a stepped server: the host (the harness's mirror, on the local pipe) and,
 // for the test of two, a guest over the harness's network. The host's edits are made on
 // the server's side through the engine's own path (core.apply_edit), as a click's would
 // be, so the game's editing and block_changed hooks judge and charge them.
 
-Rig :: struct {
-	sess:  core.Session,
-	guest: core.Harness_Player,
-	with:  bool, // the guest joined
-}
+Rig :: playtest.Rig
 
-// rig_start: Towers on a stepped server (listening, for a guest), the field built.
+// rig_start: Towers on a stepped server (with a guest, for the test of two), the field
+// built. (The builder's kit is the mode's.)
 rig_start :: proc(t: ^testing.T, rig: ^Rig, guest := false) -> bool {
-	config := core.harness_world()
-	config.game = GAME
-	config.listen = true
-	config.kit = "" // (the builder's kit is the mode's)
-	if !testing.expect(t, core.session_start(&rig.sess, {}, false, with = config)) {return false}
-	if guest {
-		core.harness_player_join(&rig.sess.h, &rig.guest, "guest")
-		rig.with = true
-	}
-	ready :: proc(data: rawptr) -> bool {
-		rig := (^Rig)(data)
-		s := &rig.sess.h.srv
-		if !rig.sess.mirror.welcomed || s.clients[0].state != .Playing || !state(s).built {
-			return false
-		}
-		if rig.with {
-			g := core.harness_player_client(&rig.guest)
-			return g != nil && g.state == .Playing
-		}
-		return true
-	}
-	_, ok := core.harness_step_until(&rig.sess.h, ready, rig, 600)
-	return testing.expect(t, ok, "the field was never built, or the players never came")
+	if !playtest.start(t, rig, GAME, {guests = 1 if guest else 0, listen = true}) {return false}
+	built :: proc(data: rawptr) -> bool {return state((^core.Server)(data)).built}
+	return testing.expect(t, playtest.until(rig, built, srv(rig)), "the field was never built")
 }
 
-rig_stop :: proc(rig: ^Rig) {
-	core.session_stop(&rig.sess)
-	if rig.with {core.harness_player_free(&rig.guest)}
-}
-
-srv :: proc(rig: ^Rig) -> ^core.Server {return &rig.sess.h.srv}
-host :: proc(rig: ^Rig) -> ^core.Client {return &rig.sess.h.srv.clients[0]}
-step :: proc(rig: ^Rig, n := 1) {core.harness_step(&rig.sess.h, n)}
+rig_stop :: playtest.stop
+srv :: playtest.srv
+host :: playtest.host
+step :: playtest.step
 
 coins :: proc(rig: ^Rig, c: ^core.Client) -> int {return core.item_count(c, state(srv(rig)).coin)}
 
@@ -127,9 +101,9 @@ test_creeps_walk_the_shortest_way_to_the_core :: proc(t: ^testing.T) {
 		seconds,
 		expected,
 	)
-	for i := 0; i < 60 * game.TICK_RATE && d.phase == .Wave; i += 1 {step(rig)}
+	for i := 0; i < 60 * game.TICK_RATE && d.phase.now == .Wave; i += 1 {step(rig)}
 	testing.expect_value(t, d.lives, towers.DEFAULT_SETTINGS.lives - towers.wave_size(1))
-	testing.expect_value(t, d.phase, towers.Phase.Building)
+	testing.expect_value(t, d.phase.now, towers.Phase.Building)
 }
 
 // A wall across the field with one gap: the way from the gate grows, a creep goes
@@ -157,7 +131,7 @@ test_a_wall_sends_the_creeps_round :: proc(t: ^testing.T) {
 	testing.expectf(t, after > before + 4, "the way did not grow: %v to %v", before, after)
 
 	d.coming[.Grunt] = 1
-	d.phase = .Wave
+	d.phase.now = .Wave
 	step(rig, 2)
 	grunt, found := first_creep(s)
 	if !testing.expect(t, found) {return}
@@ -222,13 +196,13 @@ test_a_tower_kills_a_creep_and_pays :: proc(t: ^testing.T) {
 	paid := coins(rig, h)
 	testing.expect_value(t, paid, towers.DEFAULT_SETTINGS.coins - towers.PIECES[.Arrow].price)
 	d.coming[.Runner] = 1
-	d.phase = .Wave
+	d.phase.now = .Wave
 	for i := 0; i < 20 * game.TICK_RATE && purse(s, h).kills == 0; i += 1 {step(rig)}
 	testing.expect_value(t, purse(s, h).kills, 1)
 	testing.expect_value(t, coins(rig, h), paid + towers.CREEPS[.Runner].bounty)
 	testing.expect_value(t, d.lives, towers.DEFAULT_SETTINGS.lives)
 	step(rig, 2) // (the wave of one is held: its bonus)
-	testing.expect_value(t, d.phase, towers.Phase.Building)
+	testing.expect_value(t, d.phase.now, towers.Phase.Building)
 
 	before := coins(rig, h)
 	testing.expect(t, place(rig, h, at, nil), "the tower could not be broken")
@@ -250,12 +224,12 @@ test_lives_at_nought_lose_the_run :: proc(t: ^testing.T) {
 	d.lives = 2
 	seed, run := d.seed, d.run
 	wave_begin(s)
-	for i := 0; i < 60 * game.TICK_RATE && d.phase == .Wave; i += 1 {step(rig)}
-	testing.expect_value(t, d.phase, towers.Phase.Results)
+	for i := 0; i < 60 * game.TICK_RATE && d.phase.now == .Wave; i += 1 {step(rig)}
+	testing.expect_value(t, d.phase.now, towers.Phase.Results)
 	testing.expect_value(t, d.outcome, towers.Outcome.Lost)
 	testing.expect_value(t, alive(s), 0)
 	step(rig, 2)
-	r := core.mirror_game_record(&rig.sess.mirror, towers.Run)
+	r := playtest.host_record(rig, towers.Run)
 	testing.expect(t, r != nil && r.outcome == .Lost && r.phase == .Results)
 
 	core.item_clear(s, h, d.coin)
@@ -280,7 +254,7 @@ test_the_last_wave_held_wins :: proc(t: ^testing.T) {
 	d.settings.waves = 1
 	had := coins(rig, h)
 	wave_begin(s)
-	for i := 0; i < 60 * game.TICK_RATE && d.phase == .Wave; i += 1 {
+	for i := 0; i < 60 * game.TICK_RATE && d.phase.now == .Wave; i += 1 {
 		it := core.entities_each(s.home)
 		for e in core.entities_next(&it) {
 			core.entity_harm(s.home, e, {amount = 1000, kind = .Weapon, by = h, weapon = "Rifle"})
@@ -305,36 +279,30 @@ test_a_second_builder_shares_the_run :: proc(t: ^testing.T) {
 	defer rig_stop(rig)
 	s := srv(rig)
 	d := state(s)
-	g := core.harness_player_client(&rig.guest)
+	g := playtest.guest(rig)
 	testing.expect_value(t, coins(rig, g), towers.DEFAULT_SETTINGS.coins)
 	testing.expect_value(t, s.registry.game_modes[g.mode].id, towers.BUILDER_MODE)
 	at := game.Block_Pos{towers.BUILD_MIN_X + 1, 0, towers.MID_Z - 2}
 	if !testing.expect(t, place(rig, g, at, .Arrow), "the guest's tower was refused") {return}
 	d.coming[.Runner] = 1
-	d.phase = .Wave
+	d.phase.now = .Wave
 	for i := 0; i < 20 * game.TICK_RATE && purse(s, g).kills == 0; i += 1 {step(rig)}
 	testing.expect_value(t, purse(s, g).kills, 1)
 	testing.expect_value(t, purse(s, host(rig)).kills, 0)
 	step(rig, 3)
 	for id in ([]u16{0, core.player_id(s, g)}) {
 		key := game.key_player(id)
-		on_host := core.mirror_game_record(&rig.sess.mirror, towers.Builder, key)
-		on_guest := core.harness_player_record(&rig.guest, towers.Builder, key)
+		on_host := playtest.host_record(rig, towers.Builder, key)
+		on_guest := playtest.guest_record(rig, towers.Builder, key)
 		testing.expect(
 			t,
 			on_host != nil && on_guest != nil && on_host^ == on_guest^,
 			"the purses differ",
 		)
 	}
-	mine := core.harness_player_record(
-		&rig.guest,
-		towers.Builder,
-		game.key_player(core.player_id(s, g)),
-	)
+	mine := playtest.guest_record(rig, towers.Builder, game.key_player(core.player_id(s, g)))
 	testing.expect(t, mine != nil && mine.kills == 1 && mine.name == "guest")
-	r1, r2 :=
-		core.mirror_game_record(&rig.sess.mirror, towers.Run),
-		core.harness_player_record(&rig.guest, towers.Run)
+	r1, r2 := playtest.host_record(rig, towers.Run), playtest.guest_record(rig, towers.Run)
 	testing.expect(t, r1 != nil && r2 != nil && r1^ == r2^, "the run differs")
 }
 

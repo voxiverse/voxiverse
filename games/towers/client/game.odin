@@ -30,16 +30,11 @@ GAME :: engine.Game {
 	scoreboard = scoreboard,
 }
 
-BANNER_SECONDS :: 3.0
-
 // View: what the session knows of the run.
 View :: struct {
 	run:      towers.Run,
 	builders: [game.MAX_PLAYERS]Seat, // by player id
-	banner:   [64]u8,
-	banner_n: int,
-	until:    f64, // the session's clock (frame_seconds) when the banner goes
-	good:     bool, // the banner's news is good (its colour)
+	flash:    engine.Flash, // a wave set out or held
 	pieces:   [towers.Piece]game.Item, // what each piece's item is in this registry
 	kinds:    [towers.Creep]game.Kind_Id,
 	shots:    int, // seen (tests)
@@ -97,9 +92,14 @@ received :: proc(s: ^engine.Session, r: game.Received) {
 	}
 	if wave, ok := engine.game_value(s, r, towers.Wave); ok && wave != nil {
 		if wave.done {
-			say(s, fmt.tprintf("WAVE %d HELD", wave.wave), true)
+			engine.flash(&v.flash, s, fmt.tprintf("WAVE %d HELD", wave.wave), .Good)
 		} else {
-			say(s, fmt.tprintf("WAVE %d: %d CREEPS", wave.wave, wave.size), false)
+			engine.flash(
+				&v.flash,
+				s,
+				fmt.tprintf("WAVE %d: %d CREEPS", wave.wave, wave.size),
+				.Warn,
+			)
 		}
 	}
 	if shot, ok := engine.game_value(s, r, towers.Shot); ok && shot != nil {
@@ -109,13 +109,6 @@ received :: proc(s: ^engine.Session, r: game.Received) {
 		streak(s, from, to, shot.piece)
 		if shot.piece == .Cannon {blast(s, to)}
 	}
-}
-
-// say: a banner for BANNER_SECONDS.
-say :: proc(s: ^engine.Session, text: string, good: bool) {
-	v := view(s)
-	v.banner_n = copy(v.banner[:], text)
-	v.until, v.good = s.frame_seconds + BANNER_SECONDS, good
 }
 
 // STREAK_SECONDS: how long a tower's shot hangs in the air (longer than a gun's tracer:
@@ -206,20 +199,11 @@ status :: proc(s: ^engine.Session) -> string {
 	return ""
 }
 
-// banner: a line of big text across the screen, centred on y, with a shadow.
-banner :: proc(ctx: ^ui.Context, y: f32, text: string, size: f32, color: ui.Color) {
-	r := ui.Rect{ctx.screen.x, y - size, ctx.screen.w, size * 2}
-	ui.draw_text(ctx, {r.x + 3, r.y + 3, r.w, r.h}, text, size, ctx.theme.text_shadow, .Center)
-	ui.draw_text(ctx, r, text, size, color, .Center)
-}
-
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	v := view(s)
 	t := &ctx.theme
-	screen := ctx.screen
-	top := ui.cut_top(&screen, t.row_height + t.padding)
-	ui.fill_rect(ctx, top, t.hud_fill)
-	ui.draw_text(ctx, top, status(s), t.font_size, t.text, .Center)
+	rest := ctx.screen
+	engine.top_bar(ctx, &rest, status(s))
 
 	// In the world: the creeps' health, the gate and the core, where a piece would go.
 	for kind in v.kinds {engine.entity_bars(s, ctx, kind)}
@@ -229,47 +213,28 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	preview(s, ctx)
 
 	// The banner: a wave sets out or is held, the run ends.
-	k := min(1, ctx.screen.h / 720)
-	mid := ctx.screen.y + ctx.screen.h / 2
-	switch {
-	case v.run.phase == .Results:
+	if v.run.phase == .Results {
 		// The run's end stands as long as the results do, with your part in it.
-		head, good := "THE CORE HAS FALLEN", false
-		if v.run.outcome == .Won {head, good = "THE CORE STANDS", true}
-		banner(ctx, mid - 140 * k, head, t.title_size * 1.2 * k, t.success if good else t.log_warn)
+		head, color := "THE CORE HAS FALLEN", t.log_warn
+		if v.run.outcome == .Won {head, color = "THE CORE STANDS", t.success}
+		engine.banner(ctx, -140, head, 1.2, color)
 		me := mine(s)
-		banner(
-			ctx,
-			mid - 50 * k,
-			fmt.tprintf(
-				"wave %d of %d   your kills %d   coins spent %d",
-				v.run.wave,
-				v.run.waves,
-				me.kills,
-				me.spent,
-			),
-			t.title_size * 0.6 * k,
-			t.text,
+		part := fmt.tprintf(
+			"wave %d of %d   your kills %d   coins spent %d",
+			v.run.wave,
+			v.run.waves,
+			me.kills,
+			me.spent,
 		)
-		banner(
-			ctx,
-			mid + 60 * k,
-			fmt.tprintf("a new run in %d   (hold P for the builders)", v.run.left),
-			t.title_size * 0.6 * k,
-			t.text,
-		)
-	case v.banner_n > 0 && s.frame_seconds < v.until:
-		color := t.success if v.good else t.log_warn
-		banner(ctx, mid - 140 * k, string(v.banner[:v.banner_n]), t.title_size * k, color)
+		engine.banner(ctx, -50, part, 0.6, t.text)
+		next := fmt.tprintf("a new run in %d   (hold P for the builders)", v.run.left)
+		engine.banner(ctx, 60, next, 0.6, t.text)
+	} else {
+		engine.flash_draw(ctx, &v.flash, s, -140)
 	}
 	if v.run.phase == .Building && v.run.wave == 0 {
-		banner(
-			ctx,
-			mid + 200 * k,
-			"walls 2, arrow towers 12, cannons 25: leave the creeps a way",
-			t.title_size * 0.5 * k,
-			t.text,
-		)
+		prices := "walls 2, arrow towers 12, cannons 25: leave the creeps a way"
+		engine.banner(ctx, 200, prices, 0.5, t.text)
 	}
 }
 

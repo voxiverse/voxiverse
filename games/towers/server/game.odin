@@ -3,13 +3,13 @@ package towers_server
 import "core:fmt"
 import "core:log"
 import "core:math"
-import "core:strconv"
 import "core:strings"
 
 import "common:base"
 import "common:game"
 import "games:towers"
 import "server:core"
+import "server:play"
 
 // Towers' server part (the game: games/towers): it runs the runs in the home world. A
 // run's field is built from its seed (field.odin); a build phase, then the waves, each
@@ -43,14 +43,13 @@ MAX_PIECES :: 512 // towers and walls on the field at once (more are refused)
 // Defence: the run.
 Defence :: struct {
 	settings:   towers.Settings,
-	phase:      towers.Phase,
+	phase:      play.Phase(towers.Phase),
 	outcome:    towers.Outcome,
 	run:        u16,
 	wave:       int, // on now, or the last (0: none yet)
 	lives:      int,
 	seed:       u32, // the field's
 	rng:        base.Rng, // the fields' seeds (from the universe's seed)
-	phase_tick: u64, // the server tick the phase began
 	built:      bool, // the run's field is there
 	// What the pack's names are in this session's registry.
 	kinds:      [towers.Creep]game.Kind_Id,
@@ -92,10 +91,7 @@ OVERLOOK :: [3]f64{towers.SIZE_X / 2, 22, -12}
 
 // configure: a flat world with nothing wandering in it, arriving over the field.
 configure :: proc(config: ^core.Config) {
-	config.generator = .Flat
-	config.no_natural_spawns = true
-	config.spawn = OVERLOOK
-	if config.mode == "" {config.mode = towers.BUILDER_MODE}
+	play.configure_flat(config, OVERLOOK, towers.BUILDER_MODE)
 }
 
 // start: the home world stands at noon with nothing changing by itself and nothing
@@ -105,11 +101,8 @@ start :: proc(s: ^core.Server) -> bool {
 	d.settings = towers.DEFAULT_SETTINGS
 	d.rng = base.rng_make(u64(s.config.seed) ~ 0x70e75)
 	w := s.home
-	core.game_rule(s, w, "daylight_cycle", "false")
-	core.game_rule(s, w, "drops", "false")
-	core.game_rule(s, w, "random_tick_speed", "0")
+	play.world_still(s, w)
 	core.game_rule(s, w, "pvp", "false")
-	w.clock = 0.5
 	reg := s.registry
 	ok := true
 	for &k, c in d.kinds {
@@ -138,19 +131,11 @@ stop :: proc(s: ^core.Server) {
 	log.infof("towers stopped runs=%d", d.run)
 }
 
-// here: c is playing in the home world, where the runs are.
-here :: proc(s: ^core.Server, c: ^core.Client) -> bool {
-	return c.state == .Playing && c.world == s.home
-}
+here :: play.here
 
-seconds :: proc(s: ^core.Server) -> f64 {
-	return f64(s.tick - state(s).phase_tick) / f64(game.TICK_RATE)
-}
+seconds :: proc(s: ^core.Server) -> f64 {return play.phase_seconds(s, &state(s).phase)}
 
-set_phase :: proc(s: ^core.Server, phase: towers.Phase) {
-	d := state(s)
-	d.phase, d.phase_tick = phase, s.tick
-}
+set_phase :: proc(s: ^core.Server, phase: towers.Phase) {play.phase_set(s, &state(s).phase, phase)}
 
 // new_run: a new field, every builder's purse full, the lives back, no wave yet.
 new_run :: proc(s: ^core.Server) {
@@ -184,10 +169,8 @@ enlist :: proc(s: ^core.Server, c: ^core.Client) {
 		core.item_give(s, c, d.coin, d.settings.coins)
 	}
 	core.hotbar_select(s, c, 0)
-	look := [3]f64{towers.SIZE_X / 2, 0, towers.MID_Z} - OVERLOOK
-	yaw := math.atan2(-look.x, -look.z)
-	pitch := math.atan2(look.y, math.sqrt(look.x * look.x + look.z * look.z))
-	core.teleport(s, c, OVERLOOK, {f32(yaw), f32(pitch)}, flying = true)
+	look := play.look_at(OVERLOOK, {towers.SIZE_X / 2, 0, towers.MID_Z})
+	core.teleport(s, c, OVERLOOK, look, flying = true)
 }
 
 // tick: once a tick, after the players moved and the entities ran.
@@ -202,7 +185,7 @@ tick :: proc(s: ^core.Server) {
 		run_put(s)
 		return
 	}
-	switch d.phase {
+	switch d.phase.now {
 	case .Building:
 		if t >= build_time(d) {wave_begin(s)}
 	case .Wave:
@@ -216,7 +199,7 @@ tick :: proc(s: ^core.Server) {
 	case .Results:
 		if t >= towers.RESULTS {new_run(s)}
 	}
-	if d.phase != .Results {towers_fire(s)}
+	if d.phase.now != .Results {towers_fire(s)}
 	run_put(s)
 }
 
@@ -363,9 +346,8 @@ entity_died :: proc(
 // sent).
 run_put :: proc(s: ^core.Server) {
 	d := state(s)
-	t := seconds(s)
 	r := towers.Run {
-		phase   = d.phase,
+		phase   = d.phase.now,
 		outcome = d.outcome,
 		run     = d.run,
 		wave    = u8(d.wave),
@@ -375,12 +357,12 @@ run_put :: proc(s: ^core.Server) {
 		to_come = u16(waiting(d)),
 		seed    = d.seed,
 	}
-	#partial switch d.phase {
+	#partial switch d.phase.now {
 	case .Building:
 		wait := build_time(d)
-		r.left = u16(math.ceil(max(wait - t, 0))) if d.built else u16(wait)
+		r.left = play.phase_left(s, &d.phase, wait) if d.built else u16(wait)
 	case .Results:
-		r.left = u16(math.ceil(max(towers.RESULTS - t, 0)))
+		r.left = play.phase_left(s, &d.phase, towers.RESULTS)
 	}
 	for &c in s.clients {
 		if !here(s, &c) {continue}
@@ -399,45 +381,42 @@ run_put :: proc(s: ^core.Server) {
 	}
 }
 
-// command: /towers shows the run and its rules; /towers coins|lives|waves <n> sets one
-// (from the next run), /towers wave sends the next wave now, /towers restart begins a new
-// run.
+// command: /towers shows the run and its settings; /towers <setting> <value> sets one
+// (coins, lives, waves, build: from the next run, the lives this one's too before its
+// first wave), /towers wave sends the next wave now, /towers restart begins a new run.
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
 	if name != "towers" {return false}
 	d := state(s)
-	r := &d.settings
+	table := towers.settings_table()
 	if len(args) == 0 {
 		core.notice(
 			s,
 			c,
 			fmt.tprintf(
-				"Towers run %d, %v, wave %d of %d, %d lives, seed %d: %d coins to start, %d lives, %d waves, %d s to build",
+				"Towers run %d, %v, wave %d of %d, %d lives, seed %d: %s",
 				d.run,
-				d.phase,
+				d.phase.now,
 				d.wave,
-				r.waves,
+				d.settings.waves,
 				d.lives,
 				d.seed,
-				r.coins,
-				r.lives,
-				r.waves,
-				r.build,
+				play.settings_text(table, &d.settings),
 			),
 		)
+		return true
+	}
+	if handled, changed := play.settings_command(s, c, table, &d.settings, NODE_ADMIN, args);
+	   handled {
+		if changed && d.wave == 0 {d.lives = d.settings.lives}
 		return true
 	}
 	if !core.allowed(s, c, NODE_ADMIN) {
 		core.notice(s, c, "You may not change the run (towers.admin)")
 		return true
 	}
-	USAGE :: "Usage: towers [coins <0..5000> | lives <1..500> | waves <1..50> | build <5..600 s> | wave | restart]"
-	number :: proc(text: string, lo, hi: int) -> (int, bool) {
-		n, ok := strconv.parse_int(text)
-		return n, ok && n >= lo && n <= hi
-	}
 	switch {
 	case len(args) == 1 && args[0] == "wave":
-		if d.phase != .Building || !d.built {
+		if d.phase.now != .Building || !d.built {
 			core.notice(s, c, "Towers: a wave comes only after a build")
 			return true
 		}
@@ -445,83 +424,27 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 	case len(args) == 1 && args[0] == "restart":
 		new_run(s)
 		core.notice(s, c, "Towers: a new run")
-	case len(args) == 2 && args[0] == "coins":
-		n, ok := number(args[1], 0, towers.COINS_MAX)
-		if !ok {
-			core.notice(s, c, USAGE)
-			return true
-		}
-		r.coins = n
-		core.notice(s, c, fmt.tprintf("Towers: %s to start each run", towers.coins_text(n)))
-	case len(args) == 2 && args[0] == "lives":
-		n, ok := number(args[1], 1, towers.LIVES_MAX)
-		if !ok {
-			core.notice(s, c, USAGE)
-			return true
-		}
-		r.lives = n
-		if d.wave == 0 {d.lives = n} 	// (before the first wave: this run's too)
-		core.notice(s, c, fmt.tprintf("Towers: %d lives", n))
-	case len(args) == 2 && args[0] == "waves":
-		n, ok := number(args[1], 1, towers.WAVES_MAX)
-		if !ok {
-			core.notice(s, c, USAGE)
-			return true
-		}
-		r.waves = n
-		core.notice(s, c, fmt.tprintf("Towers: %d waves to hold", n))
-	case len(args) == 2 && args[0] == "build":
-		n, ok := number(args[1], towers.BUILD_MIN, towers.BUILD_MAX)
-		if !ok {
-			core.notice(s, c, USAGE)
-			return true
-		}
-		r.build = n
-		core.notice(s, c, fmt.tprintf("Towers: %d s to build before the first wave", n))
 	case:
-		core.notice(s, c, USAGE)
+		core.notice(
+			s,
+			c,
+			fmt.tprintf("Usage: towers [%s | wave | restart]", play.settings_usage(table)),
+		)
 	}
 	return true
 }
 
-// save: the run's rules, kept with the universe ("coins = 60" a line).
+// save: the run's settings, kept with the universe.
 save :: proc(s: ^core.Server, out: ^strings.Builder) {
-	r := state(s).settings
-	fmt.sbprintfln(out, "coins = %d", r.coins)
-	fmt.sbprintfln(out, "lives = %d", r.lives)
-	fmt.sbprintfln(out, "waves = %d", r.waves)
-	fmt.sbprintfln(out, "build = %d", r.build)
+	play.settings_save(towers.settings_table(), &state(s).settings, out)
 }
 
-// load: the rules the universe kept; a line Towers does not know, or a value out of its
-// bounds, is not Towers'. They hold from the next run (this one's lives now, before its
-// first wave).
+// load: the settings the universe kept (a line Towers does not know, or a value out of
+// its bounds, is not Towers'). They hold from the next run (this one's lives now, before
+// its first wave).
 load :: proc(s: ^core.Server, text: string) -> bool {
 	d := state(s)
-	r := &d.settings
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		if strings.trim_space(line) == "" {continue}
-		key, _, value := strings.partition(line, "=")
-		key, value = strings.trim_space(key), strings.trim_space(value)
-		n, ok := strconv.parse_int(value)
-		switch key {
-		case "coins":
-			if !ok || n < 0 || n > towers.COINS_MAX {return false}
-			r.coins = n
-		case "lives":
-			if !ok || n < 1 || n > towers.LIVES_MAX {return false}
-			r.lives = n
-		case "waves":
-			if !ok || n < 1 || n > towers.WAVES_MAX {return false}
-			r.waves = n
-		case "build":
-			if !ok || n < towers.BUILD_MIN || n > towers.BUILD_MAX {return false}
-			r.build = n
-		case:
-			return false
-		}
-	}
-	if d.wave == 0 {d.lives = r.lives}
+	play.settings_load(towers.settings_table(), &d.settings, text) or_return
+	if d.wave == 0 {d.lives = d.settings.lives}
 	return true
 }

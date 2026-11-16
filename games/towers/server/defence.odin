@@ -35,7 +35,7 @@ editing :: proc(
 	old, new: game.Block,
 ) -> string {
 	d := state(s)
-	if d.phase == .Results || !d.built {return "Towers: wait for the next run"}
+	if d.phase.now == .Results || !d.built {return "Towers: wait for the next run"}
 	if new == .Air {
 		if _, ok := piece_of(d, old); !ok {return "Towers: only walls and towers are broken"}
 		return ""

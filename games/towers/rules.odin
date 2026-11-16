@@ -2,6 +2,7 @@ package towers
 
 import "core:fmt"
 
+import "common:base"
 import "common:game"
 
 // Towers: a co-op tower defence. Creeps come out of a gate in waves and walk the
@@ -48,7 +49,8 @@ buildable :: proc(p: [3]i32) -> bool {
 	return p.y == 0 && p.x >= BUILD_MIN_X && p.x <= BUILD_MAX_X && p.z >= 0 && p.z < SIZE_Z
 }
 
-// The run's rules: what an admin may change (/towers), and their bounds.
+// The run's rules: what an admin may change (/towers <name> <value>, from the next run),
+// each described once with its bounds (SETTINGS_VARS), kept with the universe.
 Settings :: struct {
 	coins: int, // each player's at the start of a run
 	lives: int,
@@ -56,18 +58,25 @@ Settings :: struct {
 	build: int, // seconds to build before the first wave
 }
 
-DEFAULT_SETTINGS :: Settings {
+@(rodata)
+DEFAULT_SETTINGS := Settings {
 	coins = 60,
 	lives = 20,
 	waves = 10,
 	build = 20,
 }
 
-COINS_MAX :: 5000
-LIVES_MAX :: 500
-WAVES_MAX :: 50
-BUILD_MIN :: 5
-BUILD_MAX :: 600
+@(rodata)
+SETTINGS_VARS := [?]base.Var {
+	{field = "coins", help = "each builder's coins at the start of a run", min = 0, max = 5000},
+	{field = "lives", help = "lives the core has", min = 1, max = 500},
+	{field = "waves", help = "waves to hold", min = 1, max = 50},
+	{field = "build", help = "seconds to build before the first wave", min = 5, max = 600},
+}
+
+settings_table :: proc() -> base.Var_Table {
+	return {"", Settings, SETTINGS_VARS[:], &DEFAULT_SETTINGS}
+}
 
 // Seconds.
 BETWEEN :: 10.0 // between waves
