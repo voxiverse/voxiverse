@@ -240,13 +240,6 @@ spatial_move :: proc(sp: ^Spatial, h: Spatial_Handle, lo, hi: [3]f64) -> bool {
 	return true
 }
 
-spatial_set_flags :: proc(sp: ^Spatial, h: Spatial_Handle, flags: Spatial_Flags) {
-	s := &sp.slots[u32(h) - 1]
-	assert(s.used && (.Large in flags) == s.large, "Large cannot change")
-	s.entry.flags = flags
-	if !s.large {sp.cells[s.cell].items[s.pos].flags = flags}
-}
-
 spatial_remove :: proc(sp: ^Spatial, h: Spatial_Handle) {
 	i := u32(h) - 1
 	assert(sp.slots[i].used)
@@ -664,11 +657,6 @@ cast_entry :: proc(k: ^Cast, e: ^Spatial_Entry) {
 	if !k.found || d < k.dist || (d == k.dist && e.id < k.best) {
 		k.best, k.dist, k.found = e.id, d, true
 	}
-}
-
-@(private = "file")
-cast_visit :: proc(data: rawptr, e: ^Spatial_Entry) {
-	cast_entry((^Cast)(data), e)
 }
 
 // spatial_cast: the nearest entry box that a ray from origin along dir

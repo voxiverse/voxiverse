@@ -119,11 +119,6 @@ Sim_Rules :: struct {
 	any:        bool, // some block has a rule
 }
 
-sim_rules_of :: proc(reg: ^Registry, b: Block) -> []u16 {
-	if int(b) >= len(reg.sim.scheduled) {return nil}
-	return reg.sim.scheduled[b]
-}
-
 @(private)
 CHANNEL_FIELDS := []string{"bits", "default", "saved", "replicated", "keep", "override"}
 @(private)
