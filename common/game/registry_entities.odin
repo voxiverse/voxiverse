@@ -31,12 +31,15 @@ Entity_Physics :: enum u8 {
 ENTITY_PHYSICS_LIST := [?]string{"none", "walker", "item", "projectile"}
 #assert(len(ENTITY_PHYSICS_LIST) == len(Entity_Physics))
 
+// Entity_Brain: what decides what a creature does each tick. The engine's own are the
+// default; "game" is its game's (core.Game.think), which steers it as "steered" is.
 Entity_Brain :: enum u8 {
 	None,
 	Grazer, // today's sheep: think, steer, graze, flee, mate
 	Steered, // no mind of its own: it stands, or goes where its game sends it (server/core/walkers.odin)
+	Game, // its game's: the game's think hook, every tick, then steered as Steered
 }
-ENTITY_BRAIN_LIST := [?]string{"none", "grazer", "steered"}
+ENTITY_BRAIN_LIST := [?]string{"none", "grazer", "steered", "game"}
 #assert(len(ENTITY_BRAIN_LIST) == len(Entity_Brain))
 
 // Entity_Part: an optional component a kind asks for with "with".
@@ -733,8 +736,13 @@ read_kind_fields :: proc(b: ^Reg_Build, f: ^Def_Field) -> []Kind_Field {
 @(private)
 read_attack :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) -> (a: Kind_Attack_Info) {
 	v := f.value
-	if info.brain != .Steered {
-		fail_field(b, f, v, "an attack is a steered walker's: set \"brain\": \"steered\"")
+	if info.brain != .Steered && info.brain != .Game {
+		fail_field(
+			b,
+			f,
+			v,
+			"an attack is a steered walker's: set \"brain\": \"steered\" or \"game\"",
+		)
 	}
 	if v.kind != .Object {
 		fail_field(b, f, v, "attack is an object with \"damage\", \"reach\", \"cooldown\"")

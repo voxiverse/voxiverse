@@ -56,12 +56,14 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
 - `box` `[width, height]`, each 0.1..4; `health` (default 1); `saved`, `summonable`, `hittable`.
 - `physics` (`none`, `walker`, `item`, `projectile`) with its block of numbers (`walker`, `item`
   or `projectile`), required with it and refused without it.
-- `brain` (`none`, `grazer`, `steered`; either needs `walker`): `grazer` is the sheep's mind;
-  `steered` none, the walker stands or goes where its game sends it ([games.md](games.md#walkers)),
+- `brain` (`none`, `grazer`, `steered`, `game`; each needs `walker`): `grazer` is the sheep's
+  mind; `steered` none, the walker stands or goes where its game sends it
+  ([games.md](games.md#walkers)); `game` its game's, the game's `think` hook each tick, then
+  steered as `steered` is,
   `with` (`wool`, `genes`, `breeding`),
   `looks` (at most 16; each is computed from a component the kind must have in `with`, but
   `striking`, which is its attack's: a blow or a shot a moment ago).
-- `attack` (a `steered` walker's): `{"damage": n, "reach": blocks, "cooldown": seconds}` and,
+- `attack` (a `steered` or `game` walker's): `{"damage": n, "reach": blocks, "cooldown": seconds}` and,
   for a shooter, `"shot"`: a projectile kind's id. The game says when and at whom
   (`entity_strike`, `entity_shoot`: [games.md](games.md#walkers)); a blow lands within `reach`
   of the target's box, a shot flies straight at its point and, with `explode` 0, hurts what it
@@ -83,10 +85,13 @@ systems (`entities_tick` in `server/core/entities.odin`) each run over the entit
 has their data, in this fixed order:
 
 1. age: every entity gets a tick older; a natural one with nobody within 80 blocks goes.
-2. brains: `brain: grazer`. The clocks of a kind with `breeding`, thinking (flee, look, wander,
-   graze, and mating, which makes the lamb) and steering; the wish goes to the walkers. Then
-   `brain: steered`: the way its game sent it (a point, a route, a band of distances from a
-   point), its attack's cooldown, and a push out of any walker or player it overlaps.
+2. brains: each kind's brain over its creatures, once a tick for the whole kind (the kinds in
+   id order, the creatures lowest id first; one born during it gets its turn in the same tick).
+   The engine's own are the default: `brain: grazer`, the clocks of a kind with `breeding`,
+   thinking (flee, look, wander, graze, and mating, which makes the lamb) and steering, the
+   wish to the walkers; `brain: game`, its game's `think` hook. Then `brain: steered` and
+   `game`: the way its game or its brain sent it (a point, a route, a band of distances from
+   a point), its attack's cooldown, and a push out of any walker or player it overlaps.
 3. walkers' physics: `physics: walker`. Each takes its step with the wish its brain made (none
    without a brain); one whose ground is not loaded waits.
 4. items: `physics: item`. Expiry, falling, merging, pickup.

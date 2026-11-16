@@ -102,6 +102,12 @@ Game :: struct {
 	start:         proc(s: ^Server) -> bool, // the session is set up, no tick has run (false: start fails)
 	stop:          proc(s: ^Server), // after the last tick, before the last save
 	tick:          proc(s: ^Server), // every tick, after the entities' (also while frozen)
+	think:         proc(
+		s: ^Server,
+		w: ^World,
+		kind: game.Kind_Id,
+		entities: []game.Entity_Handle,
+	), // each tick, the creatures of each of its kinds whose brain is "game" (their ground loaded, lowest id first), before they are steered
 	joined:        proc(s: ^Server, c: ^Client), // c is playing (welcomed, in its world)
 	left:          proc(s: ^Server, c: ^Client), // c is leaving (still seated, its state still there)
 	command:       proc(s: ^Server, c: ^Client, name: string, args: []string) -> (known: bool), // a command the server has none of; known false: "Unknown server command"

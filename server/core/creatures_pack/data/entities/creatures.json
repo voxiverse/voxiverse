@@ -11,5 +11,16 @@
 		"walker": {"walk_speed": 1.4, "run_speed": 4.2, "jump": 1.2, "step": 0},
 		"brain": "steered",
 		"model": {"box": [200, 200, 200]}
+	},
+	// The same with a brain of its game's (Game.think).
+	"thinker": {
+		"box": [0.8, 0.9],
+		"health": 4,
+		"saved": true,
+		"hittable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.4, "run_speed": 4.2, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"model": {"box": [120, 200, 120]}
 	}
 }

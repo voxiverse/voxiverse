@@ -171,6 +171,7 @@ world, its configure choosing the Earth generator); the engine's own tests play
 | `configure(^Config)` | First thing in `start`, before the config is checked: change the world's generator, mode, spawn... | the caller's |
 | `start(s) -> bool` | The session is set up (worlds, seats, the game's state), before the first tick; false: `start` fails and frees the session | the caller's |
 | `tick(s)` | Every tick, after the entities' (also while the world is frozen) | the server's |
+| `think(s, w, kind, entities)` | Every tick, for each of its kinds whose `brain` is `game`, with all of that kind's creatures in `w` whose ground is loaded (lowest id first), before they are steered: their minds, in one call for a crowd ([walkers](#walkers)) | the server's |
 | `joined(s, c)` | A player is playing: welcomed, in its world | the server's |
 | `left(s, c)` | A playing player leaves (still seated, its state still there); not called for those still playing when the server stops | the server's |
 | `command(s, c, name, args) -> bool` | A `/command` the server has none of (relative coordinates already expanded); the game checks its own arguments and permissions (`core.allowed`); false: unknown | the server's |
@@ -273,6 +274,13 @@ for every walker that follows it, and again before its next use after a block in
 changes. Its body is its kind's: as wide and tall as its box, climbing a step only if it
 jumps a block high. `route_would_shut` asks, before a block is placed, whether it would
 leave the route's start or a walker following it with no way.
+
+A creature with a mind of its own has `"brain": "game"`: the game's `think` hook is given
+every creature of the kind each tick, in one call (a herd of hundreds costs one call and
+what the game reads once for all of them), and steers them with the same calls, which the
+engine then carries out; an engine brain (`grazer`) is only the default for a kind that
+names it. What it decides from is the game's record on each (`entity_data`) and what it
+asks the world.
 
 A walker that fights is the same steered walker with an `attack` in its kind. `entity_keep`
 holds it within a band of distances from a point the game gives each tick (a player's

@@ -1404,7 +1404,7 @@ entity_world_spawn :: proc(
 	if info.physics == .Item {set += {int(game.C_STACK), int(game.C_OWNER)}}
 	if info.physics == .Projectile {set += {int(game.C_OWNER)}}
 	if info.brain == .Grazer {set += {int(C_BRAIN)}}
-	if info.brain == .Steered {set += {int(C_STEER)}}
+	if info.brain == .Steered || info.brain == .Game {set += {int(C_STEER)}}
 	if info.hittable {set += {int(game.C_HURT_BY)}}
 	if info.model == .Player {set += {int(game.C_PLAYER_LINK)}}
 	if len(info.fields) > 0 {set += {int(game.C_FIELDS)}}
@@ -1831,9 +1831,10 @@ entities_clear :: proc(w: ^World) {
 // `with`), never over a kind by name, and they run in this fixed order:
 //
 //  1. age: every entity grows a tick older; a natural one nobody is near goes.
-//  2. brains (grazer): a sheep's clocks, its thinking (which includes mating and
-//     the lamb) and its steering; the wish goes to the walkers' physics. Then the
-//     steered walkers (walkers.odin): where their game sends them.
+//  2. brains: each kind's brain over its creatures (the engine's grazer: a sheep's
+//     clocks, its thinking, which includes mating and the lamb, and its steering, the
+//     wish to the walkers' physics; a game's: its think hook). Then the steered
+//     walkers (walkers.odin): where their game or its brain sends them.
 //  3. walkers' physics: every walker takes its step (the wish its brain made,
 //     none for a walker without a brain).
 //  4. items: a dropped stack expires, falls, merges and is picked up.
@@ -1896,25 +1897,87 @@ kind_of :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Kind_Info {
 	return game.kind_info(w.server.registry, entity_kind(w, h))
 }
 
-// system_brains: the grazers. Entities in id order; one spawned during the
-// walk (a lamb) has a higher id and is walked in this same tick, after the
-// ones that were there.
+// Brain_Proc: a brain: what the creatures of one kind do this tick, given them all at
+// once (those whose ground is loaded, lowest id first), so a crowd costs one call and the
+// brain may share its looking about among them. The engine's own brains are the default
+// (BRAINS); a kind whose brain is "game" has its game's (Game.think).
+Brain_Proc :: proc(
+	w: ^World,
+	kind: game.Kind_Id,
+	entities: []game.Entity_Handle,
+	wishes: ^map[game.Entity_Handle]Wish,
+)
+
+@(rodata, private = "file")
+BRAINS := [game.Entity_Brain]Brain_Proc {
+	.None    = nil,
+	.Grazer  = grazer_brain,
+	.Steered = nil, // (its game steers it from its tick)
+	.Game    = game_brain,
+}
+
+// grazer_brain: the engine's grazers: a sheep's clocks, its thinking (which includes
+// mating and the lamb) and its steering, its wish to the walkers' physics.
+@(private = "file")
+grazer_brain :: proc(
+	w: ^World,
+	kind: game.Kind_Id,
+	entities: []game.Entity_Handle,
+	wishes: ^map[game.Entity_Handle]Wish,
+) {
+	for h in entities {
+		if !entity_listed(w, h) {continue} 	// (gone in this walk)
+		sheep_life(w, h)
+		think(w, h)
+		wish, jump := steer(w, h)
+		wishes[h] = {wish, jump}
+	}
+}
+
+// game_brain: the game's think hook for its kind; the steering does the rest.
+@(private = "file")
+game_brain :: proc(
+	w: ^World,
+	kind: game.Kind_Id,
+	entities: []game.Entity_Handle,
+	wishes: ^map[game.Entity_Handle]Wish,
+) {
+	s := w.server
+	if s.config.game.think != nil {s.config.game.think(s, w, kind, entities)}
+}
+
+// system_brains: each kind's brain over its creatures, the kinds in id order. A
+// creature born during a brain's turn (a lamb) has a higher id and is given to its
+// kind's brain again in this same tick, after the ones that were there.
 @(private = "file")
 system_brains :: proc(w: ^World, wishes: ^map[game.Entity_Handle]Wish) {
 	walked: u32
 	for {
 		it := entities_each(w, after = walked)
+		by_kind := make(map[game.Kind_Id][dynamic]game.Entity_Handle, context.temp_allocator)
+		kinds := make([dynamic]game.Kind_Id, context.temp_allocator)
 		any := false
 		for h in entities_next(&it) {
 			any = true
 			walked = max(walked, entity_id(w, h))
-			if kind_of(w, h).brain != .Grazer || !chunk_ready(w, entity_pos(w, h)) {continue}
-			sheep_life(w, h)
-			think(w, h)
-			wish, jump := steer(w, h)
-			wishes[h] = {wish, jump}
+			kind := entity_kind(w, h)
+			if BRAINS[kind_of(w, h).brain] == nil || !chunk_ready(w, entity_pos(w, h)) {continue}
+			if kind not_in by_kind {
+				by_kind[kind] = make([dynamic]game.Entity_Handle, context.temp_allocator)
+				append(&kinds, kind)
+			}
+			append(&by_kind[kind], h)
 		}
 		if !any {break}
+		slice.sort(kinds[:])
+		for kind in kinds {
+			BRAINS[game.kind_info(w.server.registry, kind).brain](
+				w,
+				kind,
+				by_kind[kind][:],
+				wishes,
+			)
+		}
 	}
 }
 

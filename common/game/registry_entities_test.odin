@@ -112,7 +112,7 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 		{
 			"unknown brain",
 			`{"k": {"box": [1, 1], ` + WALKER + `, "brain": "hunter", "model": "item"}}`,
-			`testpack/data/entities/k.json:1:120: brain is one of "none", "grazer", "steered"; got "hunter"`,
+			`testpack/data/entities/k.json:1:120: brain is one of "none", "grazer", "steered", "game"; got "hunter"`,
 		},
 		{
 			"unknown model",
@@ -217,7 +217,7 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 			`{"k": {"box": [1, 1], ` +
 			WALKER +
 			`, "attack": {"damage": 1, "reach": 1, "cooldown": 1}, "model": "item"}}`,
-			`testpack/data/entities/k.json:1:121: an attack is a steered walker's: set "brain": "steered"`,
+			`testpack/data/entities/k.json:1:121: an attack is a steered walker's: set "brain": "steered" or "game"`,
 		},
 		{
 			"an attack number missing",

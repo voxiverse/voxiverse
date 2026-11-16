@@ -58,3 +58,74 @@ test_a_games_creature_survives_a_restart :: proc(t: ^testing.T) {
 	testing.expect_value(t, st.target, [3]f64{20.5, 1, 3.5})
 	testing.expect_value(t, st.speed, 2.5)
 }
+
+// A game's brain: the creatures of each of its kinds whose brain is "game" are given to
+// its think hook once a tick, all of them in one call (lowest id first), and what it
+// steers them to do they do. Hundreds cost one call a tick.
+@(test)
+test_a_games_brain_thinks_for_its_creatures :: proc(t: ^testing.T) {
+	Seen :: struct {
+		calls, last: int,
+		in_order:    bool,
+	}
+	h := new(Harness)
+	defer free(h)
+	config := harness_world()
+	config.game = harness_creatures()
+	config.game.server_state = Seen
+	config.game.think = proc(
+		s: ^Server,
+		w: ^World,
+		kind: game.Kind_Id,
+		entities: []game.Entity_Handle,
+	) {
+		seen := game_state(s, Seen)
+		seen.calls += 1
+		seen.last = len(entities)
+		seen.in_order = true
+		for e, i in entities {
+			if i > 0 && entity_id(w, entities[i - 1]) >= entity_id(w, e) {seen.in_order = false}
+			data := entity_data(w, e, Creature_Data)
+			data.number += 1
+			if data.number == 1 {entity_go(w, e, entity_pos(w, e) + {4, 0, 0})}
+		}
+	}
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	s := &h.srv
+	kind, _ := game.registry_kind(s.registry, "creatures:thinker")
+	walker, _ := game.registry_kind(s.registry, "creatures:walker")
+	area := Box{{-24, -16, -24}, {24, 16, 24}}
+	world_keep(s.home, area)
+	for _ in 0 ..< 300 {
+		if world_ready(s.home, area) {break}
+		harness_step(h)
+	}
+	if !testing.expect(t, world_ready(s.home, area), "the ground never came") {return}
+	COUNT :: 300
+	first: game.Entity_Handle
+	for i in 0 ..< COUNT {
+		e := entity_spawn(s.home, kind, {f64(i % 20) * 1.5 - 15, 0, f64(i / 20) * 1.5 - 12}, false)
+		if i == 0 {first = e}
+	}
+	entity_spawn(s.home, walker, {0.5, 1, 20.5}, false) // (no brain of the game's: not given)
+	start := entity_pos(s.home, first)
+	seen := game_state(s, Seen)
+	seen.calls = 0
+	harness_step(h, 30)
+	testing.expect_value(t, seen.calls, 30)
+	testing.expect_value(t, seen.last, COUNT)
+	testing.expect(t, seen.in_order, "not lowest id first")
+	testing.expect_value(t, entity_data(s.home, first, Creature_Data).number, 30)
+	st := entity_steer(s.home, first)
+	testing.expectf(
+		t,
+		entity_pos(s.home, first).x > start.x + 0.5,
+		"the brain's steering did nothing: %v -> %v, %v %v %v",
+		start,
+		entity_pos(s.home, first),
+		st.mode,
+		st.target,
+		st.path.count,
+	)
+}
