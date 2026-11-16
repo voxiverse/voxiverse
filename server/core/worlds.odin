@@ -59,6 +59,8 @@ World :: struct {
 	interventions:       intervention.Log, // what players did that the world's history carries forward (heap)
 	interventions_dirty: bool, // interventions changed since interventions.vxi was staged
 	economy:             ^World_Economy, // the markets near the observers (economy.odin; heap; nil until needed)
+	noted_changes:       [dynamic]Noted_Change, // block changes the game's block_changed hook is told before its tick (changes.odin; heap)
+	noted_dropped:       int, // ... and those past MAX_NOTED_CHANGES this tick
 	revisit:             map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (compact.odin)
 }
 
@@ -165,6 +167,7 @@ world_close :: proc(w: ^World) {
 		virtual.arena_destroy(&w.arena)
 	}
 	delete(w.tops)
+	delete(w.noted_changes)
 	delete(w.gates)
 	delete(w.touched)
 	delete(w.kept)

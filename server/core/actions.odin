@@ -210,6 +210,13 @@ apply_edit_cells :: proc(
 		}
 	}
 	if !ok {return}
+	if g := &s.config.game; g.editing != nil {
+		becomes := game.Block.Air if kind == .Break else e.block
+		if why := g.editing(s, c, e.pos, current, becomes); why != "" {
+			notice(s, c, why)
+			return
+		}
+	}
 	system := game.Edit_System.Till if tilling else .Hand
 	act := Act{action_begin(w, actor_of(s, c), system), system}
 	if moves_other && admit(w, act, cell) != .Yes {

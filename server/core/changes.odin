@@ -1,5 +1,7 @@
 package core
 
+import "core:log"
+
 import "common:base"
 import "common:game"
 
@@ -64,6 +66,7 @@ set_block :: proc(
 	if old != b {
 		channels_reset_cell(w, p)
 		walkers_changed(w, p, p)
+		block_change_note(w, {area = {p, p}, old = old, new = b}, by)
 	}
 	journal_entry(w, cause, p, old, b)
 	entity_lifecycle(w, p, old, b, cause)
@@ -167,4 +170,64 @@ cell_less :: proc(a, b: Cell_Key) -> bool {
 column_less :: proc(a, b: [2]i32) -> bool {
 	if a.y != b.y {return a.y < b.y}
 	return a.x < b.x
+}
+
+// Block_Change: blocks a world changed, as a game's block_changed hook is told them:
+// one block (old and new say what it was and is), or a bulk edit's box (bulk: read
+// the blocks).
+Block_Change :: struct {
+	area:     Box,
+	old, new: game.Block, // one block's (a bulk edit: .Air and .Air)
+	bulk:     bool,
+	by:       ^Client, // the player whose edit it was (nil: the world, a command, the game)
+}
+
+// Noted_Change: a change kept until the game is told: the player as a Player_Ref, so
+// one who left by then is nobody.
+Noted_Change :: struct {
+	change: Block_Change,
+	by:     Maybe(Player_Ref),
+}
+
+// MAX_NOTED_CHANGES: changes a world keeps for its game in a tick; more are dropped,
+// and said (a game that needs every block of a flood watches the area instead).
+MAX_NOTED_CHANGES :: 4096
+
+// block_change_note keeps a change for the game's block_changed hook (when it has
+// one), told before its next tick.
+block_change_note :: proc(w: ^World, change: Block_Change, by: ^Client = nil) {
+	s := w.server
+	if s.config.game.block_changed == nil {return}
+	if len(w.noted_changes) >= MAX_NOTED_CHANGES {
+		if w.noted_dropped == 0 {
+			log.warnf(
+				"server more than %d block changes in a tick: the game is told the first",
+				MAX_NOTED_CHANGES,
+			)
+		}
+		w.noted_dropped += 1
+		return
+	}
+	noted := Noted_Change {
+		change = change,
+	}
+	noted.change.by = nil
+	if by != nil {noted.by = player_ref(s, by)}
+	append(&w.noted_changes, noted)
+}
+
+// block_changes_tell: the game hears of the changes kept since its last tick.
+block_changes_tell :: proc(w: ^World) {
+	s := w.server
+	defer {
+		clear(&w.noted_changes)
+		w.noted_dropped = 0
+	}
+	g := &s.config.game
+	if g.block_changed == nil {return}
+	for n in w.noted_changes {
+		change := n.change
+		if ref, set := n.by.?; set {change.by = player_of(s, ref)}
+		g.block_changed(s, w, change)
+	}
 }

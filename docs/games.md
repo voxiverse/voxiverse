@@ -49,6 +49,8 @@ client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 | `hurt(s, c, harm)` | A player was hurt and lives (its health already less): `harm` is a `core.Harm`, the amount, the kind of source (`game.Source_Kind`: a fall, an explosion, a weapon...), `by` the player who did it (the one hurt, for its own rocket; nil for nobody) and the weapon's name for a shot | the server's |
 | `died(s, c, harm)` | A player died of `harm`, after the engine's death: the line told, `kills` and `deaths` counted, its things dropped (by its mode and the world's rules) | the server's |
 | `respawned(s, c)` | A dead player stands again, after the engine stood it at the world's spawn with full health and its mode's kit: the game may move it (`teleport`) and change what it holds. Also for a dead player who leaves, after `left` | the server's |
+| `editing(s, c, at, old, new) -> string` | A player would change the block at `at` from `old` to `new` (`.Air` for a break) and the engine's rules allow it (reach, what it holds, protection still to come): `""` lets it, anything else refuses it, the block stays and the player is told that text | the server's |
+| `block_changed(s, w, change)` | Blocks of world `w` changed since the game's last tick, each told once, in order, before its next one: `change` is a `core.Block_Change`, one block (what it was and is) or a bulk edit's box (`bulk`), and `by` the player whose edit it was (nil: the world, a command, the game; one who has left by then is nil). At most `MAX_NOTED_CHANGES` a tick (more are dropped, and logged) | the server's |
 | `entity_hurt(s, w, h, harm)` | An entity of world `w` was hurt and lives (its health already less): `harm` is a `core.Entity_Harm`, the amount, the kind of source (a blast, a player's shot or blow, `.Game` for the game's own `entity_harm`), `by` the player who did it (nil: nobody, or the game) and the weapon's name for a shot | the server's |
 | `entity_died(s, w, dead, harm)` | An entity of `w` died of `harm`: everyone who knew it was shown it die, and it is gone (`dead`, a `core.Dead_Entity`, says its id, kind and where it was) | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
@@ -71,7 +73,7 @@ makes it for games, documented where it is declared.
 
 | Name | What it is for |
 |---|---|
-| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result`, `Harm`, `Entity_Harm`, `Dead_Entity` | The game itself, the config `configure` changes, the session, a player, a world, what hurt a player or an entity, an entity that died (its hooks') |
+| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result`, `Harm`, `Entity_Harm`, `Dead_Entity`, `Block_Change` | The game itself, the config `configure` changes, the session, a player, a world, what hurt a player or an entity, an entity that died, blocks that changed (its hooks') |
 | `game_state(s, T)`, `game_client_state(s, c, T)` | The game's state, for the session and for a seat |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |

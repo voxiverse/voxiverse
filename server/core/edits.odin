@@ -100,6 +100,7 @@ bulk_edit :: proc(
 	}
 	if changed == 0 {return 0, .Done, protected}
 	walkers_changed(w, lo, hi)
+	block_change_note(w, {area = {lo, hi}, bulk = true})
 
 	sim_wake_box(w, lo, hi, cause.action)
 	supports_check_box(w, lo, hi, cause.action)
