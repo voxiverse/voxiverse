@@ -50,7 +50,7 @@ Alone:
 Together, hosting open to the LAN, or served:
 
 ```sh
-./build.sh run -- --game towers --exec "singleplayer; wait_world; /open_lan"
+./build.sh run -- --game towers --exec "wait_world; /open_lan"
 ./build.sh run -- --exec "join <host>"
 ./build.sh serve -- --game towers --universe build/towers-universe
 ```
