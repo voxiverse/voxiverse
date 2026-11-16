@@ -184,7 +184,7 @@ sheep_use :: proc(s: ^Server, c: ^Client, h: game.Entity_Handle) -> bool {
 	for _ in 0 ..< base.rng_int_range(r, 1, 4) {
 		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
 		ledger(s, w, .Drop_Mob, wool, 1)
-		spawn_item(w, entity_pos(w, h) + {0, 0.6, 0}, {wool, 1, 0}, v, -1)
+		spawn_item(w, entity_pos(w, h) + {0, 0.6, 0}, {wool, 1, 0, 0}, v, -1)
 	}
 	return true
 }

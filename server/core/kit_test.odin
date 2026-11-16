@@ -34,7 +34,7 @@ test_default_kit_is_nothing :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok) {return}
 	if stacks, parsed = kit_parse(reg, SANDBOX_KIT); testing.expect(t, parsed) {
 		testing.expect_value(t, len(stacks), 1)
-		testing.expect_value(t, stacks[0], game.Stack{launcher, 1, 0})
+		testing.expect_value(t, stacks[0], game.Stack{launcher, 1, 0, 0})
 	}
 	kit_default(reg, &kit)
 	testing.expect(t, len(kit) > 1, "the tests' kit")
@@ -88,7 +88,7 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 		}
 		launcher := game.item_of_tool(.Launcher)
 		if game.allowed(a.grants[:], "world.fire") {
-			testing.expect_value(t, a.inventory.slots[0], game.Stack{launcher, 1, 0})
+			testing.expect_value(t, a.inventory.slots[0], game.Stack{launcher, 1, 0, 0})
 		} else {
 			testing.expect(
 				t,

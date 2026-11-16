@@ -66,7 +66,7 @@ shoot_at :: proc(s: ^Server, c: ^Client, target: [3]f64, latency: f32, press := 
 @(private = "file")
 hold :: proc(rig: ^Rig, item: game.Item) {
 	reg := rig.alice.world.server.registry
-	rig.alice.inventory.slots[0] = {item, 1, game.new_ammo(reg, item)}
+	rig.alice.inventory.slots[0] = {item, 1, game.new_ammo(reg, item), 0}
 	rig.alice.inventory.selected = 0
 	rig.alice.reload_until = 0
 }
@@ -236,7 +236,7 @@ magazine_scenario :: proc(s: ^Server, _: rawptr) {
 	alice.inventory.selected = 0
 	// The kit's refill.
 	alice.inventory.slots[0].ammo = 0
-	alice.inventory.slots[1] = {rig.rifle, 1, 0}
+	alice.inventory.slots[1] = {rig.rifle, 1, 0, 0}
 	refill_weapons(s, alice)
 	res.full_after_refill =
 		alice.inventory.slots[0].ammo == 12 && alice.inventory.slots[1].ammo == 30

@@ -195,7 +195,7 @@ test_crosshair_in_third_person :: proc(t: ^testing.T) {
 	s := session_at({0.5, 0.5, 0.5}, 0, 0)
 	defer free(s)
 	launcher := game.item_of_tool(.Launcher)
-	s.inventory.slots[0] = {launcher, 1, 0}
+	s.inventory.slots[0] = {launcher, 1, 0, 0}
 	w := Fake_World{}
 	a: engine.Actions
 	engine.camera_update(s, &a, engine.SETTINGS_DEFAULTS, fake_query(&w), 0.016, true)
@@ -206,7 +206,7 @@ test_crosshair_in_third_person :: proc(t: ^testing.T) {
 	a.down = {.Use}
 	engine.camera_update(s, &a, engine.SETTINGS_DEFAULTS, fake_query(&w), 0.016, true)
 	testing.expect(t, engine.crosshair_shown(s), "shown while aiming")
-	s.inventory.slots[0] = {game.item_of_block(testkit.test_reg(), .Stone), 1, 0}
+	s.inventory.slots[0] = {game.item_of_block(testkit.test_reg(), .Stone), 1, 0, 0}
 	engine.camera_update(s, &a, engine.SETTINGS_DEFAULTS, fake_query(&w), 0.016, true)
 	testing.expect(t, !engine.crosshair_shown(s), "a block does not aim")
 }

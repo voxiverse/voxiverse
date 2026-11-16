@@ -12,7 +12,7 @@ import "common:game"
 
 @(test)
 test_popup_timing :: proc(t: ^testing.T) {
-	stone := game.Stack{3, 1, 0}
+	stone := game.Stack{3, 1, 0, 0}
 	p: engine.Item_Popup
 	// The first frame in a world shows it, at once.
 	hud.popup_update(&p, 0, stone, 0.016)
@@ -50,7 +50,7 @@ test_hud_f1 :: proc(t: ^testing.T) {
 	app := f.app
 	menu.player_menu_close(app)
 	stone := game.item_of_block(testkit.test_reg(), .Stone)
-	f.s.inventory.slots[0] = {stone, 5, 0}
+	f.s.inventory.slots[0] = {stone, 5, 0, 0}
 	f.s.inventory.selected = 0
 	f.s.max_health = 20
 	f.s.health = 20

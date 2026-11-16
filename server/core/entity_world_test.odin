@@ -479,7 +479,13 @@ test_store_copies_follow_the_list :: proc(t: ^testing.T) {
 	w := h.srv.home
 	reg := w.server.registry
 	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, true)
-	item := spawn_item(w, {10.5, 40, 8.5}, {game.item_of_block(reg, .Wool), 1, 0}, {1, 2, 3}, -1)
+	item := spawn_item(
+		w,
+		{10.5, 40, 8.5},
+		{game.item_of_block(reg, .Wool), 1, 0, 0},
+		{1, 2, 3},
+		-1,
+	)
 	testing.expect(t, sheep != 0 && item != 0)
 	if sheep == 0 || item == 0 {return}
 	// the components exist when the spawn returns
@@ -512,7 +518,13 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 	w := h.srv.home
 	reg := w.server.registry
 	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
-	item := spawn_item(w, {10.5, 40, 8.5}, {game.item_of_block(reg, .Wool), 1, 0}, {1, 2, 3}, -1)
+	item := spawn_item(
+		w,
+		{10.5, 40, 8.5},
+		{game.item_of_block(reg, .Wool), 1, 0, 0},
+		{1, 2, 3},
+		-1,
+	)
 	if !testing.expect(t, sheep != 0 && item != 0) {return}
 	sheep_id, item_id := entity_id(w, sheep), entity_id(w, item)
 	// spawned: in the store, with what the spawn gave
@@ -569,7 +581,7 @@ test_plain_components_live_in_the_store :: proc(t: ^testing.T) {
 	reg := w.server.registry
 	st := &w.entity_world.store
 	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
-	item := spawn_item(w, {10.5, 40, 8.5}, {game.item_of_block(reg, .Wool), 3, 0}, {}, 7)
+	item := spawn_item(w, {10.5, 40, 8.5}, {game.item_of_block(reg, .Wool), 3, 0, 0}, {}, 7)
 	rocket := entity_spawn(w, reg.engine.rocket, {12.5, 40, 8.5}, false)
 	if !testing.expect(t, sheep != 0 && item != 0 && rocket != 0) {return}
 	// the spawn's values

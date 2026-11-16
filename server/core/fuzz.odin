@@ -189,7 +189,12 @@ fuzz_generate_player :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	r: Player_Record
 	r.state.position = {f64(base.rng_int_max(rng, 100)), 70, -3}
 	r.look = {1, 0.2}
-	r.inventory.slots[0] = game.Stack{game.item_by_name(reg, "voxiverse:stone") or_else {}, 12, 0}
+	r.inventory.slots[0] = game.Stack {
+		game.item_by_name(reg, "voxiverse:stone") or_else {},
+		12,
+		0,
+		0,
+	}
 	counter_set(&r.stats, "blocks.mined", 5)
 	counter_set(&r.stats, "blocks.mined.stone", 3)
 	defer counters_free(&r.stats)

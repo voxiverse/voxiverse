@@ -274,7 +274,7 @@ entity_restore :: proc(
 		n := min(st.count, lying[st.item])
 		lying[st.item] -= n
 		taken[st.item] += n
-		if n > 0 {e.slots[i] = {st.item, n, 0}}
+		if n > 0 {e.slots[i] = {st.item, n, 0, 0}}
 	}
 	for id in stacks {
 		ent, got := entity_find(w, id)

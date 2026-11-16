@@ -45,7 +45,7 @@ budget_save_scene :: proc(s: ^Server) {
 		rec := Player_Record {
 			dirty = true,
 		}
-		for &st in rec.inventory.slots {st = {planks, 7, 0}}
+		for &st in rec.inventory.slots {st = {planks, 7, 0, 0}}
 		for k in 0 ..< 300 {
 			counter_set(&rec.stats, fmt.bprintf(name[:], "budget.%d", k), u64(i * k))
 		}
@@ -76,7 +76,7 @@ budget_save_scene :: proc(s: ^Server) {
 				local = u16(game.local_index({5, 5, 5})),
 				kind  = .Container,
 			}
-			for &st in chest.slots {st = {planks, 3, 0}}
+			for &st in chest.slots {st = {planks, 3, 0, 0}}
 			held = {chest}
 		}
 		chunks_insert(&w.chunks, pos, .Air, array, held[:] if n < 100 else nil)
@@ -84,7 +84,7 @@ budget_save_scene :: proc(s: ^Server) {
 	}
 	for n in 0 ..< 400 {
 		e := entity_spawn(w, w.server.registry.engine.item, {f64(1000 + n), 200, 1000}, false)
-		if e != 0 {entity_stack(w, e)^ = {planks, 5, 0}}
+		if e != 0 {entity_stack(w, e)^ = {planks, 5, 0, 0}}
 	}
 }
 
@@ -167,12 +167,12 @@ budget_audit :: proc(reg: ^game.Registry) -> (lines: int, us: i64) {
 	for &c, i in s.clients {
 		c.state = .Playing
 		for &st, k in c.inventory.slots {
-			st = {items[(i + k) % len(items)], 1 + k % 5, 0}
+			st = {items[(i + k) % len(items)], 1 + k % 5, 0, 0}
 			given(s, st)
 		}
 	}
 	for i in 0 ..< 3000 {
-		st := game.Stack{items[i % len(items)], 1 + i % 7, 0}
+		st := game.Stack{items[i % len(items)], 1 + i % 7, 0, 0}
 		// (straight into the store: the cap is for play, not for this count)
 		_, h, _ := entity_world_spawn(w.entity_world, reg, reg.engine.item, {}, {}, 0, false)
 		game.store_apply(&w.entity_world.store)

@@ -193,6 +193,12 @@ Stack :: struct {
 	item:  Item,
 	count: int,
 	ammo:  u8, // a weapon's magazine (instance data; 0 for everything else)
+	data:  u32, // a game's own number for it (a rolled stat, a rarity: core.item_drop); kept, sent and saved with it, and only stacks with the same data stack together
+}
+
+// stacks_alike: a and b may stack together: the same item with the same game data.
+stacks_alike :: proc(a, b: Stack) -> bool {
+	return a.item == b.item && a.data == b.data
 }
 
 stack_empty :: proc(s: Stack) -> bool {

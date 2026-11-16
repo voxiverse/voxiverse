@@ -34,7 +34,9 @@ every universe made before then played).
 `entities.cfg` names each entity's kind by its registry id (`voxiverse:sheep`); a file
 written before kinds were data has the bare name (`sheep`, or `critter`), and that loads
 into the same kind. A line whose kind the world's packs no longer have (or no longer save)
-is dropped, and the server's log names the kind.
+is dropped, and the server's log names the kind. A dropped stack's line ends with its item,
+count, the journal action that dropped it and its game data (`Stack.data`; a line written
+before has none: 0).
 
 ## Capturing a tick without stalling it
 
@@ -237,7 +239,8 @@ A character file of format 3 (`PLAYER_FILE_FORMAT`) has a `trader` member: `cash
 `cargo` (units of each good, in the order of `planet.Good`) and `seen`, the prices the player
 saw where they stood (`cell` of the town, `good`, `price`, `month` the price was true; at most
 `MAX_SEEN`, the oldest forgotten first). A file of format 1 or 2 loads with no cargo, nothing
-seen and the starting purse (`STARTING_PURSE`, 20 silver); so does a new player.
+seen and the starting purse (`STARTING_PURSE`, 20 silver); so does a new player. From format 4
+each stack also has its `data`, the game's number for it (a rolled stat); before, 0.
 
 ### The edit journal
 

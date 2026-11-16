@@ -210,7 +210,7 @@ test_explosion_removes_the_entity :: proc(t: ^testing.T) {
 		proc(s: ^Server, data: rawptr) {
 			d := (^Block_Data)(data)
 			w := s.worlds[0]
-			block_entity_at(w, d.pos).slots[3] = {game.item_of_block(test_reg(), .Planks), 5, 0}
+			block_entity_at(w, d.pos).slots[3] = {game.item_of_block(test_reg(), .Planks), 5, 0, 0}
 			p := d.pos
 			bulk_edit(w, Bulk_Edit{shape = Box{p, p}, op = .Carve}, world_act(w, .Explosion))
 			d.has = block_entity_at(w, d.pos) != nil // (in the same call: no tick, no sweep)
@@ -279,7 +279,7 @@ test_entity_without_block_dropped :: proc(t: ^testing.T) {
 		local = u16(game.local_index({5, 5, 5})),
 		kind  = .Container,
 	}
-	orphan.slots[3] = {planks, 5, 0}
+	orphan.slots[3] = {planks, 5, 0, 0}
 	pos := game.Chunk_Pos{900, 0, 900}
 	save_chunk_with(w, pos, .Stone, {orphan})
 	orphaned := proc(s: ^Server, item: game.Item) -> i64 {
@@ -365,16 +365,16 @@ test_restore_takes_spilled_stacks :: proc(t: ^testing.T) {
 			w := s.worlds[0]
 			planks := game.item_of_block(test_reg(), .Planks)
 			e := block_entity_at(w, d.pos)
-			e.slots[0] = {planks, 5, 0}
+			e.slots[0] = {planks, 5, 0, 0}
 			value := e^
 			key := Entity_Undo_Key{d.pos, 77, 1}
 			bytes := game.block_entity_pack(s.registry, &value, context.temp_allocator)
 			e.slots[0] = {}
 			here := [3]f64{f64(d.pos.x) + 0.5, f64(d.pos.y) + 0.5, f64(d.pos.z) + 0.5}
-			near_a := spawn_item(w, here + {1, 0, 0}, {planks, 3, 0}, {}, -1)
-			near_b := spawn_item(w, here + {0, 0, 2}, {planks, 4, 0}, {}, -1)
-			far := spawn_item(w, here + {20, 0, 0}, {planks, 9, 0}, {}, -1)
-			other := spawn_item(w, here + {0, 0, 1}, {planks, 9, 0}, {}, -1)
+			near_a := spawn_item(w, here + {1, 0, 0}, {planks, 3, 0, 0}, {}, -1)
+			near_b := spawn_item(w, here + {0, 0, 2}, {planks, 4, 0, 0}, {}, -1)
+			far := spawn_item(w, here + {20, 0, 0}, {planks, 9, 0, 0}, {}, -1)
+			other := spawn_item(w, here + {0, 0, 1}, {planks, 9, 0, 0}, {}, -1)
 			entity_owner(w, near_a).action, entity_owner(w, near_b).action, entity_owner(w, far).action, entity_owner(w, other).action =
 				77, 77, 77, 5
 			ids := [4]u32 {

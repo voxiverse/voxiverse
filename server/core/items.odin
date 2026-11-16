@@ -81,19 +81,19 @@ block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 		if stage == game.WHEAT_STAGES - 1 {
 			append(
 				&drops,
-				game.Stack{wheat, 1, 0},
-				game.Stack{seeds, base.rng_int_range(r, 1, 4), 0},
+				game.Stack{wheat, 1, 0, 0},
+				game.Stack{seeds, base.rng_int_range(r, 1, 4), 0, 0},
 			)
 		} else {
-			append(&drops, game.Stack{seeds, 1, 0})
+			append(&drops, game.Stack{seeds, 1, 0, 0})
 		}
 	} else if block == .Tall_Grass {
-		if base.rng_int_max(r, 8) == 0 {append(&drops, game.Stack{seeds, 1, 0})}
+		if base.rng_int_max(r, 8) == 0 {append(&drops, game.Stack{seeds, 1, 0, 0})}
 	} else if item := game.block_drop(w.server.registry, block); item != game.NO_ITEM {
 		t := &w.server.registry.blocks
 		double :=
 			t.types[t.type_of[block]].place == .Slab && game.state_is(t, block, "type", "double")
-		append(&drops, game.Stack{item, 2 if double else 1, 0}) // (a double slab leaves two)
+		append(&drops, game.Stack{item, 2 if double else 1, 0, 0}) // (a double slab leaves two)
 	}
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
 	for st in drops {
@@ -182,7 +182,7 @@ item_tick :: proc(w: ^World, ent: game.Entity_Handle) -> bool {
 				other, found := entity_find(w, u32(id))
 				if !found || u32(id) < own {continue}
 				if entity_kind(w, other) != ekind ||
-				   entity_stack(w, other)^.item != entity_stack(w, ent)^.item {continue}
+				   !game.stacks_alike(entity_stack(w, other)^, entity_stack(w, ent)^) {continue}
 				if entity_stack(w, ent)^.count + entity_stack(w, other)^.count > size {continue}
 				d := entity_pos(w, other) - entity_pos(w, ent)
 				if d.x * d.x + d.y * d.y + d.z * d.z >
@@ -223,6 +223,24 @@ item_tick :: proc(w: ^World, ent: game.Entity_Handle) -> bool {
 		if f32(entity_age_of(w, ent)) * game.TICK_SECONDS < delay {continue}
 		d := c.player.position + {0, 0.5, 0} - entity_pos(w, ent)
 		if d.x * d.x + d.y * d.y + d.z * d.z > f64(kind.item.range * kind.item.range) {continue}
+		if g := &s.config.game; g.picking != nil {
+			switch g.picking(s, c, entity_stack(w, ent)^) {
+			case .Take:
+			case .Leave:
+				continue
+			case .Taken:
+				// The game took it its own way (a purse, a potion drunk): gone.
+				record(
+					s,
+					c,
+					.Item_Picked,
+					game.item_name(s.registry, entity_stack(w, ent)^.item),
+					i64(entity_stack(w, ent)^.count),
+				)
+				ledger_stack(s, w, .Game, entity_stack(w, ent)^, -1)
+				return true
+			}
+		}
 		left := game.inventory_add(s.registry, &c.inventory, entity_stack(w, ent)^)
 		if left.count == entity_stack(w, ent)^.count {continue} 	// no room
 		record(
@@ -264,7 +282,7 @@ item_give :: proc(s: ^Server, c: ^Client, item: game.Item, count: int) -> (given
 		rest := game.inventory_add(
 			s.registry,
 			&c.inventory,
-			{item, want, game.new_ammo(s.registry, item)},
+			{item, want, game.new_ammo(s.registry, item), 0},
 		)
 		given += want - rest.count
 		if rest.count > 0 {break}
@@ -274,6 +292,32 @@ item_give :: proc(s: ^Server, c: ^Client, item: game.Item, count: int) -> (given
 		c.inv_changed = true
 	}
 	return
+}
+
+// Pickup: what a game's picking hook makes of a stack a player walks over.
+Pickup :: enum u8 {
+	Take, // into its inventory, as the engine does (as far as there is room)
+	Leave, // it stays where it lies (not this player's, not now)
+	Taken, // the game took it its own way (coins into a purse, a potion drunk): gone
+}
+
+// item_drop: the game drops a stack into the world at position (loot, a chest's
+// spill), with its game data (Stack.data: a rolled stat, a rarity); it hops up a
+// little, lies there for its kind's life, and the first player to walk over it picks
+// it up (the game's picking hook may decide). Booked in the ledger as the game's. 0:
+// the world is full.
+item_drop :: proc(
+	s: ^Server,
+	w: ^World,
+	position: [3]f64,
+	stack: game.Stack,
+) -> game.Entity_Handle {
+	if game.stack_empty(stack) {return 0}
+	st := stack
+	st.count = min(st.count, game.item_stack_size(s.registry, st.item))
+	if st.ammo == 0 {st.ammo = game.new_ammo(s.registry, st.item)}
+	ledger_stack(s, w, .Game, st)
+	return spawn_item(w, position, st, {0, 3, 0}, -1)
 }
 
 // item_take: up to count of item out of c's slots; how many it took.
@@ -318,7 +362,7 @@ admin_give :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	for to in targets {
 		ledger(s, to.world, .Give, item, count)
 		for left := count; left > 0; left -= size {
-			rest := game.inventory_add(s.registry, &to.inventory, {item, min(left, size), 0})
+			rest := game.inventory_add(s.registry, &to.inventory, {item, min(left, size), 0, 0})
 			if !game.stack_empty(
 				rest,
 			) {spawn_item(to.world, to.player.position + {0, 0.5, 0}, rest, {}, -1)}
@@ -358,7 +402,7 @@ admin_clear :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 			s,
 			who.world,
 			.Clear,
-			{st.item, st.count - who.inventory.slots[i].count, 0},
+			{st.item, st.count - who.inventory.slots[i].count, 0, 0},
 			-1,
 		)
 	}
@@ -366,7 +410,7 @@ admin_clear :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		s,
 		who.world,
 		.Clear,
-		{before.cursor.item, before.cursor.count - who.inventory.cursor.count, 0},
+		{before.cursor.item, before.cursor.count - who.inventory.cursor.count, 0, 0},
 		-1,
 	)
 	who.inv_changed = true

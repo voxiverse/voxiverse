@@ -256,7 +256,7 @@ run_script :: proc(
 		item, _ := game.item_by_name(srv.registry, "grappling_hook")
 		call(srv, proc(s: ^Server, data: rawptr) {
 				c := &s.clients[0]
-				c.inventory.slots[0] = {(^game.Item)(data)^, 1, 0}
+				c.inventory.slots[0] = {(^game.Item)(data)^, 1, 0, 0}
 				c.inventory.selected = 0
 				c.inv_changed = true
 			}, &item)

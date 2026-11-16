@@ -112,7 +112,7 @@ inventory_apply :: proc(
 		switch {
 		case stack_empty(cur^) && stack_empty(slot^):
 			return
-		case !stack_empty(cur^) && !stack_empty(slot^) && cur.item == slot.item:
+		case !stack_empty(cur^) && !stack_empty(slot^) && stacks_alike(cur^, slot^):
 			moved := min(cur.count, item_stack_size(reg, slot.item) - slot.count)
 			if moved <= 0 {cur^, slot^ = slot^, cur^} else {
 				slot.count += moved
@@ -135,7 +135,7 @@ inventory_apply :: proc(
 		case stack_empty(slot^):
 			slot^ = with_count(cur^, 1)
 			cur.count -= 1
-		case slot.item == cur.item:
+		case stacks_alike(slot^, cur^):
 			if slot.count >= item_stack_size(reg, slot.item) {return}
 			slot.count += 1
 			cur.count -= 1
@@ -192,11 +192,11 @@ inventory_apply :: proc(
 	case .Take:
 		item := Item(a.arg)
 		if !catalog || !item_valid(reg, item) {return}
-		inv.cursor = {item, item_stack_size(reg, item), new_ammo(reg, item)}
+		inv.cursor = {item, item_stack_size(reg, item), new_ammo(reg, item), 0}
 	case .Put:
 		if !in_slots || stack_empty(inv.cursor) || !slot_accepts(reg, a.slot, inv.cursor) {return}
 		slot := slot_at(inv, a.slot)
-		if !stack_empty(slot^) && slot.item != inv.cursor.item {return}
+		if !stack_empty(slot^) && !stacks_alike(slot^, inv.cursor) {return}
 		moved := min(a.arg, inv.cursor.count, item_stack_size(reg, inv.cursor.item) - slot.count)
 		if moved <= 0 {return}
 		slot^ = with_count(inv.cursor, slot.count + moved)
@@ -210,7 +210,7 @@ inventory_apply :: proc(
 		for full in ([2]bool{false, true}) {
 			for &slot in inv.slots {
 				if cur.count >= size {break}
-				if slot.item != cur.item || stack_empty(slot) {continue}
+				if !stacks_alike(slot, cur^) || stack_empty(slot) {continue}
 				if (slot.count >= size) != full {continue}
 				moved := min(slot.count, size - cur.count)
 				slot.count -= moved
@@ -232,7 +232,7 @@ inventory_apply :: proc(
 			if stack_empty(slot^) || slot.count >= item_stack_size(reg, slot.item) {return}
 			// From the last slot of the other section holding it.
 			from := -1
-			for i in lo ..< hi {if inv.slots[i].item == slot.item && !stack_empty(inv.slots[i]) {from = i}}
+			for i in lo ..< hi {if stacks_alike(inv.slots[i], slot^) && !stack_empty(inv.slots[i]) {from = i}}
 			if from < 0 {return}
 			inv.slots[from].count -= 1
 			slot.count += 1
@@ -305,13 +305,15 @@ inventory_add_at :: proc(
 slots_sort :: proc(reg: ^Registry, slots: []Stack) {
 	items := make([dynamic]Stack, context.temp_allocator)
 	for s in slots {if !stack_empty(s) {append(&items, s)}}
-	slice.stable_sort_by(items[:], proc(a, b: Stack) -> bool {return a.item < b.item})
+	slice.stable_sort_by(items[:], proc(a, b: Stack) -> bool {
+		return a.item < b.item || (a.item == b.item && a.data < b.data)
+	})
 	n := 0
 	for &s in slots {s = {}}
 	for it in items {
 		size := item_stack_size(reg, it.item)
 		left := it.count
-		if n > 0 && slots[n - 1].item == it.item && slots[n - 1].count < size {
+		if n > 0 && stacks_alike(slots[n - 1], it) && slots[n - 1].count < size {
 			moved := min(left, size - slots[n - 1].count)
 			slots[n - 1].count += moved
 			left -= moved
@@ -332,7 +334,7 @@ slots_add :: proc(reg: ^Registry, slots: []Stack, stack: Stack) -> Stack {
 	if stack_empty(left) || size == 0 {return left}
 	for &s in slots {
 		if left.count == 0 {break}
-		if s.item != left.item || stack_empty(s) {continue}
+		if !stacks_alike(s, left) || stack_empty(s) {continue}
 		moved := min(left.count, size - s.count)
 		if moved > 0 {
 			s.count += moved

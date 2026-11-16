@@ -244,7 +244,7 @@ test_pack_adds_block_item_recipe :: proc(t: ^testing.T) {
 		len(frozen_every_item(context.temp_allocator)) + BASE_NEW_TYPES + BASE_WEAPONS + 2,
 	)
 
-	two := Stack{item, 1, 0}
+	two := Stack{item, 1, 0, 0}
 	grid: [9]Stack
 	grid[0], grid[1] = two, two // 1 wide, 2 high
 	id, found := recipe_match(reg, grid, 1, 2)

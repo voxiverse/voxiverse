@@ -27,7 +27,7 @@ import "common:planet"
 
 CHARACTERS_DIR :: "characters"
 PLAYERS_DIR :: "players"
-PLAYER_FILE_FORMAT :: 3 // 3: the trader; a file before has an empty one and the starting purse. 2: a weapon's magazine (`ammo`); a file of 1 has none: full
+PLAYER_FILE_FORMAT :: 4 // 4: an item's game data (`data`; before: 0). 3: the trader; a file before has an empty one and the starting purse. 2: a weapon's magazine (`ammo`); a file of 1 has none: full
 
 Player_Record :: struct {
 	account:   Maybe(game.Account), // whose (none: from before accounts, unclaimed)
@@ -84,6 +84,7 @@ File_Stack :: struct {
 	item:  string,
 	count: int,
 	ammo:  int, // a weapon's magazine (format 2)
+	data:  u32, // the game's number for it (format 4: Stack.data)
 }
 
 // character_path: where name's file is (its account's directory, or
@@ -215,9 +216,10 @@ player_parse :: proc(reg: ^game.Registry, data: []u8) -> (r: Player_Record, ok: 
 			log.warnf("server player file item dropped item=%q", st.item)
 			continue
 		}
-		stack := game.Stack{item, min(st.count, game.item_stack_size(reg, item)), 0}
+		stack := game.Stack{item, min(st.count, game.item_stack_size(reg, item)), 0, 0}
 		stack.ammo = game.new_ammo(reg, item) // (a file of format 1 has no magazines: full)
 		if f.format >= 2 {stack.ammo = u8(clamp(st.ammo, 0, int(stack.ammo)))}
+		stack.data = st.data
 		switch {
 		case st.slot >= 0 && st.slot < game.INVENTORY_SLOTS:
 			r.inventory.slots[st.slot] = stack
@@ -253,7 +255,7 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
 	for st, i in r.inventory.slots {
 		if !game.stack_empty(
 			st,
-		) {append(&items, File_Stack{i, game.item_id(reg, st.item), st.count, int(st.ammo)})}
+		) {append(&items, File_Stack{i, game.item_id(reg, st.item), st.count, int(st.ammo), st.data})}
 	}
 	for st, e in r.inventory.equipment {
 		if !game.stack_empty(st) {
@@ -264,6 +266,7 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
 					game.item_id(reg, st.item),
 					st.count,
 					int(st.ammo),
+					st.data,
 				},
 			)
 		}
@@ -271,7 +274,7 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
 	if c := r.inventory.cursor; !game.stack_empty(c) {
 		append(
 			&items,
-			File_Stack{game.CURSOR_SLOT, game.item_id(reg, c.item), c.count, int(c.ammo)},
+			File_Stack{game.CURSOR_SLOT, game.item_id(reg, c.item), c.count, int(c.ammo), c.data},
 		)
 	}
 	seen := make([dynamic]Seen_File, context.temp_allocator)
@@ -424,6 +427,7 @@ kit_parse :: proc(reg: ^game.Registry, text: string) -> ([]game.Stack, bool) {
 			game.Stack {
 				item,
 				min(count, game.item_stack_size(reg, item) * game.INVENTORY_SLOTS),
+				0,
 				0,
 			},
 		)

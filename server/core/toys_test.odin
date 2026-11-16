@@ -104,7 +104,7 @@ shotgun_scenario :: proc(s: ^Server, _: rawptr) {
 	}
 	alice.player.position = base
 	bob.player.position = base + {4, 0, 0}
-	alice.inventory.slots[0] = {shotgun, 1, game.new_ammo(reg, shotgun)}
+	alice.inventory.slots[0] = {shotgun, 1, game.new_ammo(reg, shotgun), 0}
 	alice.inventory.selected = 0
 	alice.reload_until = 0
 	s.tick += 20_000

@@ -719,7 +719,7 @@ write_entities :: proc(w: ^World) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintln(
 		&b,
-		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count | shorn genes growth love wait]",
+		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count action data | shorn genes growth love wait]",
 	)
 	it := entities_each(w)
 	for e in entities_next(&it) {
@@ -739,10 +739,11 @@ write_entities :: proc(w: ^World) -> bool {
 		if entity_kind(w, e) == w.server.registry.engine.item { 	// (and the action that dropped it: a rollback takes it back after a restart)
 			fmt.sbprintf(
 				&b,
-				" %s %d %d",
+				" %s %d %d %d",
 				game.item_id(w.server.registry, entity_stack(w, e).item),
 				entity_stack(w, e).count,
 				entity_owner(w, e).action,
+				entity_stack(w, e).data,
 			)
 		}
 		if entity_kind(w, e) == w.server.registry.engine.sheep {
@@ -794,7 +795,7 @@ load_entities :: proc(w: ^World) {
 			// An item has its stack after, a sheep whether it is shorn; no other has more.
 			// An item has its stack after; a sheep whether it is shorn (and, with
 			// its genes, growth, love and wait); no other has more.
-			if found && kind == item && len(f) != 9 && len(f) != 10 {ok = false}
+			if found && kind == item && (len(f) < 9 || len(f) > 11) {ok = false}
 			if found && kind == sheep && len(f) != 7 && len(f) != 8 && len(f) != 12 {ok = false}
 			if found && kind != item && kind != sheep && len(f) != 7 {ok = false}
 		}
@@ -827,13 +828,19 @@ load_entities :: proc(w: ^World) {
 			// A dropped stack: what it is.
 			item, known := game.item_by_name(w.server.registry, f[7] if len(f) >= 9 else "")
 			n, counted := strconv.parse_int(f[8] if len(f) >= 9 else "")
-			if len(f) == 10 {
+			if len(f) >= 10 {
 				a, has := strconv.parse_u64(f[9], 10)
 				ok = has && a <= u64(max(u32))
 				action = u32(a)
 			}
+			data: u64 // (the game's number for it: a save before had none)
+			if len(f) == 11 {
+				d, has := strconv.parse_u64(f[10], 10)
+				ok = ok && has && d <= u64(max(u32))
+				data = d
+			}
 			ok = ok && known && counted && n > 0
-			stack = {item, min(n, game.item_stack_size(w.server.registry, item)), 0}
+			stack = {item, min(n, game.item_stack_size(w.server.registry, item)), 0, u32(data)}
 		}
 		if !ok || !found {
 			skipped += 1

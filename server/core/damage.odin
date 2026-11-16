@@ -228,7 +228,7 @@ kit_give :: proc(s: ^Server, c: ^Client) {
 		left := game.inventory_add_at(
 			s.registry,
 			&c.inventory,
-			{e.item, want, game.new_ammo(s.registry, e.item)},
+			{e.item, want, game.new_ammo(s.registry, e.item), 0},
 			e.place,
 			e.worn,
 		)

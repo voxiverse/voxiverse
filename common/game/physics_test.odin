@@ -380,10 +380,10 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 
 	// derive_mods: worn boots and a charm in the offhand; the pocket's do not count.
 	inv: Inventory
-	inv.equipment[.Feet] = {item_of_armor(.Boots), 1, 0}
-	inv.equipment[.Offhand] = {item_of_material(.Feather_Charm), 1, 0}
-	inv.equipment[.Head] = {item_of_armor(.Cap), 1, 0}
-	inv.slots[3] = {item_of_armor(.Tunic), 1, 0}
+	inv.equipment[.Feet] = {item_of_armor(.Boots), 1, 0, 0}
+	inv.equipment[.Offhand] = {item_of_material(.Feather_Charm), 1, 0, 0}
+	inv.equipment[.Head] = {item_of_armor(.Cap), 1, 0, 0}
+	inv.slots[3] = {item_of_armor(.Tunic), 1, 0, 0}
 	m := derive_mods(test_reg(), &inv)
 	testing.expectf(
 		t,
@@ -474,13 +474,13 @@ test_jump_boots_give_one_extra_jump :: proc(t: ^testing.T) {
 	boots, found := item_by_name(test_reg(), "jump_boots")
 	if !testing.expect(t, found) {return}
 	inv: Inventory
-	inv.equipment[.Feet] = {boots, 1, 0}
+	inv.equipment[.Feet] = {boots, 1, 0, 0}
 	mods := derive_mods(test_reg(), &inv)
 	testing.expect_value(t, mods.air_jumps, 1)
 	testing.expectf(t, abs(mods.speed - 1.2) < 1e-5, "speed %v", mods.speed)
 	// (carried in the pockets they do nothing)
 	inv.equipment[.Feet] = {}
-	inv.slots[7] = {boots, 1, 0}
+	inv.slots[7] = {boots, 1, 0, 0}
 	testing.expect_value(t, derive_mods(test_reg(), &inv).air_jumps, 0)
 
 	s := Player_State {

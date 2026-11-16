@@ -78,7 +78,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 		return ready(cs[0]) && ready(cs[1])
 	})
 	if !testing.expect(t, ok, "the players never landed with their kits") {return}
-	testing.expect(t, alice.inventory.slots[0] == {stone, 64, 0}, "no kit")
+	testing.expect(t, alice.inventory.slots[0] == {stone, 64, 0, 0}, "no kit")
 	testing.expect(t, !game.allowed(alice.grants[:], "items.infinite"))
 
 	// Alice drops all her stone at her feet (looking down); bob, standing
@@ -224,4 +224,131 @@ test_hotbar_select :: proc(t: ^testing.T) {
 	testing.expect(t, !hotbar_select(s, c, -1))
 	harness_step(&sess.h, 5)
 	testing.expect_value(t, sess.mirror.inventory.selected, 3)
+}
+
+// Loot: Picked, the test game's tally of what its picking hook decided.
+@(private = "file")
+Picked :: struct {
+	taken: int, // the dirt it took its own way (a purse)
+	seen:  [dynamic]game.Stack,
+}
+
+// A game drops stacks with data of its own (a rolled stat): the pistol walked over
+// goes into the inventory with its data, sent to the client so; the dirt the game
+// takes its own way is gone; the stone it leaves lies there. After a save and a
+// restart the pistol in the inventory and the stone on the ground still have theirs.
+@(test)
+test_loot_keeps_its_data :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "loot"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	config := harness_world()
+	config.mode = "survival"
+	config.save_dir = dir
+	config.kit = ""
+	config.game = {
+		info = {id = "loot", name = "Loot"},
+		server_state = Picked,
+		picking = proc(s: ^Server, c: ^Client, stack: game.Stack) -> Pickup {
+			p := game_state(s, Picked)
+			append(&p.seen, stack)
+			switch stack.item {
+			case game.item_of_block(s.registry, .Dirt):
+				p.taken += stack.count
+				return .Taken
+			case game.item_of_block(s.registry, .Stone):
+				return .Leave
+			}
+			return .Take
+		},
+		stop = proc(s: ^Server) {delete(game_state(s, Picked).seen)},
+	}
+	pistol, _ := game.registry_item(test_reg(), "voxiverse:pistol")
+	stone := game.item_of_block(test_reg(), .Stone)
+	{
+		sess := new(Session)
+		defer free(sess)
+		if !testing.expect(t, session_start(sess, {}, false, with = config)) {
+			session_stop(sess)
+			return
+		}
+		_, ok := harness_step_until(&sess.h, proc(data: rawptr) -> bool {
+				sess := (^Session)(data)
+				return sess.mirror.welcomed && sess.h.srv.clients[0].state == .Playing
+			}, sess, 600)
+		if !testing.expect(t, ok) {
+			session_stop(sess)
+			return
+		}
+		s := &sess.h.srv
+		c := &s.clients[0]
+		c.inventory.slots, c.inv_changed = {}, true // (the kit out of the way)
+		feet := c.player.position
+		testing.expect(t, item_drop(s, s.home, feet + {0.3, 0.5, 0}, {pistol, 1, 0, 0x0207}) != 0)
+		testing.expect(
+			t,
+			item_drop(
+				s,
+				s.home,
+				feet + {-0.3, 0.5, 0},
+				{game.item_of_block(s.registry, .Dirt), 5, 0, 0},
+			) !=
+			0,
+		)
+		testing.expect(t, item_drop(s, s.home, feet + {0, 0.5, 0.3}, {stone, 3, 0, 99}) != 0)
+		harness_step(&sess.h, 60)
+		p := game_state(s, Picked)
+		testing.expect_value(t, p.taken, 5)
+		slot := slot_of(c, pistol)
+		if testing.expect(t, slot >= 0, "the pistol was not picked up") {
+			testing.expect_value(t, c.inventory.slots[slot].data, 0x0207)
+			testing.expect_value(t, sess.mirror.inventory.slots[slot].data, 0x0207)
+		}
+		testing.expect_value(t, item_count(c, stone), 0)
+		lying := 0
+		it := entities_each(s.home)
+		for h in entities_next(&it) {
+			if entity_kind(s.home, h) == s.registry.engine.item {
+				lying += 1
+				testing.expect_value(t, entity_stack(s.home, h)^, game.Stack{stone, 3, 0, 99})
+			}
+		}
+		testing.expect_value(t, lying, 1)
+		session_stop(sess)
+	}
+	// The second session: the same player in the same universe.
+	config.game.picking = proc(s: ^Server, c: ^Client, stack: game.Stack) -> Pickup {return .Leave}
+	sess := new(Session)
+	defer free(sess)
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {
+		session_stop(sess)
+		return
+	}
+	defer session_stop(sess)
+	_, ok := harness_step_until(&sess.h, proc(data: rawptr) -> bool {
+			sess := (^Session)(data)
+			return sess.mirror.welcomed && sess.h.srv.clients[0].state == .Playing
+		}, sess, 600)
+	if !testing.expect(t, ok) {return}
+	s := &sess.h.srv
+	c := &s.clients[0]
+	slot := slot_of(c, pistol)
+	if testing.expect(t, slot >= 0, "the pistol did not come back") {
+		testing.expect_value(t, c.inventory.slots[slot].data, 0x0207)
+	}
+	found := false
+	it := entities_each(s.home)
+	for h in entities_next(&it) {
+		if entity_kind(s.home, h) == s.registry.engine.item {
+			found = entity_stack(s.home, h)^ == game.Stack{stone, 3, 0, 99}
+		}
+	}
+	testing.expect(t, found, "the stone on the ground lost its data")
+}
+
+// slot_of: the first slot holding item (-1: none).
+@(private = "file")
+slot_of :: proc(c: ^Client, item: game.Item) -> int {
+	for st, i in c.inventory.slots {if st.item == item && !game.stack_empty(st) {return i}}
+	return -1
 }

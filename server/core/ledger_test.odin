@@ -162,7 +162,7 @@ script :: proc(s: ^Server, data: rawptr) {
 		ledger(s, w, .Give, stone, 5)
 		for entity_count(w) <
 		    MAX_ENTITIES {entity_spawn(w, test_reg().engine.sheep, {0, 100, 0}, false)}
-		spawn_item(w, {0, 100, 0}, {stone, 5, 0}, {}, -1)
+		spawn_item(w, {0, 100, 0}, {stone, 5, 0, 0}, {}, -1)
 		for e in entities_snapshot(w) {
 			if entity_kind(w, e) == test_reg().engine.sheep {entity_gone(w, e)}
 		}
@@ -171,7 +171,7 @@ script :: proc(s: ^Server, data: rawptr) {
 		// A stack duplicated: the audit says which item and how much.
 		for &st in c.inventory.slots {
 			if game.stack_empty(st) {
-				st = {stone, 7, 0}
+				st = {stone, 7, 0, 0}
 				read_audit(s, r)
 				st = {}
 				break
@@ -288,7 +288,7 @@ scenario_proc :: proc(s: ^Server, data: rawptr) {
 	case 3:
 		// A saved character with more than it can hold.
 		if rec, ok := &s.store.players[d.name]; ok {
-			rec.overflow[0] = {game.item_of_block(test_reg(), .Dirt), 9, 0}
+			rec.overflow[0] = {game.item_of_block(test_reg(), .Dirt), 9, 0, 0}
 			d.ok = true
 		}
 	case 4:
@@ -442,7 +442,7 @@ random_inventory :: proc(r: rand.Generator) -> (inv: game.Inventory) {
 	pick :: proc(r: rand.Generator, items: []game.Item) -> game.Stack {
 		if rand.int_max(3, r) == 0 {return {}}
 		item := rand.choice(items, r)
-		return {item, rand.int_range(1, game.item_stack_size(test_reg(), item) + 1, r), 0}
+		return {item, rand.int_range(1, game.item_stack_size(test_reg(), item) + 1, r), 0, 0}
 	}
 	for &st in inv.slots {st = pick(r, items)}
 	for &st, e in inv.equipment {
