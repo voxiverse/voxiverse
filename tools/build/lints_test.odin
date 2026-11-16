@@ -134,7 +134,7 @@ test_game_import_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_game_imports("client/main/main.odin", imports)), 0)
 	testing.expect_value(t, len(lint_game_imports("server/core/server.odin", imports)), 2)
 	testing.expect_value(t, len(lint_game_imports("client/engine/app.odin", imports)), 2)
-	testing.expect_value(t, len(lint_game_imports("tools/bench/main.odin", imports)), 2)
+	testing.expect_value(t, len(lint_game_imports("tools/worldmap/main.odin", imports)), 2)
 	testing.expect_value(t, len(lint_game_imports("tests/x_test.odin", imports)), 2)
 	// A game's client part: client/main's alone (the dedicated server links no client code).
 	client := "import \"games:tag/client\"\n"
