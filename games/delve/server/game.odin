@@ -58,8 +58,7 @@ Run :: struct {
 	foe_count:   int,
 	warden:      u32, // its entity id (0: dead, or not yet)
 	warden_call: u64, // the tick the warden next calls biters
-	kept:        [MAX_KEPT]Kept,
-	kept_count:  int,
+	kept:        play.By_Name(Kept, MAX_KEPT),
 	// What the pack's names are in this session's registry.
 	kinds:       [delve.Foe]game.Kind_Id,
 	chest, spit: game.Kind_Id,
@@ -81,13 +80,11 @@ Seat :: struct {
 	whirl_at: u64, // the tick its whirl is ready again
 }
 
-// Kept: a delver's progress as the universe keeps it (by name).
+// Kept: a delver's progress as the universe keeps it (by name: play.By_Name).
 Kept :: struct {
-	name:     [game.MAX_NAME_LENGTH]u8,
-	name_len: int,
-	level:    int,
-	xp:       int,
-	best:     int,
+	level: int,
+	xp:    int,
+	best:  int,
 }
 
 state :: proc(s: ^core.Server) -> ^Run {return core.game_state(s, Run)}
@@ -185,9 +182,7 @@ restore :: proc(s: ^core.Server, c: ^core.Client) {
 	p^ = {
 		level = 1,
 	}
-	name := core.client_name(c)
-	for &k in d.kept[:d.kept_count] {
-		if string(k.name[:k.name_len]) != name {continue}
+	if k := play.by_name(&d.kept, core.client_name(c)); k != nil {
 		p.level, p.xp, p.best = k.level, k.xp, k.best
 	}
 }
@@ -197,17 +192,8 @@ keep :: proc(s: ^core.Server, c: ^core.Client) {
 	d := state(s)
 	p := seat(s, c)
 	if p.level == 0 {return}
-	name := core.client_name(c)
-	k: ^Kept
-	for &e in d.kept[:d.kept_count] {
-		if string(e.name[:e.name_len]) == name {k = &e}
-	}
-	if k == nil {
-		if d.kept_count >= MAX_KEPT {return}
-		k = &d.kept[d.kept_count]
-		d.kept_count += 1
-		k.name_len = copy(k.name[:], name)
-	}
+	k := play.by_name(&d.kept, core.client_name(c), make_it = true)
+	if k == nil {return}
 	k.level, k.xp, k.best = p.level, p.xp, p.best
 }
 
@@ -354,36 +340,32 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 	return true
 }
 
-// save: every delver's progress, kept by name ("hero <level> <xp> <best> <name>").
+// save: every delver's progress, kept by name ("hero = <level> <xp> <best> <name>").
 save :: proc(s: ^core.Server, out: ^strings.Builder) {
 	for &c in s.clients {if here(s, &c) {keep(s, &c)}}
-	d := state(s)
-	for &k in d.kept[:d.kept_count] {
-		fmt.sbprintfln(out, "hero %d %d %d %s", k.level, k.xp, k.best, string(k.name[:k.name_len]))
+	write :: proc(b: ^strings.Builder, k: ^Kept) -> bool {
+		fmt.sbprintf(b, "%d %d %d", k.level, k.xp, k.best)
+		return true
 	}
+	play.by_name_save(&state(s).kept, "hero", out, write)
 }
 
 // load: the progress the universe kept; a line Delve does not know, or a number out of
 // its bounds, is not Delve's.
 load :: proc(s: ^core.Server, text: string) -> bool {
 	d := state(s)
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		if strings.trim_space(line) == "" {continue}
-		f := strings.fields(line, context.temp_allocator)
-		if len(f) != 5 || f[0] != "hero" || d.kept_count >= MAX_KEPT {return false}
-		level, ok1 := strconv.parse_int(f[1])
-		xp, ok2 := strconv.parse_int(f[2])
-		best, ok3 := strconv.parse_int(f[3])
+	read :: proc(f: []string, k: ^Kept) -> bool {
+		if len(f) != 3 {return false}
+		level, ok1 := strconv.parse_int(f[0])
+		xp, ok2 := strconv.parse_int(f[1])
+		best, ok3 := strconv.parse_int(f[2])
 		if !ok1 || !ok2 || !ok3 || level < 1 || level > delve.MAX_LEVEL || xp < 0 || best < 0 {
 			return false
 		}
-		if len(f[4]) > game.MAX_NAME_LENGTH {return false}
-		k := &d.kept[d.kept_count]
-		k.name_len = copy(k.name[:], f[4])
 		k.level, k.xp, k.best = level, xp, best
-		d.kept_count += 1
+		return true
 	}
+	for line in play.saved_lines(text) {play.by_name_read(&d.kept, "hero", line, read) or_return}
 	for &c in s.clients {if here(s, &c) {restore(s, &c)}}
 	return true
 }
