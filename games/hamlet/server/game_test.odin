@@ -6,55 +6,33 @@ import "core:testing"
 
 import "games:hamlet"
 import "server:core"
+import "server:playtest"
 
 // Hamlet on a stepped server: the host (the harness's mirror, a planner over the
 // village) and, for the tests of two, a guest over the harness's network with the
 // default role. Every change goes through the requests, as the toolbar's would.
 
-Rig :: struct {
-	sess:  core.Session,
-	guest: core.Harness_Player,
-	with:  bool,
-}
+Rig :: playtest.Rig
 
+// rig_start: Hamlet on a stepped server (with a guest, for the tests of two, who holds
+// the default role), the village's land built and the players in it.
 rig_start :: proc(t: ^testing.T, rig: ^Rig, guest := false, dir := "") -> bool {
-	config := core.harness_world()
-	config.game = GAME
-	config.listen = true
-	config.kit = ""
-	config.save_dir = dir
-	config.everyone_cheats = false
-	if !testing.expect(t, core.session_start(&rig.sess, {}, false, with = config)) {return false}
-	if guest {
-		core.harness_player_join(&rig.sess.h, &rig.guest, "guest")
-		rig.with = true
+	o := playtest.Options {
+		guests   = 1 if guest else 0,
+		listen   = true,
+		save_dir = dir,
+		plain    = true,
 	}
-	ready :: proc(data: rawptr) -> bool {
-		rig := (^Rig)(data)
-		s := &rig.sess.h.srv
-		if !rig.sess.mirror.welcomed ||
-		   s.clients[0].state != .Playing ||
-		   state(s).phase != .Running {
-			return false
-		}
-		if rig.with {
-			g := core.harness_player_client(&rig.guest)
-			return g != nil && g.state == .Playing
-		}
-		return true
-	}
-	_, ok := core.harness_step_until(&rig.sess.h, ready, rig, 1200)
-	return testing.expect(t, ok, "the village's land was never built, or the players never came")
+	if !playtest.start(t, rig, GAME, o) {return false}
+	running :: proc(data: rawptr) -> bool {return state((^core.Server)(data)).phase == .Running}
+	ok := playtest.until(rig, running, srv(rig), 40)
+	return testing.expect(t, ok, "the village's land was never built")
 }
 
-rig_stop :: proc(rig: ^Rig) {
-	core.session_stop(&rig.sess)
-	if rig.with {core.harness_player_free(&rig.guest)}
-}
-
-srv :: proc(rig: ^Rig) -> ^core.Server {return &rig.sess.h.srv}
-host :: proc(rig: ^Rig) -> ^core.Client {return &rig.sess.h.srv.clients[0]}
-step :: proc(rig: ^Rig, n := 1) {core.harness_step(&rig.sess.h, n)}
+rig_stop :: playtest.stop
+srv :: playtest.srv
+host :: playtest.host
+step :: playtest.step
 
 ROAD_Z :: hamlet.MAP / 2
 ROAD_FROM :: hamlet.MAP / 2 - 11
@@ -287,7 +265,7 @@ test_two_players_build_together :: proc(t: ^testing.T) {
 	defer rig_stop(rig)
 	s := srv(rig)
 	town := state(s)
-	g := core.harness_player_client(&rig.guest)
+	g := playtest.guest(rig)
 	main_road(rig, g)
 	testing.expect_value(t, town.tiles[ROAD_Z][ROAD_FROM], hamlet.Tile.Road)
 	testing.expect(t, place(rig, .Farm, c = g) >= 0, "the guest's farm")
@@ -312,7 +290,7 @@ test_demolish_needs_the_permission :: proc(t: ^testing.T) {
 	if !testing.expect(t, k >= 0, "no storehouse") {return}
 	at := town.structures[k].at
 	d := hamlet.Demolish{{i16(at.x), i16(at.y)}}
-	core.harness_request(s, core.harness_player_client(&rig.guest), &d)
+	core.harness_request(s, playtest.guest(rig), &d)
 	testing.expect_value(t, count_kind(town, .Storehouse), 1)
 	wood := town.stock[.Wood]
 	core.harness_request(s, host(rig), &d)

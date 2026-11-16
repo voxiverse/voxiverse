@@ -8,6 +8,7 @@ import "core:strings"
 import "common:game"
 import "games:hamlet"
 import "server:core"
+import "server:play"
 
 // Hamlet's server part (the game: games/hamlet). The village is one per session, on the
 // home world's flat ground: its land is built from the seed once (town.odin), then the
@@ -79,22 +80,19 @@ Town :: struct {
 
 state :: proc(s: ^core.Server) -> ^Town {return core.game_state(s, Town)}
 
+// configure: a flat world of the game's own, every universe planned from above (a
+// mode asked for is not kept: a planner has no body).
 configure :: proc(config: ^core.Config) {
-	config.generator = .Flat
-	config.no_natural_spawns = true
-	config.spawn = {f64(hamlet.MAP / 2) + 0.5, 0, f64(hamlet.MAP / 2) + 0.5}
 	config.mode = hamlet.PLANNER_MODE
+	play.configure_flat(config, {f64(hamlet.MAP / 2) + 0.5, 0, f64(hamlet.MAP / 2) + 0.5}, "")
 }
 
 start :: proc(s: ^core.Server) -> bool {
 	t := state(s)
 	w := s.home
-	core.game_rule(s, w, "daylight_cycle", "false")
-	core.game_rule(s, w, "random_tick_speed", "0")
-	core.game_rule(s, w, "drops", "false")
+	play.world_still(s, w, clock = 0.42)
 	core.game_rule(s, w, "fly_speed", "24") // (the planner's panning)
 	core.game_rule(s, w, "fly_sprint_speed", "60")
-	w.clock = 0.42
 	reg := s.registry
 	t.citizen_kind = game.registry_kind(reg, hamlet.CITIZEN_KIND) or_return
 	t.road = game.registry_block(reg, hamlet.ROAD_BLOCK) or_return

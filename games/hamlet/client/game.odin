@@ -58,7 +58,7 @@ Overlay :: enum u8 {
 	Happiness,
 }
 
-BANNER_SECONDS :: 4.0
+MILESTONE_SECONDS :: 4.0
 
 View :: struct {
 	town:       hamlet.Town,
@@ -74,9 +74,7 @@ View :: struct {
 	kind:       hamlet.Kind,
 	rotation:   u8,
 	overlay:    Overlay,
-	banner:     [64]u8,
-	banner_n:   int,
-	until:      f64,
+	flash:      engine.Flash, // a milestone reached
 	requests:   int, // sent (tests)
 	pinned:     bool, // the tool held at pin_from .. pin_to (`hamlet tool ... x z`: a picture aid)
 	pin_from:   [2]i32,
@@ -123,14 +121,9 @@ received :: proc(s: ^engine.Session, r: game.Received) {
 		if st != nil {v.structures[r.key.a] = st^}
 	}
 	if m, ok := engine.game_value(s, r, hamlet.Milestone); ok && m != nil {
-		say(s, fmt.tprintf("%d PEOPLE LIVE IN HAMLET", m.population))
+		text := fmt.tprintf("%d PEOPLE LIVE IN HAMLET", m.population)
+		engine.flash(&view(s).flash, s, text, .Good, MILESTONE_SECONDS)
 	}
-}
-
-say :: proc(s: ^engine.Session, text: string) {
-	v := view(s)
-	v.banner_n = copy(v.banner[:], text)
-	v.until = s.frame_seconds + BANNER_SECONDS
 }
 
 // send: a request to the server part, counted.
@@ -436,20 +429,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		if info.jobs > 0 {text = fmt.tprintf("%s %d/%d", info.name, st.workers, info.jobs)}
 		engine.world_label(s, ctx, at, text)
 	}
-	if v.banner_n > 0 && s.frame_seconds < v.until {
-		k := min(1, ctx.screen.h / 720)
-		mid := ctx.screen.y + ctx.screen.h / 2
-		r := ui.Rect{ctx.screen.x, mid - 200 * k, ctx.screen.w, t.title_size * k * 2}
-		ui.draw_text(
-			ctx,
-			{r.x + 3, r.y + 3, r.w, r.h},
-			string(v.banner[:v.banner_n]),
-			t.title_size * k,
-			t.text_shadow,
-			.Center,
-		)
-		ui.draw_text(ctx, r, string(v.banner[:v.banner_n]), t.title_size * k, t.success, .Center)
-	}
+	engine.flash_draw(ctx, &v.flash, s, -160)
 }
 
 // command: the console's `hamlet` (see GAME.commands).
