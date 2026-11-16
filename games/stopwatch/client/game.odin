@@ -5,6 +5,7 @@ import "core:fmt"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 import "games:stopwatch"
 
 // Stopwatch's client part (the game: games/stopwatch): it keeps what the server last
@@ -37,7 +38,7 @@ View :: struct {
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if times, ok := engine.game_value(s, r, stopwatch.Times); ok && times != nil {
 		v.times = times^

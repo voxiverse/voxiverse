@@ -8,6 +8,7 @@ import "client:console"
 import "client:engine"
 import "client:playtest"
 import "common:game"
+import "common:protocol"
 import "games:stopwatch"
 import stopwatch_server "games:stopwatch/server"
 
@@ -58,8 +59,8 @@ test_stopwatch_on_the_hud :: proc(t: ^testing.T) {
 
 	// A record broken as someone leaves: who broke it is shown beside it.
 	broken := stopwatch.Record_Broken{"Steve_1", 75}
-	r := game.Received {
-		kind  = game.game_kind(&s.schema, stopwatch.Record_Broken) or_else -1,
+	r := protocol.Received {
+		kind  = protocol.game_kind(&s.schema, stopwatch.Record_Broken) or_else -1,
 		op    = .Event,
 		value = &broken,
 	}

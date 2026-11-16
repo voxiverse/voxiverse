@@ -6,6 +6,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "games:stopwatch"
 import "server:core"
 
@@ -85,7 +86,7 @@ test_stopwatch_replicates :: proc(t: ^testing.T) {
 	config.game = GAME
 	if !testing.expect(t, core.session_start(sess, {}, false, with = config)) {return}
 	defer core.session_stop(sess)
-	engine := game.game_schema(allocator = context.temp_allocator)
+	engine := protocol.game_schema(allocator = context.temp_allocator)
 	testing.expect(t, sess.mirror.schema.hash != engine.hash, "the game's kinds are not hashed")
 	testing.expect_value(t, sess.mirror.schema.engine_hash, engine.hash)
 

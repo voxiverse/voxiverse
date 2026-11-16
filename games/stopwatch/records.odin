@@ -1,6 +1,6 @@
 package stopwatch
 
-import "common:game"
+import "common:protocol"
 
 // What the game replicates besides the engine's kinds (docs/games.md): its own state
 // and event kinds, as data. Both sides name them through KINDS (core.Game.kinds, and
@@ -20,7 +20,7 @@ Record_Broken :: struct {
 	seconds: u32,
 }
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states = {{name = "stopwatch.times", value = Times}},
 	events = {{name = "stopwatch.record_broken", value = Record_Broken}},
 }
