@@ -550,3 +550,33 @@ test_walkers_keep_apart :: proc(t: ^testing.T) {
 	d = entity_pos(w, inside) - c.player.position
 	testing.expectf(t, math.sqrt(d.x * d.x + d.z * d.z) >= 0.6, "inside the player: %v", d)
 }
+
+// An archer told to keep 5..7 blocks from the player, with a wall right behind it, does
+// not jump at the wall: it slides along it until it is far enough.
+@(test)
+test_creature_backs_along_a_wall :: proc(t: ^testing.T) {
+	rig := new(Fight_Rig)
+	defer free(rig)
+	if !fight_start(t, rig) {
+		session_stop(&rig.sess)
+		return
+	}
+	defer session_stop(&rig.sess)
+	s := &rig.sess.h.srv
+	w := s.home
+	c := &s.clients[0]
+	bulk_edit(
+		w,
+		{shape = Box{{-14, 0, -3}, {14, 3, -3}}, op = .Set, block = .Stone},
+		world_act(w, .Structure),
+	)
+	archer, _ := game.registry_kind(s.registry, "walkers:archer")
+	e := entity_spawn(w, archer, c.player.position + {0, 0, -2}, false)
+	if !testing.expect(t, e != 0) {return}
+	for _ in 0 ..< 150 {
+		entity_keep(w, e, c.player.position, 5, 7)
+		harness_step(&rig.sess.h)
+	}
+	d := entity_pos(w, e) - c.player.position
+	testing.expectf(t, math.sqrt(d.x * d.x + d.z * d.z) >= 4.8, "backed only to %v", d)
+}

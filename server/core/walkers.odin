@@ -509,6 +509,7 @@ steer_walk :: proc(
 	pos := entity_pos(w, h)
 	at := path.body_block(pos, body)
 	toward: [3]f64 // the centre of the block it goes to next
+	backing: bool // Keep: too near, it backs away
 	switch st.mode {
 	case .Stand:
 		return
@@ -551,15 +552,15 @@ steer_walk :: proc(
 		case st.arrived:
 			return
 		case flat < f64(st.near):
-			// Too near: straight back, away from it.
+			// Too near: straight back, away from it; backed against a wall, along it
+			// (to one side or the other, by its id).
 			away := [2]f64{-d.x, -d.z} / max(flat, 1e-6)
 			if flat < 1e-6 {away = {1, 0}}
-			speed := st.speed if st.speed > 0 else info.walker.walk_speed
-			wish = {f32(away.x), f32(away.y)} * speed
-			vel := entity_velocity(w, h)
-			jump =
-				entity_on_ground(w, h) && body.climb > 0 && abs(vel.x) + abs(vel.z) < 0.1 * speed
-			return
+			if st.stuck > STUCK_TICKS / 4 {
+				away = {-away.y, away.x} if entity_id(w, h) % 2 == 0 else {away.y, -away.x}
+			}
+			toward = pos + {away.x, 0, away.y}
+			backing = true
 		case abs(d.y) < 1.5 && sees(w, pos + {0, 0.5, 0}, st.target + {0, 0.5, 0}):
 			// In sight on its own level: straight at it.
 			toward = st.target
@@ -588,7 +589,9 @@ steer_walk :: proc(
 	vel := entity_velocity(w, h)
 	blocked := entity_on_ground(w, h) && abs(vel.x) + abs(vel.z) < 0.1 * speed
 	if blocked {st.stuck += 1} else {st.stuck = 0}
-	jump = entity_on_ground(w, h) && body.climb > 0 && (toward.y > pos.y + 0.5 || blocked)
+	// (backing away it does not jump at what it backs into: it slides along it)
+	jump =
+		entity_on_ground(w, h) && body.climb > 0 && (toward.y > pos.y + 0.5 || blocked) && !backing
 	return
 }
 
