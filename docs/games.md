@@ -197,6 +197,13 @@ pointer was over a widget or a panel (`ui.panel`, a framed backing, or `ui.block
 when the UI was last drawn (`ui.pointer_over`), and to the world (the
 game's `pointer_tool`) otherwise.
 
+A game's HUD is made of a few pieces the engine draws alike for every game
+(`client/engine/marks.odin`): `top_bar(ctx, &rest, text)` a line of status across the top,
+cut from the screen, `banner(ctx, at, text, scale, color)` big text across the middle (`at`
+pixels from it, laid out for 720 high and shrunk with a smaller screen, as under F3), and a
+`Flash` (`flash(&f, s, text, tone)`, `flash_draw(ctx, &f, s)`): a banner that stands a few
+seconds after the news that brought it.
+
 A game marks the ground from its `hud` hook (`client/engine/free_camera.odin`):
 `ground_fill(s, lo, hi, color)` lays a translucent cover over the top of each column of a
 rectangle (its highest solid block between `lo.y` and `hi.y`; a zone, a heat map),

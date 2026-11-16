@@ -177,3 +177,85 @@ entity_place :: proc(s: ^Session, id: u32) -> (at: [3]f64, ok: bool) {
 	v := track_view(&e.track, now) or_return
 	return v.position, true
 }
+
+// What a game's HUD is made of (its client part's hud hook draws them): a line of status
+// across the top of the screen, banners in big text across its middle, and a flash: a
+// banner that stands a few seconds after something happened (a wave set out, a level
+// gained). Banners are laid out for a screen 720 high and shrink with a smaller one (the
+// engine gives a game's HUD only the screen below F3 while it is open).
+
+// top_bar: a line of text centred across the top of rest, on the HUD's backing, cut
+// from rest (what is under it is left for the rest of the HUD).
+top_bar :: proc(ctx: ^ui.Context, rest: ^ui.Rect, text: string) {
+	t := &ctx.theme
+	bar := ui.cut_top(rest, t.row_height + t.padding)
+	ui.fill_rect(ctx, bar, t.hud_fill)
+	ui.draw_text(ctx, bar, text, t.font_size, t.text, .Center)
+}
+
+// BANNER_HEIGHT: the screen height banners are laid out for.
+BANNER_HEIGHT :: 720
+
+// banner: a line of big text across the screen, its middle `at` pixels from the
+// screen's (negative: above it), `scale` times the title's size, with a shadow.
+banner :: proc(ctx: ^ui.Context, at: f32, text: string, scale: f32, color: ui.Color) {
+	k := min(1, ctx.screen.h / BANNER_HEIGHT)
+	size := ctx.theme.title_size * scale * k
+	y := ctx.screen.y + ctx.screen.h / 2 + at * k
+	r := ui.Rect{ctx.screen.x, y - size, ctx.screen.w, size * 2}
+	ui.draw_text(ctx, {r.x + 3, r.y + 3, r.w, r.h}, text, size, ctx.theme.text_shadow, .Center)
+	ui.draw_text(ctx, r, text, size, color, .Center)
+}
+
+// Tone: what a flash's news is, which colours it.
+Tone :: enum u8 {
+	Plain,
+	Good,
+	Warn,
+	Bad,
+}
+
+// tone_color: a tone's colour in the theme.
+tone_color :: proc(t: ^ui.Theme, tone: Tone) -> ui.Color {
+	switch tone {
+	case .Good:
+		return t.success
+	case .Warn:
+		return t.log_warn
+	case .Bad:
+		return t.log_error
+	case .Plain:
+	}
+	return t.text
+}
+
+FLASH_SECONDS :: 3.0
+FLASH_TEXT_MAX :: 64
+
+// Flash: a banner shown for a while, kept in the game's view (it outlives the frame its
+// news came in).
+Flash :: struct {
+	text:  [FLASH_TEXT_MAX]u8,
+	len:   int,
+	tone:  Tone,
+	until: f64, // the session's frame_seconds when it goes
+}
+
+// flash: show text as a banner from now for seconds (it replaces the one shown).
+flash :: proc(f: ^Flash, s: ^Session, text: string, tone := Tone.Plain, seconds := FLASH_SECONDS) {
+	f.len = copy(f.text[:], text)
+	f.tone, f.until = tone, s.frame_seconds + seconds
+}
+
+// flash_shown: the flash's text while it stands ("" once it has gone).
+flash_shown :: proc(f: ^Flash, s: ^Session) -> string {
+	if f.len == 0 || s.frame_seconds >= f.until {return ""}
+	return string(f.text[:f.len])
+}
+
+// flash_draw: the flash, while it stands, as a banner at `at` (banner's).
+flash_draw :: proc(ctx: ^ui.Context, f: ^Flash, s: ^Session, at: f32 = -160, scale: f32 = 1) {
+	if text := flash_shown(f, s); text != "" {
+		banner(ctx, at, text, scale, tone_color(&ctx.theme, f.tone))
+	}
+}
