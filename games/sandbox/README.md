@@ -34,6 +34,9 @@ each parent, and one copy in a thousand flips. What a player sees of one (shorn,
 spotted, in love: hearts rise) is its looks, shown by the server part and drawn from the
 pack's model.
 
+`/sheep [lamb] [shorn] [black] [spotted]` sets a sheep of those looks down in front of you
+(the summoning permission, `world.summon`).
+
 The statistics it keeps of a player: `sheep.sheared` (5 experience each) and `sheep.fed` (2),
 and of a world `sheep.born`, shown with the engine's.
 

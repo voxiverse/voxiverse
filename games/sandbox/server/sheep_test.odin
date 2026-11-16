@@ -191,3 +191,29 @@ test_a_hurt_sheep_flees :: proc(t: ^testing.T) {
 		core.entity_pos(s.home, h),
 	)
 }
+
+// The host's /sheep sets down a sheep of the looks it names.
+@(test)
+test_the_sheep_command :: proc(t: ^testing.T) {
+	rig := new(Rig)
+	defer free(rig)
+	if !meadow(t, rig) {playtest.stop(rig); return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	playtest.say(rig, "sheep lamb shorn black")
+	found := false
+	it := core.entities_each(s.home)
+	for h in core.entities_next(&it) {
+		if d := sheep(s, s.home, h); d != nil {
+			found = true
+			testing.expect(t, d.shorn && d.grows > 0 && sandbox.genes_black(d.genes))
+			testing.expect(
+				t,
+				looks(rig, h, "lamb") && looks(rig, h, "shorn") && looks(rig, h, "black"),
+			)
+		}
+	}
+	testing.expect(t, found, "no sheep was set down")
+	playtest.say(rig, "sheep woolly")
+	testing.expect(t, playtest.told(rig, "Usage: sheep"))
+}

@@ -27,6 +27,7 @@ GAME :: core.Game {
 	spawned      = spawned,
 	entity_use   = entity_use,
 	entity_hurt  = entity_hurt,
+	command      = command,
 }
 
 // Sandbox: the session's state: the sheep's randomness and the registry's names they use.
@@ -36,6 +37,7 @@ Sandbox :: struct {
 	grass, dirt:      game.Block,
 	wheat:            game.Item,
 	wool, black_wool: game.Item,
+	placed:           int, // sheep the command has set down (each a little further along)
 }
 
 state :: proc(s: ^core.Server) -> ^Sandbox {return core.game_state(s, Sandbox)}
@@ -71,3 +73,40 @@ configure :: proc(config: ^core.Config) {
 }
 
 #assert(worldgen.Kind.Earth == {}, "the Earth generator is the zero kind (an unset Config's)")
+
+// command: `/sheep [lamb] [shorn] [black] [spotted]` sets a sheep of those looks down in
+// front of the player (north of it, each further along; the summoning permission).
+command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
+	if name != "sheep" {return false}
+	if !core.allowed(s, c, "world.summon") {
+		core.notice(s, c, "You may not summon here")
+		return true
+	}
+	g := state(s)
+	d := Sheep{}
+	for a in args {
+		switch a {
+		case "lamb":
+			d.grows = sandbox.LAMB_TICKS
+		case "shorn":
+			d.shorn = true
+		case "black":
+			d.genes += sandbox.WOOL_BLACK
+		case "spotted":
+			d.genes += sandbox.COAT_SPOTTED
+		case:
+			core.notice(s, c, "Usage: sheep [lamb] [shorn] [black] [spotted]")
+			return true
+		}
+	}
+	at := c.player.position + {f64(g.placed % 5) * 1.5 - 3, 0, -4}
+	g.placed += 1
+	h := core.entity_spawn(c.world, g.sheep, at, false)
+	if h == 0 {
+		core.notice(s, c, "The world is full")
+		return true
+	}
+	sheep(s, c.world, h)^ = d
+	show(c.world, h, sheep(s, c.world, h))
+	return true
+}
