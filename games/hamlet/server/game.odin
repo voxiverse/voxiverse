@@ -16,13 +16,15 @@ import "server:play"
 // players shape it with their requests (roads, zones, buildings, demolition, the
 // speed), each checked here (its cost, the placement rules, the permission), and the
 // citizens live in it (citizens.odin). The whole village is kept with the universe
-// (game.cfg) and comes back after a restart.
+// (game.cfg; its citizens as entities, each with its record) and comes back after a
+// restart.
 
 GAME :: core.Game {
 	info         = hamlet.INFO,
 	kinds        = hamlet.KINDS,
 	pack         = hamlet.PACK,
 	server_state = Town,
+	entity_data  = Citizen,
 	configure    = configure,
 	start        = start,
 	stop         = stop,
@@ -62,9 +64,7 @@ Town :: struct {
 	owner:        [hamlet.MAP][hamlet.MAP]i16, // [z][x]: the structure on it (-1: none)
 	structures:   [hamlet.MAX_STRUCTURES]Structure,
 	count:        int, // structures[:count] are used or free
-	citizens:     [hamlet.MAX_CITIZENS]Citizen,
-	population:   int,
-	respawn:      bool, // the loaded citizens wait for their entities
+	population:   int, // citizens
 	stock:        [hamlet.Good]int,
 	delivered:    [hamlet.Good]int, // brought to the storehouses this session (tests, F3)
 	steps:        u64,
@@ -125,10 +125,7 @@ tick :: proc(s: ^core.Server) {
 	switch t.phase {
 	case .Building:
 		if !t.built {t.built = ground_build(s)}
-		if t.built && core.world_ready(s.home, AREA) {
-			t.phase = .Running
-			if t.respawn {respawn(s)}
-		}
+		if t.built && core.world_ready(s.home, AREA) {t.phase = .Running}
 	case .Running:
 		for _ in 0 ..< s.sim_steps {town_step(s)}
 	}
@@ -139,26 +136,10 @@ tick :: proc(s: ^core.Server) {
 town_step :: proc(s: ^core.Server) {
 	t := state(s)
 	t.steps += 1
-	for &c, i in t.citizens {if c.id != 0 {citizen_step(s, i)}}
+	for h in citizens(s) {citizen_step(s, h)}
 	if t.steps % hamlet.GROW_STEPS == 0 {grow(s)}
 	if t.steps % hamlet.ARRIVE_STEPS == 0 {arrive(s)}
 	if t.steps % hamlet.DAY_STEPS == 0 {day_end(s)}
-}
-
-// respawn: the citizens a loaded village kept stand at their homes' doors again.
-respawn :: proc(s: ^core.Server) {
-	t := state(s)
-	t.respawn = false
-	for &c in t.citizens {
-		if c.id == 0 {continue}
-		door, ok := structure_access(t, c.home)
-		if !ok {door = center(&t.structures[c.home])}
-		h := core.entity_spawn(s.home, t.citizen_kind, citizen_point(t, door), false)
-		if h == 0 {continue}
-		core.entity_set_speed(s.home, h, hamlet.WALK_SPEED)
-		c.id, c.at, c.state, c.timer, c.carrying =
-			core.entity_id(s.home, h), door, .Home, hamlet.REST_STEPS, 0
-	}
 }
 
 joined :: proc(s: ^core.Server, c: ^core.Client) {
@@ -301,8 +282,9 @@ put_records :: proc(s: ^core.Server) {
 		if st.kind == .House && watered(t, k) {town.housing += u16(info.homes)}
 	}
 	happy: [hamlet.MAP][hamlet.MAP]u8
-	for &c in t.citizens {
-		if c.id == 0 || c.home < 0 {continue}
+	for h in citizens(s) {
+		c := citizen(s, h)
+		if c.home < 0 {continue}
 		st := &t.structures[c.home]
 		size := hamlet.footprint(st.kind, st.rotation)
 		for z in st.at.y ..< st.at.y + size.y {
@@ -413,18 +395,18 @@ plan :: proc(s: ^core.Server) {
 }
 
 // save: the whole village as text (game.cfg): its seed, its stock and its clock, each
-// row of the map, each structure and each citizen.
+// row of the map and each structure. Its citizens are kept with the world, as entities
+// with their records (Citizen).
 //
-//	hamlet 1
+//	hamlet 2
 //	seed <seed>
 //	stock <wood> <stone> <food>
 //	clock <steps> <day> <milestone> <speed>
 //	row <z> <a tile's number for each x>
 //	structure <index> <kind> <x> <z> <rotation> <floor>
-//	citizen <home> <job> <hungry> <happiness>
 save :: proc(s: ^core.Server, out: ^strings.Builder) {
 	t := state(s)
-	fmt.sbprintln(out, "hamlet 1")
+	fmt.sbprintln(out, "hamlet 2")
 	fmt.sbprintfln(out, "seed %d", s.config.seed)
 	fmt.sbprintfln(out, "stock %d %d %d", t.stock[.Wood], t.stock[.Stone], t.stock[.Food])
 	fmt.sbprintfln(out, "clock %d %d %d %d", t.steps, t.day, t.milestone, s.sim_speed)
@@ -446,15 +428,11 @@ save :: proc(s: ^core.Server, out: ^strings.Builder) {
 			st.floor,
 		)
 	}
-	for &c in t.citizens {
-		if c.id == 0 {continue}
-		fmt.sbprintfln(out, "citizen %d %d %d %d", c.home, c.job, c.hungry, c.happiness)
-	}
 }
 
 // load: the village a universe kept; a line Hamlet does not know, or a number out of its
-// bounds, is not Hamlet's. The land is already in the world; the citizens' entities are
-// made again at their homes once it is loaded.
+// bounds, is not Hamlet's. The land and the citizens are already in the world (a village
+// kept before its citizens were, `hamlet 1`, has its people move in again as they come).
 load :: proc(s: ^core.Server, text: string) -> bool {
 	t := state(s)
 	rest := text
@@ -464,14 +442,13 @@ load :: proc(s: ^core.Server, text: string) -> bool {
 		return true
 	}
 	seen_header := false
-	citizens := 0
 	for line in strings.split_lines_iterator(&rest) {
 		f := strings.fields(line, context.temp_allocator)
 		if len(f) == 0 {continue}
 		n: [8]int
 		switch f[0] {
 		case "hamlet":
-			seen_header = len(f) == 2 && f[1] == "1"
+			seen_header = len(f) == 2 && (f[1] == "1" || f[1] == "2")
 		case "seed":
 			if !ints(f[1:], n[:1]) || i64(n[0]) != s.config.seed {return false}
 		case "stock":
@@ -517,23 +494,7 @@ load :: proc(s: ^core.Server, text: string) -> bool {
 				floor    = i32(n[5]),
 			}
 			t.count = max(t.count, k + 1)
-		case "citizen":
-			if !ints(f[1:], n[:4]) || citizens >= hamlet.MAX_CITIZENS {return false}
-			home, job := n[0], n[1]
-			if home < 0 ||
-			   home >= hamlet.MAX_STRUCTURES ||
-			   job < -1 ||
-			   job >= hamlet.MAX_STRUCTURES {
-				return false
-			}
-			t.citizens[citizens] = {
-				id        = 1, // (a placeholder: respawn makes its entity)
-				home      = home,
-				job       = job,
-				hungry    = n[2],
-				happiness = n[3],
-			}
-			citizens += 1
+		case "citizen": // (hamlet 1: its citizens were not kept as entities)
 		case:
 			return false
 		}
@@ -550,12 +511,22 @@ load :: proc(s: ^core.Server, text: string) -> bool {
 			}
 		}
 	}
-	for &c in t.citizens[:citizens] {
-		if !t.structures[c.home].used || (c.job >= 0 && !t.structures[c.job].used) {return false}
-		t.structures[c.home].people += 1
-		if c.job >= 0 {t.structures[c.job].workers += 1}
+	// Who lives and works where, from the citizens the world kept.
+	for h in citizens(s) {
+		c := citizen(s, h)
+		home, job := int(c.home), int(c.job)
+		if home < 0 ||
+		   home >= t.count ||
+		   !t.structures[home].used ||
+		   job >= t.count ||
+		   (job >= 0 && !t.structures[job].used) {
+			core.entity_gone(s.home, h) // (not of this village)
+			continue
+		}
+		t.structures[home].people += 1
+		if job >= 0 {t.structures[job].workers += 1}
+		t.population += 1
 	}
-	t.population = citizens
-	t.built, t.respawn = true, true
+	t.built = true
 	return true
 }

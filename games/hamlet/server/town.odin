@@ -185,9 +185,9 @@ structure_take :: proc(s: ^core.Server, i: int) {
 	for z in st.at.y ..< st.at.y + size.y {
 		for x in st.at.x ..< st.at.x + size.x {tile_set(t, x, z, .Grass)}
 	}
-	for &c, k in t.citizens {
-		if c.id == 0 {continue}
-		if c.home == i {citizen_leave(s, k)} else if c.job == i {c.job = -1}
+	for h in citizens(s) {
+		c := citizen(s, h)
+		if int(c.home) == i {citizen_leave(s, h)} else if int(c.job) == i {c.job = -1}
 	}
 	st^ = {}
 }

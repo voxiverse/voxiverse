@@ -135,8 +135,8 @@ test_zone_grows_a_house_and_people_come :: proc(t: ^testing.T) {
 	testing.expect(t, count_kind(town, .House) >= 1, "no house grew")
 	testing.expect(t, town.population >= 1, "nobody came")
 	// They live in the house and stand on the road.
-	for &c in town.citizens {
-		if c.id == 0 {continue}
+	for h in citizens(s) {
+		c := citizen(s, h)
 		testing.expect_value(t, town.structures[c.home].kind, hamlet.Kind.House)
 		testing.expect_value(t, town.tiles[c.at.y][c.at.x], hamlet.Tile.Road)
 	}
@@ -171,8 +171,9 @@ test_citizen_works_and_goods_reach_the_store :: proc(t: ^testing.T) {
 		step(rig)
 		if town.stock[.Food] > before {delivered = true}
 	}
-	for &c in town.citizens {
-		if c.id != 0 && c.job >= 0 && town.structures[c.job].kind == .Farm {farmers += 1}
+	for h in citizens(s) {
+		c := citizen(s, h)
+		if c.job >= 0 && town.structures[c.job].kind == .Farm {farmers += 1}
 	}
 	testing.expect(t, farmers > 0, "nobody works the farm")
 	testing.expect(t, delivered, "no food reached the storehouse")
@@ -207,7 +208,8 @@ test_starvation_makes_people_leave :: proc(t: ^testing.T) {
 }
 
 // The village after a save and a restart is the one saved: its tiles, structures,
-// stock, day, people and their homes and jobs; and the people stand in the world again.
+// stock, day, people and their homes and jobs; and the people stand in the world where
+// they were, going where they went, without being made again.
 @(test)
 test_town_survives_a_restart :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "hamlet_restart"}, context.temp_allocator) or_else ""
@@ -215,13 +217,35 @@ test_town_survives_a_restart :: proc(t: ^testing.T) {
 	defer os.remove_all(dir)
 	saved := new(Town)
 	defer free(saved)
+	Kept :: struct {
+		id:       u32,
+		citizen:  Citizen,
+		position: [3]f64,
+		arrived:  bool,
+	}
+	kept := make([dynamic]Kept)
+	defer delete(kept)
 	{
 		rig := new(Rig)
 		defer free(rig)
 		if !rig_start(t, rig, dir = dir) {rig_stop(rig); return}
 		if !town_working(t, rig) {rig_stop(rig); return}
-		core.sim_speed_set(srv(rig), 2)
+		step(rig, 20)
+		core.sim_speed_set(srv(rig), 0) // (paused: what is kept is what the snapshot holds)
+		step(rig)
 		saved^ = state(srv(rig))^
+		s := srv(rig)
+		for h in citizens(s) {
+			append(
+				&kept,
+				Kept {
+					core.entity_id(s.home, h),
+					citizen(s, h)^,
+					core.entity_pos(s.home, h),
+					core.entity_arrived(s.home, h),
+				},
+			)
+		}
 		rig_stop(rig) // (the last save: this tick's)
 	}
 	rig := new(Rig)
@@ -244,15 +268,31 @@ test_town_survives_a_restart :: proc(t: ^testing.T) {
 	testing.expect_value(t, town.stock, saved.stock)
 	testing.expect_value(t, town.day, saved.day)
 	testing.expect_value(t, town.population, saved.population)
-	testing.expect_value(t, s.sim_speed, 2)
-	alive := 0
-	for &c, i in town.citizens {
-		if c.id == 0 {continue}
-		testing.expect_value(t, c.home, saved.citizens[i].home)
-		testing.expect_value(t, c.job, saved.citizens[i].job)
-		if _, ok := core.entity_find(s.home, c.id); ok {alive += 1}
+	testing.expect_value(t, s.sim_speed, 0)
+	testing.expect(t, len(kept) > 0, "nobody lived in the village")
+	walking := 0
+	for k in kept {
+		h, ok := core.entity_find(s.home, k.id)
+		if !testing.expectf(t, ok, "citizen %d was not kept", k.id) {continue}
+		testing.expect_value(t, citizen(s, h)^, k.citizen)
+		d := core.entity_pos(s.home, h) - k.position
+		testing.expectf(t, d.x * d.x + d.y * d.y + d.z * d.z < 1e-6, "citizen %d moved", k.id)
+		if !k.arrived {
+			walking += 1
+			testing.expectf(t, !core.entity_arrived(s.home, h), "citizen %d stopped", k.id)
+		}
 	}
-	testing.expect_value(t, alive, saved.population)
+	// On its way again: a step later the walkers move from where they stood.
+	core.sim_speed_set(s, 2)
+	step(rig, 2)
+	if walking > 0 {
+		moved := 0
+		for k in kept {
+			if h, ok := core.entity_find(s.home, k.id);
+			   ok && core.entity_pos(s.home, h) != k.position {moved += 1}
+		}
+		testing.expect(t, moved > 0, "nobody went on")
+	}
 }
 
 // Two players build the same village: the guest lays the road and a farm, the host a

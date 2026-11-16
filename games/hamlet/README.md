@@ -56,9 +56,11 @@ happiness (green: 70 and over; yellow: 40 and over; red: below; grey: empty).
 ```
 
 Server command: `/hamlet` (the village's day, people and stock), and for the host
-`/hamlet stock <wood> <stone> <food>`, `/hamlet speed <0..4>` and `/hamlet plan` (a village laid out by the same rules: streets, zones, wells, farms, a storehouse, a market, a woodcutter and a quarry where they fit). The whole village (its tiles, structures, citizens,
-stock, day and speed) is kept with the universe (`game.cfg`) and comes back after a
-restart; the citizens stand at their homes' doors again.
+`/hamlet stock <wood> <stone> <food>`, `/hamlet speed <0..4>` and `/hamlet plan` (a village laid out by the same rules: streets, zones, wells, farms, a storehouse, a market, a woodcutter and a quarry where they fit). The whole village (its tiles, structures,
+stock, day and speed) is kept with the universe (`game.cfg`), its citizens with the world
+as entities carrying their records (`core.entity_data`: home, job, errand, hunger,
+happiness), and it comes back after a restart with each citizen where it stood, going
+where it went.
 
 ## The code
 
