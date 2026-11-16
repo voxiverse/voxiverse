@@ -5,14 +5,17 @@ import "core:log"
 import "common:game"
 import "games:rally"
 import "server:core"
+import "server:play"
 
 // The course: laid out from its seed (rally.course_plan, which the client lays out too)
 // and built in the sky over the flat world, through the edit journal as the game's.
 
-// AREA: the box the course is built in (and kept loaded).
-AREA :: core.Box {
-	{0, rally.TOP - 1, -rally.WIDTH / 2},
-	{rally.LENGTH - 1, rally.TOP + rally.RISE + 6, rally.WIDTH / 2 - 1},
+// COURSE: the open arena the course is built in (and kept loaded): its template alone,
+// in the sky.
+COURSE :: play.Arena {
+	origin = {0, rally.TOP - 1, -rally.WIDTH / 2},
+	size   = {rally.LENGTH, rally.RISE + 8, rally.WIDTH},
+	open   = true,
 }
 
 // build: the course of the universe's seed; false while its chunks are not all loaded,
@@ -20,11 +23,9 @@ AREA :: core.Box {
 build :: proc(s: ^core.Server, force: bool) -> bool {
 	d := state(s)
 	w := s.home
-	loaded := core.world_ready(w, AREA)
-	if !loaded && !force {return false}
 	t := course_template(&d.course, d.pad, d.gate, d.hazard)
-	act := core.game_act(s, w, .Structure)
-	core.bulk_edit(w, {shape = AREA, op = .Paste, template = &t, partial = true}, act)
+	built, loaded := play.arena_build(s, w, COURSE, &t, force)
+	if !built {return false}
 	log.infof(
 		"rally course built seed=%d platforms=%d all_loaded=%v",
 		d.seed,
@@ -35,12 +36,12 @@ build :: proc(s: ^core.Server, force: bool) -> bool {
 	return true
 }
 
-// course_template: the course's blocks over AREA (temp memory): each platform of its
+// course_template: the course's blocks over COURSE (temp memory): each platform of its
 // kind's stone (the start and the finish lit), a gate of glowing posts and a beam over
 // each checkpoint's platform, the hazard strips, and a beam of logs over each wide gap.
 course_template :: proc(c: ^rally.Course, pad, gate, hazard: game.Block) -> game.Template {
-	o := AREA.lo
-	t := game.template_make(AREA.hi - AREA.lo + 1, context.temp_allocator)
+	o := COURSE.origin
+	t := game.template_make(COURSE.size, context.temp_allocator)
 	box :: proc(t: ^game.Template, o, lo, hi: [3]i32, b: game.Block) {
 		game.template_fill(t, lo - o, hi - o, b)
 	}

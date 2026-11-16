@@ -7,6 +7,7 @@ import "common:game"
 import "common:protocol"
 import "games:rally"
 import "server:core"
+import "server:play"
 import "server:playtest"
 
 // Rally on a stepped server: the host (the harness's mirror) and, for the race of two, a
@@ -53,6 +54,7 @@ go_to :: proc(rig: ^Rig, c: ^core.Client, k: int) {
 // and the same plan for the same seed on both sides.
 @(test)
 test_rally_course :: proc(t: ^testing.T) {
+	area := play.arena_area(COURSE)
 	for seed in ([]u32{1, 66, 4242}) {
 		c := rally.course_plan(seed)
 		testing.expect_value(t, c.platforms[0].kind, rally.Platform_Kind.Start)
@@ -61,12 +63,12 @@ test_rally_course :: proc(t: ^testing.T) {
 			if p.kind == .Gate || p.kind == .Finish {gates += 1}
 			testing.expect(
 				t,
-				p.lo.x >= AREA.lo.x && p.hi.x <= AREA.hi.x,
+				p.lo.x >= area.lo.x && p.hi.x <= area.hi.x,
 				"a platform past the area",
 			)
 			testing.expect(
 				t,
-				p.lo.z >= AREA.lo.z && p.hi.z <= AREA.hi.z,
+				p.lo.z >= area.lo.z && p.hi.z <= area.hi.z,
 				"a platform past the area",
 			)
 			if i == 0 {continue}

@@ -100,7 +100,7 @@ start :: proc(s: ^core.Server) -> bool {
 	d.pad = game.registry_block(reg, rally.PAD_BLOCK) or_return
 	d.gate = game.registry_block(reg, rally.GATE_BLOCK) or_return
 	d.hazard = game.registry_block(reg, rally.HAZARD_BLOCK) or_return
-	core.world_keep(w, AREA)
+	core.world_keep(w, play.arena_area(COURSE))
 	log.infof("rally started seed=%d", d.seed)
 	return true
 }
