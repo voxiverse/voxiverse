@@ -523,6 +523,7 @@ session_update :: proc(
 	if !s.config.still_clouds {s.cloud_drift += f64(dt) * render.CLOUD_SPEED}
 	camera_game(s)
 	query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
+	if camera_pointer(s) && s.screen_view.set {input_pointer_middle(input, s.screen_view.size)}
 	if look {
 		if camera_free(s) {free_camera_update(s, input, actions)}
 		if camera_pointer(s) {

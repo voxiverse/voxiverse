@@ -1,0 +1,111 @@
+# Builds a version's packages and publishes them as its GitHub release. This is not a
+# gate: main is gated on the development machine (AGENTS.md). It runs only for a version
+# tag, because a Windows or macOS package can only be linked and signed on its own system,
+# and the Linux one is built on an old Ubuntu so it runs on older distributions (glibc).
+#
+#   git tag -a v0.6.0 -m "v0.6.0" && git push origin v0.6.0     a new release
+#   gh workflow run release.yml -f tag=v0.5.0                   an existing tag again
+name: release
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: the version tag to package
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  package:
+    name: Package · ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, name: Linux x64 }
+          - { os: windows-latest, name: Windows x64 }
+          - { os: macos-latest, name: macOS arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0 # the tags: the version comes from them
+
+      # Checkout fetches a tag as a plain ref; its message needs the tag object itself.
+      - name: Tags
+        shell: bash
+        run: git fetch --force --tags origin
+
+      - name: Odin pin
+        id: pin
+        shell: bash
+        run: echo "odin=$(sed -n 's/^odin = "\(.*\)"/\1/p' odinup.toml)" >> "$GITHUB_OUTPUT"
+
+      - name: Odin
+        uses: laytan/setup-odin@8536d8fa450ec6f1bd9ddc84bbaaf16296c0051d # v2.12.2
+        with:
+          token: ${{ github.token }}
+          release: ${{ steps.pin.outputs.odin }}
+
+      - name: Package
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} package
+
+      # Not played: no window server or GPU here. Each is unpacked as a user would and
+      # asked for its version.
+      - name: Check the package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          tar -xzf build/dist/*.tar.gz -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"/voxiverse-*-linux-x64
+          ./voxiverse-server --version
+          ./voxiverse --version
+
+      - name: Check the package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/package" && cd "$RUNNER_TEMP/package"
+          unzip -q "$GITHUB_WORKSPACE"/build/dist/*.zip
+          cd voxiverse-*-windows-x64
+          ./voxiverse-server.exe --version
+
+      - name: Check the package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ditto -x -k build/dist/*.zip "$RUNNER_TEMP/package"
+          cd "$RUNNER_TEMP"/package/voxiverse-*-macos-arm64
+          plutil -lint Voxiverse.app/Contents/Info.plist
+          codesign --verify --deep --strict Voxiverse.app
+          codesign --verify --strict voxiverse-server
+          ./voxiverse-server --version
+          Voxiverse.app/Contents/MacOS/voxiverse --version
+
+      - name: Add to the release
+        shell: bash
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --title "Voxiverse ${TAG#v}" --generate-notes ||
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null # (another job made it first)
+          shopt -s nullglob
+          gh release upload "$TAG" build/dist/voxiverse-*.zip build/dist/voxiverse-*.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
+
+  # The checksums of every package of the release.
+  checksums:
+    name: Checksums
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'voxiverse-*'
+          sha256sum voxiverse-* > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"

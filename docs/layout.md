@@ -88,6 +88,7 @@ package** is enforced by the `layout` lint (see above).
 | Folder | What belongs | Patterns |
 |---|---|---|
 | `.` | The repository's own top-level files; `AGENTS.md` says how work is done here, `CLAUDE.md` imports it | `.gitattributes`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `README.md`, `build.sh`, `build.bat`, `odinup.toml`, `ols.json` |
+| `.github/workflows` | The release workflow: a version tag's packages, built on each platform's own system (not a gate) | `release.yml` |
 | `.githooks` | Git hooks: `pre-commit` runs `build check`, `commit-msg` checks the subject | `*` |
 | `assets` | The assets' own notes | `*.txt` |
 | `assets/catalog` | Earth's content as data before it is in the game (the schemas in its README) | `README.md` |

@@ -7,6 +7,8 @@ The code is written by agents and read by a person, so it has to read well.
 
 - There is one branch, `main`, and it always passes `./build.sh check` and `./build.sh test`.
   Commit to it directly. There are no pull requests and no remote CI; this machine is the gate.
+  The one workflow on GitHub (`.github/workflows/release.yml`) only builds a version tag's
+  packages; it tests nothing and gates nothing.
 - A worktree or branch exists only while one change is being made. Rebase it onto `main`,
   land it, and delete it the same day. Do not leave a branch behind: the next agent will
   mistake it for something that matters.

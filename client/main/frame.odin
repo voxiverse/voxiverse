@@ -220,7 +220,6 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			if f, ok := e.(platform.Fullscreen_Event); ok {app.settings.fullscreen = f.fullscreen}
 		}
 		engine.input_update(&app.input, events)
-		engine.input_pointer_middle(&app.input, {f32(w.width), f32(w.height)})
 		engine.actions_sync(app, app.last_frame_ms / 1000)
 		engine.crash_track(app)
 	}

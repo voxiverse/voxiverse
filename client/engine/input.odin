@@ -143,7 +143,8 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 // input_pointer_middle: until the pointer has moved over the window (a window opened
 // under no pointer; a script's run under xvfb, where nothing moves it but `pointer`), it
 // is at the window's middle (size: pixels), so it neither aims at a corner nor pans a
-// free camera at the window's edge.
+// free camera at the window's edge. Only a camera that frees the pointer asks it
+// (session_update): a menu's buttons are not hovered by a pointer nobody moved.
 input_pointer_middle :: proc(s: ^Input_State, size: [2]f32) {
 	if !s.mouse_seen {s.mouse = size / 2}
 }
