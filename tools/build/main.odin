@@ -284,6 +284,7 @@ main :: proc() {
 	     "music",
 	     "bench",
 	     "images",
+	     "shot",
 	     "audio":
 		// The game's packages link miniaudio; even type-checking wants it.
 		compare_only := args[0] == "determinism" && len(args) > 1 && args[1] == "--compare"
@@ -346,6 +347,8 @@ main :: proc() {
 		ok = audio_baselines(args[1:])
 	case "images":
 		ok = images(args[1:])
+	case "shot":
+		ok = shot(args[1:])
 	case "bench":
 		ok = bench(args[1:])
 	case "trace":
@@ -415,6 +418,7 @@ usage :: proc() {
 	)
 	fmt.println(
 		"  images    render the visual baselines' scenes on lavapipe and compare them (--accept <scene|all> rewrites them; Linux)",
+		"  shot      shot <name> [--game <id>] -- <script>: play a console script headless on lavapipe at 1280x720 (its `screenshot <file>`: build/screenshots/<file>.png; Linux)",
 	)
 	fmt.println(
 		"  audiodump dump an audio capture: timeline, voice decisions, loudness, a bus as WAV (-report, -bus:, -wav:)",
