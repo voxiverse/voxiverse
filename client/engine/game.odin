@@ -23,7 +23,55 @@ Game :: struct {
 	received:   proc(s: ^Session, r: game.Received), // a record of the game's kinds came, changed or went, or an event (game_value)
 	hud:        proc(s: ^Session, ctx: ^ui.Context), // draw its HUD, after the engine's (F1 hides both)
 	debug:      proc(s: ^Session) -> string, // its line of the F3 overlay ("": none; temporary memory)
+	scoreboard: proc(s: ^Session, board: ^Scoreboard), // fill board: what the player list shows while its key is held, in place of the engine's
 	commands:   []Command_Spec, // its console commands, there while a world plays it
+}
+
+// SCOREBOARD_COLUMNS: the most columns a game's scoreboard has besides the name.
+SCOREBOARD_COLUMNS :: 4
+
+// Scoreboard: a game's table of its players, shown by the player list while its key
+// is held (client/hud): a title, the headings of its columns after the name's, and a
+// row for each player, in the order the game gives (the game sorts). The game's
+// scoreboard hook fills it with scoreboard_columns and scoreboard_row; it lasts the
+// frame (its rows are temporary memory).
+Scoreboard :: struct {
+	title:   string, // over the table ("": none)
+	columns: [SCOREBOARD_COLUMNS]string, // the headings after the name's
+	count:   int, // ... how many
+	rows:    [dynamic]Score_Row,
+}
+
+// Score_Row: a player's row: the name and a cell under each heading.
+Score_Row :: struct {
+	name:  string,
+	cells: [SCOREBOARD_COLUMNS]string,
+	you:   bool, // the player's own: lit
+}
+
+// scoreboard_columns: the board's headings after the name's (at most SCOREBOARD_COLUMNS).
+scoreboard_columns :: proc(board: ^Scoreboard, headings: ..string) {
+	assert(len(headings) <= SCOREBOARD_COLUMNS, "a scoreboard has too many columns")
+	board.count = copy(board.columns[:], headings)
+}
+
+// scoreboard_row: a row, after those there are: a name and its cells, in the columns'
+// order; you: the player's own.
+scoreboard_row :: proc(board: ^Scoreboard, name: string, cells: ..string, you := false) {
+	row := Score_Row {
+		name = name,
+		you  = you,
+	}
+	copy(row.cells[:], cells)
+	append(&board.rows, row)
+}
+
+// game_scoreboard: the game's scoreboard, if it has one (ok false: the engine's list).
+game_scoreboard :: proc(s: ^Session) -> (board: Scoreboard, ok: bool) {
+	if s.game.scoreboard == nil {return}
+	board.rows = make([dynamic]Score_Row, context.temp_allocator)
+	s.game.scoreboard(s, &board)
+	return board, true
 }
 
 // HARNESS_GAME: the client part of the game a harness server plays when its tests name

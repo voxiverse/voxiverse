@@ -10,7 +10,9 @@ import "client:ui"
 // The player list: while the key is held,
 // the connected players' names and pings. An overlay that takes no input.
 // A ping is known for ourselves on a server we joined (the link's round
-// trip); alone in our own world, and for the others, it reads "-".
+// trip); alone in our own world, and for the others, it reads "-". A game
+// with a scoreboard (engine.Game.scoreboard) has its table shown instead:
+// its title, its columns, its rows in its order, the player's own lit.
 
 Player_Row :: struct {
 	name:     string,
@@ -49,6 +51,10 @@ COLUMN_WIDTH :: 70
 
 player_list_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if !engine.action_down(&app.actions, .Player_List) || app.overlays.count != 0 {return}
+	if board, ok := engine.game_scoreboard(app.session); ok {
+		scoreboard_draw(ctx, board)
+		return
+	}
 	t := &ctx.theme
 	rows := player_rows(app.session)
 	height := f32(len(rows) + 1) * t.row_height + 2 * t.padding
@@ -75,5 +81,44 @@ player_list_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		ui.label(ctx, row.kills, kills, .Right)
 		ui.label(ctx, row.deaths, deaths, .Right)
 		ui.label(ctx, row.ping, ping, .Right, t.text_muted)
+	}
+}
+
+// scoreboard_draw: a game's table, where the player list stands, as wide as its columns
+// need.
+scoreboard_draw :: proc(ctx: ^ui.Context, board: engine.Scoreboard) {
+	t := &ctx.theme
+	lines := len(board.rows) + 1 + (1 if board.title != "" else 0)
+	width := 300 + f32(board.count) * COLUMN_WIDTH
+	box := ui.rect_center(ctx.screen, width, f32(lines) * t.row_height + 2 * t.padding)
+	box.y = 40
+	ui.panel(ctx, box)
+	inner := ui.rect_shrink(box, t.padding)
+	if board.title != "" {
+		ui.label_clipped(ctx, board.title, ui.cut_top(&inner, t.row_height), .Center)
+	}
+	// cells: the line's rects under each heading, the last column rightmost.
+	cells :: proc(
+		line: ui.Rect,
+		n: int,
+	) -> (
+		name: ui.Rect,
+		at: [engine.SCOREBOARD_COLUMNS]ui.Rect,
+	) {
+		name = line
+		for i := n - 1; i >= 0; i -= 1 {at[i] = ui.cut_right(&name, COLUMN_WIDTH)}
+		return
+	}
+	n := board.count
+	head, under := cells(ui.cut_top(&inner, t.row_height), n)
+	ui.label(ctx, engine.tr(.Players_Player), head, .Left, t.text_muted)
+	for i in 0 ..< n {ui.label(ctx, board.columns[i], under[i], .Right, t.text_muted)}
+	for row in board.rows {
+		line := ui.cut_top(&inner, t.row_height)
+		if row.you {ui.fill_rect(ctx, line, t.hud_fill)}
+		name, at := cells(line, n)
+		color := t.focus_ring if row.you else t.text
+		ui.label_clipped(ctx, row.name, name, .Left, color)
+		for i in 0 ..< n {ui.label(ctx, row.cells[i], at[i], .Right, color)}
 	}
 }

@@ -109,6 +109,7 @@ on the main thread, in the frame.
 | `received(s, r)` | A record of the game's kinds came, changed or went, or one of its events came, in the order sent |
 | `hud(s, ctx)` | Every frame in the world, after the engine's HUD (`client/hud`'s `hud_draw`; F1 hides both), with the `ui.Context`; while F3 is open, its `ctx.screen` is the screen below the overlay (`App.debug_bottom`), so a bar at its top moves down rather than under the overlay |
 | `debug(s) -> string` | Every frame with F3 open: one line of the overlay, shown as `game <id>: <line>` ("": none) |
+| `scoreboard(s, board)` | Every frame the player list's key (<kbd>P</kbd>, `Player_List`) is held: the game fills `board` (an `engine.Scoreboard`: a title, `scoreboard_columns(board, "Frags", ...)`, at most `SCOREBOARD_COLUMNS`, and `scoreboard_row(board, name, cells..., you = mine)` per player, in the order to show), which the list shows in place of the engine's names, kills, deaths and pings |
 | `commands` | Console commands (`engine.Command_Spec`), there while a world plays the game: `help` lists them and Tab completes them |
 
 The accessors are typed as the server's are: `engine.game_state(s, T)` checks `T` is the
