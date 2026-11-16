@@ -239,6 +239,59 @@ item_tick :: proc(w: ^World, ent: game.Entity_Handle) -> bool {
 	return false
 }
 
+// --- A game's ---
+
+// The inventory as a game handles it: a currency (coins as an item), what a player
+// buys, a kit taken away. Each counts what it did; the ledger books it as the game's.
+
+// item_count: how much of item c carries in its slots (not in its hand's cursor, not
+// worn).
+item_count :: proc(c: ^Client, item: game.Item) -> int {
+	n := 0
+	for st in c.inventory.slots {
+		if st.item == item && !game.stack_empty(st) {n += st.count}
+	}
+	return n
+}
+
+// item_give: count of item into c's slots, as stacks fit (the hotbar first); how
+// many went in (the rest found no room and is not given).
+item_give :: proc(s: ^Server, c: ^Client, item: game.Item, count: int) -> (given: int) {
+	if item == game.NO_ITEM || count <= 0 || game.item_stack_size(s.registry, item) <= 0 {return}
+	size := game.item_stack_size(s.registry, item)
+	for given < count {
+		want := min(count - given, size)
+		rest := game.inventory_add(
+			s.registry,
+			&c.inventory,
+			{item, want, game.new_ammo(s.registry, item)},
+		)
+		given += want - rest.count
+		if rest.count > 0 {break}
+	}
+	if given > 0 {
+		ledger(s, c.world, .Game, item, given)
+		c.inv_changed = true
+	}
+	return
+}
+
+// item_take: up to count of item out of c's slots; how many it took.
+item_take :: proc(s: ^Server, c: ^Client, item: game.Item, count: int) -> (taken: int) {
+	if item == game.NO_ITEM || count <= 0 {return}
+	taken = game.inventory_remove(&c.inventory, item, count)
+	if taken > 0 {
+		ledger(s, c.world, .Game, item, -taken)
+		c.inv_changed = true
+	}
+	return
+}
+
+// item_clear: all of item out of c's slots; how many there were.
+item_clear :: proc(s: ^Server, c: ^Client, item: game.Item) -> int {
+	return item_take(s, c, item, max(int))
+}
+
 // --- Commands ---
 
 // admin_give: give <player> <item> [count]; what does not fit is dropped

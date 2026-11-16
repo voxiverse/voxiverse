@@ -90,3 +90,41 @@ told :: proc(sess: ^Session, text: string) -> bool {
 	for n in sess.mirror.notices {if n == text {return true}}
 	return false
 }
+
+// A game's inventory: give, count, take and clear one item (a currency); a give that
+// does not fit gives what fits and says so; the ledger books it all (the audit balances).
+@(test)
+test_a_game_gives_and_takes_items :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.mode = "survival"
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	ready :: proc(data: rawptr) -> bool {
+		sess := (^Session)(data)
+		return sess.mirror.welcomed && sess.h.srv.clients[0].state == .Playing
+	}
+	_, ok := harness_step_until(&sess.h, ready, sess, 300)
+	if !testing.expect(t, ok, "the host never joined") {return}
+	s := &sess.h.srv
+	c := &s.clients[0]
+	c.inventory = {}
+	audit_baseline(s)
+	gold := game.item_of_material(.Wheat) // (the coin of this test)
+	size := game.item_stack_size(s.registry, gold)
+
+	testing.expect_value(t, item_give(s, c, gold, 3 * size + 5), 3 * size + 5)
+	testing.expect_value(t, item_count(c, gold), 3 * size + 5)
+	testing.expect_value(t, item_take(s, c, gold, size), size)
+	testing.expect_value(t, item_take(s, c, gold, 10 * size), 2 * size + 5) // (all there was)
+	testing.expect_value(t, item_count(c, gold), 0)
+	testing.expect_value(t, item_take(s, c, gold, 1), 0)
+
+	// A full inventory: what fits, and no more.
+	slots := len(c.inventory.slots)
+	testing.expect_value(t, item_give(s, c, gold, (slots + 2) * size), slots * size)
+	testing.expect_value(t, item_clear(s, c, gold), slots * size)
+	testing.expect(t, c.inv_changed)
+	testing.expect_value(t, len(audit(s)), 0)
+}

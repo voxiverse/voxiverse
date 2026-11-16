@@ -82,6 +82,7 @@ makes it for games, documented where it is declared.
 | `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |
 | `game_mode(s, c, id)` | Put a player in a mode by id (a pack's too: `flood:out`); journalled as the game's |
 | `kit_give(s, c)` | Give a player what its mode's kit has that it lacks, weapons full |
+| `item_count(c, item)`, `item_give(s, c, item, count)`, `item_take(s, c, item, count)`, `item_clear(s, c, item)` | A player's slots as a game's store: how many of an item it carries, give some (what fits: the number given), take some (the number taken), take all; booked in the item ledger as the game's |
 | `hotbar_select(s, c, slot)` | Put a hotbar slot (0 ..< `game.HOTBAR_SLOTS`) in a player's hand, as if it chose it; false for a slot out of range |
 | `head_in_water(s, c)` | A player's eyes are in water |
 | `game_rule(s, w, name, value)` | Change a world's rule (`explosion_size`, as the `rule` command names it; the value as text), journalled as the game's and told to the world's players |
