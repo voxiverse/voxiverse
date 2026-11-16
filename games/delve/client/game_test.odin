@@ -93,7 +93,7 @@ test_delve_from_above :: proc(t: ^testing.T) {
 		"the camera is not over the head",
 	)
 	if cut, has := s.view.cut.?; testing.expect(t, has, "no cut") {
-		testing.expect_value(t, cut, i32(3))
+		testing.expect_value(t, cut, i32(delve.WALL_HEIGHT))
 	}
 	testing.expect(t, !engine.crosshair_shown(s))
 

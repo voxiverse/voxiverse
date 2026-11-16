@@ -30,14 +30,14 @@ GAME :: engine.Game {
 	scoreboard = scoreboard,
 }
 
-// The camera: over the head, looking down at 60 degrees from 15 blocks; the world from
-// three blocks over the feet is not drawn (the walls are four high).
+// The camera: over the head, looking down at 60 degrees from 15 blocks; nothing of the
+// world from the walls' height up is drawn (a roof, a ceiling).
 CAMERA :: engine.Game_Camera {
 	kind     = .Top_Down,
 	distance = 15,
 	angle    = 60,
 	heading  = 0,
-	cut      = 3,
+	cut      = delve.WALL_HEIGHT,
 }
 
 BANNER_SECONDS :: 3.0
