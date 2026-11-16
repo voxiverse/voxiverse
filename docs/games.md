@@ -188,6 +188,8 @@ world, its configure choosing the Earth generator); the engine's own tests play
 | `picking(s, c, stack) -> Pickup` | A player walks over a dropped stack it may pick up: `.Take` (into its inventory, as far as there is room), `.Leave` (it stays) or `.Taken` (the game took it its own way, a purse, a potion drunk: it is gone) | the server's |
 | `action(s, c, index)` | A player pressed one of the game's own actions (`index` into the client part's `actions`): an ability, a potion. Not while dead | the server's |
 | `request(s, c, r)` | A player's client part sent one of the game's requests ([below](#requests)), decoded and checked: `core.request_value(s, r, T)` reads it. Whether the player may, can afford it and where it goes is the hook's to judge | the server's |
+| `machines(s, w, kind, at)` | Every tick, the game's machines of world `w` whose time has come (`machine_wake`), one call per block type (`kind`), lowest position first ([machines](#machines)) | the server's |
+| `machine_use(s, c, at) -> string` | A player uses (right-clicks) one of the game's machines within its reach: the game opens its panel (an event to the player's client part) and says `""`, or refuses (the player is told the text) | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
 | `world_opened(s, w)` | A world is open: the home world right after `start` (and `load`), any other as it loads (a player travels there), its entities loaded. The game makes what it keeps of it: its `world_state`, its files read back (`world_file_read`) | the caller's for the home world, else the server's |
 | `world_save(s, w)` | A save captures world `w` at this tick (with the universe, or `w` alone as it unloads): the game stages its files (`world_file_write`), in the same transaction | as `save` |
@@ -240,6 +242,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `entity_strike(w, h, target)`, `entity_shoot(w, h, p)` | A creature's attack, its kind's `attack` data: a blow at a player or entity within its reach, or its shot at a point, each when its cooldown allows, credited to it |
 | `entity_glide(w, h, points)` | Send a steered walker along points in straight legs, with no physics, at a fraction of a walker's cost (a town's citizens on its roads); `entity_arrived` at the last |
 | `MAX_TEAMS`, `client_set_team(c, team)`, `client_team(c)`, `entity_set_team(w, h, team)`, `entity_team(w, h)`, `entity_set_vision(w, h, blocks)`, `entity_vision(w, h)`, `world_fog(w, on)`, `team_sees(w, team, p)` | Sides ([below](#sides)): a player's and an entity's team (0: none; no harm passes between two of a team, and a kind's `team<n>` look shows its team's colour), how far an entity sees for its team, and a world whose players on a team are told only of the entities their team sees |
+| `Machines`, `machine_data(w, p, T)`, `machine_slots(w, p)`, `machine_kind(w, p)`, `machine_wake(w, p, ticks)`, `machine_sleep(w, p)`, `machine_show(w, p, &value)`, `items_made(s, w, item, count)`, `items_used(s, w, item, count)` | Machines ([below](#machines)): the game's record on one, its inventory, its block type, when it thinks next, what players are shown of it; what its machines make and use up, booked in the item ledger |
 | `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
 
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
@@ -301,6 +304,26 @@ learns nothing a side has. Nothing its side does not see reaches its client, so 
 the server's, not a picture drawn over what was sent. (Blocks are not fogged: a chunk goes
 to whoever is near it.) Its client knows each entity's team and vision from its record
 (`engine.Other_Entity`'s `team` and `vision`), from which it draws its own fog.
+
+### Machines
+
+A block of the game's pack declared `"entity": {"kind": "machine", "slots": n}` is a
+machine (`server/core/machines.odin`): a furnace, a conveyor's motor, a tower that fires. It
+keeps, with its chunk and through every save, the game's record on it (`Game.machine_data`, a
+plain type of at most `game.MAX_MACHINE_DATA` bytes, `machine_data(w, p, T)`; zero when it is
+built), what players are shown of it (`Game.machine_shown`, at most `game.MAX_MACHINE_SHOWN`
+bytes, set by `machine_show`: sent when it changes to every player who has its chunk, and with
+the chunk to those who get it later; the client part reads it with `engine.machine_shown(s,
+p, T)`), its first `n` slots (`machine_slots`: its inventory, in the item ledger as a chest's,
+spilled when it is broken) and when it thinks next. Building and breaking one is a block edit
+like any (the journal keeps a broken one's value for undo).
+
+A machine sleeps until woken: `machine_wake(w, p, ticks)` has it think once, that many ticks
+on (the earlier of two wakes stands), and each tick the game's `machines` hook is given every
+machine whose time has come, one call per block type, lowest position first, so tens of
+thousands of machines cost what the due ones cost, not a scan of all. The time is the server's
+age (its persistent tick), so a machine thinks on after a restart where it left off. What a
+machine makes or uses up is booked with `items_made` and `items_used`.
 
 ### Walkers
 
@@ -390,6 +413,7 @@ number and no cast.
 | `world_box(s, lo, hi, color)` | An outline of blocks in the world this frame (a placement's ghost, a footprint) |
 | `ground_fill(s, lo, hi, color)`, `ground_outline(s, lo, hi, color)`, `structure_ghost(s, t, at, rotation, color)` | A translucent cover over the tops of a rectangle's columns (a zone, a heat map), its edge on the ground, a template's blocks tinted (what a placement would build), `MAX_FILL_VERTICES` and `MAX_WORLD_LINES` a frame |
 | `ground_top(s, x, z, lo, hi)`, `ground_quad(s, a, b, c, d, color)`, `block_colour(s, block)` | The highest solid block of a column as the session holds the world (false: none, or not loaded), a translucent quad of the game's drawn with the ground marks, a block's look in one colour: what a fog over the ground and a minimap are made of |
+| `machine_shown(s, p, T)` | What the game's machine at `p` shows, as its type (`Game.machine_shown`, the server part's): nil where the session holds none ([machines](#machines)) |
 | `puff_add(s, puff)` | A speck that drifts and fades (a tower's tracer, a blast's smoke) |
 | `game_request(s, &value)` | Send the server part one of the game's requests ([below](#requests)) |
 | `Seats(T)`, `seats_received(s, &seats, r)`, `seat_mine(s, &seats)`, `seats_ranked(&seats, before)` | What the game keeps of each player from a record of its keyed by the player (`key_player`, with a `name`): the last value by seat, its name copied out of the message, forgotten when the server stops putting it; the player's own; the seats told of in order (ties by name), a scoreboard's rows |
@@ -516,6 +540,11 @@ A game declares two types and the server owns their memory (the session's arena,
 whether it reads as the game would read it: `voxiverse-server --check` asks it of each world's
 file when the universe plays the game ([saves.md](saves.md)). `start` refuses a name that is not 1 to 32 bytes of
   `a-z`, `0-9`, `_` and `.`, or one named twice.
+
+- `machine_data`, `machine_shown`: its record on each of its machines and what they show
+  ([machines](#machines)): plain types, as `entity_data`'s, saved with the chunk as bytes (a
+  game that changes its record's layout reads its old records as the new type: it keeps the
+  layout, or a version field of its own).
 
 - `entity_data`: a record on each entity of the game's own kinds (its pack's,
   `<game>:<name>`): `core.entity_data(w, h, T)`, nil for an entity of another kind. Zero

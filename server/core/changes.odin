@@ -138,6 +138,7 @@ changes_flush :: proc(w: ^World) {
 		for pos in whole {
 			chunk := chunks_get(&w.chunks, pos)
 			send_message(s, &c, chunk_message(w, chunk), &chunk.blocks)
+			machines_sent(s, &c, chunk)
 		}
 		// A player's edit, heard; the world's changes (flowing water), quietly.
 		for p in edits {

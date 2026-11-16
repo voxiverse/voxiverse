@@ -212,6 +212,7 @@ USE_RULE_LIST := [?]string{"none", "toggle_open"}
 Block_Entity_Kind :: enum u8 {
 	None,
 	Container,
+	Machine, // a game's: its record, what it shows, its slots, when it thinks next (block_entity.odin)
 }
 
 
@@ -229,6 +230,7 @@ Type_Def :: struct {
 	connect:     i32, // a block tag index: what a side connects to, or NO_TAG (north..west are bool properties)
 	use:         Use_Rule,
 	entity:      Block_Entity_Kind,
+	slots:       u8, // a machine's slots (its inventory: 0 to CHEST_SLOTS); a container's are CHEST_SLOTS
 }
 
 // Box: a box in sixteenths of a block, 0 <= lo < hi <= 16 (collision boxes

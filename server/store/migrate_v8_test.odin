@@ -83,5 +83,5 @@ test_migrate_v8 :: proc(t: ^testing.T) {
 		context.temp_allocator,
 	)
 	value_text, _ := text_value(string(cfg), "format")
-	testing.expect_value(t, value_text, "9")
+	testing.expect_value(t, value_text, fmt.tprint(SAVE_FORMAT)) // (through every migration after)
 }

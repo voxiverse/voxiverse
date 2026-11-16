@@ -436,12 +436,21 @@ read_block_behaviour :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def
 			switch {
 			case !ok || kind == "":
 				fail_field(b, f, f.value, "entity is {\"kind\": \"container\", \"slots\": 25}")
+			case kind == "machine" && (slots < 0 || slots > CHEST_SLOTS):
+				fail_field(
+					b,
+					f,
+					f.value,
+					fmt.aprintf("a machine holds 0 to %d slots; got %d", CHEST_SLOTS, slots),
+				)
+			case kind == "machine":
+				def.entity, def.slots = .Machine, u8(slots)
 			case kind != "container":
 				fail_field(
 					b,
 					f,
 					f.value,
-					fmt.aprintf("entity kind is \"container\"; got \"%s\"", kind),
+					fmt.aprintf("entity kind is \"container\" or \"machine\"; got \"%s\"", kind),
 				)
 			case slots != CHEST_SLOTS:
 				fail_field(
@@ -455,7 +464,7 @@ read_block_behaviour :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def
 					),
 				)
 			case:
-				def.entity = .Container
+				def.entity, def.slots = .Container, CHEST_SLOTS
 			}
 		}
 	}

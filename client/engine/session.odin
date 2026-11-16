@@ -85,6 +85,7 @@ Session :: struct {
 	traffic:          [protocol.Side]protocol.Traffic, // counted here when remote (the pipe counts its own)
 	others:           map[u16]Other_Player, // the other players, by player id (players.odin)
 	entities:         map[u32]Other_Entity, // near us, by id (entities.odin)
+	machines:         map[game.Chunk_Pos][dynamic]Machine_Shown, // what the game's machines show, by chunk (heap; machine_shown)
 	screen_view:      Screen_View, // the frame's view, for a HUD's marks in the world (marks.odin)
 	world_boxes:      [MAX_WORLD_BOXES]World_Box, // outlines a game asked for this frame
 	world_box_count:  int,
@@ -405,6 +406,8 @@ session_free :: proc(s: ^Session) -> bool {
 	if s.remote {netcode.link_close(&s.link, "left the game")}
 	if s.config.steam != nil {steam.cancel_ticket(s.config.steam, &s.ticket)}
 	delete(s.entities) // the heap: entities come and go
+	for _, list in s.machines {delete(list)}
+	delete(s.machines)
 	protocol.receiver_destroy(&s.rx)
 	protocol.schema_destroy(&s.schema)
 	for g in s.grants {delete(g.pattern)}

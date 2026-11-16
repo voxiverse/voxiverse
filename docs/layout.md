@@ -61,7 +61,7 @@ Cap: `70` files per package.
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
 read from the line above. The largest packages are `client/engine` (68 files),
-`server/core` (66), `common/game` (56) and `common/base` (34); every other package has 31
+`server/core` (67), `common/game` (56) and `common/base` (34); every other package has 31
 or fewer (the `layout` lint holds these counts to the tree, so they are never stale). The
 cap leaves the largest no room beyond it, so a package that keeps growing splits into
 feature packages rather than get a bigger number. There is no per-folder allowance (that would
@@ -111,6 +111,9 @@ package** is enforced by the `layout` lint (see above).
 | `assets/fixtures/save-v8/characters/01ff5021b7bbecff5ed759200066950cd0ffd9cf7734206027c3588a8d6f6d0a` | Its character | `*.json` |
 | `assets/fixtures/save-v8/worlds/111a140f0413180e-14040022162710` | Its home world | `*.cfg`, `*.json`, `*.vxe`, `*.vxi` |
 | `assets/fixtures/save-v8/worlds/111a140f0413180e-14040022162710/journal` | Its edit journal | `*.vxj` |
+| `assets/fixtures/save-v9` | A universe of save format 9 written by that format's dedicated server, the commit before machines (a new sandbox universe, saved as it stopped) | `*.cfg` |
+| `assets/fixtures/save-v9/worlds/2202051d0f201024-021a220c110a0e` | Its home world | `*.cfg`, `*.json` |
+| `assets/fixtures/save-v9/worlds/2202051d0f201024-021a220c110a0e/journal` | Its edit journal | `*.vxj` |
 | `assets/fonts` | The one font and its licence | `*.ttf`, `*.txt` |
 | `assets/music` | Rendered music: Ogg, score and decisions, credits, soundfont | `*.ogg`, `*.score`, `*.json`, `*.txt`, `*.bin`, `*.sf2` |
 | `assets/packs/voxiverse` | The base pack's manifest | `*.json` |

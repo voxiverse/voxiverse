@@ -1,5 +1,6 @@
 package engine
 
+import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:strings"
@@ -39,6 +40,7 @@ APPLY := [protocol.State_Kind]Apply_Proc {
 	.Tally         = apply_tally,
 	.Channel       = apply_channel,
 	.Island        = apply_island,
+	.Machine       = apply_machine,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -242,6 +244,26 @@ apply_block :: proc(s: ^Session, g: protocol.Received) {
 	old, _ := world_block(&s.world, p)
 	block := game.Block(v.block)
 	if world_set_block(&s.world, p, block) && old != block {edit_sound(s, p, old, block)}
+}
+
+// apply_machine keeps what a machine shows, by its chunk (machine_shown reads it).
+@(private)
+apply_machine :: proc(s: ^Session, g: protocol.Received) {
+	if g.op == .Remove {return}
+	p := protocol.key_block(g.key)
+	shown := (^protocol.Machine_Record)(g.value).shown
+	list, _ := &s.machines[game.chunk_of(p)]
+	if list == nil {
+		s.machines[game.chunk_of(p)] = make([dynamic]Machine_Shown, runtime.heap_allocator())
+		list = &s.machines[game.chunk_of(p)]
+	}
+	for &m in list {
+		if m.pos == p {
+			m.shown = shown
+			return
+		}
+	}
+	append(list, Machine_Shown{p, shown})
 }
 
 @(private)

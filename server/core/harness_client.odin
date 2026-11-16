@@ -44,6 +44,7 @@ Mirror :: struct {
 	teleports:     u8,
 	entities:      [dynamic]u32, // ids told, in the order told
 	notices:       [dynamic]string, // the text of every Notice told (heap)
+	machines:      map[game.Block_Pos][game.MAX_MACHINE_SHOWN]u8, // what each machine shows, as told (heap)
 	packs_changed: u64, // the content of the last Packs_Changed
 	inv_seq:       u32,
 	edit_id:       u32,
@@ -276,6 +277,9 @@ mirror_apply :: proc(sess: ^Session, got: []protocol.Received) {
 			}
 		case .Inventory:
 			m.inventory = (^protocol.Inventory_State)(g.value).inventory
+		case .Machine:
+			if m.machines == nil {m.machines = make(type_of(m.machines), runtime.heap_allocator())}
+			m.machines[protocol.key_block(g.key)] = (^protocol.Machine_Record)(g.value).shown
 		case .Health,
 		     .Clock,
 		     .Grants,
@@ -355,6 +359,7 @@ session_stop :: proc(sess: ^Session) {
 	delete(m.entities)
 	for n in m.notices {delete(n)}
 	delete(m.notices)
+	delete(m.machines)
 	protocol.receiver_destroy(&m.rx)
 	protocol.schema_destroy(&m.schema)
 	game.block_arrays_destroy(&m.arrays)

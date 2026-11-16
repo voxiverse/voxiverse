@@ -44,6 +44,7 @@ World :: struct {
 	random_runs:       int, // random rules run (a count for the budget; random_ticks.odin)
 	command_rng:       base.Rng, // @r (commands_world.odin)
 	updates:           Updates, // scheduled block updates: flowing water (liquids.odin)
+	machines:          Machines, // the game's machines waiting to think (machines.odin; heap)
 	saved:             map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
 	regions:           map[game.Region_Pos]bool, // read from disk; true = changed since written
 	started:           bool, // world_start ran (its chunks and the rest exist)
@@ -170,6 +171,7 @@ world_close :: proc(w: ^World) {
 		virtual.arena_destroy(&w.arena)
 	}
 	sight_destroy(&w.sight)
+	machines_destroy(&w.machines)
 	delete(w.tops)
 	delete(w.noted_changes)
 	delete(w.gates)

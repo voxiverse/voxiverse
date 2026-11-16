@@ -21,21 +21,42 @@ import "server:core"
 // one its server names in Welcome (session_game_begin). Its state is the session's.
 // Any hook may be nil; all run on the main thread, in the frame.
 Game :: struct {
-	using info: game.Game_Info, // its id (its folder's name in games/: what the server's Welcome names), name and description (its shared package's, as the server part's)
-	kinds:      protocol.Game_Kinds, // what its server part replicates (its shared package's)
-	state:      typeid, // its state for the session (game_state): zero when the game begins; nil: none
-	started:    proc(s: ^Session), // the session plays the game: welcomed, its state zero
-	ended:      proc(s: ^Session), // the session ends (its state still there)
-	received:   proc(s: ^Session, r: protocol.Received), // a record of the game's kinds came, changed or went, or an event (game_value)
-	hud:        proc(s: ^Session, ctx: ^ui.Context), // draw its HUD, after the engine's (F1 hides both)
-	debug:      proc(s: ^Session) -> string, // its line of the F3 overlay ("": none; temporary memory)
-	scoreboard: proc(s: ^Session, board: ^Scoreboard), // fill board: what the player list shows while its key is held, in place of the engine's
-	commands:   []Command_Spec, // its console commands, there while a world plays it
-	camera:     proc(s: ^Session) -> Game_Camera, // the camera it wants, every frame (nil: the player's own, F5)
-	actions:    []string, // its own actions' names (at most game.MAX_GAME_ACTIONS): keys Game_1.. press them, its server part's action hook hears them
-	screen:     proc(s: ^Session, ctx: ^ui.Context, top: bool), // its screen, every frame while it is open (game_screen_open): a panel over the world drawn with the UI kit; top: it has the focus
-	keys:       []Game_Key, // its client part's own keys (at most MAX_GAME_KEYS): a command panel's hotkeys, control groups; read with game_key_pressed and game_key_down, never sent
-	no_hotbar:  bool, // its players hold no hotbar: in its world the hotbar's keys and the wheel pick no slot, and the controls do not list them
+	using info:    game.Game_Info, // its id (its folder's name in games/: what the server's Welcome names), name and description (its shared package's, as the server part's)
+	kinds:         protocol.Game_Kinds, // what its server part replicates (its shared package's)
+	state:         typeid, // its state for the session (game_state): zero when the game begins; nil: none
+	started:       proc(s: ^Session), // the session plays the game: welcomed, its state zero
+	ended:         proc(s: ^Session), // the session ends (its state still there)
+	received:      proc(s: ^Session, r: protocol.Received), // a record of the game's kinds came, changed or went, or an event (game_value)
+	hud:           proc(s: ^Session, ctx: ^ui.Context), // draw its HUD, after the engine's (F1 hides both)
+	debug:         proc(s: ^Session) -> string, // its line of the F3 overlay ("": none; temporary memory)
+	scoreboard:    proc(s: ^Session, board: ^Scoreboard), // fill board: what the player list shows while its key is held, in place of the engine's
+	commands:      []Command_Spec, // its console commands, there while a world plays it
+	camera:        proc(s: ^Session) -> Game_Camera, // the camera it wants, every frame (nil: the player's own, F5)
+	actions:       []string, // its own actions' names (at most game.MAX_GAME_ACTIONS): keys Game_1.. press them, its server part's action hook hears them
+	screen:        proc(s: ^Session, ctx: ^ui.Context, top: bool), // its screen, every frame while it is open (game_screen_open): a panel over the world drawn with the UI kit; top: it has the focus
+	keys:          []Game_Key, // its client part's own keys (at most MAX_GAME_KEYS): a command panel's hotkeys, control groups; read with game_key_pressed and game_key_down, never sent
+	no_hotbar:     bool, // its players hold no hotbar: in its world the hotbar's keys and the wheel pick no slot, and the controls do not list them
+	machine_shown: typeid, // what its machines show (its server part's Game.machine_shown): machine_shown reads it
+}
+
+// Machine_Shown: what a machine showed when last told (apply_machine).
+Machine_Shown :: struct {
+	pos:   game.Block_Pos,
+	shown: [game.MAX_MACHINE_SHOWN]u8,
+}
+
+// machine_shown: what the game's machine at p shows, as the game's type (Game.machine_shown),
+// as its server part last said; nil where the session holds no machine (none there, its
+// chunk not here, or it never showed anything).
+machine_shown :: proc(s: ^Session, p: game.Block_Pos, $T: typeid) -> ^T {
+	assert(s.game.machine_shown == T, "not the game's machine_shown")
+	#assert(size_of(T) <= game.MAX_MACHINE_SHOWN)
+	b, loaded := world_block(&s.world, p)
+	if !loaded || game.block_entity_kind(&s.reg.blocks, b) != .Machine {return nil}
+	list, _ := &s.machines[game.chunk_of(p)]
+	if list == nil {return nil}
+	for &m in list {if m.pos == p {return (^T)(&m.shown)}}
+	return nil
 }
 
 // MAX_GAME_KEYS: the keys a game's client part may declare (Game.keys).

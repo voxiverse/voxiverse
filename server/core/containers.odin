@@ -21,17 +21,25 @@ CONTAINER_SWEEP_TICKS :: 10
 @(private = "file")
 CHEST_LEASH :: 2.0
 
-// use_block: c used the block at pos (right click): a chest opens.
+// use_block: c used the block at pos (right click): a chest opens; a machine's game hears it.
 @(private)
 use_block :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos) {
 	w := c.world
 	block, loaded := chunks_block(&w.chunks, pos)
-	if !loaded || game.block_entity_kind(&s.registry.blocks, block) != .Container {return}
+	kind := game.block_entity_kind(&s.registry.blocks, block)
+	if !loaded || (kind != .Container && kind != .Machine) {return}
 	if !game.in_reach(
 		game.player_eye(c.player),
 		pos,
 		f64(w.rules.reach) + game.EDIT_REACH_SLACK,
 	) {return}
+	if kind == .Machine {
+		// A machine's use is its game's (its panel).
+		use := s.config.game.machine_use
+		if use == nil || machine_entity(w, pos) == nil {return}
+		if why := use(s, c, pos); why != "" {notice(s, c, why)}
+		return
+	}
 	if _, was := c.open_chest.?; was {chest_close(c)}
 	e := block_entity_at(w, pos)
 	if e == nil {

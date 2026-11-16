@@ -6,12 +6,28 @@ import "core:slice"
 // stacks. A type says it has one (`"entity": {"kind": "container", "slots": 25}`);
 // the kinds are the engine's. A chunk holds its entities sorted by `local`
 // (the index of the block in the chunk), found by binary search.
+//
+// A machine (`"entity": {"kind": "machine", "slots": n}`) is a game's block: its
+// record (`data`, the game's own type as bytes, at most MAX_MACHINE_DATA), what
+// players are shown of it (`shown`, at most MAX_MACHINE_SHOWN: sent to those who
+// have its chunk), its first `slots` slots (its inventory) and the server's age
+// (its persistent tick) at which it thinks next (`due`; 0: asleep). All of it is
+// saved with the chunk.
+
+MAX_MACHINE_DATA :: 64
+MAX_MACHINE_SHOWN :: 16
 
 Block_Entity :: struct {
 	local: u16, // local_index of its block
 	kind:  Block_Entity_Kind,
-	slots: [CHEST_SLOTS]Stack, // a container's
+	slots: [CHEST_SLOTS]Stack, // a container's; a machine's first Type_Def.slots
+	data:  [MAX_MACHINE_DATA]u8, // a machine's record (the game's type)
+	shown: [MAX_MACHINE_SHOWN]u8, // what a machine shows (the game's type)
+	due:   u64, // a machine's next think, in server age (0: none)
 }
+
+// (a game's record is read in place as its type: aligned as any plain type may need)
+#assert(offset_of(Block_Entity, data) % 8 == 0 && offset_of(Block_Entity, shown) % 8 == 0)
 
 // block_entity_kind: the entity kind a block has (None for most).
 block_entity_kind :: proc(t: ^Block_Table, b: Block) -> Block_Entity_Kind {
@@ -52,13 +68,16 @@ block_entity_insert :: proc(list: ^[dynamic]Block_Entity, e: Block_Entity) {
 MAX_BLOCK_ENTITIES :: CHUNK_VOLUME
 
 // write_block_entity: the value of one entity (without its local): the kind,
-// then a container's non-empty slots as slot, item number and count. The item
-// number is the registry's; a region file maps it by name (save.odin).
+// then a container's or a machine's non-empty slots as slot, item number and
+// count; a machine's then its record and what it shows (each a varint length
+// and the bytes up to the last that is not zero) and its due age (varint
+// split in two halves). The item number is the registry's; a region file maps
+// it by name (save.odin).
 write_block_entity_value :: proc(w: ^Writer, e: ^Block_Entity) {
 	write_u8(w, u8(e.kind))
 	switch e.kind {
 	case .None:
-	case .Container:
+	case .Container, .Machine:
 		n := 0
 		for st in e.slots {if !stack_empty(st) {n += 1}}
 		write_varint(w, u32(n))
@@ -68,6 +87,18 @@ write_block_entity_value :: proc(w: ^Writer, e: ^Block_Entity) {
 			write_varint(w, u32(st.item))
 			write_varint(w, u32(st.count))
 		}
+		if e.kind != .Machine {break}
+		trimmed :: proc(b: []u8) -> []u8 {
+			n := len(b)
+			for n > 0 && b[n - 1] == 0 {n -= 1}
+			return b[:n]
+		}
+		for bytes in ([2][]u8{trimmed(e.data[:]), trimmed(e.shown[:])}) {
+			write_varint(w, u32(len(bytes)))
+			for x in bytes {write_u8(w, x)}
+		}
+		write_varint(w, u32(e.due & 0xFFFF_FFFF))
+		write_varint(w, u32(e.due >> 32))
 	}
 }
 
@@ -76,7 +107,7 @@ write_block_entity_value :: proc(w: ^Writer, e: ^Block_Entity) {
 // registry; a bad value fails the reader.
 read_block_entity_value :: proc(r: ^Reader, e: ^Block_Entity) {
 	kind := read_u8(r)
-	if kind == 0 || kind > u8(Block_Entity_Kind.Container) {
+	if kind == 0 || kind > u8(max(Block_Entity_Kind)) {
 		reader_fail(r)
 		return
 	}
@@ -103,6 +134,18 @@ read_block_entity_value :: proc(r: ^Reader, e: ^Block_Entity) {
 		}
 		e.slots[slot] = {item, int(count), 0, 0}
 	}
+	if e.kind != .Machine {return}
+	for into in ([2][]u8{e.data[:], e.shown[:]}) {
+		size := read_varint(r)
+		if !r.ok || int(size) > len(into) {
+			reader_fail(r)
+			return
+		}
+		for i in 0 ..< int(size) {into[i] = read_u8(r)}
+	}
+	low := read_varint(r)
+	high := read_varint(r)
+	e.due = u64(high) << 32 | u64(low)
 }
 
 // reader_item: the item a saved number means here.

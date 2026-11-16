@@ -156,6 +156,8 @@ handle_packets :: proc(s: ^Session, packets: []protocol.Packet) {
 				fail(s, "the server sent more of the world than was asked for")
 				return
 			}
+			// (what its machines show follows the chunk: what was kept is old)
+			if list, had := &s.machines[v.pos]; had {clear(list)}
 			s.stats.chunks_received += 1
 		case protocol.Pong:
 			if s.net.ping_pending && v.id == s.net.ping_id {

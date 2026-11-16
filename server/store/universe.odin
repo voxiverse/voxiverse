@@ -147,8 +147,9 @@ WORLD_FILE :: "world.cfg"
 // migrations in a registry (migrate.odin); 6: regions name their
 // blocks, universes list their packs; 7: entities' fields by name; 8: the
 // sheep are the sandbox's; 9: the markets, traders and interventions are the
-// sandbox's. Older than 6 are refused (MIGRATIONS starts there).
-SAVE_FORMAT :: 9
+// sandbox's; 10: a block entity may be a game's machine. Older than 6 are refused
+// (MIGRATIONS starts there).
+SAVE_FORMAT :: 10
 
 // UNIVERSE_LOCK: the file an open universe holds a lock on (its text is the
 // owner's process id, for the message only).

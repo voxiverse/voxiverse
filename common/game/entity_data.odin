@@ -37,6 +37,11 @@ entity_data_plain :: proc(T: typeid) -> string {return data_plain(T, MAX_ENTITY_
 // MAX_CHARACTER_DATA bytes).
 character_data_plain :: proc(T: typeid) -> string {return data_plain(T, MAX_CHARACTER_DATA)}
 
+// machine_data_plain, machine_shown_plain: as entity_data_plain, for a game's record on its
+// machines and what they show (block_entity.odin).
+machine_data_plain :: proc(T: typeid) -> string {return data_plain(T, MAX_MACHINE_DATA)}
+machine_shown_plain :: proc(T: typeid) -> string {return data_plain(T, MAX_MACHINE_SHOWN)}
+
 @(private = "file")
 data_plain :: proc(T: typeid, most: int) -> string {
 	ti := type_info_of(T)

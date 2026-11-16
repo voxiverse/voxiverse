@@ -183,11 +183,14 @@ releases the lock with its process, so a crash leaves no stale lock.
 
 ## Formats
 
-`SAVE_FORMAT` (9) is recorded in `universe.cfg` and in each `world.cfg`. A universe of an older format the migrations reach is brought up to date when it is opened, any other refused (see [Migrations](#migrations)).
+`SAVE_FORMAT` (10) is recorded in `universe.cfg` and in each `world.cfg`. A universe of an older format the migrations reach is brought up to date when it is opened, any other refused (see [Migrations](#migrations)).
 
 ### Region format 5
 
-A region file (`REGION_FORMAT`, 5) stores, after each chunk's blocks, its block entities, its waiting
+A region file (`REGION_FORMAT`, 5) stores, after each chunk's blocks, its block entities (a
+container's stacks; a machine's stacks, its game's record and what it shows, each to its last
+byte that is not zero, and the server age at which it thinks next: a kind a format 9 build does
+not know, hence save format 10), its waiting
 simulation updates (`varint n`, then per update the cell's local index and the ticks until
 it is due; written when the chunk is saved or unloaded, scheduled again when it loads) and its
 channels: `varint n`, then per channel its name and its values (one value, or a palette and
@@ -250,6 +253,7 @@ this world was made by an older build; create a new one
 | 6 | `entities.cfg`'s lines name their fields (`item=`, `shorn=`...) where format 6 placed them by position; a `critter` is a `voxiverse:sheep` | `assets/fixtures/save-v6` |
 | 7 | The base pack's sheep (`voxiverse:sheep`) are the sandbox's (`sandbox:sheep`): what the engine kept of each (`shorn`, `genes`, `love`, `wait`; `growth` as `grows`, the ticks before it is grown) is the sandbox's record on it (`data.<field>`) | `assets/fixtures/save-v7` |
 | 8 | The towns' markets, the traders and the interventions log are the sandbox's: each world's `economy.vxe` and `interventions.vxi` are its `sandbox.economy.vxe` and `sandbox.interventions.vxi` (their bytes as they were), and a character file's `trader` (silver, cargo, the prices seen) is the sandbox's record on the character (`game`: `cash`, `cargo.<i>`, `seen.<i>.cell`/`price`/`month`/`good`, `count`, `given`), in a universe the sandbox plays; in another it is dropped. The counters stay last in the file | `assets/fixtures/save-v8` |
+| 9 | Nothing in its files changes: a block entity may now be a game's machine (its record, what it shows, its slots, when it thinks next; a chunk of format 9 has none), and the number moves so a build of format 9 refuses such a universe rather than misread it | `assets/fixtures/save-v9` |
 
 A migration that fails commits nothing, and the open fails with "this world could not be
 brought up to date (the log says why); nothing in it was changed". The rules for a

@@ -148,6 +148,10 @@ Game :: struct {
 	world_opened:   proc(s: ^Server, w: ^World), // w is open (started, its entities loaded; the home world after start and load): the game makes what it keeps of it (world_state, its files read)
 	world_closed:   proc(s: ^Server, w: ^World), // w closes (unloaded, or the session stops), after its last save: the game frees what it made of it
 	world_save:     proc(s: ^Server, w: ^World), // a save captures w at this tick (with the universe, or w alone as it unloads): the game stages its files (world_file_write)
+	machine_data:   typeid, // its record on each machine of its pack's blocks (machine_data): zero when built, saved with the chunk; nil: none
+	machine_shown:  typeid, // what players are shown of each machine (machine_show; engine.machine_shown): at most game.MAX_MACHINE_SHOWN bytes; nil: nothing
+	machines:       proc(s: ^Server, w: ^World, kind: game.Block_Type, at: []game.Block_Pos), // the machines of w whose time has come (machine_wake), a call per block type, lowest position first
+	machine_use:    proc(s: ^Server, c: ^Client, at: game.Block_Pos) -> (refusal: string), // c uses (right-clicks) the machine at `at` within its reach: the game opens its panel, or refuses (c is told why)
 	pack:           game.Pack_Source, // its own pack (games/<game>/pack, named for the game; its shared package's): loaded only where it is played (game_packs)
 }
 
@@ -298,6 +302,20 @@ start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 	if config.game.entity_data != nil {
 		if why := game.entity_data_plain(config.game.entity_data); why != "" {
 			log.errorf("server game's entity_data cannot be kept game=%s: %s", config.game.id, why)
+			return false
+		}
+	}
+	for check in ([2]struct {
+			type: typeid,
+			why:  proc(T: typeid) -> string,
+		}{{config.game.machine_data, game.machine_data_plain}, {config.game.machine_shown, game.machine_shown_plain}}) {
+		if check.type == nil {continue}
+		if why := check.why(check.type); why != "" {
+			log.errorf(
+				"server game's machine records cannot be kept game=%s: %s",
+				config.game.id,
+				why,
+			)
 			return false
 		}
 	}
@@ -857,6 +875,11 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	tick_mark(s, "entities")
+	if s.sim_steps > 0 {
+		base.profile_scope("machines")
+		for w in s.worlds {machines_tick(w)}
+		tick_mark(s, "machines")
+	}
 	for w in s.worlds {block_changes_tell(w)}
 	if s.config.game.tick != nil {
 		base.profile_scope("game")

@@ -37,6 +37,7 @@ State_Kind :: enum u8 {
 	Tally,
 	Channel,
 	Island,
+	Machine,
 }
 
 Event_Kind :: enum u8 {
@@ -134,6 +135,12 @@ Entity_Motion :: struct {
 Block_Record :: struct {
 	block: u16, // a block number (any pack's): check_block_record asks the registry
 	heard: bool,
+}
+
+// Machine_Record: what a game's machine shows (key: its block), as the game's own type
+// (server/core/machines.odin): sent when it changes and with its chunk.
+Machine_Record :: struct {
+	shown: [game.MAX_MACHINE_SHOWN]u8,
 }
 
 // Channel_Record: a replicated channel's value at a cell (key: the cell and the channel).
@@ -267,6 +274,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 	.Tally = {name = "tally", value = Tally},
 	.Channel = {name = "channel", value = Channel_Record, key = .Cell, write_through = true},
 	.Island = {name = "island", value = Island},
+	.Machine = {name = "machine", value = Machine_Record, key = .Block, write_through = true},
 }
 
 @(rodata)
