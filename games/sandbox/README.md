@@ -2,7 +2,7 @@
 
 The engine's open world as a game, and the game a session plays when nobody names another
 (`game.DEFAULT_GAME`). A universe of planets, the home world Earth or one made from the seed,
-with its climate, sheep, farming, towns and gates between worlds: build, explore, survive or
+with its climate, sheep, farming, peoples and their markets, and gates between worlds: build, explore, survive or
 create. There is no round and no score. A new player is given the rocket launcher.
 
 ## Playing it
@@ -40,13 +40,42 @@ pack's model.
 The statistics it keeps of a player: `sheep.sheared` (5 experience each) and `sheep.fed` (2),
 and of a world `sheep.born`, shown with the engine's.
 
+## Its peoples and markets
+
+On a world built on the planet (the home world when it is Earth), the sandbox keeps the
+peoples' history and their towns' markets (`history.odin`, `settlements.odin`, `economy.odin`,
+`market.odin`, `trade.odin`: docs/world.md describes the model). The history is a function of
+the planet, the world's address and seed and the day; the towns it implies near the players
+have markets in detail, stepped a market month (30 world days) at a time, with news and
+caravans between them; the rest are priced lazily from the history, so a town left and come
+back to does not jump. What the history does not give back (the detailed stocks, what the
+lazy towns remember) is kept with the world, `sandbox.economy.vxe`.
+
+Each character is a trader (its record, kept in its character file): silver (20 to start),
+cargo of each good, and the prices it saw where it stood. Standing in a town (within 15 km of
+it) the HUD says `Market of <town>`; the game's action (`Market`, Z by default) opens the
+market's screen there: each good's price, stock, what you carry and how old the news behind
+the price is; pick a good and a quantity, buy or sell. Walking out of the town closes it. The
+server judges every trade (where you stand, your silver, your cargo, the stock).
+
+A world's interventions log (`sandbox.interventions.vxi`: what players did that its history
+carries forward; a settlement founded is a town of the history from then on) is listed by
+`/interventions [radius]` (the `world.interventions` permission).
+
+What it tells its players: `sandbox.market` (the market of the town a player stands in, or
+none), the events `sandbox.trade_refused` (why) and `sandbox.market_open`; what they ask:
+`sandbox.trade`.
+
 ## The code
 
-`rules.odin` (its name and description), `genetics.odin` (the sheep's genes) and `pack.odin`
-(its pack: `pack/data/entities/sheep.json`, the sheep's body, looks, model and spawn rule);
-`server/` chooses the world (`configure`: the Earth generator and the starter kit) and keeps
-the sheep (`sheep.odin`: their minds, `think`; their shearing and feeding, `entity_use`; their
-wild genes, `spawned`; their flight, `entity_hurt`), each sheep's record (`Sheep`) kept on its
-entity; `client/` adds nothing to the engine's HUD and is there so a client can play it.
-Everything else the sandbox does (worlds and gates, climate, farming, the market) is the
+`rules.odin` (its name and description), `genetics.odin` (the sheep's genes), `pack.odin`
+(its pack: `pack/data/entities/sheep.json`, the sheep's body, looks, model and spawn rule),
+the peoples' and markets' model (above), `records.odin` (what it replicates) and `text.odin`
+(what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
+and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and
+feeding, `entity_use`; their wild genes, `spawned`; their flight, `entity_hurt`), each sheep's
+record (`Sheep`) kept on its entity, and runs the markets (`economy.odin`, each world's
+economy, its `world_state` and file; `trader.odin`, the character's `Trader_Record` and the
+market on the wire; `interventions.odin`); `client/` draws the market's line and screen
+(`market.odin`). Everything else the sandbox does (worlds and gates, climate, farming) is the
 engine's, chosen through the server's `Config`.

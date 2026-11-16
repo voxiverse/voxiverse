@@ -7,9 +7,10 @@ import "common:game"
 // worlds through gates, survive or create. It has no round and no score: what the
 // engine's world does is the game.
 //
-// This is its shared package: what both of its sides use (its pack, the sheep's
-// genetics). The server part (games/sandbox/server) chooses the world (its configure) and
-// keeps the sheep; the client part (games/sandbox/client) is there so a session can play it.
+// This is its shared package: what both of its sides use (its pack, the sheep's genetics,
+// the peoples' history and the markets' model, its records and its text). The server part
+// (games/sandbox/server) chooses the world (its configure), keeps the sheep and runs the
+// markets; the client part (games/sandbox/client) shows a town's market.
 
 // INFO: the game's id, name and description, for both of its parts (the launcher
 // lists it by them).

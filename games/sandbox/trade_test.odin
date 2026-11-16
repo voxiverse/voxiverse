@@ -1,0 +1,195 @@
+package sandbox
+
+import "core:testing"
+
+import "common:planet"
+
+@(private = "file")
+fixture :: proc(p: planet.Planet, limit: int) -> [dynamic]Settlement {
+	list := make([dynamic]Settlement)
+	w, h := p.land.width, p.land.height
+	land := 0
+	for k in 0 ..< w * h {if p.land.is_land[k] {land += 1}}
+	stride := max(land / limit, 1)
+	seen := 0
+	for k in 0 ..< w * h {
+		if !p.land.is_land[k] {continue}
+		seen += 1
+		if seen % stride == 0 {append(&list, town_at(p, k, 1 + k % 2, f32(500 + k % 7 * 500)))}
+	}
+	return list
+}
+
+@(private = "file")
+island :: proc(e: Economy) -> []int {
+	all := make([]int, len(e.towns))
+	for i in 0 ..< len(all) {all[i] = i}
+	return all
+}
+
+@(test)
+test_caravan_arrival_updates_knowledge_of_origin :: proc(t: ^testing.T) {
+	p, r := chronicle_planet()
+	defer planet.relief_destroy(&r)
+	defer planet.planet_destroy(&p)
+	list := fixture(p, 150)
+	defer delete(list)
+	e := economy_build(p, list[:], nil)
+	defer economy_destroy(&e)
+	all := island(e)
+	defer delete(all)
+	m := market_make(e, all, 0)
+	defer market_destroy(&m)
+	n := news_make(e, m)
+	defer news_destroy(&n)
+	c: Convoy
+	defer convoy_destroy(&c)
+
+	// A town with a way and a good both ends trade.
+	a, b, g := -1, -1, Good.Grain
+	for i in 0 ..< len(e.towns) {
+		for l in e.links[e.link_first[i]:e.link_first[i + 1]] {
+			if e.towns[i].market[g] && e.towns[l.to].market[g] && a < 0 {a, b = i, l.to}
+		}
+	}
+	testing.expect(t, a >= 0)
+	testing.expect(t, !n.town[b].at[a][g].known, "a town knows another's prices before any news")
+	months := 0
+	for months < 12 && !n.town[b].at[a][g].known {
+		convoy_step(e, &m, n, &c, nil)
+		months += 1
+	}
+	rep := n.town[b].at[a][g]
+	testing.expect(t, rep.known, "no caravan from the origin arrived in a year")
+	age := knowledge_age(n.town[b], a, g, m.month)
+	testing.expectf(t, age >= 0 && age <= 3, "the news is %v months old", age)
+	testing.expect(t, rep.month < m.month, "the news is as new as the town's own")
+	testing.expect(t, rep.price > 0)
+}
+
+@(test)
+test_trader_buys_and_sells :: proc(t: ^testing.T) {
+	p, r := chronicle_planet()
+	defer planet.relief_destroy(&r)
+	defer planet.planet_destroy(&p)
+	list := fixture(p, 150)
+	defer delete(list)
+	e := economy_build(p, list[:], nil)
+	defer economy_destroy(&e)
+	all := island(e)
+	defer delete(all)
+	m := market_make(e, all, 0)
+	defer market_destroy(&m)
+
+	i := 0
+	for !e.towns[i].market[.Grain] {i += 1}
+	tr := trader_make(m, 1e6, i)
+	defer trader_destroy(&tr)
+	before := market_price(e, m, i, .Grain)
+	bought := trader_buy(&tr, e, &m, .Grain, 100)
+	testing.expect(t, bought > 0 && abs(tr.cargo[.Grain] - bought) < 1e-3)
+	testing.expect(t, tr.cash < 1e6, "buying cost nothing")
+	testing.expect(t, market_price(e, m, i, .Grain) > before, "buying did not raise the price")
+	spent := 1e6 - tr.cash
+	sold := trader_sell(&tr, e, &m, .Grain, bought)
+	testing.expect(t, abs(sold - bought) < 1e-3 && tr.cargo[.Grain] < 1e-3)
+	testing.expect(t, 1e6 - tr.cash > 0 && tr.cash < 1e6, "a round trip in one town paid")
+	testing.expect(t, spent > 0)
+	testing.expect(
+		t,
+		tr.know.at[i][.Grain].known,
+		"the trader does not know the price they traded at",
+	)
+	testing.expect(t, trade_matters(e.towns[i].size, e.towns[i]))
+	testing.expect(t, !trade_matters(1, e.towns[i]))
+	// Nothing to sell, nothing sold; no money, nothing bought.
+	testing.expect(t, trader_sell(&tr, e, &m, .Grain, 5) == 0)
+	broke := trader_make(m, 0, i)
+	defer trader_destroy(&broke)
+	testing.expect(t, trader_buy(&broke, e, &m, .Grain, 5) == 0)
+}
+
+// A trader who learns of a drought first and carries grain there profits more than one who
+// sets out once the news has reached the grain's town: the first sells at the peak, the later
+// one meets the caravans that came before.
+@(test)
+test_first_to_a_drought_profits_more :: proc(t: ^testing.T) {
+	p, r := chronicle_planet()
+	defer planet.relief_destroy(&r)
+	defer planet.planet_destroy(&p)
+	list := fixture(p, 150)
+	defer delete(list)
+	e := economy_build(p, list[:], nil)
+	defer economy_destroy(&e)
+	all := island(e)
+	defer delete(all)
+
+	// The drought town D and a grain town S one way off, outside the drought's radius.
+	d, s := -1, -1
+	search: for i in 0 ..< len(e.towns) {
+		if !e.towns[i].market[.Grain] || e.towns[i].production[.Grain] <= 0 {continue}
+		for l in e.links[e.link_first[i]:e.link_first[i + 1]] {
+			a, b := e.towns[i], e.towns[l.to]
+			far := km_between(a.lat, a.lon, b.lat, b.lon) > DROUGHT_RADIUS_KM
+			if far && b.market[.Grain] && b.production[.Grain] > 0 {
+				d, s = i, l.to
+				break search
+			}
+		}
+	}
+	testing.expect(t, d >= 0, "no pair of grain towns")
+	if d < 0 {return}
+	trip := travel_months(e, s, d)
+
+	WARM :: 12
+	run :: proc(e: Economy, all: []int, d, s: int, delay: int, trip: f64) -> (profit: f64) {
+		m := market_make(e, all, 0)
+		defer market_destroy(&m)
+		n := news_make(e, m)
+		defer news_destroy(&n)
+		c: Convoy
+		defer convoy_destroy(&c)
+		for _ in 0 ..< WARM {convoy_step(e, &m, n, &c, nil)}
+		ds := []Drought{{e.towns[d].lat, e.towns[d].lon, f32(WARM), 0.6}}
+		tr := trader_make(m, 1e9, s)
+		defer trader_destroy(&tr)
+		// The trader is told at the start; the others hear at S `delay` months later.
+		for _ in 0 ..< 1 + delay {convoy_step(e, &m, n, &c, ds)}
+		units := 0.3 * e.towns[s].size
+		trader_arrive(&tr, e, m, n, s)
+		start := tr.cash
+		bought := trader_buy(&tr, e, &m, .Grain, units)
+		for m.month < f64(WARM + 1 + delay) + trip {convoy_step(e, &m, n, &c, ds)}
+		tr.at = d
+		trader_sell(&tr, e, &m, .Grain, bought)
+		return (tr.cash - start) / f64(max(bought, 1e-6))
+	}
+	first := run(e, all, d, s, 0, trip)
+	// Later: once the news has reached S, measured on a run with no trader.
+	delay := 0
+	{
+		m := market_make(e, all, 0)
+		defer market_destroy(&m)
+		n := news_make(e, m)
+		defer news_destroy(&n)
+		c: Convoy
+		defer convoy_destroy(&c)
+		for _ in 0 ..< WARM {convoy_step(e, &m, n, &c, nil)}
+		ds := []Drought{{e.towns[d].lat, e.towns[d].lon, f32(WARM), 0.6}}
+		for delay < 12 {
+			convoy_step(e, &m, n, &c, ds)
+			delay += 1
+			rep := n.town[s].at[d][.Grain]
+			if rep.known && rep.month > WARM {break}
+		}
+	}
+	later := run(e, all, d, s, delay, trip)
+	testing.expectf(
+		t,
+		first > later,
+		"first %v per unit, after the news (%d months) %v",
+		first,
+		delay,
+		later,
+	)
+}

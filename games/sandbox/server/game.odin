@@ -6,28 +6,44 @@ import "common:worldgen"
 import "games:sandbox"
 import "server:core"
 
-// Sandbox's server part (the game: games/sandbox): it chooses the world the engine runs
-// and keeps its sheep (sheep.odin: their minds, shearing and feeding, their statistics).
-// Every other system of that world (worlds and gates, climate, farming, the market) is
-// the engine's, chosen by the config.
+// Sandbox's server part (the game: games/sandbox): it chooses the world the engine runs,
+// keeps its sheep (sheep.odin: their minds, shearing and feeding, their statistics) and the
+// economy of a world built on the planet (economy.odin: its towns' markets; trader.odin: the
+// player as a trader; interventions.odin: what players did that the world's history carries
+// forward). The rest of that world (worlds and gates, climate, farming) is the engine's,
+// chosen by the config.
 
 GAME :: core.Game {
-	info         = sandbox.INFO,
-	pack         = sandbox.PACK,
-	server_state = Sandbox,
-	entity_data  = Sheep,
-	stats        = {
+	info           = sandbox.INFO,
+	kinds          = sandbox.KINDS,
+	pack           = sandbox.PACK,
+	server_state   = Sandbox,
+	entity_data    = Sheep,
+	character_data = Trader_Record,
+	world_state    = Sandbox_World,
+	world_files    = {
+		{name = ECONOMY_FILE, check = economy_check},
+		{name = INTERVENTIONS_FILE, check = interventions_check},
+	},
+	stats          = {
 		{name = "sheep.sheared", kind = .Count, xp = 5},
 		{name = "sheep.fed", kind = .Count, xp = 2},
 		{name = "sheep.born", kind = .Count},
 	},
-	configure    = configure,
-	start        = start,
-	think        = think,
-	spawned      = spawned,
-	entity_use   = entity_use,
-	entity_hurt  = entity_hurt,
-	command      = command,
+	configure      = configure,
+	start          = start,
+	tick           = economy_tick,
+	think          = think,
+	spawned        = spawned,
+	joined         = trader_joined,
+	action         = action,
+	request        = request,
+	entity_use     = entity_use,
+	entity_hurt    = entity_hurt,
+	command        = command,
+	world_opened   = world_opened,
+	world_closed   = world_closed,
+	world_save     = world_save,
 }
 
 // Sandbox: the session's state: the sheep's randomness and the registry's names they use.
@@ -74,9 +90,40 @@ configure :: proc(config: ^core.Config) {
 
 #assert(worldgen.Kind.Earth == {}, "the Earth generator is the zero kind (an unset Config's)")
 
+// world_opened: a world's interventions log and economy file are read back.
+world_opened :: proc(s: ^core.Server, w: ^core.World) {
+	interventions_load(w)
+	economy_load(w)
+}
+
+// world_closed: what the sandbox made of a world is freed (its economy's build waited for).
+world_closed :: proc(s: ^core.Server, w: ^core.World) {
+	sw := world_of(w)
+	economy_free(sw)
+	interventions_destroy(&sw.interventions)
+}
+
+// world_save: a world's files, those that changed, in the save's transaction.
+world_save :: proc(s: ^core.Server, w: ^core.World) {
+	interventions_write(w)
+	economy_write(w)
+}
+
+// action: the game's one action (its client part's MARKET_ACTION) asks for the market.
+action :: proc(s: ^core.Server, c: ^core.Client, index: int) {
+	if index == sandbox.MARKET_ACTION {market_ask(s, c)}
+}
+
+// request: a trade in the town the player stands in.
+request :: proc(s: ^core.Server, c: ^core.Client, r: core.Request) {
+	if t, ok := core.request_value(s, r, sandbox.Trade); ok {market_trade(s, c, t^)}
+}
+
 // command: `/sheep [lamb] [shorn] [black] [spotted]` sets a sheep of those looks down in
-// front of the player (north of it, each further along; the summoning permission).
+// front of the player (north of it, each further along; the summoning permission);
+// `/interventions [radius]` lists the world's interventions (interventions.odin).
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
+	if name == "interventions" {return interventions_command(s, c, args)}
 	if name != "sheep" {return false}
 	if !core.allowed(s, c, "world.summon") {
 		core.notice(s, c, "You may not summon here")
