@@ -531,7 +531,10 @@ session_update :: proc(
 		send_prediction_check(s, sent.sequence)
 		movement_sounds(s)
 	}
-	if look {edit_controls(s, input, actions, dt)}
+	if look {
+		edit_controls(s, input, actions, dt)
+		game_actions(s, actions)
+	}
 	game.prediction_decay(&s.prediction, dt)
 	eyes := game.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
 	// The eyes ease down when crouching and back up (not a jump cut).

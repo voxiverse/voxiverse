@@ -292,6 +292,7 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 	     game.Shoot,
 	     game.Reload,
 	     game.Market_Trade,
+	     game.Game_Action,
 	     game.Fire,
 	     game.Chat,
 	     game.Inventory_Request,

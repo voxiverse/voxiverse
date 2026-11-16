@@ -104,7 +104,7 @@ word :: proc(rng: ^base.Rng, max_len: int) -> string {
 }
 
 fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
-	which := base.rng_int_max(rng, 28)
+	which := base.rng_int_max(rng, 29)
 	m: Client_Message
 	switch which {
 	case 0:
@@ -233,6 +233,8 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		}
 	case 26:
 		m = Dev_Fetch{word(rng, MAX_DEV_FIELD)}
+	case 28:
+		m = Game_Action{u8(base.rng_int_max(rng, MAX_GAME_ACTIONS + 1)), edge_u32(rng)}
 	case 27:
 		m = Market_Trade {
 			u8(base.rng_int_max(rng, MARKET_GOODS + 1)),

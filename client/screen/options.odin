@@ -322,7 +322,7 @@ bindings_list :: proc(app: ^engine.App, ctx: ^ui.Context) -> (changed: bool) {
 			r := ui.next(ctx)
 			ui.push_id_int(ctx, int(a))
 			defer ui.pop_id(ctx)
-			ui.label(ctx, engine.ACTION_INFO[a].label, ui.cut_left(&r, r.w * 0.4))
+			ui.label(ctx, engine.action_name(app, a), ui.cut_left(&r, r.w * 0.4))
 			kr := ui.cut_left(&r, r.w * 0.5)
 			field := engine.action_field(a)
 			if k := engine.action_key(keys, a); k != nil {

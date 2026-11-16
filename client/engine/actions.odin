@@ -6,6 +6,7 @@ import "core:reflect"
 import "core:strings"
 
 import "common:base"
+import "common:game"
 
 import "client:platform"
 
@@ -66,7 +67,13 @@ Action :: enum u8 {
 	Screenshot,
 	Fullscreen,
 	Dev_Chat, // F9: developer chat, while the devchat setting is set
+	Game_1, // the game's own actions (Game.actions), sent to its server part: Z, X, B
+	Game_2,
+	Game_3,
 }
+
+// GAME_ACTIONS: the actions a game's client part names, in its list's order.
+GAME_ACTIONS :: [game.MAX_GAME_ACTIONS]Action{.Game_1, .Game_2, .Game_3}
 
 // Action_Context: where an action is read. World is game_controls(app);
 // Menu is everything else (menu screens, overlays that take the keyboard or
@@ -138,6 +145,19 @@ ACTION_INFO := [Action]Action_Info {
 	.Screenshot      = {{.World, .Menu}, "Take screenshot", {}, {}},
 	.Fullscreen      = {{.World, .Menu}, "Toggle fullscreen", {}, {}},
 	.Dev_Chat        = {{.World, .Menu}, "Developer chat", {}, {}},
+	.Game_1          = {{.World}, "Game action 1", {}, {}},
+	.Game_2          = {{.World}, "Game action 2", {}, {}},
+	.Game_3          = {{.World}, "Game action 3", {}, {}},
+}
+
+// action_name: what the controls call an action: a game action by the name the game
+// playing gives it ("Game action 1" with no game, or one that has fewer).
+action_name :: proc(app: ^App, a: Action) -> string {
+	for g, i in GAME_ACTIONS {
+		if g != a || app.session == nil || i >= len(app.session.game.actions) {continue}
+		return fmt.tprintf("%s (%s)", app.session.game.actions[i], app.session.game.name)
+	}
+	return ACTION_INFO[a].label
 }
 
 // PAD_COVERED_BY, KEY_COVERED_BY: why an action has no rebindable source on
@@ -169,6 +189,9 @@ PAD_COVERED_BY :: [?]struct {
 	{.Screenshot, "not on pads"},
 	{.Fullscreen, "not on pads"},
 	{.Dev_Chat, "not on pads"},
+	{.Game_1, "not on pads (the pad's quick ring is next tier)"},
+	{.Game_2, "not on pads (the pad's quick ring is next tier)"},
+	{.Game_3, "not on pads (the pad's quick ring is next tier)"},
 }
 
 KEY_COVERED_BY :: [?]struct {
@@ -278,6 +301,12 @@ action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 		return &b.fullscreen
 	case .Dev_Chat:
 		return &b.dev_chat
+	case .Game_1:
+		return &b.game_1
+	case .Game_2:
+		return &b.game_2
+	case .Game_3:
+		return &b.game_3
 	}
 	return nil
 }
@@ -314,7 +343,10 @@ action_pad :: proc(p: ^Pad_Bindings, a: Action) -> ^platform.Pad_Button {
 	     .Section_Next,
 	     .Catalog,
 	     .Fullscreen,
-	     .Dev_Chat:
+	     .Dev_Chat,
+	     .Game_1,
+	     .Game_2,
+	     .Game_3:
 		return nil
 	case .Jump:
 		return &p.jump

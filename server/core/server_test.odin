@@ -1114,3 +1114,50 @@ test_game_harm_hooks :: proc(t: ^testing.T) {
 	testing.expect(t, !respawn(s, c), "a living player came back")
 	testing.expect_value(t, p.respawns, 1)
 }
+
+// Pressed: the test game's tally of its actions.
+@(private = "file")
+Pressed :: struct {
+	count: [game.MAX_GAME_ACTIONS]int,
+	who:   ^Client,
+}
+
+// A game's own action (a key the client part binds) reaches its action hook with its
+// index and the player who pressed it; a dead player's does not.
+@(test)
+test_game_action_reaches_the_game :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.mode = "survival"
+	config.game = {
+		info = {id = "presser", name = "Presser"},
+		server_state = Pressed,
+		action = proc(s: ^Server, c: ^Client, index: int) {
+			p := game_state(s, Pressed)
+			p.count[index] += 1
+			p.who = c
+		},
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {
+		session_stop(sess)
+		return
+	}
+	defer session_stop(sess)
+	_, ok := harness_step_until(&sess.h, proc(data: rawptr) -> bool {
+			sess := (^Session)(data)
+			return sess.mirror.welcomed && sess.h.srv.clients[0].state == .Playing
+		}, sess, 600)
+	if !testing.expect(t, ok) {return}
+	s := &sess.h.srv
+	p := game_state(s, Pressed)
+	mirror_send(&sess.mirror, game.Game_Action{2, 0})
+	mirror_send(&sess.mirror, game.Game_Action{0, 0})
+	harness_step(&sess.h, 3)
+	testing.expect_value(t, p.count, [game.MAX_GAME_ACTIONS]int{1, 0, 1})
+	testing.expect(t, p.who == &s.clients[0])
+	damage(s, &s.clients[0], 1000, {kind = .Command})
+	mirror_send(&sess.mirror, game.Game_Action{0, 0})
+	harness_step(&sess.h, 3)
+	testing.expect_value(t, p.count[0], 1)
+}

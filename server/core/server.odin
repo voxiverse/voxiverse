@@ -115,6 +115,7 @@ Game :: struct {
 	block_changed: proc(s: ^Server, w: ^World, change: Block_Change), // blocks of w changed (by a player, the world, a command, the game): told once a tick, before the game's tick
 	entity_hurt:   proc(s: ^Server, w: ^World, h: game.Entity_Handle, harm: Entity_Harm), // an entity of w was hurt and lives (its health already less: entity_harm)
 	entity_died:   proc(s: ^Server, w: ^World, dead: Dead_Entity, harm: Entity_Harm), // an entity of w died of harm (gone already: dead says what and where it was)
+	action:        proc(s: ^Server, c: ^Client, index: int), // c pressed the game's action `index` (0 ..< game.MAX_GAME_ACTIONS; the client part's Game.actions names them); not while dead
 	harming:       proc(s: ^Server, h: ^Harming), // any harm about to be done, to a player or an entity: may change h.amount (0 or less: none)
 	save:          proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
 	load:          proc(s: ^Server, text: string) -> (ok: bool), // its game.cfg, after start, before the first tick (a universe that has one); false: start fails
@@ -1081,6 +1082,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		weapon_reload(s, c)
 	case game.Market_Trade:
 		market_trade(s, c, v)
+	case game.Game_Action:
+		if g := &s.config.game; g.action != nil && !c.dead {g.action(s, c, int(v.index))}
 	case game.Telemetry_Batch, game.Dev_Message, game.Dev_Fetch:
 		disconnect(s, c, "this is not a telemetry collector")
 	case game.Respawn:

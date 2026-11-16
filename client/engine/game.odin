@@ -26,6 +26,18 @@ Game :: struct {
 	scoreboard: proc(s: ^Session, board: ^Scoreboard), // fill board: what the player list shows while its key is held, in place of the engine's
 	commands:   []Command_Spec, // its console commands, there while a world plays it
 	camera:     proc(s: ^Session) -> Game_Camera, // the camera it wants, every frame (nil: the player's own, F5)
+	actions:    []string, // its own actions' names (at most game.MAX_GAME_ACTIONS): keys Game_1.. press them, its server part's action hook hears them
+}
+
+// game_actions: the game's own actions pressed this frame go to its server part (a
+// Game_Action, after the last input sent).
+game_actions :: proc(s: ^Session, a: ^Actions) {
+	for action, i in GAME_ACTIONS {
+		if i >= len(s.game.actions) {break}
+		if action_pressed(a, action) {
+			send_message(s, game.Game_Action{u8(i), s.prediction.next_sequence - 1})
+		}
+	}
 }
 
 // SCOREBOARD_COLUMNS: the most columns a game's scoreboard has besides the name.

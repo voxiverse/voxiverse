@@ -16,7 +16,7 @@ import sc "common:steam"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 42
+PROTOCOL_VERSION :: 43
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -318,6 +318,17 @@ Prediction_Check :: struct {
 DESYNC_CHECK_INPUTS :: 30 // inputs between checks (one a second)
 DESYNC_QUIET_TICKS :: 60 // ticks without a disturbance before a check is judged
 
+// MAX_GAME_ACTIONS: the actions a game's client part may bind keys to (engine.Game.actions).
+MAX_GAME_ACTIONS :: 3
+
+// Game_Action: the player pressed one of its game's own actions (a key bound to "use
+// ability", "drink potion"): index into the game's list. Like an Attack it follows
+// input `after`.
+Game_Action :: struct {
+	index: u8,
+	after: u32,
+}
+
 // Market_Trade: the player buys or sells `quantity` units (a person's month of the good) of a
 // good in the town they stand in. It names no town: the server knows where they are, and
 // answers with a Market_View (the new one, or a refusal).
@@ -360,6 +371,7 @@ Client_Message :: union {
 	Shoot,
 	Reload,
 	Market_Trade,
+	Game_Action,
 }
 
 // Server -> client.
@@ -685,6 +697,7 @@ Client_Kind :: enum u8 {
 	Dev_Message,
 	Dev_Fetch,
 	Market_Trade,
+	Game_Action,
 }
 
 @(private = "file")
@@ -804,6 +817,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "reload"
 		case u8(Client_Kind.Market_Trade):
 			return "market_trade"
+		case u8(Client_Kind.Game_Action):
+			return "game_action"
 		case u8(Client_Kind.Choose):
 			return "choose"
 		case u8(Client_Kind.Dial):
@@ -907,6 +922,10 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Respawn))
 	case Reload:
 		write_u8(w, u8(Client_Kind.Reload))
+	case Game_Action:
+		write_u8(w, u8(Client_Kind.Game_Action))
+		write_u8(w, v.index)
+		write_u32(w, v.after)
 	case Market_Trade:
 		write_u8(w, u8(Client_Kind.Market_Trade))
 		write_u8(w, v.good)
@@ -1202,6 +1221,13 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 		m = Respawn{}
 	case u8(Client_Kind.Reload):
 		m = Reload{}
+	case u8(Client_Kind.Game_Action):
+		a := Game_Action {
+			index = read_u8(&r),
+			after = read_u32(&r),
+		}
+		if int(a.index) >= MAX_GAME_ACTIONS {reader_fail(&r)}
+		m = a
 	case u8(Client_Kind.Market_Trade):
 		t := Market_Trade {
 			good     = read_u8(&r),

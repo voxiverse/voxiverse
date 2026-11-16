@@ -289,6 +289,10 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(encode_s(Market_View{reason = .Away})), 2)
 	_, mok = decode_server_t([]u8{43, 99}, scratch)
 	testing.expect(t, !mok, "a Market_View with no such reason decoded")
+	ga, gok := decode_client_t(encode_c(Game_Action{2, 77})[:])
+	testing.expect(t, gok && ga.(Game_Action) == Game_Action{2, 77})
+	_, gbad := decode_client_t(encode_c(Game_Action{MAX_GAME_ACTIONS, 1})[:])
+	testing.expect(t, !gbad, "a game action past the most decoded")
 	mt, tok := decode_client_t(encode_c(Market_Trade{3, true, 2.5})[:])
 	testing.expect(t, tok && mt.(Market_Trade) == Market_Trade{3, true, 2.5})
 	for bad in ([]Market_Trade{{MARKET_GOODS, false, 1}, {0, false, 0}, {0, false, -1}, {0, false, MAX_TRADE_QUANTITY * 2}}) {
