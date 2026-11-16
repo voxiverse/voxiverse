@@ -419,6 +419,7 @@ explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id, by: May
 		harm := Entity_Harm {
 			amount = 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1,
 			kind   = .Explosion,
+			from   = center,
 		}
 		if seat, set := by.?; set && int(seat) < len(s.clients) {harm.by = &s.clients[seat]}
 		scare(entity_brain(w, h), center)
@@ -552,6 +553,8 @@ entity_attack :: proc(
 	entity_set_velocity(w, h, {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]})
 	entity_set_on_ground(w, h, false)
 	scare(entity_brain(w, h), from)
+	harm := harm
+	harm.from = from
 	return entity_harm(w, h, harm)
 }
 
@@ -564,6 +567,7 @@ Entity_Harm :: struct {
 	creature: u32, // the entity that did it (its id; 0: none; it may be gone)
 	weapon:   string, // what a shot came from: its item's name ("" for any other)
 	stack:    game.Stack, // what the player struck or shot with (empty: nothing, or no player)
+	from:     [3]f64, // where it came from: the striker, the shooter, the blast's centre (zero: the game's own, unless it says)
 }
 
 // Dead_Entity: an entity that died, as the entity_died hook is told it (it is gone

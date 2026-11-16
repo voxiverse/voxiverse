@@ -250,6 +250,66 @@ test_a_game_judges_the_use_of_its_creatures :: proc(t: ^testing.T) {
 	net_send(c, protocol.Use_Entity{id, c.seq})
 	net_for(t, {c}, 0.3)
 	testing.expect_value(t, entity_data(s.home, e, Creature_Data).number, 5)
+
+	// What the use costs: spent from what the player carries (kept by a mode that gives
+	// without end); not when it carries too few.
+	stone := game.item_of_block(s.registry, .Stone)
+	infinite := has_ability(s, player, .Infinite_Items)
+	testing.expect(t, item_spend(s, player, stone, 2))
+	testing.expect_value(t, game.inventory_count(&player.inventory, stone), 5 if infinite else 3)
+	testing.expect(t, !item_spend(s, player, stone, 9), "spent more than it carried")
+}
+
+// An entity hurt is told where the harm came from: the striker's place (where it would
+// flee from).
+@(test)
+test_an_entity_is_told_where_harm_came_from :: proc(t: ^testing.T) {
+	Seen :: struct {
+		from: [3]f64,
+		hurt: int,
+	}
+	config := harness_world()
+	config.listen = true
+	config.game = harness_creatures()
+	config.game.server_state = Seen
+	config.game.entity_hurt = proc(
+		s: ^Server,
+		w: ^World,
+		h: game.Entity_Handle,
+		harm: Entity_Harm,
+	) {
+		seen := game_state(s, Seen)
+		seen.from, seen.hurt = harm.from, seen.hurt + 1
+	}
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	c := new(Net_Client)
+	defer free(c)
+	net_connect(c, 0, "striker", h = h)
+	defer net_close(c)
+	standing :: proc(cs: []^Net_Client) -> bool {return(
+			cs[0].welcomed &&
+			cs[0].update.state.on_ground \
+		)}
+	if !testing.expect(t, net_wait(t, {c}, standing), "never stood") {return}
+	s := &h.srv
+	player := client_by_name(s, "striker")
+	kind, _ := game.registry_kind(s.registry, "creatures:walker")
+	e := entity_spawn(s.home, kind, player.player.position + {1.5, 0, 0}, false)
+	net_send(c, protocol.Attack{entity_id(s.home, e), c.seq})
+	net_for(t, {c}, 0.3)
+	seen := game_state(s, Seen)
+	testing.expect_value(t, seen.hurt, 1)
+	d := seen.from - player.player.position
+	testing.expectf(
+		t,
+		d.x * d.x + d.y * d.y + d.z * d.z < 0.01,
+		"from %v, the striker at %v",
+		seen.from,
+		player.player.position,
+	)
 }
 
 // A game's own statistics are counted with the character and its world as the engine's

@@ -332,6 +332,20 @@ item_take :: proc(s: ^Server, c: ^Client, item: game.Item, count: int) -> (taken
 	return
 }
 
+// item_spend: c spends count of an item it carries on a use (fed to a creature): taken
+// and booked as used, unless its mode gives without end (it keeps them). False when it
+// carries fewer, and nothing is taken.
+item_spend :: proc(s: ^Server, c: ^Client, item: game.Item, count := 1) -> bool {
+	if item == game.NO_ITEM ||
+	   count <= 0 ||
+	   game.inventory_count(&c.inventory, item) < count {return false}
+	if has_ability(s, c, .Infinite_Items) {return true}
+	game.inventory_remove(&c.inventory, item, count)
+	ledger(s, c.world, .Use, item, -count)
+	c.inv_changed = true
+	return true
+}
+
 // item_clear: all of item out of c's slots; how many there were.
 item_clear :: proc(s: ^Server, c: ^Client, item: game.Item) -> int {
 	return item_take(s, c, item, max(int))
