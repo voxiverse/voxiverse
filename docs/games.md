@@ -26,7 +26,8 @@ only `common:` and `core:`), the server part (`package <game>_server`: no `clien
 the client part (`package <game>_client`). A part imports no other part of its game but the
 shared package, but for the client part's tests, which play the game against its server
 part. A game imports no other game: what two share belongs in the engine. A proc of the
-game's must not take the name of a package it imports (`play`, `hud`, `engine`).
+game's must not take the name of a package it imports (`play`, `hud`, `engine`): the
+`import` lint refuses one, naming both (the compiler's own error names neither).
 
 From `common:` a game takes the rules both sides share from `common:game` (blocks, items,
 templates, `Game_Info`, a name's longest) and what it replicates from `common:protocol`

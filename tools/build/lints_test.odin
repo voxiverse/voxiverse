@@ -301,3 +301,22 @@ test_process_exec_lint :: proc(t: ^testing.T) {
 		0,
 	)
 }
+
+// A game's proc named as a package it imports is refused, naming both; a name of its own
+// that no import takes passes, and the engine's code is not the lint's.
+@(test)
+test_game_shadows_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	text := "package tag_server\n\nimport \"server:play\"\nimport ui \"client:ui\"\n"
+	found := lint_game_shadows("games/tag/server/game.odin", text, {"play", "tick"})
+	testing.expect_value(t, len(found), 1)
+	if len(found) ==
+	   1 {testing.expect(t, strings.contains(found[0], "game.odin:3: the package declares play"))}
+	testing.expect_value(t, len(lint_game_shadows("games/tag/server/game.odin", text, {"ui"})), 1)
+	testing.expect_value(
+		t,
+		len(lint_game_shadows("games/tag/server/game.odin", text, {"tick"})),
+		0,
+	)
+	testing.expect_value(t, len(lint_game_shadows("server/play/x.odin", text, {"play"})), 0)
+}

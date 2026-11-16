@@ -613,6 +613,43 @@ lint_game_imports :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
+// lint_game_shadows: no declaration of a game's package takes the name of a package one
+// of its files imports (a proc `play` beside `import "server:play"`): the compiler's
+// complaint names neither, and every use of the import in that file breaks. decls are
+// the package's top-level names (every file of its folder). path is relative to the
+// repository, with forward slashes.
+lint_game_shadows :: proc(path, text: string, decls: []string) -> []string {
+	found := make([dynamic]string)
+	if !strings.has_prefix(path, "games/") {return found[:]}
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		l := strings.trim_space(line)
+		if !strings.has_prefix(l, "import ") {continue}
+		q := strings.index_byte(l, '"')
+		if q < 0 {continue}
+		alias := strings.trim_space(l[len("import "):q])
+		if alias == "" {
+			target := strings.trim_right(l[q + 1:], "\"")
+			target, _, _ = strings.partition(target, "\"")
+			if c := strings.last_index_any(target, ":/"); c >= 0 {target = target[c + 1:]}
+			alias = target
+		}
+		if !slice.contains(decls, alias) {continue}
+		append(
+			&found,
+			fmt.aprintf(
+				"%s:%d: the package declares %s, the name this file imports a package as: rename the declaration",
+				path,
+				line_no,
+				alias,
+			),
+		)
+	}
+	return found[:]
+}
+
 // lint_game_package: a game's packages are named for it (docs/layout.md, rule 6): the
 // shared package `<game>`, the server part `<game>_server`, the client part `<game>_client`,
 // so no two games' parts share a name and code that imports one names it so. path is relative to the repository, with forward slashes.
@@ -856,6 +893,22 @@ import_lint :: proc() -> bool {
 			for msg in lint_game_package(path, string(data)) {
 				fmt.eprintln(msg)
 				ok = false
+			}
+			if strings.has_prefix(path, GAMES_DIR + "/") {
+				pkg_dir := filepath.dir(info.fullpath)
+				names := make([dynamic]string, context.temp_allocator)
+				if entries, derr := os.read_all_directory_by_path(pkg_dir, context.temp_allocator);
+				   derr == nil {
+					for e in entries {
+						if filepath.ext(e.name) != ".odin" {continue}
+						d, _ := os.read_entire_file_from_path(e.fullpath, context.temp_allocator)
+						top_declarations(string(d), &names)
+					}
+				}
+				for msg in lint_game_shadows(path, string(data), names[:]) {
+					fmt.eprintln(msg)
+					ok = false
+				}
 			}
 			for msg in lint_game_api(path, string(data), api) {
 				fmt.eprintln(msg)
