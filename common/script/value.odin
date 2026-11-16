@@ -73,10 +73,6 @@ is_number :: #force_inline proc "contextless" (v: Value) -> bool {
 	return v.tag == .Int || v.tag == .Float
 }
 
-is_collectable :: #force_inline proc "contextless" (v: Value) -> bool {
-	return v.tag >= .String
-}
-
 // raw_equal: equality without metamethods; 1 == 1.0, strings are interned.
 raw_equal :: proc "contextless" (a, b: Value) -> bool {
 	if a.tag == b.tag {

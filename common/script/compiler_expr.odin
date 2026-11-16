@@ -630,11 +630,6 @@ code_self :: proc(c: ^Compiler, e: ^Exp, key: ^Exp) {
 	free_exp(c, key)
 }
 
-@(private = "file")
-is_kstr :: proc(e: ^Exp) -> bool {
-	return e.kind == .Str
-}
-
 // indexed turns t (in a register) and key into an indexed expression.
 indexed :: proc(c: ^Compiler, t: ^Exp, key: ^Exp) {
 	treg := t.info
