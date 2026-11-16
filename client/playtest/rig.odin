@@ -75,6 +75,7 @@ start :: proc(
 	}
 	if !testing.expect(t, core.harness_start(&rig.h, config), "no server") {return false}
 	rig.ui = o.ui
+	rig.input.mouse_seen = true // (the test puts the pointer where it wants: rig.input.mouse)
 	rig.games = {client_game}
 	rig.s = new(engine.Session)
 	key: access.Account_Key
