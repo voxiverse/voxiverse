@@ -94,32 +94,33 @@ Config :: struct {
 // the thread that calls start, stop on the one that calls stop, the rest on the
 // server's, in its tick.
 Game :: struct {
-	using info:    game.Game_Info, // its id (its folder's name in games/: the dedicated server's --game), name and description (its shared package's)
-	kinds:         protocol.Game_Kinds, // what it replicates besides the engine (its shared package's; game_put, game_event)
-	server_state:  typeid, // its state for the session (game_state): zero at start; nil: none
-	client_state:  typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none
-	entity_data:   typeid, // its record on each entity of its pack's kinds (entity_data): zero at spawn, saved with the world; nil: none
-	stats:         []Game_Stat, // the statistics it keeps of its players (stat_count, stat_world): with the character, shown with the engine's
-	world_state:   typeid, // its state for each world (world_state): zero when the world opens, freed with it; nil: none
-	world_files:   []World_File, // the files it keeps in each world's directory (world_file_read, world_file_write)
-	configure:     proc(config: ^Config), // before anything else: may change the config
-	start:         proc(s: ^Server) -> bool, // the session is set up, no tick has run (false: start fails)
-	stop:          proc(s: ^Server), // after the last tick, before the last save
-	tick:          proc(s: ^Server), // every tick, after the entities' (also while frozen)
-	spawned:       proc(s: ^Server, w: ^World, h: game.Entity_Handle) -> (keep: bool), // a creature of a kind with a spawn rule appeared by itself (natural): the game makes it what it is (its record, its looks) or refuses it (false: it goes)
-	think:         proc(
+	using info:     game.Game_Info, // its id (its folder's name in games/: the dedicated server's --game), name and description (its shared package's)
+	kinds:          protocol.Game_Kinds, // what it replicates besides the engine (its shared package's; game_put, game_event)
+	server_state:   typeid, // its state for the session (game_state): zero at start; nil: none
+	client_state:   typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none
+	entity_data:    typeid, // its record on each entity of its pack's kinds (entity_data): zero at spawn, saved with the world; nil: none
+	stats:          []Game_Stat, // the statistics it keeps of its players (stat_count, stat_world): with the character, shown with the engine's
+	character_data: typeid, // its record on each character (character_data): zero for a new one, kept with the character and saved in its file; nil: none
+	world_state:    typeid, // its state for each world (world_state): zero when the world opens, freed with it; nil: none
+	world_files:    []World_File, // the files it keeps in each world's directory (world_file_read, world_file_write)
+	configure:      proc(config: ^Config), // before anything else: may change the config
+	start:          proc(s: ^Server) -> bool, // the session is set up, no tick has run (false: start fails)
+	stop:           proc(s: ^Server), // after the last tick, before the last save
+	tick:           proc(s: ^Server), // every tick, after the entities' (also while frozen)
+	spawned:        proc(s: ^Server, w: ^World, h: game.Entity_Handle) -> (keep: bool), // a creature of a kind with a spawn rule appeared by itself (natural): the game makes it what it is (its record, its looks) or refuses it (false: it goes)
+	think:          proc(
 		s: ^Server,
 		w: ^World,
 		kind: game.Kind_Id,
 		entities: []game.Entity_Handle,
 	), // each tick, the creatures of each of its kinds whose brain is "game" (their ground loaded, lowest id first), before they are steered
-	joined:        proc(s: ^Server, c: ^Client), // c is playing (welcomed, in its world)
-	left:          proc(s: ^Server, c: ^Client), // c is leaving (still seated, its state still there)
-	command:       proc(s: ^Server, c: ^Client, name: string, args: []string) -> (known: bool), // a command the server has none of; known false: "Unknown server command"
-	hurt:          proc(s: ^Server, c: ^Client, harm: Harm), // c was hurt and lives (its health already less)
-	died:          proc(s: ^Server, c: ^Client, harm: Harm), // c died of harm (already told, counted and its things dropped)
-	respawned:     proc(s: ^Server, c: ^Client), // c stands again: at the world's spawn, full health, the mode's kit (the game may move it, change what it holds)
-	editing:       proc(
+	joined:         proc(s: ^Server, c: ^Client), // c is playing (welcomed, in its world)
+	left:           proc(s: ^Server, c: ^Client), // c is leaving (still seated, its state still there)
+	command:        proc(s: ^Server, c: ^Client, name: string, args: []string) -> (known: bool), // a command the server has none of; known false: "Unknown server command"
+	hurt:           proc(s: ^Server, c: ^Client, harm: Harm), // c was hurt and lives (its health already less)
+	died:           proc(s: ^Server, c: ^Client, harm: Harm), // c died of harm (already told, counted and its things dropped)
+	respawned:      proc(s: ^Server, c: ^Client), // c stands again: at the world's spawn, full health, the mode's kit (the game may move it, change what it holds)
+	editing:        proc(
 		s: ^Server,
 		c: ^Client,
 		at: game.Block_Pos,
@@ -127,7 +128,7 @@ Game :: struct {
 	) -> (
 		refusal: string,
 	), // c would change the block at `at` (its rules and reach allow it): "" lets it, else the edit is refused and c is told why
-	entity_use:    proc(
+	entity_use:     proc(
 		s: ^Server,
 		c: ^Client,
 		h: game.Entity_Handle,
@@ -135,19 +136,19 @@ Game :: struct {
 	) -> (
 		refusal: string,
 	), // c uses (right-clicks) the entity h within its reach, holding stack: the game does what the use does for its kinds and says "", or refuses (nothing happens, c is told why); then the engine's own use of the kind, if any
-	block_changed: proc(s: ^Server, w: ^World, change: Block_Change), // blocks of w changed (by a player, the world, a command, the game): told once a tick, before the game's tick
-	entity_hurt:   proc(s: ^Server, w: ^World, h: game.Entity_Handle, harm: Entity_Harm), // an entity of w was hurt and lives (its health already less: entity_harm)
-	entity_died:   proc(s: ^Server, w: ^World, dead: Dead_Entity, harm: Entity_Harm), // an entity of w died of harm (gone already: dead says what and where it was)
-	action:        proc(s: ^Server, c: ^Client, index: int), // c pressed the game's action `index` (0 ..< game.MAX_GAME_ACTIONS; the client part's Game.actions names them); not while dead
-	request:       proc(s: ^Server, c: ^Client, r: Request), // c's client part sent one of the game's requests (Game_Kinds.requests), decoded and checked (request_value)
-	picking:       proc(s: ^Server, c: ^Client, stack: game.Stack) -> Pickup, // c walks over a dropped stack it may pick up: take it, leave it, or the game took it its own way
-	harming:       proc(s: ^Server, h: ^Harming), // any harm about to be done, to a player or an entity: may change h.amount (0 or less: none)
-	save:          proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
-	load:          proc(s: ^Server, text: string) -> (ok: bool), // its game.cfg, after start, before the first tick (a universe that has one); false: start fails
-	world_opened:  proc(s: ^Server, w: ^World), // w is open (started, its entities loaded; the home world after start and load): the game makes what it keeps of it (world_state, its files read)
-	world_closed:  proc(s: ^Server, w: ^World), // w closes (unloaded, or the session stops), after its last save: the game frees what it made of it
-	world_save:    proc(s: ^Server, w: ^World), // a save captures w at this tick (with the universe, or w alone as it unloads): the game stages its files (world_file_write)
-	pack:          game.Pack_Source, // its own pack (games/<game>/pack, named for the game; its shared package's): loaded only where it is played (game_packs)
+	block_changed:  proc(s: ^Server, w: ^World, change: Block_Change), // blocks of w changed (by a player, the world, a command, the game): told once a tick, before the game's tick
+	entity_hurt:    proc(s: ^Server, w: ^World, h: game.Entity_Handle, harm: Entity_Harm), // an entity of w was hurt and lives (its health already less: entity_harm)
+	entity_died:    proc(s: ^Server, w: ^World, dead: Dead_Entity, harm: Entity_Harm), // an entity of w died of harm (gone already: dead says what and where it was)
+	action:         proc(s: ^Server, c: ^Client, index: int), // c pressed the game's action `index` (0 ..< game.MAX_GAME_ACTIONS; the client part's Game.actions names them); not while dead
+	request:        proc(s: ^Server, c: ^Client, r: Request), // c's client part sent one of the game's requests (Game_Kinds.requests), decoded and checked (request_value)
+	picking:        proc(s: ^Server, c: ^Client, stack: game.Stack) -> Pickup, // c walks over a dropped stack it may pick up: take it, leave it, or the game took it its own way
+	harming:        proc(s: ^Server, h: ^Harming), // any harm about to be done, to a player or an entity: may change h.amount (0 or less: none)
+	save:           proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
+	load:           proc(s: ^Server, text: string) -> (ok: bool), // its game.cfg, after start, before the first tick (a universe that has one); false: start fails
+	world_opened:   proc(s: ^Server, w: ^World), // w is open (started, its entities loaded; the home world after start and load): the game makes what it keeps of it (world_state, its files read)
+	world_closed:   proc(s: ^Server, w: ^World), // w closes (unloaded, or the session stops), after its last save: the game frees what it made of it
+	world_save:     proc(s: ^Server, w: ^World), // a save captures w at this tick (with the universe, or w alone as it unloads): the game stages its files (world_file_write)
+	pack:           game.Pack_Source, // its own pack (games/<game>/pack, named for the game; its shared package's): loaded only where it is played (game_packs)
 }
 
 // game_state: the game's state for the session, as the type it declared
@@ -303,6 +304,16 @@ start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 	if why := game_stats_valid(config.game.stats); why != "" {
 		log.errorf("server game's statistics cannot be kept game=%s: %s", config.game.id, why)
 		return false
+	}
+	if config.game.character_data != nil {
+		if why := game.character_data_plain(config.game.character_data); why != "" {
+			log.errorf(
+				"server game's character_data cannot be kept game=%s: %s",
+				config.game.id,
+				why,
+			)
+			return false
+		}
 	}
 	if why := world_files_valid(config.game.world_files); why != "" {
 		log.errorf("server game's world files cannot be kept game=%s: %s", config.game.id, why)

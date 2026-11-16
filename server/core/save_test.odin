@@ -914,7 +914,7 @@ test_trader_is_saved_and_old_files_get_the_purse :: proc(t: ^testing.T) {
 	seen_put(&rec.trader, Seen{7, 1.25, 12, .Fish})
 	seen_put(&rec.trader, Seen{7, 9, 3, .Fish}) // older: not kept
 	seen_put(&rec.trader, Seen{9, 0.5, 14, .Ore})
-	back, ok := player_parse(test_reg(), player_json(test_reg(), &rec))
+	back, ok := player_parse(test_reg(), player_json(test_reg(), &rec, nil), nil)
 	defer counters_free(&back.stats)
 	testing.expect(t, ok)
 	testing.expect_value(t, back.trader.cash, 33.5)
@@ -926,6 +926,7 @@ test_trader_is_saved_and_old_files_get_the_purse :: proc(t: ^testing.T) {
 	old, old_ok := player_parse(
 		test_reg(),
 		transmute([]u8)string(`{"format": 2, "position": [1, 2, 3]}`),
+		nil,
 	)
 	defer counters_free(&old.stats)
 	testing.expect(t, old_ok)
@@ -1168,4 +1169,92 @@ test_game_saves_its_state :: proc(t: ^testing.T) {
 		h.srv.refusal,
 		"this universe's game.cfg is not one counter understands",
 	)
+}
+
+// A game's record on each character: kept with the character and saved in its file (its
+// `game` member, a field by its path), given back when the character joins again; a file
+// from before has none (zero), and a field the type no longer has is skipped.
+@(private = "file")
+Purse_Kind :: enum u8 {
+	Leather,
+	Silk,
+}
+
+@(private = "file")
+Purse :: struct {
+	silver: f64,
+	kind:   Purse_Kind,
+	coins:  [3]struct {
+		value: u32,
+		worn:  f32,
+	},
+}
+
+@(test)
+test_a_game_keeps_a_record_on_each_character :: proc(t: ^testing.T) {
+	rec: Player_Record
+	(^Purse)(&rec.character_data.bytes)^ = {12.5, .Silk, {{7, 0.25}, {}, {9, 0}}}
+	text := player_json(test_reg(), &rec, Purse)
+	testing.expect(t, strings.contains(string(text), `"silver": 12.5`), string(text))
+	testing.expect(t, strings.contains(string(text), `"kind": "Silk"`), string(text))
+	back, ok := player_parse(test_reg(), text, Purse)
+	counters_free(&back.stats)
+	testing.expect(t, ok)
+	testing.expect_value(
+		t,
+		(^Purse)(&back.character_data.bytes)^,
+		Purse{12.5, .Silk, {{7, 0.25}, {}, {9, 0}}},
+	)
+	// A file from before (format 4), and one with a field the type has not.
+	old, old_ok := player_parse(
+		test_reg(),
+		transmute([]u8)string(`{"format": 4, "position": [1, 2, 3]}`),
+		Purse,
+	)
+	counters_free(&old.stats)
+	testing.expect(t, old_ok)
+	testing.expect_value(t, (^Purse)(&old.character_data.bytes)^, Purse{})
+	odd, odd_ok := player_parse(
+		test_reg(),
+		transmute([]u8)string(
+			`{"format": 5, "position": [1, 2, 3], "game": {"silver": 3, "gold": 4, "kind": "Iron"}}`,
+		),
+		Purse,
+	)
+	counters_free(&odd.stats)
+	testing.expect(t, odd_ok)
+	testing.expect_value(t, (^Purse)(&odd.character_data.bytes)^, Purse{silver = 3})
+	testing.expect(
+		t,
+		harness_refused(
+			{
+				game = Game {
+					info = {id = "big", name = "Big", description = "x"},
+					character_data = [game.MAX_CHARACTER_DATA + 1]u8,
+				},
+			},
+		),
+	)
+
+	// Through a session: saved with the character, back when it joins again.
+	dir := scratch_dir("character_data")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	cfg := grief_config(dir)
+	cfg.game = Game {
+		info = {id = "purses", name = "Purses", description = "Each character has a purse."},
+		character_data = Purse,
+	}
+	g, opened := grief_open(t, dir, cfg)
+	if opened {
+		character_data(grief_srv(g), grief_client(g), Purse).silver = 99
+		grief_close_keep(g)
+	}
+	grief_close(g)
+	g2, opened2 := grief_open(t, dir, cfg)
+	if opened2 {
+		testing.expect_value(t, character_data(grief_srv(g2), grief_client(g2), Purse).silver, 99)
+		grief_close_keep(g2)
+	}
+	grief_close(g2)
 }

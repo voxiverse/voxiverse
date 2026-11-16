@@ -1,12 +1,14 @@
 package core
 
 import "core:encoding/json"
+import "core:fmt"
 import "core:hash"
 import "core:log"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 
 import "common:access"
@@ -30,19 +32,20 @@ import "common:starmap"
 
 CHARACTERS_DIR :: "characters"
 PLAYERS_DIR :: "players"
-PLAYER_FILE_FORMAT :: 4 // 4: an item's game data (`data`; before: 0). 3: the trader; a file before has an empty one and the starting purse. 2: a weapon's magazine (`ammo`); a file of 1 has none: full
+PLAYER_FILE_FORMAT :: 5 // 5: the game's record on the character (`game`; before: none). 4: an item's game data (`data`; before: 0). 3: the trader; a file before has an empty one and the starting purse. 2: a weapon's magazine (`ammo`); a file of 1 has none: full
 
 Player_Record :: struct {
-	account:   Maybe(access.Account), // whose (none: from before accounts, unclaimed)
-	world:     Maybe(starmap.Address), // where they are (none: the home world)
-	state:     game.Player_State,
-	look:      [2]f32, // yaw, pitch
-	mode:      base.Var_Text, // their game mode's id ("": none yet: the world's default)
-	inventory: game.Inventory,
-	trader:    Trader_Record, // silver, cargo and seen prices (trading.odin)
-	dirty:     bool, // changed since its file was written
-	stats:     Counters, // its counters (heap; stats.odin)
-	overflow:  [MAX_OVERFLOW]game.Stack, // read but with no room (an older, bigger inventory): dropped at their feet on joining
+	account:        Maybe(access.Account), // whose (none: from before accounts, unclaimed)
+	world:          Maybe(starmap.Address), // where they are (none: the home world)
+	state:          game.Player_State,
+	look:           [2]f32, // yaw, pitch
+	mode:           base.Var_Text, // their game mode's id ("": none yet: the world's default)
+	inventory:      game.Inventory,
+	trader:         Trader_Record, // silver, cargo and seen prices (trading.odin)
+	character_data: game.Character_Data, // the game's record on the character (Game.character_data)
+	dirty:          bool, // changed since its file was written
+	stats:          Counters, // its counters (heap; stats.odin)
+	overflow:       [MAX_OVERFLOW]game.Stack, // read but with no room (an older, bigger inventory): dropped at their feet on joining
 }
 
 MAX_OVERFLOW :: 16
@@ -60,6 +63,7 @@ Player_File :: struct {
 	mode:     string, // their game mode's id (absent in a file from before modes)
 	items:    []File_Stack,
 	trader:   Trader_File, // format 3
+	game:     json.Value `json:"game,omitempty"`, // format 5: the game's record, a field by its path (written by hand: player_json)
 }
 
 @(private = "file")
@@ -163,7 +167,7 @@ player_record :: proc(s: ^Server, name: string) -> (Player_Record, bool) {
 			if err != .Not_Exist {log.errorf("server cannot read path=%s error=%v", path, err)}
 			continue
 		}
-		r, ok := player_parse(s.registry, data)
+		r, ok := player_parse(s.registry, data, s.config.game.character_data)
 		if !ok {
 			log.errorf("server character file not understood, starting afresh path=%s", path)
 			return {}, false
@@ -175,8 +179,16 @@ player_record :: proc(s: ^Server, name: string) -> (Player_Record, bool) {
 	return {}, false
 }
 
-// player_parse reads a player file's JSON.
-player_parse :: proc(reg: ^game.Registry, data: []u8) -> (r: Player_Record, ok: bool) {
+// player_parse reads a player file's JSON; character is the type of the game's record on a
+// character (Game.character_data; nil: none).
+player_parse :: proc(
+	reg: ^game.Registry,
+	data: []u8,
+	character: typeid,
+) -> (
+	r: Player_Record,
+	ok: bool,
+) {
 	rest, stats, found, read := split_stats(data)
 	if !read {return}
 	f: Player_File
@@ -211,6 +223,9 @@ player_parse :: proc(reg: ^game.Registry, data: []u8) -> (r: Player_Record, ok: 
 			if !(sf.price >= 0 && sf.price < 1e9) || !(abs(sf.month) < 1e9) {continue}
 			seen_put(&r.trader, Seen{sf.cell, sf.price, f32(sf.month), planet.Good(sf.good)})
 		}
+	}
+	if record, is_record := f.game.(json.Object); is_record && character != nil {
+		character_data_read(character, &r.character_data, record)
 	}
 	late := make([dynamic]game.Stack, context.temp_allocator)
 	for st in f.items {
@@ -252,8 +267,9 @@ player_parse :: proc(reg: ^game.Registry, data: []u8) -> (r: Player_Record, ok: 
 	return r, true
 }
 
-// player_json: a player file's text.
-player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
+// player_json: a player file's text; character is the type of the game's record on a
+// character (Game.character_data; nil: none).
+player_json :: proc(reg: ^game.Registry, r: ^Player_Record, character: typeid) -> []u8 {
 	items := make([dynamic]File_Stack, context.temp_allocator)
 	for st, i in r.inventory.slots {
 		if !game.stack_empty(
@@ -308,6 +324,7 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
 	// are too many for the reflecting marshaller.
 	b := strings.builder_make(0, len(data) + 64 * len(r.stats) + 32, context.temp_allocator)
 	strings.write_bytes(&b, data[:len(data) - 1]) // (without the closing brace)
+	if character != nil {character_data_write(&b, character, &r.character_data)}
 	strings.write_string(&b, ",\n  \"stats\": ")
 	counters_write(&b, r.stats, "    ")
 	strings.write_string(&b, "\n}")
@@ -360,20 +377,82 @@ split_stats :: proc(data: []u8) -> (rest: []u8, stats: Counters, found, read: bo
 	}
 }
 
+// character_data: the game's record on c's character, as the type it declared
+// (Game.character_data). Zero for a character new to the universe; kept with the character
+// (its file's `game` member) and given back when it joins again.
+character_data :: proc(s: ^Server, c: ^Client, $T: typeid) -> ^T {
+	assert(s.config.game.character_data == T, "not the game's character_data")
+	return (^T)(&c.character_data.bytes)
+}
+
+// character_data_write: the `game` member of a character file, a field by its path (only
+// those not zero), its value a JSON number or boolean where it is one, else a string (an
+// enum's name).
+@(private = "file")
+character_data_write :: proc(b: ^strings.Builder, T: typeid, data: ^game.Character_Data) {
+	strings.write_string(b, ",\n  \"game\": {")
+	for f, i in game.data_fields(T, &data.bytes) {
+		strings.write_string(b, "," if i > 0 else "")
+		strings.write_string(b, "\n    ")
+		json_string(b, f.path)
+		strings.write_string(b, ": ")
+		if _, number := strconv.parse_f64(f.text);
+		   number || f.text == "true" || f.text == "false" {
+			strings.write_string(b, f.text)
+		} else {
+			json_string(b, f.text)
+		}
+	}
+	strings.write_string(b, "\n  }")
+}
+
+@(private = "file")
+json_string :: proc(b: ^strings.Builder, text: string) {
+	data, _ := json.marshal(text, allocator = context.temp_allocator)
+	strings.write_bytes(b, data)
+}
+
+// character_data_read: the game's record from a character file's `game` member. A field the
+// type no longer has, or a value it cannot hold, is skipped and logged; the rest is read.
+@(private = "file")
+character_data_read :: proc(T: typeid, data: ^game.Character_Data, record: json.Object) {
+	fields := make([dynamic]game.Data_Field, 0, len(record), context.temp_allocator)
+	for path, value in record {
+		text: string
+		switch v in value {
+		case json.Null, json.Array, json.Object:
+			text = "" // (no field's value: skipped as bad)
+		case json.Integer:
+			text = fmt.tprintf("%d", v)
+		case json.Float:
+			text = fmt.tprintf("%v", v)
+		case json.Boolean:
+			text = "true" if v else "false"
+		case json.String:
+			text = v
+		}
+		append(&fields, game.Data_Field{path, text})
+	}
+	if bad := game.data_fields_read(T, &data.bytes, fields[:]); bad != "" {
+		log.warnf("server character file's game field skipped field=%s", bad)
+	}
+}
+
 // keep_player stores a playing client's player under its name (when it
 // leaves, and before each save).
 keep_player :: proc(s: ^Server, c: ^Client) {
 	name := client_name(c)
 	r := Player_Record {
-		account   = c.account,
-		world     = c.world.address,
-		state     = c.player,
-		look      = c.look,
-		inventory = c.inventory,
-		trader    = c.trader,
-		mode      = mode_record_text(s, c),
-		dirty     = true,
-		stats     = counters_clone(c.stats),
+		account        = c.account,
+		world          = c.world.address,
+		state          = c.player,
+		look           = c.look,
+		inventory      = c.inventory,
+		trader         = c.trader,
+		character_data = c.character_data,
+		mode           = mode_record_text(s, c),
+		dirty          = true,
+		stats          = counters_clone(c.stats),
 	}
 	if old, had := &s.store.players[name]; had {
 		counters_free(&old.stats)

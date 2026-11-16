@@ -238,6 +238,14 @@ file that is cut, has a bad CRC or a number that is negative or not finite is mo
 (`economy.vxe.bad`) and the markets are recomputed; `--check` reports it. News and caravans in
 flight are not saved.
 
+### The game's record on a character
+
+A character file of format 5 (`PLAYER_FILE_FORMAT`) may have a `game` member: the record the
+universe's game keeps on the character (`Game.character_data`, [games.md](games.md)), an object
+of its fields not at zero by their dotted paths, each value a number, `true` or `false`, or an
+enum's name as a string. A file before has none: the record is zero. A path the game's type
+lacks, or a value it cannot hold, is skipped (and logged); the rest is read.
+
 ### The player's trader
 
 A character file of format 3 (`PLAYER_FILE_FORMAT`) has a `trader` member: `cash` (silver),

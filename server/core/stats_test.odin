@@ -344,8 +344,8 @@ test_counters_text_round_trip :: proc(t: ^testing.T) {
 	defer counters_free(&r.stats)
 	counter_add(&r.stats, "blocks.mined.stone", 12)
 	counter_add(&r.stats, "odd \"name\"\\\n\x01é", 18446744073709551615)
-	json := player_json(test_reg(), &r)
-	back, ok := player_parse(test_reg(), json)
+	json := player_json(test_reg(), &r, nil)
+	back, ok := player_parse(test_reg(), json, nil)
 	defer counters_free(&back.stats)
 	testing.expect(t, ok)
 	testing.expect_value(t, len(back.stats), 2)
@@ -354,18 +354,31 @@ test_counters_text_round_trip :: proc(t: ^testing.T) {
 	first, first_ok := player_parse(
 		test_reg(),
 		transmute([]u8)string(`{"stats": {"a": 1, "a": 2}, "format": 1, "position": [1, 2, 3]}`),
+		nil,
 	)
 	defer counters_free(&first.stats)
 	testing.expect(t, first_ok)
 	testing.expect_value(t, first.stats["a"], 2)
 	testing.expect_value(t, first.state.position, [3]f64{1, 2, 3})
 
-	none, none_ok := player_parse(test_reg(), transmute([]u8)string(`{"format": 1, "stats": {}}`))
+	none, none_ok := player_parse(
+		test_reg(),
+		transmute([]u8)string(`{"format": 1, "stats": {}}`),
+		nil,
+	)
 	testing.expect(t, none_ok)
 	testing.expect_value(t, len(none.stats), 0)
 
-	_, bad := player_parse(test_reg(), transmute([]u8)string(`{"format": 1, "stats": {"a": -1}}`))
+	_, bad := player_parse(
+		test_reg(),
+		transmute([]u8)string(`{"format": 1, "stats": {"a": -1}}`),
+		nil,
+	)
 	testing.expect(t, !bad, "a negative counter was taken")
-	_, bad2 := player_parse(test_reg(), transmute([]u8)string(`{"format": 1, "stats": {"a": 1`))
+	_, bad2 := player_parse(
+		test_reg(),
+		transmute([]u8)string(`{"format": 1, "stats": {"a": 1`),
+		nil,
+	)
 	testing.expect(t, !bad2, "a cut file was taken")
 }

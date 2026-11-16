@@ -209,7 +209,7 @@ the engine commit that makes it for games, documented where it is declared.
 | Name | What it is for |
 |---|---|
 | `Game`, `Config`, `Server`, `Client`, `World`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change`, `Pickup`, `Request` | The game itself, the config `configure` changes, the session, a player, a world, and what its hooks are told |
-| `game_state(s, T)`, `game_client_state(s, c, T)`, `world_state(w, T)`, `entity_data(w, h, T)` | The game's state, for the session, for a seat and for a world; its record on an entity of its kinds ([below](#the-games-state)) |
+| `game_state(s, T)`, `game_client_state(s, c, T)`, `world_state(w, T)`, `character_data(s, c, T)`, `entity_data(w, h, T)` | The game's state, for the session, for a seat and for a world; its record on a player's character and on an entity of its kinds ([below](#the-games-state)) |
 | `World_File`, `world_file_read(w, name)`, `world_file_write(w, name, data)`, `world_file_aside(w, name)` | The files it keeps with each world (`Game.world_files`): read one back as saved (false: none), stage one in the save being made (its `world_save` hook), move a damaged one aside ([below](#the-games-state)) |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `request_value(s, r, T)` | One of its requests, in its `request` hook, as its type ([below](#requests)) |
@@ -436,6 +436,15 @@ A game declares two types and the server owns their memory (the session's arena,
 - `client_state`: one per seat, zero for each player who joins (the seat's block is zeroed
   when it is freed): `core.game_client_state(s, c, T)`.
 
+- `character_data`: a record on each player's character, zero for a character new to the
+  universe: `core.character_data(s, c, T)`. A plain record as `entity_data` is (numbers,
+  booleans, enums, bit sets, fixed arrays and structs of them; at most
+  `game.MAX_CHARACTER_DATA`, 4096 bytes: a trader's purse and the prices it remembers). It
+  stays with the character when it leaves (`client_state` does not: that is the seat's) and is
+  saved in its file, field by field by name (`"game": {"cash": 20, "seen.0.cell": 82623}`,
+  only those not zero: [saves.md](saves.md)), so a field added later reads as zero and one
+  dropped is skipped and logged. What it reads from the file is what was written: the game
+  judges the values it relies on.
 - `world_state`: one per world, zero when the world opens (before `world_opened`), in the
   world's memory and freed with it: `core.world_state(w, T)`. What the game makes of a world
   beyond it (a model it builds, a thread it starts) it makes in `world_opened` and frees in

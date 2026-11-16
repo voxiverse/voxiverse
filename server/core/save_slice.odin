@@ -255,7 +255,11 @@ job_step :: proc(s: ^Server, job: ^Save_Job) {
 		rec.stats = r.stats
 	}
 	path := character_path(s, cc.name, rec.account)
-	store.batch_stage(job.batch, store.relative_path(st.dir, path), player_json(s.registry, &rec))
+	store.batch_stage(
+		job.batch,
+		store.relative_path(st.dir, path),
+		player_json(s.registry, &rec, s.config.game.character_data),
+	)
 	if r, ok := &st.players[cc.name];
 	   ok && cc.forget && !r.dirty && client_by_name(s, cc.name) == nil {
 		counters_free(&r.stats)

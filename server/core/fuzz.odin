@@ -116,7 +116,7 @@ fuzz_registry :: proc() -> ^game.Registry {
 fuzz_save_player :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 	context.allocator = allocator
 	reg := fuzz_registry()
-	r, ok := player_parse(reg, data)
+	r, ok := player_parse(reg, data, nil)
 	sig := u64(1)
 	if ok {
 		sig = fuzz.sig_mix(2, fuzz.sig_bucket(len(r.stats)))
@@ -142,7 +142,7 @@ fuzz_generate_player :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	counter_set(&r.stats, "blocks.mined", 5)
 	counter_set(&r.stats, "blocks.mined.stone", 3)
 	defer counters_free(&r.stats)
-	append(out, ..player_json(reg, &r))
+	append(out, ..player_json(reg, &r, nil))
 }
 
 // ---- save.config: permissions.cfg, a grants list, universe.cfg's packs line, a counters

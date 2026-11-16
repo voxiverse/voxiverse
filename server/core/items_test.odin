@@ -192,7 +192,7 @@ test_old_inventory_fits :: proc(t: ^testing.T) {
 		strings.write_string(&b, `, "item": "stone", "count": 64}`)
 	}
 	strings.write_string(&b, "]}")
-	r, ok := player_parse(test_reg(), transmute([]u8)strings.to_string(b))
+	r, ok := player_parse(test_reg(), transmute([]u8)strings.to_string(b), nil)
 	testing.expect(t, ok)
 	stone := game.item_of_block(test_reg(), .Stone)
 	testing.expect_value(t, game.inventory_count(&r.inventory, stone), 64 * game.INVENTORY_SLOTS)

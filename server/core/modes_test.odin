@@ -200,11 +200,11 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 test_the_mode_is_saved_with_the_character :: proc(t: ^testing.T) {
 	r: Player_Record
 	base.var_text_set(&r.mode, "voxiverse:creative")
-	back, ok := player_parse(test_reg(), player_json(test_reg(), &r))
+	back, ok := player_parse(test_reg(), player_json(test_reg(), &r, nil), nil)
 	testing.expect(t, ok)
 	testing.expect_value(t, base.var_text(&back.mode), "voxiverse:creative")
 	r2: Player_Record
-	old, ok2 := player_parse(test_reg(), player_json(test_reg(), &r2))
+	old, ok2 := player_parse(test_reg(), player_json(test_reg(), &r2, nil), nil)
 	testing.expect(t, ok2)
 	testing.expect_value(t, base.var_text(&old.mode), "")
 }

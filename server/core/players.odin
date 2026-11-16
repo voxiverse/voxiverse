@@ -41,6 +41,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		c.look = saved.look
 		c.inventory = saved.inventory
 		c.trader = saved.trader
+		c.character_data = saved.character_data
 		ledger_inventory(s, w, .Scope_In, &c.inventory)
 		for st in saved.overflow {
 			if !game.stack_empty(st) {

@@ -217,9 +217,9 @@ budget_counters :: proc(reg: ^game.Registry) -> (building_us, work_us: i64, byte
 	}
 	start := base.thread_cpu_us()
 	for &r in records {
-		json := player_json(reg, &r)
+		json := player_json(reg, &r, nil)
 		bytes += len(json)
-		back, ok := player_parse(reg, json)
+		back, ok := player_parse(reg, json, nil)
 		if !ok || len(back.stats) != BUDGET_COUNTERS {bad += 1}
 		counters_free(&back.stats)
 		free_all(context.temp_allocator) // (a server's tick does the same: the cost is the work, not a heap grown to hold every player's text)

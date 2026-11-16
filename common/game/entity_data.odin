@@ -12,19 +12,36 @@ import "core:strings"
 // `data.slots.2`), so a game may add, drop or reorder fields and still read its saves: a
 // field the line lacks is zero, a name the type lacks is reported.
 
+//
+// A game's data on a character (core.Game.character_data) is a record of the same kind,
+// bigger (MAX_CHARACTER_DATA), kept with the character and saved in its file the same way,
+// a field by its path (data_fields, data_fields_read).
+
 MAX_ENTITY_DATA :: 64 // bytes
+MAX_CHARACTER_DATA :: 4096 // bytes
 
 Entity_Data :: struct #align (8) {
 	bytes: [MAX_ENTITY_DATA]u8,
 }
 
+Character_Data :: struct #align (8) {
+	bytes: [MAX_CHARACTER_DATA]u8,
+}
+
 // entity_data_plain: why a type cannot be a game's entity data ("" when it can): it fits
 // MAX_ENTITY_DATA and holds numbers, booleans, enums, bit sets and fixed arrays and
 // structs of them; no pointer, slice, string or map, which a save could not hold.
-entity_data_plain :: proc(T: typeid) -> string {
+entity_data_plain :: proc(T: typeid) -> string {return data_plain(T, MAX_ENTITY_DATA)}
+
+// character_data_plain: as entity_data_plain, for a game's data on a character (at most
+// MAX_CHARACTER_DATA bytes).
+character_data_plain :: proc(T: typeid) -> string {return data_plain(T, MAX_CHARACTER_DATA)}
+
+@(private = "file")
+data_plain :: proc(T: typeid, most: int) -> string {
 	ti := type_info_of(T)
-	if ti.size > MAX_ENTITY_DATA {
-		return fmt.tprintf("%v is %d bytes; at most %d", T, ti.size, MAX_ENTITY_DATA)
+	if ti.size > most {
+		return fmt.tprintf("%v is %d bytes; at most %d", T, ti.size, most)
 	}
 	if ti.align > 8 {return fmt.tprintf("%v is aligned to %d; at most 8", T, ti.align)}
 	if !plain(
@@ -80,21 +97,54 @@ leaves :: proc(ti: ^reflect.Type_Info, path: string, offset: uintptr, out: ^[dyn
 // entity_data_write writes each field of the record at data (of type T) as
 // ` <prefix>.<path>=<value>`, leaving out those at zero (a line stays short).
 entity_data_write :: proc(b: ^strings.Builder, T: typeid, data: rawptr, prefix: string) {
+	for f in data_fields(T, data) {fmt.sbprintf(b, " %s.%s=%s", prefix, f.path, f.text)}
+}
+
+// Data_Field: one field of a record as text: its dotted path (`cash`, `seen.3.price`) and
+// its value (a number, `true` or `false`, an enum by its name, a bit set as its bits).
+Data_Field :: struct {
+	path, text: string,
+}
+
+// data_fields: the fields of the record at data (of type T) that are not zero, in the
+// type's order (temporary memory).
+data_fields :: proc(T: typeid, data: rawptr) -> []Data_Field {
 	list := make([dynamic]Data_Leaf, context.temp_allocator)
-	leaves(type_info_of(T), prefix, 0, &list)
+	leaves(type_info_of(T), "", 0, &list)
+	out := make([dynamic]Data_Field, 0, len(list), context.temp_allocator)
 	for l in list {
 		p := rawptr(uintptr(data) + l.offset)
-		value := any{p, l.type.id}
 		zero := true
 		for b in ([^]u8)(p)[:l.type.size] {if b != 0 {zero = false}}
 		if zero {continue}
+		text: string
 		if _, is_set := reflect.type_info_base(l.type).variant.(reflect.Type_Info_Bit_Set);
 		   is_set {
-			fmt.sbprintf(b, " %s=%d", l.path, bits_of(p, l.type.size)) // (a set as its bits)
+			text = fmt.tprintf("%d", bits_of(p, l.type.size))
 		} else {
-			fmt.sbprintf(b, " %s=%v", l.path, value) // (an enum by its name)
+			text = fmt.tprintf("%v", any{p, l.type.id})
+		}
+		append(&out, Data_Field{l.path[1:], text})
+	}
+	return out[:]
+}
+
+// data_fields_read sets the fields of the record at data (of type T) from their text, each
+// found by its path once (a record of thousands of fields reads in one pass). A path the
+// type lacks or a text that is not one of its field's values is skipped; bad names the
+// first such path ("": none).
+data_fields_read :: proc(T: typeid, data: rawptr, fields: []Data_Field) -> (bad: string) {
+	list := make([dynamic]Data_Leaf, context.temp_allocator)
+	leaves(type_info_of(T), "", 0, &list)
+	by_path := make(map[string]Data_Leaf, len(list), context.temp_allocator)
+	for l in list {by_path[l.path[1:]] = l}
+	for f in fields {
+		l, known := by_path[f.path]
+		if !(known && leaf_read(l, rawptr(uintptr(data) + l.offset), f.text)) && bad == "" {
+			bad = f.path
 		}
 	}
+	return
 }
 
 @(private = "file")
@@ -111,58 +161,63 @@ entity_data_read :: proc(T: typeid, data: rawptr, path, text: string) -> bool {
 	list := make([dynamic]Data_Leaf, context.temp_allocator)
 	leaves(type_info_of(T), "", 0, &list)
 	for l in list {
-		if l.path[1:] != path {continue}
-		p := rawptr(uintptr(data) + l.offset)
-		#partial switch v in reflect.type_info_base(l.type).variant {
-		case reflect.Type_Info_Integer:
-			if v.signed {
-				n := strconv.parse_i64(text) or_return
-				lo := -(i64(1) << uint(8 * l.type.size - 1))
-				hi := (i64(1) << uint(8 * l.type.size - 1)) - 1
-				if l.type.size < 8 && (n < lo || n > hi) {return false}
-				set_bytes(p, u64(n), l.type.size)
-			} else {
-				n := strconv.parse_u64(text) or_return
-				if l.type.size < 8 && n >> uint(8 * l.type.size) != 0 {return false}
-				set_bytes(p, n, l.type.size)
-			}
-		case reflect.Type_Info_Float:
-			f := strconv.parse_f64(text) or_return
-			switch l.type.size {
-			case 4:
-				(^f32)(p)^ = f32(f)
-			case 8:
-				(^f64)(p)^ = f
-			case:
-				return false
-			}
-		case reflect.Type_Info_Boolean:
-			switch text {
-			case "true":
-				([^]u8)(p)[0] = 1
-			case "false":
-				([^]u8)(p)[0] = 0
-			case:
-				return false
-			}
-		case reflect.Type_Info_Enum:
-			for name, i in v.names {
-				if name == text {
-					set_bytes(p, u64(v.values[i]), l.type.size)
-					return true
-				}
-			}
-			return false
-		case reflect.Type_Info_Bit_Set:
+		if l.path[1:] == path {return leaf_read(l, rawptr(uintptr(data) + l.offset), text)}
+	}
+	return false
+}
+
+// leaf_read sets one number of a record from its text; false when the text is not one of
+// its values.
+@(private = "file")
+leaf_read :: proc(l: Data_Leaf, p: rawptr, text: string) -> bool {
+	#partial switch v in reflect.type_info_base(l.type).variant {
+	case reflect.Type_Info_Integer:
+		if v.signed {
+			n := strconv.parse_i64(text) or_return
+			lo := -(i64(1) << uint(8 * l.type.size - 1))
+			hi := (i64(1) << uint(8 * l.type.size - 1)) - 1
+			if l.type.size < 8 && (n < lo || n > hi) {return false}
+			set_bytes(p, u64(n), l.type.size)
+		} else {
 			n := strconv.parse_u64(text) or_return
 			if l.type.size < 8 && n >> uint(8 * l.type.size) != 0 {return false}
 			set_bytes(p, n, l.type.size)
+		}
+	case reflect.Type_Info_Float:
+		f := strconv.parse_f64(text) or_return
+		switch l.type.size {
+		case 4:
+			(^f32)(p)^ = f32(f)
+		case 8:
+			(^f64)(p)^ = f
 		case:
 			return false
 		}
-		return true
+	case reflect.Type_Info_Boolean:
+		switch text {
+		case "true":
+			([^]u8)(p)[0] = 1
+		case "false":
+			([^]u8)(p)[0] = 0
+		case:
+			return false
+		}
+	case reflect.Type_Info_Enum:
+		for name, i in v.names {
+			if name == text {
+				set_bytes(p, u64(v.values[i]), l.type.size)
+				return true
+			}
+		}
+		return false
+	case reflect.Type_Info_Bit_Set:
+		n := strconv.parse_u64(text) or_return
+		if l.type.size < 8 && n >> uint(8 * l.type.size) != 0 {return false}
+		set_bytes(p, n, l.type.size)
+	case:
+		return false
 	}
-	return false
+	return true
 }
 
 @(private = "file")
