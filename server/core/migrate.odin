@@ -59,11 +59,6 @@ mig_write :: proc(m: ^Migrator, rel: string, data: []u8) {
 	}
 }
 
-mig_delete :: proc(m: ^Migrator, rel: string) {
-	delete_key(&m.staged, rel)
-	append(&m.deletes, rel)
-}
-
 // mig_list: the files of a directory (relative paths) ending in suffix, staged
 // ones included, deleted ones left out, sorted.
 mig_list :: proc(m: ^Migrator, rel_dir, suffix: string) -> []string {
