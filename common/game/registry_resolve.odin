@@ -1015,6 +1015,9 @@ read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info) {
 @(private)
 GRAPPLE_NUMBERS := []string{"range", "speed", "cooldown"}
 
+@(private)
+MELEE_KEYS := []string{"damage", "reach", "arc", "cooldown"}
+
 // read_grapple: an item's `grapple` object: range (blocks), speed (blocks a
 // second) and cooldown (seconds), all required.
 @(private)
@@ -1118,6 +1121,11 @@ read_item :: proc(
 	}
 	if f := field_of(m, "grapple"); f != nil {
 		read_grapple(b, f, &info)
+	}
+	if f := field_of(m, "melee"); f != nil {
+		o: [4]f64
+		read_numbers(b, f, f.value, "melee", MELEE_KEYS, {0, 0.5, 1, 0.05}, {1000, 8, 360, 60}, &o)
+		info.melee = Melee_Info{f32(o[0]), f32(o[1]), f32(o[2]), f32(o[3])}
 	}
 	if f := field_of(m, "model"); f != nil {
 		if f.value.kind != .String {

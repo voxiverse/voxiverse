@@ -781,7 +781,7 @@ registry_text_of :: proc(
 	item_line :: proc(b: ^strings.Builder, n: u32, info: Item_Info) {
 		fmt.sbprintf(
 			b,
-			"item %s %d stack=%d places=%d tool=%v armor=%v equip=%v mods=%v weapon=%v grapple=%v model=%v\n",
+			"item %s %d stack=%d places=%d tool=%v armor=%v equip=%v mods=%v weapon=%v grapple=%v model=%v",
 			info.name,
 			n,
 			info.stack,
@@ -794,6 +794,8 @@ registry_text_of :: proc(
 			info.grapple,
 			info.model,
 		)
+		if m, has := info.melee.?; has {fmt.sbprintf(b, " melee=%v", m)}
+		strings.write_byte(b, '\n')
 	}
 	for info, i in reg.items.blocks {if info.name != "" {item_line(&b, u32(i + 1), info)}}
 	for t in Tool {item_line(&b, u32(item_of_tool(t)), reg.items.tools[t])}

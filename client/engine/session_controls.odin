@@ -19,6 +19,13 @@ session_attack :: proc(s: ^Session) -> bool {
 	return true
 }
 
+// session_swing swings the melee weapon in hand: an Attack naming the aimed entity, or
+// none (the server strikes whatever is in the weapon's arc either way).
+session_swing :: proc(s: ^Session) {
+	id := s.aim_entity.? or_else 0
+	send_message(s, game.Attack{id, s.prediction.next_sequence - 1})
+}
+
 // session_use_entity uses the aimed entity (right click); false if none is aimed at.
 session_use_entity :: proc(s: ^Session) -> bool {
 	id, ok := s.aim_entity.?

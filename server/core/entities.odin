@@ -510,6 +510,7 @@ Entity_Harm :: struct {
 	by:       ^Client, // the player who did it (nil: nobody, or the game itself)
 	creature: u32, // the entity that did it (its id; 0: none; it may be gone)
 	weapon:   string, // what a shot came from: its item's name ("" for any other)
+	stack:    game.Stack, // what the player struck or shot with (empty: nothing, or no player)
 }
 
 // Dead_Entity: an entity that died, as the entity_died hook is told it (it is gone
@@ -530,6 +531,21 @@ entity_harm :: proc(w: ^World, h: game.Entity_Handle, harm: Entity_Harm) -> (die
 	if hp == nil {return false}
 	s := w.server
 	g := &s.config.game
+	harm := harm
+	changed := harming(
+		s,
+		{
+			amount = f32(harm.amount),
+			kind = harm.kind,
+			by = harm.by,
+			creature = harm.creature,
+			stack = harm.stack,
+			entity = h,
+			world = w,
+		},
+	)
+	harm.amount = int(math.round(changed))
+	if harm.amount <= 0 {return false}
 	hp.health -= i32(harm.amount)
 	if hp.health > 0 {
 		entity_hurt_shown(w, entity_id(w, h))

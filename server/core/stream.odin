@@ -75,6 +75,7 @@ Client :: struct {
 	fired_at:        u64, // tick of its last rocket (a rate limit)
 	shot_due:        f64, // the tick its next weapon shot is due (weapons.odin)
 	reload_until:    u64, // the tick its reload ends (0: none)
+	swing_due:       u64, // the tick its melee weapon may swing again (actions.odin)
 	reload_slot:     int, // the hotbar slot being reloaded
 	shots_refused:   int, // shots refused for coming too early
 	chat_tokens:     int, // lines it may say now (chat.odin)

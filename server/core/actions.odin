@@ -1,7 +1,10 @@
 package core
 
 import "core:log"
+import "core:math"
+import "core:slice"
 
+import "common:base"
 import "common:game"
 
 // Actions: what a player does besides moving (edit a block, hit an entity,
@@ -256,10 +259,18 @@ apply_edit_cells :: proc(
 
 // attack: a player hits an entity, if it is within reach of where the
 // server has the player (with the same slack as edits). The client chose it
-// by its own ray; the server only checks it was possible.
+// by its own ray; the server only checks it was possible. With a melee weapon
+// in hand it is a swing instead (whatever entity it names; 0: none).
 @(private = "file")
 attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 	w := c.world
+	held := game.inventory_held(&c.inventory)
+	if info, known := game.item_info(s.registry, held.item); known && !game.stack_empty(held) {
+		if melee, swung := info.melee.?; swung {
+			swing(s, c, held, melee)
+			return
+		}
+	}
 	ent, found := entity_find(w, a.entity)
 	if !found {return} 	// gone already: a late click
 	info := game.kind_info(s.registry, entity_kind(w, ent))
@@ -270,6 +281,90 @@ attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 		record(s, c, .Entity_Killed, game.kind_name(info))
 		log.debugf("server entity died id=%d by=%s", a.entity, client_name(c))
 	}
+}
+
+// swing: c swings the melee weapon in hand, if its cooldown has run: everything
+// hittable whose box comes within the weapon's reach of the eyes and lies inside its
+// arc about where c faces (horizontally), in sight, is struck for its damage (the
+// game's harming hook may change it): creatures knocked back, other players hurt as a
+// blow hurts them (pvp permitting). Returns how many were struck.
+swing :: proc(s: ^Server, c: ^Client, held: game.Stack, melee: game.Melee_Info) -> (struck: int) {
+	if c.dead || s.tick < c.swing_due {return}
+	c.swing_due = s.tick + u64(max(math.round(melee.cooldown * game.TICK_RATE), 1))
+	w := c.world
+	eye := game.player_eye(c.player)
+	name := game.item_name(s.registry, held.item)
+	yaw := f64(c.look[0])
+	facing := [2]f64{-base.sin(yaw), -base.cos(yaw)}
+	least := base.cos(f64(melee.arc) * math.RAD_PER_DEG / 2) // (the arc's edge, as a cosine)
+	reach := f64(melee.reach)
+	// within: the box's nearest point is in reach, its middle inside the arc, in sight.
+	within :: proc(
+		w: ^World,
+		eye: [3]f64,
+		lo, hi: [3]f64,
+		facing: [2]f64,
+		least, reach: f64,
+	) -> bool {
+		near := [3]f64 {
+			clamp(eye.x, lo.x, hi.x),
+			clamp(eye.y, lo.y, hi.y),
+			clamp(eye.z, lo.z, hi.z),
+		}
+		d := near - eye
+		if d.x * d.x + d.y * d.y + d.z * d.z > reach * reach {return false}
+		mid := (lo + hi) / 2
+		to := [2]f64{mid.x - eye.x, mid.z - eye.z}
+		l := math.sqrt(to.x * to.x + to.y * to.y)
+		if l > 0.3 {
+			if (to.x * facing.x + to.y * facing.y) / l < least {return false}
+		}
+		return sees(w, eye, mid)
+	}
+	found := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_sphere(
+		&w.entity_world.spatial,
+		eye,
+		reach + ROCKET_REACH,
+		{all = {.Hittable}},
+		&found,
+	)
+	slice.sort(found[:])
+	for id in found {
+		e, there := entity_find(w, u32(id))
+		if !there {continue}
+		info := game.kind_info(s.registry, entity_kind(w, e))
+		if !info.hittable {continue}
+		lo, hi := game.entity_box(info, entity_pos(w, e))
+		if !within(w, eye, lo, hi, facing, least, reach) {continue}
+		struck += 1
+		record(s, c, .Entity_Hit, game.kind_name(info))
+		harm := Entity_Harm {
+			amount = max(int(math.round(melee.damage)), 1),
+			kind   = .Hit,
+			by     = c,
+			weapon = name,
+			stack  = held,
+		}
+		if entity_attack(w, e, c.player.position, harm) {
+			record(s, c, .Entity_Killed, game.kind_name(info))
+		}
+	}
+	for &o in s.clients {
+		if &o == c || o.world != w || o.state != .Playing || o.dead {continue}
+		lo, hi := game.player_box(o.player)
+		if !within(w, eye, lo, hi, facing, least, reach) {continue}
+		source := Damage_Source {
+			kind     = .Hit,
+			attacker = u16(player_id(s, c)),
+			weapon   = name,
+			stack    = held,
+			pos      = c.player.position,
+			placed   = true,
+		}
+		if r := damage(s, &o, melee.damage, source); r == .Hurt || r == .Killed {struck += 1}
+	}
+	return
 }
 
 // anyone_else_in: block at pos would be inside another player.

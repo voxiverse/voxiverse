@@ -264,7 +264,8 @@ edit_plain :: proc(id, after: u32, pos: Block_Pos, block: Block) -> Edit {
 	return {id = id, after = after, pos = pos, block = block, face = EDIT_FACE_PLAIN}
 }
 
-// Attack hits an entity (left click on it). Like an Edit it follows input
+// Attack hits an entity (left click on it); with a melee weapon in hand, a swing at
+// whatever is in its arc (the entity named or none: 0). Like an Edit it follows input
 // `after`, so reach is judged from where the player was.
 Attack :: struct {
 	entity: u32,

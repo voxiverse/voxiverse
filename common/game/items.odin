@@ -83,6 +83,7 @@ Item_Info :: struct {
 	equip:       Maybe(Equip_Slot), // where it can be worn (armor)
 	weapon:      Maybe(Weapon_Info), // a hitscan weapon (data: items/weapons.json)
 	grapple:     Maybe(Grapple_Info), // a grappling hook (data: items/tools.json)
+	melee:       Maybe(Melee_Info), // a weapon swung by hand (its `melee`)
 	model:       Maybe(u16), // the voxel model it is held as (an index into Registry.models)
 }
 
@@ -103,6 +104,16 @@ Weapon_Info :: struct {
 }
 
 MAX_PELLETS :: 16
+
+// Melee_Info: a weapon swung by hand (the item's `melee` object): a swing hits whatever
+// is within `reach` blocks of the eyes and inside an `arc` (degrees, centred on where
+// the player faces) in front, each for `damage`, once every `cooldown` seconds.
+Melee_Info :: struct {
+	damage:   f32,
+	reach:    f32,
+	arc:      f32,
+	cooldown: f32,
+}
 
 // Grapple_Info: what a grappling hook does, all of it data (the item's `grapple`
 // object; the shared movement code, physics.odin, is its only reader).

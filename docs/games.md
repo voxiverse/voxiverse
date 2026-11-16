@@ -52,6 +52,7 @@ client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 | `editing(s, c, at, old, new) -> string` | A player would change the block at `at` from `old` to `new` (`.Air` for a break) and the engine's rules allow it (reach, what it holds, protection still to come): `""` lets it, anything else refuses it, the block stays and the player is told that text | the server's |
 | `block_changed(s, w, change)` | Blocks of world `w` changed since the game's last tick, each told once, in order, before its next one: `change` is a `core.Block_Change`, one block (what it was and is) or a bulk edit's box (`bulk`), and `by` the player whose edit it was (nil: the world, a command, the game; one who has left by then is nil). At most `MAX_NOTED_CHANGES` a tick (more are dropped, and logged) | the server's |
 | `entity_hurt(s, w, h, harm)` | An entity of world `w` was hurt and lives (its health already less): `harm` is a `core.Entity_Harm`, the amount, the kind of source (a blast, a player's shot or blow, `.Game` for the game's own `entity_harm`), `by` the player who did it (nil: nobody, or the game), `creature` the entity that did it (its id; 0: none) and the weapon's name for a shot | the server's |
+| `harming(s, h)` | Any harm is about to be done, to a player or an entity, whoever does it (a player's blow or shot, a creature's, a blast, a fall, the game's own `entity_harm`): `h` is a `core.Harming`, the amount, its kind, who does it (`by` a player, `creature` an entity), what the player holds (`stack`, its data too) and who takes it (`to` a player, `entity` an entity); the hook may change `h.amount` (stats, armour, a critical blow), 0 or less and nothing is done. An entity's health is whole: the amount is rounded after the hook | the server's |
 | `entity_died(s, w, dead, harm)` | An entity of `w` died of `harm`: everyone who knew it was shown it die, and it is gone (`dead`, a `core.Dead_Entity`, says its id, kind and where it was) | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
 | `save(s, out)` | A save captures this tick (an autosave, `/save`, the last one): the game writes what it keeps to the `strings.Builder` as text, saved with the universe as `game.cfg` in the same transaction ([saves.md](saves.md)) | the server's (the last save: the caller's) |
@@ -73,7 +74,7 @@ makes it for games, documented where it is declared.
 
 | Name | What it is for |
 |---|---|
-| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result`, `Harm`, `Entity_Harm`, `Dead_Entity`, `Block_Change` | The game itself, the config `configure` changes, the session, a player, a world, what hurt a player or an entity, an entity that died, blocks that changed (its hooks') |
+| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change` | The game itself, the config `configure` changes, the session, a player, a world, what hurt a player or an entity, an entity that died, blocks that changed (its hooks') |
 | `game_state(s, T)`, `game_client_state(s, c, T)` | The game's state, for the session and for a seat |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
@@ -122,6 +123,15 @@ changes. Its body is its kind's: as wide and tall as its box, climbing a step on
 jumps a block high. `route_would_shut` asks, before a block is placed, whether it would
 leave the route's start or a walker following it with no way: a maze a player builds stays
 a maze, not a wall.
+
+A player's weapons are items with their numbers as data in the game's pack
+(`data/items`): a hitscan weapon's `weapon` (its `damage` hurts players and creatures alike, a
+creature's rounded to whole health), and a melee weapon's `melee`, `{"damage": n, "reach":
+blocks, "arc": degrees, "cooldown": seconds}`: with one in hand the attack button swings it
+(no block breaks), and the server strikes every hittable entity and player whose box is
+within reach of the eyes and inside the arc about where the player faces, in sight, each for
+the damage (players as the `pvp` rule allows). Every one of those harms, and every other,
+passes the game's `harming` hook first.
 
 A walker that fights is the same steered walker with an `attack` in its kind
 ([packs.md](packs.md)). `entity_keep` holds it within a band of distances from a point the

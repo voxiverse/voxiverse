@@ -205,11 +205,16 @@ weapon_shoot :: proc(
 					game.kind_name(game.kind_info(s.registry, entity_kind(w, ent))),
 				)
 				kind_name := game.kind_name(game.kind_info(s.registry, entity_kind(w, ent)))
+				// (the weapon's damage, rounded: a creature's health is whole)
 				harm := Entity_Harm {
-					amount = 1,
+					amount = max(
+						int(math.round(info.damage * (info.headshot if res.head else 1))),
+						1,
+					),
 					kind   = .Weapon,
 					by     = c,
 					weapon = name,
+					stack  = stack^,
 				}
 				if entity_attack(w, ent, c.player.position, harm) {
 					killed = true
@@ -224,6 +229,7 @@ weapon_shoot :: proc(
 			kind     = .Weapon,
 			attacker = id,
 			weapon   = name,
+			stack    = stack^,
 			pos      = origin,
 			placed   = true,
 		}

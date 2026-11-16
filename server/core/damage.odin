@@ -18,6 +18,7 @@ Damage_Source :: struct {
 	creature: u32, // the entity that did it (its id; 0: none): a creature's blow or shot
 	kind_of:  game.Kind_Id, // ... its kind (named in the message, though it is gone)
 	weapon:   string, // its item's name, for the message
+	stack:    game.Stack, // what the player struck or shot with (empty: nothing, or no player)
 	pos:      [3]f64, // where it came from (when placed)
 	placed:   bool,
 }
@@ -29,6 +30,29 @@ Harm :: struct {
 	by:       ^Client, // the player who did it (the one hurt, for its own rocket; nil: nobody, or one no longer playing)
 	creature: u32, // the entity that did it (its id; 0: none; it may be gone)
 	weapon:   string, // what a shot came from: its item's name ("" for any other)
+}
+
+// Harming: a harm about to be done, as a game's harming hook is shown it before it is:
+// the hook may change the amount (a player's stats, armour, a critical blow, a rolled
+// weapon); 0 or less and nothing is done. Every harm passes it: player to player,
+// player to entity, entity to player, entity to entity, blasts, falls, the game's own.
+Harming :: struct {
+	amount:   f32,
+	kind:     game.Source_Kind,
+	by:       ^Client, // the player who does it (nil: none)
+	creature: u32, // the entity that does it (its id; 0: none)
+	stack:    game.Stack, // what the player strikes or shoots with (empty: nothing, or no player)
+	to:       ^Client, // the player harmed (nil: an entity)
+	entity:   game.Entity_Handle, // the entity harmed (0: a player)
+	world:    ^World, // where
+}
+
+// harming: what the game's harming hook makes of an amount (the amount, with none).
+harming :: proc(s: ^Server, h: Harming) -> f32 {
+	if s.config.game.harming == nil {return h.amount}
+	h := h
+	s.config.game.harming(s, &h)
+	return h.amount
 }
 
 Damage_Result :: enum u8 {
@@ -48,18 +72,31 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 		if int(attacker) != int(player_id(s, target)) && !target.world.rules.pvp {return .Blocked}
 	}
 	if .Health not_in abilities {return .Blocked}
-	target.health = max(target.health - amount, 0)
+	taken := harming(
+		s,
+		{
+			amount = amount,
+			kind = source.kind,
+			by = attacker(s, source),
+			creature = source.creature,
+			stack = source.stack,
+			to = target,
+			world = target.world,
+		},
+	)
+	if !(taken > 0) {return .Blocked}
+	target.health = max(target.health - taken, 0)
 	target.last_damage = s.tick
 	record(
 		s,
 		target,
 		.Damage,
 		game.damage_source_name(source.kind),
-		i64(math.round(amount * 10)),
+		i64(math.round(taken * 10)),
 		i64(math.round(target.health * 10)),
 	)
 	hit := game.Damage_Hit {
-		amount = amount,
+		amount = taken,
 		known  = source.placed,
 	}
 	if source.placed {
@@ -67,8 +104,8 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 		hit.yaw = f32(math.atan2(-d.x, -d.z)) // (a yaw: 0 looks down -z)
 	}
 	event_send(s, target, .Damage_Hit, &hit)
-	session_damage(s, target, amount, source, target.health <= 0)
-	harm := Harm{amount, source.kind, attacker(s, source), source.creature, source.weapon}
+	session_damage(s, target, taken, source, target.health <= 0)
+	harm := Harm{taken, source.kind, attacker(s, source), source.creature, source.weapon}
 	g := &s.config.game
 	if target.health <= 0 {
 		die(s, target, source)

@@ -76,6 +76,12 @@ item_use :: proc(s: ^Session, stack: game.Stack, breaking, placing: bool) {
 			}
 		}
 	}
+	if _, melee := info.melee.?; melee && breaking && !placing {
+		// A melee weapon swings: the server strikes what is in its arc (no block breaks).
+		vm_event(&s.vm, .Swing)
+		session_swing(s)
+		return
+	}
 	if breaking && !placing {
 		vm_event(&s.vm, .Swing)
 		if session_attack(s) {return}
