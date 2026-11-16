@@ -532,18 +532,22 @@ is clicked. The game's own debug line is `engine.game_debug_line(s)`, its scoreb
 
 `./build.sh shot <name> [--game <id>] -- <script>` plays a console script headless on
 lavapipe under `xvfb-run` at 1280x720 ([debugging.md](debugging.md)): the script is what
-`--exec` takes, its lines separated by `;`, with `wait_world` (the world is there),
+`--exec` takes, its lines separated by `;` (with `--exec` the title is not skipped:
+`singleplayer` starts the world of `--game`'s game), with `wait_world` (the world is there),
 `wait <frames>`, `sleep <seconds>`, any console command (`/tp x y z yaw pitch`, `/<game>
 ...` for the game's own, `hold <item>`, `key <key> down|up`, `pointer <x> <y>`, `set
 <variable> <value>`) and `screenshot <file>`, which writes `build/screenshots/<file>.png`; it
 ends with `quit`. A game's screenshot, with the round where it should be:
 
 ```sh
-./build.sh shot flood_water --game flood -- "wait_world; /flood rule baseline; sleep 20; screenshot flood_water; quit"
+./build.sh shot flood_water --game flood -- "singleplayer; wait_world; /flood rule baseline; sleep 20; screenshot flood_water; quit"
+./build.sh shot horde_shop --game horde -- "singleplayer; wait_world; sleep 4; /horde restart; sleep 2; /horde purse 60; /tp 15 1 18.5 -90 -12; key z down; wait 2; key z up; sleep 0.8; screenshot horde_shop; quit"
 ./build.sh shot launcher -- "wait 60; screenshot launcher; quit"
 ```
 
-Look at each picture before saying what it shows.
+A UI button is reached by keys (`key down down; wait 2; key down up`, then `key enter`):
+`pointer` moves the pointer, but `key mouse_left` is the world's attack, not a click. Look at
+each picture before saying what it shows.
 
 ## The rules
 
