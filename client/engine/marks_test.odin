@@ -87,6 +87,19 @@ test_marks_show_health_and_points :: proc(t: ^testing.T) {
 	_, ok = world_point(s, &ctx, {0.5, 1.6, -(MARK_DISTANCE + 10)})
 	testing.expect(t, !ok, "a point too far was drawn")
 
+	// An entity's marks go just over its box (a sheep's is 0.9 high).
+	top, over := entity_top(s, id)
+	feet, _ := entity_place(s, id)
+	testing.expectf(
+		t,
+		over && top.xz == feet.xz && abs(top.y - feet.y - (0.9 + ENTITY_MARK_LIFT)) < 1e-6,
+		"over the sheep at %v, its feet at %v",
+		top,
+		feet,
+	)
+	_, over = entity_top(s, id + 1000)
+	testing.expect(t, !over, "a mark over an entity nobody knows")
+
 	// Outlines: queued, drawn into the debug lines once, then gone.
 	world_box(s, {1, 0, 1}, {2, 1, 2}, {255, 200, 0, 255})
 	testing.expect_value(t, s.world_box_count, 1)

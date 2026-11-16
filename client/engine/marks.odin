@@ -102,6 +102,43 @@ entity_bars :: proc(s: ^Session, ctx: ^ui.Context, kind: game.Kind_Id = 0, alway
 	}
 }
 
+// ENTITY_MARK_LIFT: blocks over an entity's box where its marks go.
+ENTITY_MARK_LIFT :: 0.35
+
+// entity_top: the point just over an entity the session shows (its box's top, lifted
+// by ENTITY_MARK_LIFT), where its marks go; false: not known, or not yet placed.
+entity_top :: proc(s: ^Session, id: u32) -> (at: [3]f64, ok: bool) {
+	e, known := &s.entities[id]
+	if !known {return}
+	info := game.kind_info(s.reg, e.kind)
+	if info == nil {return}
+	p := entity_place(s, id) or_return
+	return p + {0, f64(info.box[1]) + ENTITY_MARK_LIFT, 0}, true
+}
+
+// entity_label: text on a plate over an entity (a name kept in a game's record keyed by
+// the entity: game.key_entity), `rows` plates higher (0: just over it; a bar's height
+// is a third of a row); false when it is not shown.
+entity_label :: proc(s: ^Session, ctx: ^ui.Context, id: u32, text: string, rows: f32 = 0) -> bool {
+	at := entity_top(s, id) or_return
+	p := world_point(s, ctx, at) or_return
+	t := &ctx.theme
+	width := ui.measure_text(ctx, text, t.font_size) + 2 * t.padding
+	r := ui.Rect{p.x - width / 2, p.y - t.row_height * (rows + 0.5), width, t.row_height}
+	ui.fill_rect(ctx, r, t.hud_fill)
+	ui.draw_text(ctx, r, text, t.font_size, t.text, .Center)
+	return true
+}
+
+// entity_bar: an entity's health bar over it, hurt or not (entity_bars puts one over
+// every hurt one of a kind); false when it is not shown or has no health.
+entity_bar :: proc(s: ^Session, ctx: ^ui.Context, id: u32) -> bool {
+	e, known := &s.entities[id]
+	if !known || e.max_health == 0 {return false}
+	at := entity_top(s, id) or_return
+	return world_bar(s, ctx, at, f32(e.health) / f32(e.max_health))
+}
+
 // world_box: an outline of the blocks lo..hi drawn in the world this frame (at most
 // MAX_WORLD_BOXES; more are not drawn).
 world_box :: proc(s: ^Session, lo, hi: game.Block_Pos, color: [4]u8) {

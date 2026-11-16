@@ -94,6 +94,7 @@ makes it for games, documented where it is declared.
 | `set_block(w, p, block, act)`, `bulk_edit(w, edit, act)`, `Bulk_Edit`, `Box`, `Sphere` | Change blocks through the edit journal ([journal.md](journal.md)) |
 | `entity_spawn(w, kind, position, natural)`, `entity_gone(w, h)` | An entity of a kind (the game's pack's, `<game>:<name>`) at a place, its handle (0: the world is full); gone again, with no death to show |
 | `entity_find(w, id)`, `entity_listed(w, h)`, `entities_of(w, kind, center, radius)`, `entities_each(w)`, `entities_next(&it)`, `Entity_Iter` | An entity by its id; whether a handle is one still there; the entities of a kind near a point, nearest first; every entity, lowest id first |
+| `entity_known(c, id)` | Whether a player has been told of an entity (it is near it): put a record of the game's keyed by the entity (`game.key_entity(id)`: its name, its rank) to the players who know it, and it goes with it |
 | `entity_id(w, h)`, `entity_kind(w, h)`, `entity_pos(w, h)`, `entity_health_of(w, h)`, `entity_max_health(w, h)`, `entity_set_max_health(w, h, health)` | What an entity is, where it stands, its health; its most health set (and its health with it) |
 | `entity_harm(w, h, harm)` | Hurt an entity (a tower's shot: `kind = .Game`, `by` the player it is credited to), told to the entity hooks as any harm is; true: it died |
 | `entity_go(w, h, target)`, `entity_follow(w, h, route)`, `entity_stand(w, h)`, `entity_arrived(w, h)`, `entity_set_speed(w, h, speed)` | Steer a walker whose kind is `"brain": "steered"`: to a point by its own path, along a route, or still; whether it is there ([walkers](#walkers)) |
@@ -172,7 +173,9 @@ plate there and `world_bar` a bar, `entity_bars(s, ctx, kind)` a health bar over
 entity of a kind that is hurt (an entity's health and its most come with it,
 `Entity_Record`), and `world_box(s, lo, hi, color)` outlines blocks in the world this frame
 (a placement's ghost, a footprint). `entity_place(s, id)` is where the session shows an
-entity now.
+entity now, `entity_top(s, id)` the point just over it, and `entity_label(s, ctx, id, text,
+rows)` and `entity_bar(s, ctx, id)` a plate of text (a name the game keeps in a record keyed
+by the entity) and a health bar there.
 
 The accessors are typed as the server's are: `engine.game_state(s, T)` checks `T` is the
 declared state type; `engine.game_value(s, r, T)` is `r`'s value as `^T` when `r` is of the
