@@ -130,6 +130,7 @@ Fly_Test :: struct {
 Scene_Phase :: enum u8 {
 	Off,
 	Script, // its script running (the main loop's)
+	Settling, // a world scene's SCENE_SETTLE_FRAMES, each a fixed step
 	Clearing, // chat lines and toasts taken down, the UI drawn without them
 	Shooting, // the picture asked for, not yet written
 	Done,
@@ -144,12 +145,30 @@ Scene_Run :: struct {
 	menu:    bool, // a menu's scene: no world, its animations stand still
 }
 
-// scene_freezes_frame_dt: only a menu's scene stands still (every frame's step
-// is 0). Normal play keeps its frame times, and so does a world scene: what
-// fades or settles there (the held item's name, the eye's height) must finish
-// before the picture is taken.
-scene_freezes_frame_dt :: proc(scene: Scene_Run) -> bool {
-	return scene.menu
+// A world scene's picture is a function of its script, never of how fast the
+// machine drew: while its script runs (the world loading, however long that
+// takes) time stands still, and then it runs SCENE_SETTLE_FRAMES frames of
+// one tick each, so what fades or eases (the held item's name, the eye's
+// height, the third-person camera) has finished and what never settles (an
+// avatar's breath, the view model's sway) is at the same phase in every run.
+SCENE_SETTLE_SECONDS :: 2.5
+SCENE_STEP_MS :: 1000 * game.TICK_SECONDS
+SCENE_SETTLE_FRAMES :: int(SCENE_SETTLE_SECONDS * game.TICK_RATE)
+
+// scene_frame_ms: the step a frame takes, given the time it measured. Normal
+// play (.Off) and a finished scene keep their measured times; a menu's scene
+// stands still throughout (the starfield, the planet's turn); a world scene
+// stands still while its script runs, then steps SCENE_STEP_MS a frame.
+scene_frame_ms :: proc(scene: Scene_Run, measured: f32) -> f32 {
+	switch scene.phase {
+	case .Off, .Done:
+		return measured
+	case .Script:
+		return 0
+	case .Settling, .Clearing, .Shooting:
+		return 0 if scene.menu else SCENE_STEP_MS
+	}
+	return measured
 }
 
 // Scene_Counts: what a scene's frame drew,

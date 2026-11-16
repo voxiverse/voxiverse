@@ -180,7 +180,7 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 				app.seconds = math.mod(app.seconds + app.last_frame_ms / 1000, 1000)
 			}
 			base.frame_stats_add(&app.frame_stats, app.last_frame_ms)
-			if engine.scene_freezes_frame_dt(app.scene) {app.last_frame_ms = 0}
+			app.last_frame_ms = engine.scene_frame_ms(app.scene, app.last_frame_ms)
 			if app.screen == .Game {
 				base.frame_stats_add(
 					&app.triangle_stats,

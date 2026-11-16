@@ -355,8 +355,13 @@ next is fixed:
   time of day (a scene may set another with `/time set`), no random ticks, and no gravity,
   so a player teleported anywhere stays there;
 - the water's animation stopped;
-- no chat lines and no toasts: they fade with the clock, so they are cleared two frames
-  before the picture.
+- time itself: while the script runs (however long the world takes to load) every frame's
+  step is 0, and after it the scene draws `SCENE_SETTLE_FRAMES` frames (2.5 s) of exactly
+  one tick each (`scene_frame_ms` in `client/engine/autopilot.odin`), so what fades or eases
+  (the held item's name, the eye's height, the third-person camera) has finished and what
+  never settles (an avatar's breath, the view model's sway) is at the same phase in every
+  run, whatever the machine's frame times;
+- no chat lines and no toasts: they are cleared two frames before the picture.
 
 A scene whose script starts with `earth` runs on an Earth planet world instead: the scratch
 world is made at Earth's address (built on the planet model, as a new universe's home world
@@ -378,7 +383,8 @@ stamp rings in and settles before the picture. Easter's scene pins April 2026 sp
 so its baseline is the same every year.
 
 After the scene's own script, the run waits a second for the server to answer, waits until
-the world around the player is loaded and meshed, and draws ten more frames. The picture is
+the world around the player is loaded and meshed, draws ten more frames, and then settles
+(above). The picture is
 the offscreen image itself, not the window's scaled copy of it. It is written to
 `build/images/<scene>.png`.
 

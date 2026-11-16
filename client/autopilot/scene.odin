@@ -186,6 +186,10 @@ scene_update :: proc(app: ^engine.App, script_done: bool) {
 			app.script_failed, app.quit = true, true
 			return
 		}
+		sc.phase, sc.frames = .Settling, 0
+	case .Settling:
+		if sc.frames < engine.SCENE_SETTLE_FRAMES {return}
+		s := app.session
 		for e in s.chat {delete(e.text)}
 		clear(&s.chat)
 		for t in app.toasts.list {delete(t.text)}
