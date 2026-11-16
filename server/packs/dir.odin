@@ -8,8 +8,14 @@ import "core:strings"
 
 import "common:game"
 
+// GAMES_FOLDER, GAME_PACK_FOLDER: a game's own pack is games/<game>/pack.
+GAMES_FOLDER :: "games"
+GAME_PACK_FOLDER :: "pack"
+
 // pack_read_dir: a pack's directory as files in memory, for game.registry_build.
-// The directory's name is the pack's namespace. Symlinks are refused (a pack
+// The directory's name is the pack's namespace, but for a game's own pack,
+// `games/<game>/pack`, which is named for its game (docs/games.md), so it is checked
+// where it is. Symlinks are refused (a pack
 // reads only what is inside its directory), and so are files past the limits
 // registry_build would refuse anyway (they are not read at all).
 pack_read_dir :: proc(
@@ -22,6 +28,10 @@ pack_read_dir :: proc(
 	context.allocator = allocator
 	clean := strings.trim_right(dir, "/\\")
 	src.namespace = filepath.base(clean)
+	if game_dir := filepath.dir(clean);
+	   src.namespace == GAME_PACK_FOLDER && filepath.base(filepath.dir(game_dir)) == GAMES_FOLDER {
+		src.namespace = filepath.base(game_dir)
+	}
 	files := make([dynamic]game.Pack_File)
 	problems := make([dynamic]game.Pack_Error)
 	total := 0

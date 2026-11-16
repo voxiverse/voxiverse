@@ -116,6 +116,7 @@ TEST_PACKAGES :: []string {
 	"server/path",
 	"server/core",
 	"server/play",
+	"server/packs",
 	"client/render",
 	"client/mesh",
 	"client/sfx",

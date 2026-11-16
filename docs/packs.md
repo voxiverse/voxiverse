@@ -42,7 +42,8 @@ its line and column, so every error is a `Pack_Error` of the form
 assigned in load order; packs load in the order the universe lists them.
 
 `./build.sh packs [<dir>...]` loads the base pack plus the given pack directories the way a
-universe does, prints every error and a summary with the registry hash (`tools/packcheck`).
+universe does, prints every error and a summary with the registry hash (`tools/packcheck`). A directory's name is its pack's namespace, but for a game's own pack, `games/<game>/pack`,
+which takes the game's ([games.md](games.md#the-games-pack)).
 
 ## Entity kinds
 

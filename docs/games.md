@@ -395,8 +395,8 @@ PACK :: game.Pack_Source {
 
 The server loads it after the universe's packs only in a session that plays the game; a pack
 not named for its game is refused at start. It is hashed into the registry and sent to
-joining players as any pack is. `./build.sh packs` checks a pack folder named for its
-namespace, so a copy of it named `<game>`. A game's modes are where its rules for players
+joining players as any pack is. `./build.sh packs games/<game>/pack` checks it where it is
+(a folder `pack` under a game's takes the game's name as its namespace). A game's modes are where its rules for players
 live: a mode that flies and takes no harm for those watching, one with the kit for those
 playing.
 
