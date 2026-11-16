@@ -829,6 +829,14 @@ entity_set_max_health :: proc(w: ^World, h: game.Entity_Handle, health: int) {
 	}
 }
 
+// entity_heal: the entity's health raised by amount, up to its most (a building put up a
+// little more, a creature's wound closing); nothing for one that has no health.
+entity_heal :: proc(w: ^World, h: game.Entity_Handle, amount: int) {
+	if hp := entity_health(w, h); hp != nil && amount > 0 && hp.health > 0 {
+		hp.health = i32(min(i64(hp.health) + i64(amount), i64(hp.max)))
+	}
+}
+
 // entity_max_health: the most health the entity has (its kind's, unless a game set it).
 entity_max_health :: proc(w: ^World, h: game.Entity_Handle) -> int {
 	if hp := entity_health(w, h); hp != nil {return int(hp.max)}

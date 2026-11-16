@@ -99,3 +99,22 @@ test_fog_tells_a_team_what_it_sees :: proc(t: ^testing.T) {
 	harness_step(&sess.h, 6)
 	testing.expect(t, entity_known(c, entity_id(w, foe)))
 }
+
+// An entity heals up to its most, and not past it (a building put up a little each tick).
+@(test)
+test_an_entity_heals_up_to_its_most :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	defer session_stop(sess)
+	kind, ok := sides_start(t, sess)
+	if !ok {return}
+	w := sess.h.srv.home
+	e := entity_spawn(w, kind, {2.5, 0, 0.5}, false)
+	entity_set_max_health(w, e, 10)
+	entity_harm(w, e, {amount = 7, kind = .Game})
+	testing.expect_value(t, entity_health_of(w, e), 3)
+	entity_heal(w, e, 4)
+	testing.expect_value(t, entity_health_of(w, e), 7)
+	entity_heal(w, e, 40)
+	testing.expect_value(t, entity_health_of(w, e), 10)
+}
