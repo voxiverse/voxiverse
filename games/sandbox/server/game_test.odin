@@ -13,6 +13,7 @@ test_sandbox_world :: proc(t: ^testing.T) {
 	defer free(sess)
 	config := core.harness_world() // (a flat world, which the sandbox does not play)
 	config.game = GAME
+	config.kit = "" // (the game's to choose, as a world of its own leaves it)
 	if !testing.expect(t, core.session_start(sess, {}, false, with = config)) {return}
 	defer core.session_stop(sess)
 	srv := &sess.h.srv
