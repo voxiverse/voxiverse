@@ -469,10 +469,17 @@ lint_relative_imports :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// GAME_IMPORTERS: the executables' main packages and the tools that read a session's
-// trace (which must know its game), the only code outside games/ that may import a game,
-// or the lists of them the driver writes (generated:games; docs/games.md).
-GAME_IMPORTERS :: []string{"client/main", "server/dedicated", "tools/netdump", "tools/replay"}
+// GAME_IMPORTERS: the executables' main packages, the tools that read a session's
+// trace (which must know its game) and the benchmarks (which time a game's own model
+// against its budget), the only code outside games/ that may import a game, or the
+// lists of them the driver writes (generated:games; docs/games.md).
+GAME_IMPORTERS :: []string {
+	"client/main",
+	"server/dedicated",
+	"tools/bench",
+	"tools/netdump",
+	"tools/replay",
+}
 
 // CLIENT_IMPORTER: of those, the one that may import a game's client package or the list
 // of them (generated:games/client): the dedicated server links no client code.
