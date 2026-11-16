@@ -58,7 +58,7 @@
 	"belt": {
 		"states": {"facing": ["north", "east", "south", "west"]}, "default": {"facing": "north"},
 		"shape": "foundry:low", "opaque": false,
-		"textures": {"side": "voxiverse:wool_black", "top": "voxiverse:gravel", "bottom": "voxiverse:wool_black"},
+		"textures": {"side": "voxiverse:gravel", "top": "voxiverse:wool_black", "bottom": "voxiverse:gravel"},
 		"place": "facing", "sound": "voxiverse:wood",
 		"entity": {"kind": "belt", "speed": 1.5}
 	}

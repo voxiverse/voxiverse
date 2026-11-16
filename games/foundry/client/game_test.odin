@@ -35,6 +35,17 @@ test_foundry_on_the_hud :: proc(t: ^testing.T) {
 		10,
 	)
 	testing.expect(t, playtest.drawn(rig, "FOUNDRY  lodestar 0/1  "), "no factory line")
+	// The belt's items reach the client: its copy of the belts carries them.
+	carried := playtest.until(rig, proc(rig: ^playtest.Rig) -> bool {
+			for _, lane in rig.s.belts.lanes {if lane.count > 0 {return true}}
+			return false
+		}, 10)
+	testing.expectf(
+		t,
+		carried,
+		"the client holds no items on its belts: %d lanes",
+		len(s.belts.lanes),
+	)
 
 	// The furnace's label comes from what the server showed of it.
 	shown := engine_shown(rig)
