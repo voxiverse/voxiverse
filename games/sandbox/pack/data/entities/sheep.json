@@ -2,6 +2,7 @@
 // looks the game's to show and this model's to draw, coming by itself by day on grass.
 {
   "sheep": {
+    "voice": "bleat",
     "box": [0.8, 0.9],
     "health": 4,
     "saved": true,
