@@ -780,6 +780,7 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 			entity_pitch(w, h),
 			entity_looks(w, s.registry, h),
 		}
+		if at, yaw, gliding := glide_shown(w, h); gliding {motion.position, motion.yaw = at, yaw}
 		state_put(s, c, .Entity_Motion, &motion, key)
 	}
 }
@@ -1882,7 +1883,9 @@ system_walkers :: proc(w: ^World, wishes: ^map[game.Entity_Handle]Wish, query: g
 	it := entities_each(w)
 	for h in entities_next(&it) {
 		info := kind_of(w, h)
-		if info.physics != .Walker || !chunk_ready(w, entity_pos(w, h)) {continue}
+		if info.physics != .Walker ||
+		   !chunk_ready(w, entity_pos(w, h)) ||
+		   entity_gliding(w, h) {continue}
 		wish := wishes[h] or_else {}
 		entity_body_step(w, h, info, wish.wish, wish.jump, query)
 	}

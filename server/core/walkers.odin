@@ -42,6 +42,7 @@ Steer_Mode :: enum u8 {
 	Go, // to a point (target), by its own path
 	Follow, // along a route
 	Keep, // within a band of distances from a point: closer when further, away when nearer
+	Glide, // along the points a game gave, over ground it knows is walkable: no physics (entity_glide)
 }
 
 Steer :: struct {
@@ -59,7 +60,14 @@ Steer :: struct {
 	planned: [3]f64, // the target its path was planned to (Keep plans again when it moved)
 	ready:   int, // ticks until its attack is ready again
 	struck:  int, // ticks its Striking look still shows
+	shown:   [3]f64, // Glide: where its players are told it is (glide_shown)
+	shown_y: f32, // ... and its yaw
 }
+
+// GLIDE_SEND_TICKS: a gliding walker's place is told its players every this many
+// ticks (staggered by id): its legs are straight, and the client, drawing it between
+// the places it was told, loses nothing of them, while a crowd costs a third.
+GLIDE_SEND_TICKS :: 3
 
 STRIKE_SHOW :: game.TICK_RATE / 3 // ticks a blow or a shot shows (the Striking look)
 SEPARATION :: 2.5 // blocks a second at which walkers that overlap move apart
@@ -256,6 +264,69 @@ entity_keep :: proc(w: ^World, h: game.Entity_Handle, target: [3]f64, near, far:
 	st.mode, st.target = .Keep, target
 	st.near, st.far = max(near, 0), max(far, near, 0.1)
 	return true
+}
+
+// entity_glide: the walker goes along points (the blocks it stands in, in order; at
+// most path.MAX_PATH of them, the rest dropped) in straight legs at its speed, with no
+// physics: no gravity, no collision, no push from others, nothing it can trip on. For
+// the many simple walkers of a game that knows its ground (a town's citizens on its
+// roads, a factory's carriers on its paths): the game finds the way (its own graph,
+// route_cost) and the engine only moves them, at a fraction of a walker's cost. Arrived
+// at the last point, it stands (entity_arrived). False for an entity that is not a
+// steered walker, or no points.
+entity_glide :: proc(w: ^World, h: game.Entity_Handle, points: []game.Block_Pos) -> bool {
+	st := entity_steer(w, h)
+	if st == nil || len(points) == 0 {return false}
+	n := min(len(points), path.MAX_PATH)
+	copy(st.path.steps[:n], points[:n])
+	st.path.count, st.path.whole, st.step = n, true, 0
+	if st.mode != .Glide {st.shown, st.shown_y = entity_pos(w, h), entity_yaw(w, h)}
+	st.mode, st.arrived, st.stuck = .Glide, false, 0
+	entity_set_velocity(w, h, {})
+	return true
+}
+
+// glide_step: one tick along the points (system_steer).
+@(private = "file")
+glide_step :: proc(w: ^World, h: game.Entity_Handle, st: ^Steer, info: ^game.Kind_Info) {
+	if st.arrived {return}
+	left := f64(st.speed if st.speed > 0 else info.walker.walk_speed) * f64(game.TICK_SECONDS)
+	pos := entity_pos(w, h)
+	for left > 0 && st.step < st.path.count {
+		b := st.path.steps[st.step]
+		to := [3]f64{f64(b.x) + 0.5, f64(b.y), f64(b.z) + 0.5}
+		d := to - pos
+		l := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
+		if l > 1e-6 && (d.x != 0 || d.z != 0) {
+			entity_set_yaw(w, h, f32(math.atan2(-d.x, -d.z)))
+		}
+		if l <= left {
+			pos, left = to, left - l
+			st.step += 1
+			continue
+		}
+		pos += d * (left / l)
+		left = 0
+	}
+	entity_set_pos(w, h, pos)
+	if st.step >= st.path.count {st.arrived = true}
+	if st.arrived || (w.server.tick + u64(entity_id(w, h))) % GLIDE_SEND_TICKS == 0 {
+		st.shown, st.shown_y = pos, entity_yaw(w, h)
+	}
+}
+
+// glide_shown: where a gliding walker is told to be (it moves every tick, its players
+// are told every GLIDE_SEND_TICKS); false for one not gliding.
+glide_shown :: proc(w: ^World, h: game.Entity_Handle) -> (pos: [3]f64, yaw: f32, ok: bool) {
+	st := entity_steer(w, h)
+	if st == nil || st.mode != .Glide {return}
+	return st.shown, st.shown_y, true
+}
+
+// entity_gliding: the walker glides (entity_glide), so its body's physics is not run.
+entity_gliding :: proc(w: ^World, h: game.Entity_Handle) -> bool {
+	st := entity_steer(w, h)
+	return st != nil && st.mode == .Glide
 }
 
 // entity_sees: nothing solid lies between the entity's eyes (near the top of its box)
@@ -476,6 +547,10 @@ system_steer :: proc(w: ^World, wishes: ^map[game.Entity_Handle]Wish) {
 		st := entity_steer(w, h)
 		if st == nil || !chunk_ready(w, entity_pos(w, h)) {continue}
 		info := kind_info_of(w, h)
+		if st.mode == .Glide {
+			glide_step(w, h, st, info)
+			continue
+		}
 		body := path.body_of(info.box, info.walker.jump)
 		if st.mode == .Go && !st.plan {
 			for b in wk.changed {
@@ -515,7 +590,7 @@ steer_walk :: proc(
 	toward: [3]f64 // the centre of the block it goes to next
 	backing: bool // Keep: too near, it backs away
 	switch st.mode {
-	case .Stand:
+	case .Stand, .Glide:
 		return
 	case .Follow:
 		f := route_field(w, st.route)

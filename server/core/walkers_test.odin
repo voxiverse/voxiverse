@@ -591,3 +591,60 @@ test_creature_backs_along_a_wall :: proc(t: ^testing.T) {
 	d := entity_pos(w, e) - c.player.position
 	testing.expectf(t, math.sqrt(d.x * d.x + d.z * d.z) >= 4.8, "backed only to %v", d)
 }
+
+// A gliding walker goes along its points in straight legs at its speed, with no physics:
+// over a gap with nothing under it, through a wall in its way; it arrives at the last
+// point and stands. Its players are told where it is every GLIDE_SEND_TICKS.
+@(test)
+test_walker_glides :: proc(t: ^testing.T) {
+	rig := new(Rig)
+	defer free(rig)
+	h := &rig.h
+	kind, ok := walkers_start(t, rig)
+	if !ok {
+		harness_stop(h)
+		return
+	}
+	defer harness_stop(h)
+	w := h.srv.home
+	wall(w, 4, -6, 6)
+	// (a hole across its way: walking, it would fall in)
+	bulk_edit(
+		w,
+		{shape = Box{{-6, -3, -2}, {-4, -1, 2}}, op = .Set, block = .Air},
+		world_act(w, .Structure),
+	)
+	e := entity_spawn(w, kind, {-11.5, 0, 0.5}, false)
+	if !testing.expect(t, e != 0) {return}
+	entity_set_speed(w, e, 6)
+	points := []game.Block_Pos{{-1, 0, 0}, {10, 0, 0}, {10, 0, 6}}
+	if !testing.expect(t, entity_glide(w, e, points)) {return}
+	testing.expect(t, entity_gliding(w, e))
+	shown_moves := 0
+	last_shown: [3]f64
+	for tick in 0 ..< 200 {
+		harness_step(h)
+		p := entity_pos(w, e)
+		testing.expectf(t, abs(p.y) < 1e-9, "tick %d: it left its level: %v", tick, p)
+		if at, _, gliding := glide_shown(w, e); gliding && at != last_shown {
+			shown_moves += 1
+			last_shown = at
+		}
+		if entity_arrived(w, e) {break}
+	}
+	testing.expect(t, entity_arrived(w, e), "it never arrived")
+	p := entity_pos(w, e)
+	testing.expectf(t, abs(p.x - 10.5) < 1e-6 && abs(p.z - 6.5) < 1e-6, "arrived at %v", p)
+	// 28 blocks at 6 a second: 4.7 s, 140 ticks; told about a third of them.
+	testing.expectf(
+		t,
+		shown_moves > 30 && shown_moves < 70,
+		"its place was told %d times",
+		shown_moves,
+	)
+	harness_step(h, 10)
+	testing.expect_value(t, entity_pos(w, e), p)
+	// Sent elsewhere by its own path, it walks again.
+	testing.expect(t, entity_go(w, e, {12.5, 0, 0.5}))
+	testing.expect(t, !entity_gliding(w, e))
+}

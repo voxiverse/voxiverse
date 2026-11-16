@@ -917,6 +917,86 @@ budget_walkers :: proc() -> (r: Budget_Walkers, ok: bool) {
 	return r, true
 }
 
+// ---- the gliders ----
+
+Budget_Gliders :: struct {
+	mean_us:  f64, // the entities' tick, mean over the scene
+	worst_us: i64, // ... and the slowest
+	put_us:   f64, // one client's view of them (entities_put and the snapshot's encoding), mean a tick
+	bytes:    f64, // ... the snapshot's bytes, mean a tick
+	known:    int, // ... how many it was told of at the end
+	laps:     int, // loops finished, all told
+}
+
+BUDGET_GLIDERS :: 1000
+BUDGET_GLIDER_TICKS :: 300
+
+// budget_gliders: 1000 steered walkers gliding (a town's citizens on its roads): each,
+// arrived, is sent round a loop of four corners of the platform again (entity_glide);
+// the entities' whole tick, and what one client standing among them is told
+// (entities_put).
+budget_gliders :: proc() -> (r: Budget_Gliders, ok: bool) {
+	h := new(Harness)
+	defer free(h)
+	files := [2]game.Pack_File {
+		{"pack.json", transmute([]u8)string(BUDGET_WALKER_PACK)},
+		{"data/entities/walker.json", transmute([]u8)string(BUDGET_WALKER_KIND)},
+	}
+	extra := [1]game.Pack_Source{{"budget", files[:]}}
+	w := budget_world(h, extra[:]) or_return
+	defer harness_stop(h)
+	s := &h.srv
+	budget_platform(w)
+	kind := game.registry_kind(s.registry, "budget:walker") or_return
+	gliders := make([]game.Entity_Handle, BUDGET_GLIDERS)
+	defer delete(gliders)
+	loop :: proc(i: int) -> [4]game.Block_Pos {
+		x, z := i32(-45 + (i % 40) * 2), i32(-45 + (i / 40) * 3)
+		return {{x, 61, z}, {x + 9, 61, z}, {x + 9, 61, z + 2}, {x, 61, z + 2}}
+	}
+	for &g, i in gliders {
+		p := loop(i)[0]
+		g = entity_spawn(w, kind, {f64(p.x) + 0.5, 61, f64(p.z) + 0.5}, false)
+		if g == 0 {return}
+	}
+	// A client among them, told what it sees as a player is (every snapshot acknowledged).
+	c := new(Client)
+	defer free(c)
+	c.state, c.world = .Playing, w
+	c.player.position = {0, 61, 0}
+	game.sender_init(&c.tx, &s.schema)
+	defer game.sender_destroy(&c.tx)
+	total, put: i64
+	bytes: int
+	for _ in 0 ..< BUDGET_GLIDER_TICKS {
+		s.tick += 1
+		start := base.thread_cpu_us()
+		for g, i in gliders {
+			if entity_gliding(w, g) && !entity_arrived(w, g) {continue}
+			if entity_arrived(w, g) {r.laps += 1}
+			l := loop(i)
+			entity_glide(w, g, l[:])
+		}
+		entities_tick(w)
+		took := base.thread_cpu_us() - start
+		total += took
+		r.worst_us = max(r.worst_us, took)
+		start = base.thread_cpu_us()
+		entities_put(s, c)
+		out := make([dynamic]game.Outgoing, context.temp_allocator)
+		game.sender_flush(&c.tx, u32(s.tick), {0, 61, 0}, &out)
+		put += base.thread_cpu_us() - start
+		for o in out {bytes += len(o.data)}
+		game.sender_ack(&c.tx, u32(s.tick))
+		budget_world_tick_after(s, w)
+	}
+	r.mean_us = f64(total) / BUDGET_GLIDER_TICKS
+	r.put_us = f64(put) / BUDGET_GLIDER_TICKS
+	r.bytes = f64(bytes) / BUDGET_GLIDER_TICKS
+	r.known = len(c.tx.sent.tables[int(game.State_Kind.Entity)].records)
+	return r, true
+}
+
 // ---- the fighters ----
 
 Budget_Fighters :: struct {
