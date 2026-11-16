@@ -675,6 +675,19 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		console_register(
 			c,
 			{
+				"pointer",
+				"pointer <x> <y>: the mouse pointer moved to a place of the window, in pixels, as the mouse would (a script aims a game's top-down or free camera)",
+				proc(app: ^engine.App, args: []string) {
+					if msg, ok := pointer_inject(app, args); !ok {
+						engine.console_print(&app.console, msg, .Warning)
+					}
+				},
+			},
+			args = {2, 2},
+		)
+		console_register(
+			c,
+			{
 				"crash",
 				"crash the game (tests the crash handler)",
 				proc(app: ^engine.App, args: []string) {
@@ -824,6 +837,19 @@ key_inject :: proc(app: ^engine.App, args: []string) -> (message: string, ok: bo
 		return "", true
 	}
 	return "key: no such key (the names are platform.Key's: a, f3, space, left_shift...)", false
+}
+
+// pointer_inject: the `pointer` command: appends the pointer's move to x, y (window
+// pixels) to app.injected.
+pointer_inject :: proc(app: ^engine.App, args: []string) -> (message: string, ok: bool) {
+	x, x_ok := strconv.parse_f32(args[0])
+	y, y_ok := strconv.parse_f32(args[1])
+	if !x_ok ||
+	   !y_ok ||
+	   x < 0 ||
+	   y < 0 {return "pointer: say where, in pixels: pointer 640 360", false}
+	append(&app.injected, platform.Mouse_Move_Event{x, y})
+	return "", true
 }
 
 // pad_inject: the `pad` command: appends the event for slot 0 to

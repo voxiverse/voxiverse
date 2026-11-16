@@ -102,6 +102,24 @@ test_console_key_holds_a_key :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.injected), 2)
 }
 
+// `pointer <x> <y>` (development builds) moves the pointer as the mouse would (a script
+// aims a top-down camera with it); a place that is no number says so and adds nothing.
+@(test)
+test_console_pointer_moves_the_pointer :: proc(t: ^testing.T) {
+	app := new(engine.App)
+	defer free(app)
+	defer delete(app.injected)
+	defer engine.input_destroy(&app.input)
+	_, ok := console.pointer_inject(app, {"1100", "360.5"})
+	testing.expect(t, ok)
+	message: string
+	message, ok = console.pointer_inject(app, {"left", "3"})
+	testing.expect(t, !ok && strings.contains(message, "in pixels"))
+	testing.expect_value(t, len(app.injected), 1)
+	engine.input_update(&app.input, app.injected[:])
+	testing.expect_value(t, app.input.mouse, [2]f32{1100, 360.5})
+}
+
 // `pad right_trigger down` (or a value) pulls the trigger as a pad does, an axis, so a
 // script fires the weapon in hand as `key mouse_left down` does: the attack is held
 // frame after frame until `up`. Before, the name was taken for the button of the same
