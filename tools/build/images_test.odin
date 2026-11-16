@@ -116,3 +116,15 @@ test_images_counts :: proc(t: ^testing.T) {
 		testing.expect(t, line != "", bad)
 	}
 }
+
+// The whole suite renders the image baselines too (they rotted while only a separate
+// command ran them); a run narrowed to packages, an optimization, a sanitizer or some
+// tests does not.
+@(test)
+test_the_whole_suite_renders_the_images :: proc(t: ^testing.T) {
+	testing.expect(t, test_renders_images({}, {}))
+	testing.expect(t, !test_renders_images({"server/core"}, {}))
+	testing.expect(t, !test_renders_images({}, {optimization = "-o:speed"}))
+	testing.expect(t, !test_renders_images({}, {sanitizer = "address"}))
+	testing.expect(t, !test_renders_images({}, {names = {"test_x"}}))
+}

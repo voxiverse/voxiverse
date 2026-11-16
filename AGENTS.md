@@ -21,6 +21,11 @@ The code is written by agents and read by a person, so it has to read well.
 ./build.sh check --cross    # also compiles for Windows and macOS: for any change to platform code
 ```
 
+`./build.sh test` with no package named is the whole gate: every package, then the image
+baselines on lavapipe (`./build.sh images`, about ten minutes on 8 cores). A change to
+`client/` or `assets/shaders` that changes a picture re-accepts its baseline in the same
+commit (`./build.sh images --accept <scene>`), saying why.
+
 `./build.sh help` lists the rest (system tests, benchmarks, fuzzing, visual baselines).
 
 ## The rules the code follows

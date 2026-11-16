@@ -336,6 +336,12 @@ test rather than by eye. It runs on Linux only, on lavapipe (Mesa's CPU Vulkan d
 finds lavapipe's manifest in the system's ICD directories and points `VK_DRIVER_FILES` (and
 the older `VK_ICD_FILENAMES`) at it, whatever GPU the machine has.
 
+They are part of the gate: `./build.sh test` with no package named (and no `-o:`,
+`-sanitize:` or `-test-name:`) renders them after the unit tests and fails if any scene
+does, as `./build.sh images` would. On this 8-core machine the 31 scenes take about ten
+minutes (four at once; lavapipe draws on the CPU). A narrowed run (`test <package>`) does not
+render them, and on Windows and macOS `test` says they were not run.
+
 The scenes are listed in `assets/baselines/images/scenes.txt`, one a line, as
 `name: [@WxH] script`; the script is console commands separated by `;`, as `--exec` takes them.
 `voxiverse --scene <name>` runs one scene and quits: it joins the scratch world at its fixed

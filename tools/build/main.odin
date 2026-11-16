@@ -378,7 +378,7 @@ usage :: proc() {
 		"  check     type-check every package (-vet -strict-style), run the lints, verify formatting; --cross: also build objects for the other Tier 1 targets",
 	)
 	fmt.println(
-		"  test      run the unit tests, the packages in parallel (VX_JOBS=n at once, else one per core); `test <package>...`: only those",
+		"  test      run the unit tests, the packages in parallel (VX_JOBS=n at once, else one per core), then the image baselines (Linux); `test <package>...`: only those packages",
 	)
 	fmt.println(
 		"            (output is kept in build/test/<package>.log, printed only when it fails)",
@@ -1192,7 +1192,27 @@ test :: proc(args: []string) -> bool {
 	}
 	slice.sort_by(timed, proc(a, b: Timed) -> bool {return a.seconds > b.seconds})
 	for t, i in timed {packages[i] = t.pkg}
-	return test_packages(packages, {}, jobs_width(), opts)
+	ok := test_packages(packages, {}, jobs_width(), opts)
+	if !test_renders_images(named, opts) {return ok}
+	// The whole suite is the gate, and the visual baselines are part of it: run
+	// alone they were forgotten, and two rotted unseen (walk_third, swing_third).
+	if ODIN_OS != .Linux {
+		fmt.println("test: the image baselines render on Linux only (build images); not here")
+		return ok
+	}
+	fmt.println("test: the image baselines (build images)")
+	return images({}) && ok
+}
+
+// test_renders_images: a run of `test` also renders the image baselines: the whole
+// suite, built as usual (no package named, no optimization, sanitizer or test chosen).
+test_renders_images :: proc(named: []string, opts: Test_Options) -> bool {
+	return(
+		len(named) == 0 &&
+		opts.optimization == "" &&
+		opts.sanitizer == "" &&
+		len(opts.names) == 0 \
+	)
 }
 
 // system runs the system test suite on one thread: its tests start threads, sockets and clocks of
