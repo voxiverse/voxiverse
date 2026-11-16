@@ -43,8 +43,9 @@ and of a world `sheep.born`, shown with the engine's.
 ## Its peoples and markets
 
 On a world built on the planet (the home world when it is Earth), the sandbox keeps the
-peoples' history and their towns' markets (`history.odin`, `settlements.odin`, `economy.odin`,
-`market.odin`, `trade.odin`: docs/world.md describes the model). The history is a function of
+towns' markets (`economy.odin`, `market.odin`, `trade.odin`: docs/world.md describes the
+model), on the peoples' history and settlements of `common/planet` (which stay there: the
+benchmark tool, which may not import a game, times them). The history is a function of
 the planet, the world's address and seed and the day; the towns it implies near the players
 have markets in detail, stepped a market month (30 world days) at a time, with news and
 caravans between them; the rest are priced lazily from the history, so a town left and come
@@ -70,7 +71,7 @@ none), the events `sandbox.trade_refused` (why) and `sandbox.market_open`; what 
 
 `rules.odin` (its name and description), `genetics.odin` (the sheep's genes), `pack.odin`
 (its pack: `pack/data/entities/sheep.json`, the sheep's body, looks, model and spawn rule),
-the peoples' and markets' model (above), `records.odin` (what it replicates) and `text.odin`
+the markets' model (above), `records.odin` (what it replicates) and `text.odin`
 (what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
 and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and
 feeding, `entity_use`; their wild genes, `spawned`; their flight, `entity_hurt`), each sheep's

@@ -10,6 +10,7 @@ import "core:thread"
 
 import "common:base"
 import "common:game"
+import "common:planet"
 import "common:starmap"
 import "common:worldgen"
 import "games:sandbox"
@@ -29,7 +30,7 @@ import "server:core"
 MONTH_DAYS :: 30 // world days in a market month
 ECONOMY_RADIUS_KM :: 600.0 // a town this near a player is in detail
 ECONOMY_CATCH_UP :: 120 // months a resident market is stepped to catch up; more and it is entered again
-ECONOMY_PRESENT :: i64(6000 * sandbox.DAYS_PER_YEAR) // the history's day at world day 0
+ECONOMY_PRESENT :: i64(6000 * planet.DAYS_PER_YEAR) // the history's day at world day 0
 ECONOMY_FILE :: "economy.vxe" // the world's file (core.World_File): sandbox.economy.vxe
 
 @(private = "file")
@@ -79,7 +80,7 @@ saved_destroy :: proc(s: ^Saved_Economy) {
 }
 
 World_Economy :: struct {
-	cache:     sandbox.Settlement_Cache,
+	cache:     planet.Settlement_Cache,
 	key:       u64, // the placement the economy was built for
 	built:     bool,
 	economy:   sandbox.Economy,
@@ -107,7 +108,7 @@ World_Economy :: struct {
 Economy_Job :: struct {
 	address, seed: u64,
 	day, decade:   i64,
-	interventions: []sandbox.Intervention, // (the job's own copy)
+	interventions: []planet.Intervention, // (the job's own copy)
 	allocator:     runtime.Allocator, // the world's: what frees the economy later
 	economy:       sandbox.Economy,
 	kernel:        sandbox.Kernel,
@@ -121,8 +122,8 @@ economy_job :: proc(data: rawptr) {
 	j := &we.next
 	context.allocator = we.alloc // (the cache's history and the economy: freed with it)
 	p := worldgen.planet_model()
-	list := sandbox.settlements_at(&we.cache, p, j.address, j.seed, j.day, j.interventions)
-	roads := sandbox.roads_at(&we.cache, p, j.address, j.seed, j.day, j.interventions)
+	list := planet.settlements_at(&we.cache, p, j.address, j.seed, j.day, j.interventions)
+	roads := planet.roads_at(&we.cache, p, j.address, j.seed, j.day, j.interventions)
 	j.economy = sandbox.economy_build(p, list, roads, j.allocator)
 	j.kernel = sandbox.kernel_measure(j.economy)
 	sync.atomic_store(&we.job_done, true)
@@ -165,7 +166,7 @@ economy_free :: proc(sw: ^Sandbox_World) {
 	economy_drop(we)
 	{
 		context.allocator = we.alloc if we.alloc != {} else context.allocator
-		sandbox.settlement_cache_destroy(&we.cache)
+		planet.settlement_cache_destroy(&we.cache)
 	}
 	saved_destroy(&we.pending)
 	delete(we.droughts)
@@ -226,18 +227,18 @@ economy_tick :: proc(s: ^core.Server) {
 // economy_interventions turns the world's log into what the history takes: a settlement
 // founded at a place.
 @(private = "file")
-economy_interventions :: proc(sw: ^Sandbox_World) -> []sandbox.Intervention {
-	out := make([dynamic]sandbox.Intervention, context.temp_allocator)
+economy_interventions :: proc(sw: ^Sandbox_World) -> []planet.Intervention {
+	out := make([dynamic]planet.Intervention, context.temp_allocator)
 	for iv in sw.interventions.list {
 		if iv.kind != .Founded_Settlement {continue}
 		lat, lon := worldgen.planet_lat_lon(iv.place.x, iv.place.z)
 		append(
 			&out,
-			sandbox.Intervention {
+			planet.Intervention {
 				day = ECONOMY_PRESENT + i64(iv.day),
 				lat = lat,
 				lon = lon,
-				kind = sandbox.INTERVENTION_SETTLEMENT,
+				kind = planet.INTERVENTION_SETTLEMENT,
 			},
 		)
 	}
@@ -253,7 +254,7 @@ economy_sync :: proc(s: ^core.Server, w: ^core.World, observers: [][2]f64) {
 	we := sw.economy
 	if we.job != nil && sync.atomic_load(&we.job_done) {economy_install(we)}
 	day := ECONOMY_PRESENT + i64(w.clock)
-	decade := day / (10 * sandbox.DAYS_PER_YEAR)
+	decade := day / (10 * planet.DAYS_PER_YEAR)
 	ivs := economy_interventions(sw)
 	if we.job == nil && (!we.built || decade != we.decade || len(ivs) != we.ivn) {
 		// The history changed (a new decade, an intervention) or there is none yet:

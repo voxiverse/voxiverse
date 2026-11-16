@@ -7,8 +7,8 @@ import "common:planet"
 
 // A world's worth of towns: land cells evenly spread over the whole planet, sized by the cell.
 @(private = "file")
-fixture_towns :: proc(p: planet.Planet, limit: int) -> [dynamic]Settlement {
-	list := make([dynamic]Settlement)
+fixture_towns :: proc(p: planet.Planet, limit: int) -> [dynamic]planet.Settlement {
+	list := make([dynamic]planet.Settlement)
 	w, h := p.land.width, p.land.height
 	land := 0
 	for k in 0 ..< w * h {if p.land.is_land[k] {land += 1}}
@@ -92,7 +92,7 @@ Rig :: struct {
 	e:       Economy,
 	k:       Kernel,
 	all:     []int,
-	list:    [dynamic]Settlement,
+	list:    [dynamic]planet.Settlement,
 	p:       planet.Planet,
 	r:       planet.Relief,
 	drought: Drought,

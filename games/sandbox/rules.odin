@@ -8,7 +8,7 @@ import "common:game"
 // engine's world does is the game.
 //
 // This is its shared package: what both of its sides use (its pack, the sheep's genetics,
-// the peoples' history and the markets' model, its records and its text). The server part
+// the markets' model on the peoples' history of common/planet, its records and its text). The server part
 // (games/sandbox/server) chooses the world (its configure), keeps the sheep and runs the
 // markets; the client part (games/sandbox/client) shows a town's market.
 

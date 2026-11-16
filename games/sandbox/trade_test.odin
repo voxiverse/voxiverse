@@ -5,8 +5,8 @@ import "core:testing"
 import "common:planet"
 
 @(private = "file")
-fixture :: proc(p: planet.Planet, limit: int) -> [dynamic]Settlement {
-	list := make([dynamic]Settlement)
+fixture :: proc(p: planet.Planet, limit: int) -> [dynamic]planet.Settlement {
+	list := make([dynamic]planet.Settlement)
 	w, h := p.land.width, p.land.height
 	land := 0
 	for k in 0 ..< w * h {if p.land.is_land[k] {land += 1}}
@@ -187,7 +187,7 @@ test_first_to_a_drought_profits_more :: proc(t: ^testing.T) {
 	testing.expectf(
 		t,
 		first > later,
-		"first %v per unit, after the news (%d months) %v",
+		"first %v per planet.unit, after the news (%d months) %v",
 		first,
 		delay,
 		later,

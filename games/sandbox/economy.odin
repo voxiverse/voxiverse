@@ -25,7 +25,7 @@ Good :: enum u8 {
 // People supplied per km² of full yield (grain: the farmers' density; the rest likewise
 // from what a km² of that land gives against a person's yearly need).
 SUPPLY_PER_KM2 :: [Good]f64 {
-	.Grain  = FARMER_DENSITY,
+	.Grain  = planet.FARMER_DENSITY,
 	.Timber = 20,
 	.Ore    = 3,
 	.Salt   = 30,
@@ -199,8 +199,8 @@ town_price :: proc(t: Town, g: Good, month_fraction: f64) -> f32 {
 // within reach makes it.
 economy_build :: proc(
 	p: planet.Planet,
-	settlements: []Settlement,
-	roads: []Road,
+	settlements: []planet.Settlement,
+	roads: []planet.Road,
 	allocator := context.allocator,
 ) -> Economy {
 	n := 0

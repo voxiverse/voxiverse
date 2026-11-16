@@ -78,9 +78,9 @@ test_production_follows_the_land :: proc(t: ^testing.T) {
 	}
 }
 
-town_at :: proc(p: planet.Planet, cell, era: int, size: f32) -> Settlement {
+town_at :: proc(p: planet.Planet, cell, era: int, size: f32) -> planet.Settlement {
 	w, h := p.land.width, p.land.height
-	return Settlement {
+	return planet.Settlement {
 		cell = cell,
 		lat = planet.climate_lat(h, cell / w),
 		lon = (f64(cell % w) + 0.5) * 360 / f64(w) - 180,
@@ -155,7 +155,7 @@ test_equilibrium_is_deterministic :: proc(t: ^testing.T) {
 	defer planet.relief_destroy(&r)
 	defer planet.planet_destroy(&p)
 
-	list := make([dynamic]Settlement)
+	list := make([dynamic]planet.Settlement)
 	defer delete(list)
 	for k := 0; k < p.land.width * p.land.height && len(list) < 200; k += 1 {
 		if p.land.is_land[k] && k % 7 == 0 {append(&list, town_at(p, k, 1 + k % 2, 2000))}
@@ -176,13 +176,13 @@ test_economy_600_towns_converge :: proc(t: ^testing.T) {
 	defer planet.planet_destroy(&p)
 
 	w, h := p.land.width, p.land.height
-	list := make([dynamic]Settlement)
+	list := make([dynamic]planet.Settlement)
 	defer delete(list)
 	for k := 0; k < w * h && len(list) < 600; k += 1 {
 		if !p.land.is_land[k] || k % 7 != 0 {continue}
 		append(
 			&list,
-			Settlement {
+			planet.Settlement {
 				cell = k,
 				lat = planet.climate_lat(h, k / w),
 				lon = (f64(k % w) + 0.5) * 360 / f64(w) - 180,
@@ -207,13 +207,13 @@ test_island_markets_step :: proc(t: ^testing.T) {
 	defer planet.planet_destroy(&p)
 
 	w, h := p.land.width, p.land.height
-	list := make([dynamic]Settlement)
+	list := make([dynamic]planet.Settlement)
 	defer delete(list)
 	for k := 0; k < w * h && len(list) < 600; k += 1 {
 		if !p.land.is_land[k] || k % 7 != 0 {continue}
 		append(
 			&list,
-			Settlement {
+			planet.Settlement {
 				cell = k,
 				lat = planet.climate_lat(h, k / w),
 				lon = (f64(k % w) + 0.5) * 360 / f64(w) - 180,
@@ -236,4 +236,12 @@ test_island_markets_step :: proc(t: ^testing.T) {
 
 	k := kernel_measure(e)
 	_ = k
+}
+
+// chronicle_planet: Earth's climate model (from the climate file: earth_climate).
+chronicle_planet :: proc() -> (p: planet.Planet, r: planet.Relief) {
+	rv: planet.Rivers
+	p, rv, r = planet.earth_climate()
+	planet.rivers_destroy(&rv)
+	return
 }
