@@ -361,15 +361,13 @@ explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id, by: May
 		entity_set_velocity(w, h, entity_velocity(w, h) + impulse)
 		entity_set_on_ground(w, h, false)
 		d := entity_pos(w, h) - center
-		health := entity_health_of(w, h)
-		health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
-		entity_set_health(w, h, health)
-		if health <= 0 {
-			entity_died(w, h)
-			continue
+		harm := Entity_Harm {
+			amount = 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1,
+			kind   = .Explosion,
 		}
+		if seat, set := by.?; set && int(seat) < len(s.clients) {harm.by = &s.clients[seat]}
 		scare(entity_brain(w, h), center)
-		entity_hurt_shown(w, id)
+		entity_harm(w, h, harm)
 	}
 }
 
@@ -468,9 +466,15 @@ scare :: proc(b: ^Brain, from: [3]f64) {
 }
 
 // entity_attack: a player hits an entity (the reach is checked by the
-// caller). Knocked back, hurt (or dead), and scared.
-entity_attack :: proc(w: ^World, h: game.Entity_Handle, from: [3]f64) -> (died: bool) {
-	entity_set_health(w, h, entity_health_of(w, h) - 1)
+// caller): knocked back, scared, and harmed (entity_harm). True: it died.
+entity_attack :: proc(
+	w: ^World,
+	h: game.Entity_Handle,
+	from: [3]f64,
+	harm: Entity_Harm,
+) -> (
+	died: bool,
+) {
 	away := entity_pos(w, h) - from
 	l := math.sqrt(away.x * away.x + away.z * away.z)
 	if l > 1e-6 {away /= l} else {away = {1, 0, 0}}
@@ -478,7 +482,47 @@ entity_attack :: proc(w: ^World, h: game.Entity_Handle, from: [3]f64) -> (died: 
 	entity_set_velocity(w, h, {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]})
 	entity_set_on_ground(w, h, false)
 	scare(entity_brain(w, h), from)
-	return entity_health_of(w, h) <= 0
+	return entity_harm(w, h, harm)
+}
+
+// Entity_Harm: what hurt an entity, as a game's entity_hurt and entity_died hooks are
+// told it.
+Entity_Harm :: struct {
+	amount: int, // the health it took
+	kind:   game.Source_Kind, // a hit, an explosion, a weapon, the game...
+	by:     ^Client, // the player who did it (nil: nobody, or the game itself)
+	weapon: string, // what a shot came from: its item's name ("" for any other)
+}
+
+// Dead_Entity: an entity that died, as the entity_died hook is told it (it is gone
+// from the world by then: its handle finds nothing).
+Dead_Entity :: struct {
+	id:       u32,
+	kind:     game.Kind_Id,
+	position: [3]f64,
+}
+
+// entity_harm takes harm.amount from an entity's health. Alive, everyone who knows it
+// sees it flinch and the game's entity_hurt hook is told; at nought it dies (everyone
+// who knew it sees it die) and the game's entity_died hook is told. True: it died. The
+// one way an entity is hurt: a player's hit or shot, a blast, a game's tower.
+entity_harm :: proc(w: ^World, h: game.Entity_Handle, harm: Entity_Harm) -> (died: bool) {
+	if !entity_listed(w, h) || harm.amount <= 0 {return false}
+	hp := entity_health(w, h)
+	if hp == nil {return false}
+	s := w.server
+	g := &s.config.game
+	hp.health -= i32(harm.amount)
+	if hp.health > 0 {
+		entity_hurt_shown(w, entity_id(w, h))
+		if g.entity_hurt != nil {g.entity_hurt(s, w, h, harm)}
+		return false
+	}
+	hp.health = 0
+	dead := Dead_Entity{entity_id(w, h), entity_kind(w, h), entity_pos(w, h)}
+	entity_died(w, h)
+	if g.entity_died != nil {g.entity_died(s, w, dead, harm)}
+	return true
 }
 
 // The door: what the store says of an entity (nil when it has no such part).

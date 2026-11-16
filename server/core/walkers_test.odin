@@ -29,17 +29,26 @@ Rig :: struct {
 }
 
 @(private = "file")
-walkers_start :: proc(t: ^testing.T, rig: ^Rig) -> (kind: game.Kind_Id, ok: bool) {
+walkers_start :: proc(
+	t: ^testing.T,
+	rig: ^Rig,
+	hooks := Game{},
+) -> (
+	kind: game.Kind_Id,
+	ok: bool,
+) {
 	h := &rig.h
 	rig.files = {
 		{"pack.json", transmute([]u8)string(WALKERS_PACK)},
 		{"data/entities/creep.json", transmute([]u8)string(WALKERS_KINDS)},
 	}
 	config := harness_world()
-	config.game = {
-		info = {id = "walkers", name = "Walkers"},
-		pack = {"walkers", rig.files[:]},
+	config.game = hooks
+	config.game.info = {
+		id   = "walkers",
+		name = "Walkers",
 	}
+	config.game.pack = {"walkers", rig.files[:]}
 	if !testing.expect(t, harness_start(h, config)) {return}
 	w := h.srv.home
 	world_keep(w, {GROUND.lo - {0, 16, 0}, GROUND.hi})
@@ -260,4 +269,74 @@ test_budget_walkers_walk :: proc(t: ^testing.T) {
 		r.moved,
 	)
 	testing.expectf(t, r.builds >= 5, "the route was searched %d times", r.builds)
+}
+
+// What the entity hooks were told (the test game's state).
+@(private = "file")
+Told :: struct {
+	hurt, died: int,
+	harm:       Entity_Harm, // the last
+	dead:       Dead_Entity,
+	health:     int, // the hurt one's, when told
+}
+
+// An entity's harm goes through entity_harm and the game hears of it: hurt and alive
+// (its health already less), then dead (gone, with what and where it was), with what
+// did it and who. A blast's harm is the blast's; a game's own is the game's.
+@(test)
+test_entity_harm_tells_the_game :: proc(t: ^testing.T) {
+	rig := new(Rig)
+	defer free(rig)
+	h := &rig.h
+	hooks := Game {
+		server_state = Told,
+		entity_hurt = proc(s: ^Server, w: ^World, e: game.Entity_Handle, harm: Entity_Harm) {
+			told := game_state(s, Told)
+			told.hurt += 1
+			told.harm, told.health = harm, entity_health_of(w, e)
+		},
+		entity_died = proc(s: ^Server, w: ^World, dead: Dead_Entity, harm: Entity_Harm) {
+			told := game_state(s, Told)
+			told.died += 1
+			told.harm, told.dead = harm, dead
+		},
+	}
+	kind, ok := walkers_start(t, rig, hooks)
+	if !ok {
+		harness_stop(h)
+		return
+	}
+	defer harness_stop(h)
+	s := &h.srv
+	w := s.home
+	told := game_state(s, Told)
+	e := entity_spawn(w, kind, {3.5, 0, 0.5}, false)
+	id := entity_id(w, e)
+
+	// The game's tower: hurt, alive.
+	testing.expect(t, !entity_harm(w, e, {amount = 2, kind = .Game}))
+	testing.expect_value(t, told.hurt, 1)
+	testing.expect_value(t, told.health, 3)
+	testing.expect_value(t, told.harm.kind, game.Source_Kind.Game)
+	testing.expect(t, told.harm.by == nil)
+
+	// A player's blow (the seat stands for a player here) kills it at nought.
+	hitter := &s.clients[1]
+	testing.expect(t, !entity_attack(w, e, {0, 0, 0.5}, {amount = 1, kind = .Hit, by = hitter}))
+	testing.expect(t, entity_attack(w, e, {0, 0, 0.5}, {amount = 5, kind = .Hit, by = hitter}))
+	testing.expect_value(t, told.died, 1)
+	testing.expect_value(t, told.dead.id, id)
+	testing.expect_value(t, told.dead.kind, kind)
+	testing.expect(t, told.harm.by == hitter && told.harm.kind == .Hit)
+	testing.expect(t, !entity_listed(w, e), "a dead creep is still there")
+	testing.expect(t, !entity_harm(w, e, {amount = 1, kind = .Game}), "harmed a dead creep")
+	testing.expect_value(t, told.died, 1)
+
+	// A blast nobody set off: the explosion's, by nobody.
+	other := entity_spawn(w, kind, {-3.5, 0, 0.5}, false)
+	harness_step(h) // (the spatial service has it)
+	explode(w, {-3.5, 0.5, 0.5}, 1, 0)
+	testing.expect_value(t, told.hurt, 3)
+	testing.expect(t, told.harm.kind == .Explosion && told.harm.by == nil)
+	testing.expect_value(t, entity_health_of(w, other), 2)
 }

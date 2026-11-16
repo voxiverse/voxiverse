@@ -204,17 +204,16 @@ weapon_shoot :: proc(
 					.Entity_Hit,
 					game.kind_name(game.kind_info(s.registry, entity_kind(w, ent))),
 				)
-				if entity_attack(w, ent, c.player.position) {
+				kind_name := game.kind_name(game.kind_info(s.registry, entity_kind(w, ent)))
+				harm := Entity_Harm {
+					amount = 1,
+					kind   = .Weapon,
+					by     = c,
+					weapon = name,
+				}
+				if entity_attack(w, ent, c.player.position, harm) {
 					killed = true
-					record(
-						s,
-						c,
-						.Entity_Killed,
-						game.kind_name(game.kind_info(s.registry, entity_kind(w, ent))),
-					)
-					entity_died(w, ent)
-				} else {
-					entity_hurt_shown(w, res.creature)
+					record(s, c, .Entity_Killed, kind_name)
 				}
 			}
 		case .Block, .None:

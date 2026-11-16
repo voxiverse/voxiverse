@@ -49,6 +49,8 @@ client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 | `hurt(s, c, harm)` | A player was hurt and lives (its health already less): `harm` is a `core.Harm`, the amount, the kind of source (`game.Source_Kind`: a fall, an explosion, a weapon...), `by` the player who did it (the one hurt, for its own rocket; nil for nobody) and the weapon's name for a shot | the server's |
 | `died(s, c, harm)` | A player died of `harm`, after the engine's death: the line told, `kills` and `deaths` counted, its things dropped (by its mode and the world's rules) | the server's |
 | `respawned(s, c)` | A dead player stands again, after the engine stood it at the world's spawn with full health and its mode's kit: the game may move it (`teleport`) and change what it holds. Also for a dead player who leaves, after `left` | the server's |
+| `entity_hurt(s, w, h, harm)` | An entity of world `w` was hurt and lives (its health already less): `harm` is a `core.Entity_Harm`, the amount, the kind of source (a blast, a player's shot or blow, `.Game` for the game's own `entity_harm`), `by` the player who did it (nil: nobody, or the game) and the weapon's name for a shot | the server's |
+| `entity_died(s, w, dead, harm)` | An entity of `w` died of `harm`: everyone who knew it was shown it die, and it is gone (`dead`, a `core.Dead_Entity`, says its id, kind and where it was) | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
 | `save(s, out)` | A save captures this tick (an autosave, `/save`, the last one): the game writes what it keeps to the `strings.Builder` as text, saved with the universe as `game.cfg` in the same transaction ([saves.md](saves.md)) | the server's (the last save: the caller's) |
 | `load(s, text) -> bool` | Right after `start`, in a universe that has a `game.cfg`: its text; false: the game does not understand it, and the universe is refused (`stop` is called, `start` fails) | the caller's |
@@ -69,7 +71,7 @@ makes it for games, documented where it is declared.
 
 | Name | What it is for |
 |---|---|
-| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result`, `Harm` | The game itself, the config `configure` changes, the session, a player, a world, what hurt a player (its hooks') |
+| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result`, `Harm`, `Entity_Harm`, `Dead_Entity` | The game itself, the config `configure` changes, the session, a player, a world, what hurt a player or an entity, an entity that died (its hooks') |
 | `game_state(s, T)`, `game_client_state(s, c, T)` | The game's state, for the session and for a seat |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
@@ -88,6 +90,7 @@ makes it for games, documented where it is declared.
 | `entity_spawn(w, kind, position, natural)`, `entity_gone(w, h)` | An entity of a kind (the game's pack's, `<game>:<name>`) at a place, its handle (0: the world is full); gone again, with no death to show |
 | `entity_find(w, id)`, `entity_listed(w, h)`, `entities_of(w, kind, center, radius)`, `entities_each(w)`, `entities_next(&it)`, `Entity_Iter` | An entity by its id; whether a handle is one still there; the entities of a kind near a point, nearest first; every entity, lowest id first |
 | `entity_id(w, h)`, `entity_kind(w, h)`, `entity_pos(w, h)`, `entity_health_of(w, h)`, `entity_max_health(w, h)`, `entity_set_max_health(w, h, health)` | What an entity is, where it stands, its health; its most health set (and its health with it) |
+| `entity_harm(w, h, harm)` | Hurt an entity (a tower's shot: `kind = .Game`, `by` the player it is credited to), told to the entity hooks as any harm is; true: it died |
 | `entity_go(w, h, target)`, `entity_follow(w, h, route)`, `entity_stand(w, h)`, `entity_arrived(w, h)`, `entity_set_speed(w, h, speed)` | Steer a walker whose kind is `"brain": "steered"`: to a point by its own path, along a route, or still; whether it is there ([walkers](#walkers)) |
 | `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
 

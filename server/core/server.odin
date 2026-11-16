@@ -104,6 +104,8 @@ Game :: struct {
 	hurt:         proc(s: ^Server, c: ^Client, harm: Harm), // c was hurt and lives (its health already less)
 	died:         proc(s: ^Server, c: ^Client, harm: Harm), // c died of harm (already told, counted and its things dropped)
 	respawned:    proc(s: ^Server, c: ^Client), // c stands again: at the world's spawn, full health, the mode's kit (the game may move it, change what it holds)
+	entity_hurt:  proc(s: ^Server, w: ^World, h: game.Entity_Handle, harm: Entity_Harm), // an entity of w was hurt and lives (its health already less: entity_harm)
+	entity_died:  proc(s: ^Server, w: ^World, dead: Dead_Entity, harm: Entity_Harm), // an entity of w died of harm (gone already: dead says what and where it was)
 	save:         proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
 	load:         proc(s: ^Server, text: string) -> (ok: bool), // its game.cfg, after start, before the first tick (a universe that has one); false: start fails
 	pack:         game.Pack_Source, // its own pack (games/<game>/pack, named for the game; its shared package's): loaded only where it is played (game_packs)

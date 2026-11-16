@@ -259,12 +259,9 @@ attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 	if !info.hittable {return}
 	if !entity_reachable(c, ent) {return}
 	record(s, c, .Entity_Hit, game.kind_name(info))
-	if entity_attack(w, ent, c.player.position) {
+	if entity_attack(w, ent, c.player.position, {amount = 1, kind = .Hit, by = c}) {
 		record(s, c, .Entity_Killed, game.kind_name(info))
 		log.debugf("server entity died id=%d by=%s", a.entity, client_name(c))
-		entity_died(w, ent)
-	} else {
-		entity_hurt_shown(w, a.entity)
 	}
 }
 

@@ -495,7 +495,7 @@ test_store_copies_follow_the_list :: proc(t: ^testing.T) {
 		if b != 0 {entity_matches_store(t, w, b)}
 	}
 	if a, _ := entity_find(w, sheep_id); a != 0 {
-		entity_attack(w, a, {0, 40, 0})
+		entity_attack(w, a, {0, 40, 0}, {amount = 1, kind = .Hit})
 		entity_matches_store(t, w, a)
 	}
 }
@@ -542,7 +542,7 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 	testing.expect_value(t, entity_age_of(w, sheep), 5)
 	// hurt: health and knockback are in the store
 	before := entity_health_of(w, sheep)
-	entity_attack(w, sheep, {0, 40, 0})
+	entity_attack(w, sheep, {0, 40, 0}, {amount = 1, kind = .Hit})
 	testing.expect(t, entity_health_of(w, sheep) < before, "health did not drop")
 	testing.expect(t, !entity_on_ground(w, sheep))
 	testing.expect(t, entity_velocity(w, sheep) != {}, "no knockback")
@@ -619,7 +619,7 @@ test_brain_lives_in_the_store :: proc(t: ^testing.T) {
 	if !testing.expect(t, row != nil, "a sheep has no brain component") {return}
 	testing.expect_value(t, row.state, Brain_State.Idle)
 	testing.expect_value(t, row.timer, 0)
-	entity_attack(w, sheep, {0, 40, 0})
+	entity_attack(w, sheep, {0, 40, 0}, {amount = 1, kind = .Hit})
 	testing.expect_value(t, row.state, Brain_State.Flee)
 	testing.expect_value(t, row.hurt, HURT_TICKS)
 	testing.expect_value(t, entity_brain(w, sheep), row)
