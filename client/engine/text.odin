@@ -1,8 +1,8 @@
 package engine
 
 import "core:fmt"
-import "core:strings"
 
+import "common:base"
 import "common:worldgen"
 
 // The UI's strings: every string the player reads goes
@@ -357,30 +357,9 @@ TEXT_EN := [Text]string {
 	.Hud_Ammo_Carried                       = "{0} / {1}",
 }
 
-// tr: the string for key with {n} replaced by args[n] (temp allocator).
+// tr: the string for key with {n} replaced by args[n] (temp allocator; base.text_format).
 tr :: proc(key: Text, args: ..any) -> string {
-	text := TEXT_EN[key]
-	if len(args) == 0 {return text}
-	b := strings.builder_make(context.temp_allocator)
-	for i := 0; i < len(text); i += 1 {
-		if text[i] == '{' {
-			if end := strings.index_byte(text[i:], '}'); end > 1 {
-				n := 0
-				digits := true
-				for c in text[i + 1:i + end] {
-					if c < '0' || c > '9' {digits = false; break}
-					n = n * 10 + int(c - '0')
-				}
-				if digits && n < len(args) {
-					fmt.sbprint(&b, args[n])
-					i += end
-					continue
-				}
-			}
-		}
-		strings.write_byte(&b, text[i])
-	}
-	return strings.to_string(b)
+	return base.text_format(TEXT_EN[key], ..args)
 }
 
 // life_line: what lives on a world, in one line: "Plants and animals; three

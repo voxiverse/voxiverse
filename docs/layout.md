@@ -60,7 +60,7 @@ Cap: `70` files per package.
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
 read from the line above. The largest packages are `server/core` (70 files),
-`common/game` (70), `client/engine` (69) and `common/base` (33); every other package has 31
+`common/game` (70), `client/engine` (69) and `common/base` (34); every other package has 31
 or fewer (the `layout` lint holds these counts to the tree, so they are never stale). The
 cap leaves the largest no room beyond it, so a package that keeps growing splits into
 feature packages rather than get a bigger number. There is no per-folder allowance (that would
