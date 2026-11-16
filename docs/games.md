@@ -79,6 +79,7 @@ makes it for games, documented where it is declared.
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
 | `client_name(c)`, `allowed(s, c, node)` | A player's name; whether it holds a permission |
 | `player_id(s, c)` | A player's id (its seat): the key of a record of the game's about it (`game.key_player`), the same on every side |
+| `player_ref(s, c)`, `player_of(s, ref)`, `Player_Ref` | A player held past the moment (who built a tower, whose kill a shot is): its seat and the seat's generation; `player_of` gives the player still playing in it, or nil once it left, whoever sits there now |
 | `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |
 | `game_mode(s, c, id)` | Put a player in a mode by id (a pack's too: `flood:out`); journalled as the game's |
 | `kit_give(s, c)` | Give a player what its mode's kit has that it lacks, weapons full |
