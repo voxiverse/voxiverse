@@ -278,7 +278,8 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 		{f32(dir.x), f32(dir.y), f32(dir.z)} *
 		game.kind_info(s.registry, entity_kind(c.world, h)).projectile.speed,
 	)
-	entity_owner(c.world, h).client = i32(player_id(s, c))
+	owner := entity_owner(c.world, h)
+	owner.client, owner.generation = i32(player_id(s, c)), c.generation
 	entity_owner(c.world, h).action = u32(action_begin(c.world, actor_of(s, c), .Explosion))
 	record(s, c, .Rocket_Fired)
 	return true
@@ -1787,7 +1788,9 @@ system_rockets :: proc(w: ^World, blasts: ^[dynamic]Blast) {
 		if at, hit := rocket_step(w, h); hit {
 			owner := entity_owner(w, h)
 			blast := Blast{{at, f64(info.projectile.explode)}, Action_Id(owner.action), nil}
-			if owner.client >= 0 {blast.by = u16(owner.client)}
+			// (the shooter still in its seat: one who left is nobody, whoever sits there now)
+			shooter := Player_Ref{u16(max(owner.client, 0)), owner.generation}
+			if owner.client >= 0 && player_of(w.server, shooter) != nil {blast.by = shooter.seat}
 			append(blasts, blast)
 			entity_died(w, h) // its explosion is what players see
 		}

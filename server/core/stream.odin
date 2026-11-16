@@ -122,6 +122,7 @@ Client :: struct {
 	selection:       [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 	command:         string, // the text of the command admin is running ("" otherwise; journal actions record it)
 	game_state:      []byte, // the game's state for this seat (game_client_state; kept, zeroed, by client_reset)
+	generation:      u32, // counts the players who took the seat (join; kept by client_reset): a Player_Ref's
 }
 
 // What may be sent to a client per tick: bytes of chunks (at 30 Hz about
@@ -163,7 +164,7 @@ client_reset :: proc(c: ^Client) {
 	delete(c.address)
 	counters_free(&c.stats)
 	game.sender_destroy(&c.tx)
-	has, columns, game_state := c.has, c.columns, c.game_state
+	has, columns, game_state, generation := c.has, c.columns, c.game_state, c.generation
 	clear(&has)
 	clear(&columns)
 	slice.zero(game_state)
@@ -171,6 +172,7 @@ client_reset :: proc(c: ^Client) {
 		has        = has,
 		columns    = columns,
 		game_state = game_state,
+		generation = generation,
 	}
 }
 

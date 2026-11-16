@@ -1132,6 +1132,29 @@ player_id :: proc(s: ^Server, c: ^Client) -> u16 {
 	return u16(mem.ptr_sub(c, &s.clients[0]))
 }
 
+// Player_Ref: a player held past the moment (a rocket's shooter): its seat and the
+// seat's generation, which counts up each time a player takes the seat. Seats are
+// reused, generations are not, so a ref to one who left names nobody, never whoever
+// sits there now (ground rule 2: a generational handle).
+Player_Ref :: struct {
+	seat:       u16,
+	generation: u32,
+}
+
+// player_ref: c as a Player_Ref.
+player_ref :: proc(s: ^Server, c: ^Client) -> Player_Ref {
+	return {player_id(s, c), c.generation}
+}
+
+// player_of: the playing player ref names; nil when it left (its seat empty or
+// another's) or is not playing.
+player_of :: proc(s: ^Server, ref: Player_Ref) -> ^Client {
+	if int(ref.seat) >= len(s.clients) {return nil}
+	c := &s.clients[ref.seat]
+	if c.generation != ref.generation || c.state != .Playing {return nil}
+	return c
+}
+
 // update_info refreshes what LAN discovery answers.
 @(private = "file")
 update_info :: proc(s: ^Server) {

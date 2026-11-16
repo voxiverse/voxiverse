@@ -401,3 +401,68 @@ test_respawn_rules :: proc(t: ^testing.T) {
 	testing.expect(t, !c.dead, "did not come back by itself")
 	testing.expect_value(t, c.health, c.max_health)
 }
+
+// A rocket's blast is its shooter's only while the shooter keeps its seat: bob fires
+// and leaves, carol takes his seat before the rocket comes down, and the player it
+// kills is nobody's kill, not carol's (seats are reused; their generations are not).
+@(test)
+test_a_rocket_outlived_by_its_shooters_seat_is_nobodys :: proc(t: ^testing.T) {
+	bob, carol := new(Harness_Player), new(Harness_Player)
+	defer free(bob)
+	defer free(carol)
+	defer harness_player_free(bob) // (after session_stop: a deferred call runs last-first)
+	defer harness_player_free(carol)
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.listen = true
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	s := &sess.h.srv
+	playing :: proc(data: rawptr) -> bool {
+		p := (^Harness_Player)(data)
+		c := harness_player_client(p)
+		return c != nil && c.state == .Playing
+	}
+	harness_player_join(&sess.h, bob, "bob")
+	_, ok := harness_step_until(&sess.h, playing, bob, 600)
+	if !testing.expect(t, ok && sess.mirror.welcomed, "bob never joined") {return}
+	host, shooter := &s.clients[0], harness_player_client(bob)
+	seat := player_id(s, shooter)
+
+	// The host stands in the open with a breath of health; bob fires a rocket that
+	// the test holds in the air three blocks from it.
+	survival, _ := game.mode_find(s.registry, "survival")
+	set_game_mode(s, host, survival, {"test", ""})
+	s.home.rules.pvp = true
+	if !testing.expect(t, fire(s, shooter, 0, 0)) {return}
+	game.store_apply(&s.home.entity_world.store)
+	it := entities_each(s.home)
+	rocket, _, found := entities_next(&it)
+	if !testing.expect(t, found) {return}
+	held := host.player.position + {3, 1.5, 0}
+	hold :: proc(w: ^World, rocket: game.Entity_Handle, at: [3]f64) {
+		entity_set_pos(w, rocket, at)
+		entity_set_velocity(w, rocket, {0, 0.2, 0}) // (just moving: a rocket at rest goes off)
+	}
+	hold(s.home, rocket, held)
+
+	// Bob leaves; carol comes and sits in his seat while the rocket waits.
+	harness_player_leave(bob)
+	harness_player_join(&sess.h, carol, "carol")
+	for _ in 0 ..< 600 {
+		harness_step(&sess.h)
+		hold(s.home, rocket, held)
+		if playing(carol) {break}
+	}
+	if !testing.expect(t, playing(carol), "carol never joined") {return}
+	newcomer := harness_player_client(carol)
+	if !testing.expect_value(t, player_id(s, newcomer), seat) {return}
+
+	// Let go at the host, it kills: the kill is no one's.
+	host.health, host.protected_until = 1, 0
+	entity_set_velocity(s.home, rocket, {-32, -1, 0})
+	harness_step(&sess.h, 3)
+	testing.expect(t, host.dead, "the rocket did not kill")
+	testing.expect_value(t, newcomer.stats["kills"] or_else 0, u64(0))
+}

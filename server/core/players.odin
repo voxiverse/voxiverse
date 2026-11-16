@@ -17,6 +17,7 @@ import "common:netcode"
 @(private)
 join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
+	c.generation += 1 // (a Player_Ref to the seat's last player names nobody now)
 	game.sender_init(&c.tx, &s.schema)
 	c.name_len = copy(c.name_buf[:], name)
 	saved, has_saved := player_record(s, name)
