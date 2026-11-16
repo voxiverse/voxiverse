@@ -770,18 +770,36 @@ HUD, as the client does.
 lavapipe under `xvfb-run` at 1280x720 ([debugging.md](debugging.md)): the script is what
 `--exec` takes, its lines separated by `;` (with `--game` the run goes straight into a
 scratch world of that game, as without a script, and the script runs there; without it the
-title shows, where `singleplayer` starts a world), with `wait_world` (the world is there),
-`wait <frames>`, `sleep <seconds>`, any console command (`/tp x y z yaw pitch`, `/<game>
-...` for the game's own, `hold <item>`, `key <key> down|up`, `pointer <x> <y>`, `set
-<variable> <value>`, `universe --earth <name>` for a universe on Earth, kept with the run's
-state, not the player's saves) and `screenshot <file>`, which writes
-`build/screenshots/<file>.png`; it ends with `quit`. A game's screenshot, with the round where it should be:
+title shows, where `singleplayer` starts a world), with `wait_world` (the world is there and
+meshed), `ticks <n>` (the server runs n ticks, as fast as it can: the game played on to where
+the picture is), `wait <frames>`, `sleep <seconds>` (the clock's time, for a fade; play is
+`ticks`), any console command (`camera at x y z yaw pitch` for the camera, `/tp x y z yaw
+pitch` for the player, `/<game> ...` for the game's own, `hold <item>`, `key <key>
+down|up`, `pointer <x> <y>`, `set <variable> <value>`, `universe --earth <name>` for a
+universe on Earth, kept with the run's state, not the player's saves) and `screenshot
+<file>`, which writes `build/screenshots/<file>.png`; it ends with `quit`.
+
+Time a script by ticks, not seconds: at `game.TICK_RATE` (20) a second of play is 20 ticks,
+and `ticks` waits for exactly those, however slow lavapipe draws, so a run takes what its
+ticks cost to simulate rather than a guess of the clock. Put the camera where the picture is
+with `camera at` (a development build's, as a shot is): it stands there whatever the
+game's camera (top-down, free) and whatever the player may do (one who cannot fly needs no
+pillar), and the player stays where it is. The world drawn is the session's, the chunks
+within the view radius (12 chunks in a shot) of the player: for a place farther off, `/tp`
+the player nearer first. The pointer is the window's middle until `pointer` moves it, so a
+top-down or free camera neither aims at a corner nor pans at an edge. A game's screenshot,
+with the game where it should be:
 
 ```sh
-./build.sh shot flood_water --game flood -- "wait_world; /flood rule baseline; sleep 20; screenshot flood_water; quit"
-./build.sh shot horde_shop --game horde -- "wait_world; sleep 4; /horde restart; sleep 2; /horde purse 60; /tp 15 1 18.5 -90 -12; key z down; wait 2; key z up; sleep 0.8; screenshot horde_shop; quit"
+# Foundry's demo line, half a minute after it is built, from above and south of it.
+./build.sh shot foundry_line --game foundry -- "wait_world; /foundry demo; ticks 600; camera at 56.5 5 50 0 -30; wait_world; screenshot foundry_line; quit"
+./build.sh shot horde_shop --game horde -- "wait_world; ticks 80; /horde restart; ticks 40; /horde purse 60; /tp 15 1 18.5 -90 -12; key z down; wait 2; key z up; sleep 0.8; screenshot horde_shop; quit"
 ./build.sh shot launcher -- "wait 60; screenshot launcher; quit"
 ```
+
+The first takes about 10 seconds when the client is already built (`fresh` in its output:
+nothing it is built from changed since), most of it the client starting on lavapipe; the
+`wait_world` after `ticks` lets the chunks the ticks changed mesh before the picture.
 
 A UI button is clicked as the mouse would: `pointer <x> <y>` over it, then `key mouse_left
 down; wait 2; key mouse_left up` (a mouse key is the mouse's own button where the pointer is:

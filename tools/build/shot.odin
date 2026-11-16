@@ -11,10 +11,13 @@ import "common:limited"
 // games.md, "Screenshots"): `build shot <name> [--game <id>] -- <script>` plays the game
 // on lavapipe under xvfb-run at 1280x720, never a window on anyone's desktop, running
 // the script as `--exec` does (console commands, `;` between them, with the script's own
-// wait_world, wait_joined, wait <frames> and sleep <seconds>: client/console/script.odin).
-// The script's `screenshot <file>` writes build/screenshots/<file>.png; it ends with
-// `quit`. The run's log, settings, state and saves (a universe the script makes) are
-// in build/shots/<name>/ (a fresh one each run), and it is stopped after SHOT_LIMIT.
+// ticks <n>, wait_world, wait_joined, wait <frames> and sleep <seconds>:
+// client/console/script.odin). The script's `screenshot <file>` writes
+// build/screenshots/<file>.png; it ends with `quit`. The run's log, settings, state and
+// saves (a universe the script makes) are in build/shots/<name>/ (a fresh one each run),
+// and it is stopped after SHOT_LIMIT. What it needs is all it waits for: the client
+// alone, built only when something it is built from changed (fresh.odin), and no sound
+// card (its opening under xvfb took seconds).
 
 SHOT_DIR :: "build/shots"
 SHOT_LIMIT :: 10 * time.Minute
@@ -55,7 +58,7 @@ shot :: proc(args: []string) -> bool {
 	}
 	os.set_env("VK_DRIVER_FILES", icd)
 	os.set_env("VK_ICD_FILENAMES", icd)
-	exe := build_game({}) or_return
+	exe := build_game({}, server = false) or_return
 	root, _ := os.get_working_directory(context.allocator)
 	state := path_join({root, SHOT_DIR, name})
 	os.remove_all(state)
@@ -75,6 +78,7 @@ shot :: proc(args: []string) -> bool {
 		strings.concatenate({"VX_SAVES=", state, "/saves"}),
 		exe,
 	)
+	append(&cmd, "--null-audio")
 	if game_id != "" {append(&cmd, "--game", game_id)}
 	append(&cmd, "--exec", script)
 	fmt.printfln("shot   %s on lavapipe (its state: %s)", name, state)

@@ -685,9 +685,17 @@ build_game :: proc(
 	state := State {
 		ok = true,
 	}
+	// One built from the same sources, command and compiler is not built again (fresh.odin).
+	compiler, _ := capture({"odin", "version"})
+	began := time.now()
 	run_jobs := make([dynamic]limited.Job)
 	for i in 0 ..< target_count {
 		target := &targets[i]
+		if build_fresh(target.out, build_stamp_text(compiler, target.cmd), FRESH_ROOTS) {
+			fmt.printfln("fresh  %s (nothing it is built from changed)", target.out)
+			continue
+		}
+		os.remove(strings.concatenate({target.out, ".stamp"}))
 		fmt.printfln("build  %s", target.pkg)
 		append(&state.targets, target)
 		append(
@@ -721,6 +729,9 @@ build_game :: proc(
 		parallel(run_jobs[:], min(len(run_jobs), 2), done, &state)
 	}
 	if !state.ok {return "", false}
+	for target in state.targets {
+		build_stamp_write(target.out, build_stamp_text(compiler, target.cmd), began)
+	}
 	built_paths: [dynamic]string
 	if client {append(&built_paths, exe)}
 	if server {append(&built_paths, server_exe)}
