@@ -555,8 +555,9 @@ ends with `quit`. A game's screenshot, with the round where it should be:
 ./build.sh shot launcher -- "wait 60; screenshot launcher; quit"
 ```
 
-A UI button is reached by keys (`key down down; wait 2; key down up`, then `key enter`):
-`pointer` moves the pointer, but `key mouse_left` is the world's attack, not a click. Look at
+A UI button is clicked as the mouse would: `pointer <x> <y>` over it, then `key mouse_left
+down; wait 2; key mouse_left up` (a mouse key is the mouse's own button where the pointer is:
+in the world, the attack). Look at
 each picture before saying what it shows.
 
 ## The rules

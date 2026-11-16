@@ -827,14 +827,17 @@ report_text :: proc(app: ^engine.App, note: string) -> string {
 key_inject :: proc(app: ^engine.App, args: []string) -> (message: string, ok: bool) {
 	for k in platform.Key {
 		if !strings.equal_fold(fmt.tprint(k), args[0]) {continue}
-		switch args[1] {
-		case "down":
-			append(&app.injected, platform.Key_Event{key = k, symbol = k, pressed = true})
-		case "up":
-			append(&app.injected, platform.Key_Event{key = k, symbol = k, pressed = false})
-		case:
-			return "key: say down or up", false
+		if args[1] != "down" && args[1] != "up" {return "key: say down or up", false}
+		pressed := args[1] == "down"
+		// A mouse button arrives as the mouse sends it, where the pointer is: a click of
+		// the UI under it as well as the world's attack.
+		for key, button in platform.MOUSE_KEYS {
+			if key != k {continue}
+			p := app.input.mouse
+			append(&app.injected, platform.Mouse_Button_Event{button, pressed, p.x, p.y})
+			return "", true
 		}
+		append(&app.injected, platform.Key_Event{key = k, symbol = k, pressed = pressed})
 		return "", true
 	}
 	return "key: no such key (the names are platform.Key's: a, f3, space, left_shift...)", false

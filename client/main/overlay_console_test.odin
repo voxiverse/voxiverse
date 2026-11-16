@@ -102,6 +102,31 @@ test_console_key_holds_a_key :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.injected), 2)
 }
 
+// `key mouse_left down|up` is the mouse's own button, pressed where the pointer is, so a
+// script clicks a UI button under the pointer (a key event of that name reached only the
+// world's attack): the UI hears the press and the release at the pointer's place.
+@(test)
+test_console_key_clicks_with_the_mouse :: proc(t: ^testing.T) {
+	app := new(engine.App)
+	defer free(app)
+	defer delete(app.injected)
+	defer engine.input_destroy(&app.input)
+	_, ok := console.pointer_inject(app, {"300", "200"})
+	testing.expect(t, ok)
+	engine.input_update(&app.input, app.injected[:])
+	clear(&app.injected)
+	_, ok = console.key_inject(app, {"mouse_left", "down"})
+	testing.expect(t, ok)
+	engine.input_update(&app.input, app.injected[:])
+	testing.expect(t, .Left in app.input.mouse_pressed, "the UI did not hear the press")
+	testing.expect(t, .Mouse_Left in app.input.held, "the world's attack is not held")
+	clear(&app.injected)
+	_, ok = console.key_inject(app, {"mouse_left", "up"})
+	engine.input_update(&app.input, app.injected[:])
+	testing.expect(t, .Left in app.input.mouse_released, "the UI did not hear the release")
+	testing.expect_value(t, app.input.mouse, [2]f32{300, 200})
+}
+
 // `pointer <x> <y>` (development builds) moves the pointer as the mouse would (a script
 // aims a top-down camera with it); a place that is no number says so and adds nothing.
 @(test)

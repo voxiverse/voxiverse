@@ -205,7 +205,7 @@ commands are:
 | `look <yaw> <pitch>`, `camera <first\|behind\|facing> [degrees]` | Places the camera for a picture (<kbd>F5</kbd> cycles the camera modes). |
 | `use`, `hold <item>` | For scripts: presses the right button once on the target (a chest opens, a sheep is sheared); selects the hotbar slot that holds an item. |
 | `pad <button> down\|up`, `pad <axis> <value>`, `pad connect <family>`, `pad disconnect` | Development builds: a synthetic gamepad (slot 0), connected by its first button or axis. A trigger is an axis, as a pad reports it: `pad right_trigger 0.7`, or `down` (pulled all the way) and `up`. |
-| `key <key> down\|up` | Development builds: a key held or let go as the keyboard would (`key p down` holds the player list open for a screenshot; the mouse's buttons are keys too: `key mouse_left down` holds the trigger). |
+| `key <key> down\|up` | Development builds: a key held or let go as the keyboard would (`key p down` holds the player list open for a screenshot); a mouse key is the mouse's own button where the pointer is (`key mouse_left down` holds the trigger in the world, or presses a UI button under the pointer). |
 | `pointer <x> <y>` | Development builds: the pointer moved to a place of the window, in pixels, as the mouse would (a script aims a top-down or free camera's pointer for a screenshot). |
 | `export <save> [file]`, `import <file> [name]` | Writes a save as one `.vxu` file / makes a new save from one. |
 | `report <note>` | Sends the developer a note with the version and the last console lines (needs Share play data on, in a saved universe). |
