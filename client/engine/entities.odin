@@ -399,10 +399,13 @@ dropped_item :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View, stack: 
 	}
 }
 
-// item_colour: an item's look in one colour: its block's, or a tool's grey.
+// item_colour: an item's look in one colour: its block's, its model's first colour, or a
+// tool's grey.
 item_colour :: proc(s: ^Session, item: game.Item) -> [4]u8 {
 	info, _ := game.item_info(s.reg, item)
 	if info.block != .Air {return block_colour(s, info.block)}
+	if m, has := info.model.?;
+	   has && int(m) < len(s.reg.models) {return s.reg.models[m].palette[0]}
 	return {60, 60, 64, 255}
 }
 
