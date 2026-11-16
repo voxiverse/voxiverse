@@ -28,6 +28,52 @@ Game :: struct {
 	commands:   []Command_Spec, // its console commands, there while a world plays it
 	camera:     proc(s: ^Session) -> Game_Camera, // the camera it wants, every frame (nil: the player's own, F5)
 	actions:    []string, // its own actions' names (at most game.MAX_GAME_ACTIONS): keys Game_1.. press them, its server part's action hook hears them
+	screen:     proc(s: ^Session, ctx: ^ui.Context, top: bool), // its screen, every frame while it is open (game_screen_open): a panel over the world drawn with the UI kit; top: it has the focus
+}
+
+// The game's screen: a panel of the game's own over the world (a town's market, a shop),
+// drawn by its screen hook with the UI kit while it is open. The game opens it
+// (game_screen_open, from a record, an event or its own action's answer) and closes it
+// (game_screen_close); the player closes it as any screen over the world: Escape, the pad's
+// Back, leaving the world. While open it takes the keyboard, the pointer and the pad's
+// navigation, as the engine's screens do (the overlay Game_Screen); the world runs on.
+
+// game_screen_open opens the game's screen (a game without a screen hook has none).
+game_screen_open :: proc(s: ^Session) {
+	if s.game.screen != nil {s.game_screen = true}
+}
+
+// game_screen_close closes the game's screen (closed: nothing to do).
+game_screen_close :: proc(s: ^Session) {
+	s.game_screen = false
+}
+
+// game_screen_shown: the game's screen is open.
+game_screen_shown :: proc(s: ^Session) -> bool {
+	return s.game_screen
+}
+
+// game_screen_sync (every frame): the overlay stack holds the game's screen while the
+// session playing has it open, and only then.
+game_screen_sync :: proc(app: ^App) {
+	s := app.session
+	if s != nil && s.state != .Playing {s.game_screen = false} 	// (the world left: closed)
+	want := s != nil && s.game_screen
+	open := overlay_is_open(&app.overlays, .Game_Screen)
+	if want && !open {
+		overlay_open(&app.overlays, .Game_Screen)
+	} else if !want && open {
+		overlay_close(&app.overlays, .Game_Screen)
+	}
+}
+
+// game_screen_draw draws the game's screen (the overlay's turn).
+game_screen_draw :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
+	s := app.session
+	if s == nil || s.game.screen == nil || !s.game_screen {return}
+	ui.push_id(ctx, "game_screen")
+	defer ui.pop_id(ctx)
+	s.game.screen(s, ctx, top)
 }
 
 // game_actions: the game's own actions pressed this frame go to its server part (a

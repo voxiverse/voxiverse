@@ -205,6 +205,7 @@ Session :: struct {
 	player_stats:     Stats_Data, // the counters the server last sent (menu_statistics.odin)
 	game:             Game, // the game the server plays (game.odin; zero: none)
 	game_state:       []byte, // its state (game_state), in the arena
+	game_screen:      bool, // the game's screen is open (game_screen_open; game.odin)
 	game_playing:     bool, // its started hook ran (so ended will)
 	config:           Session_Config,
 	net:              Net_Stats,

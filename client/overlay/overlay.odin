@@ -92,6 +92,8 @@ close_overlay :: proc(app: ^engine.App, which: engine.Overlay) {
 		return
 	case .Options:
 		if app.settings_dirty {engine.settings_save(app)}
+	case .Game_Screen:
+		if app.session != nil {engine.game_screen_close(app.session)}
 	}
 	engine.overlay_close(&app.overlays, which) // (Options: back to the game menu below)
 }
@@ -133,6 +135,8 @@ draw_overlays :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			devchat_ui(app, ctx, top)
 		case .Market:
 			screen.market_ui(app, ctx, top)
+		case .Game_Screen:
+			engine.game_screen_draw(app, ctx, top)
 		}
 	}
 	devchat_notice(app)

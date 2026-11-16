@@ -16,6 +16,7 @@ Overlay :: enum u8 {
 	Death, // dead: how, and the Respawn button (overlay_death.odin)
 	Devchat, // the conversation with the developers (overlay/devchat.odin)
 	Market, // the market of the town one stands in (screen/market.odin)
+	Game_Screen, // the game's own screen (game.odin: game_screen_open)
 }
 
 Overlay_Take :: enum u8 {
@@ -48,6 +49,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Death = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Devchat = {takes = {.Keyboard, .Mouse}},
 	.Market = {takes = {.Keyboard, .Mouse}, in_game = true},
+	.Game_Screen = {takes = {.Keyboard, .Mouse}, in_game = true},
 }
 
 Overlays :: struct {
