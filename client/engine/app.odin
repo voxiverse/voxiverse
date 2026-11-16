@@ -162,6 +162,7 @@ App :: struct {
 	item_icons:          Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:                Dial_View, // the dial overlay's (overlay_dial.odin)
 	quit:                bool,
+	quit_frames:         int, // frames drawn since quit, for screenshots asked before it (frame.odin)
 	frame_stats:         base.Frame_Stats,
 	triangle_stats:      base.Frame_Stats, // thousands drawn a frame, in a world
 	last_frame_ms:       f32,

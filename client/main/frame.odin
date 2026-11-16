@@ -116,6 +116,9 @@ app_init :: proc(app: ^engine.App) -> bool {
 	return engine.preview_init(app)
 }
 
+// QUIT_SCREENSHOT_FRAMES: how many frames a quit waits for its screenshots.
+QUIT_SCREENSHOT_FRAMES :: 8
+
 // app_destroy tears down in reverse and returns the Vulkan validation
 // findings count (read after the GPU is gone; see gpu.destroy).
 app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
@@ -220,7 +223,14 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		engine.actions_sync(app, app.last_frame_ms / 1000)
 		engine.crash_track(app)
 	}
-	if w.close_requested || app.quit {return false}
+	if w.close_requested {return false}
+	// A screenshot asked for just before quitting (a script's `screenshot x; quit`) is
+	// drawn and saved first: a few frames at most.
+	if app.quit {
+		if len(app.screenshot_names) == 0 ||
+		   app.quit_frames >= QUIT_SCREENSHOT_FRAMES {return false}
+		app.quit_frames += 1
+	}
 
 	{
 		base.profile_scope("shader watch and telemetry")
