@@ -5,6 +5,7 @@ import "core:path/filepath"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "games:delve"
 import "server:core"
 import "server:playtest"
@@ -238,7 +239,7 @@ test_experience_levels_the_delver :: proc(t: ^testing.T) {
 	testing.expect_value(t, seat(s, c).level, 3)
 	testing.expect_value(t, seat(s, c).xp, 5)
 	testing.expect_value(t, c.max_health, most + delve.level_health(3))
-	hero := playtest.host_record(rig, delve.Hero, game.key_player(0))
+	hero := playtest.host_record(rig, delve.Hero, protocol.key_player(0))
 	if testing.expect(t, hero != nil) {testing.expect_value(t, hero.level, 3)}
 }
 
@@ -396,7 +397,7 @@ test_two_delvers_share_it :: proc(t: ^testing.T) {
 	testing.expect_value(t, seat(s, c).xp, delve.FOES[.Biter].xp)
 	testing.expect_value(t, seat(s, g).xp, delve.FOES[.Biter].xp)
 	testing.expect_value(t, seat(s, c).kills, 1)
-	theirs := playtest.guest_record(rig, delve.Hero, game.key_player(0))
+	theirs := playtest.guest_record(rig, delve.Hero, protocol.key_player(0))
 	if testing.expect(t, theirs != nil, "the guest was not told the host's progress") {
 		testing.expect_value(t, theirs.kills, 1)
 	}

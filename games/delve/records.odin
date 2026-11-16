@@ -1,6 +1,7 @@
 package delve
 
 import "common:game"
+import "common:protocol"
 
 // What the game replicates besides the engine's kinds (docs/games.md): the dungeon (a
 // singleton), every delver's progress (keyed by player id, put to every player, so the
@@ -66,7 +67,7 @@ Descended :: struct {
 
 MAX_TAGS :: 256
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states = {
 		{name = "delve.delve", value = Delve},
 		{name = "delve.hero", value = Hero, key = .Player, max_records = game.MAX_PLAYERS},

@@ -7,6 +7,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "games:delve"
 import "server:core"
 import "server:play"
@@ -267,7 +268,7 @@ put_records :: proc(s: ^core.Server) {
 				potions = u16(core.item_count(&o, d.potion)),
 				coins   = u32(core.item_count(&o, d.coin)),
 			}
-			core.game_put(s, &c, &hero, game.key_player(core.player_id(s, &o)))
+			core.game_put(s, &c, &hero, protocol.key_player(core.player_id(s, &o)))
 		}
 		for &f in d.foes[:d.foe_count] {
 			if !core.entity_known(&c, f.id) {continue}
@@ -277,7 +278,7 @@ put_records :: proc(s: ^core.Server) {
 				level = u8(clamp(f.level, 0, 255)),
 				elite = f.elite,
 			}
-			core.game_put(s, &c, &tag, game.key_entity(f.id))
+			core.game_put(s, &c, &tag, protocol.key_entity(f.id))
 		}
 	}
 }

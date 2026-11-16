@@ -7,6 +7,7 @@ import "core:strings"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 import "games:delve"
 
 // Delve's client part (the game: games/delve): it shows the dungeon from above (a
@@ -100,7 +101,7 @@ started :: proc(s: ^engine.Session) {
 	v.potion, _ = game.registry_item(s.reg, delve.POTION)
 }
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if d, ok := engine.game_value(s, r, delve.Delve); ok && d != nil {v.dungeon = d^}
 	if h, ok := engine.game_value(s, r, delve.Hero); ok && int(r.key.a) < len(v.heroes) {
