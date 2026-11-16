@@ -3,6 +3,7 @@
 	// blow (the spitter's and the boss's spit too); whom they go for and when is the
 	// game's. Health and damage here are a first wave's: later waves scale them.
 	"shambler": {
+		"voice": "groan",
 		"box": [0.7, 1.8], "health": 10, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 2.7, "run_speed": 2.7, "jump": 1.2, "step": 0},
 		"brain": "steered",
@@ -20,6 +21,7 @@
 		]}
 	},
 	"skitter": {
+		"voice": "squeak",
 		"box": [0.5, 0.5], "health": 3, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 5.0, "run_speed": 5.0, "jump": 1.2, "step": 0},
 		"brain": "steered",
@@ -35,6 +37,7 @@
 		]}
 	},
 	"spitter": {
+		"voice": "croak",
 		"box": [0.7, 1.4], "health": 7, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 2.4, "run_speed": 2.4, "jump": 1.2, "step": 0},
 		"brain": "steered",
@@ -49,6 +52,7 @@
 		]}
 	},
 	"hulk": {
+		"voice": "growl",
 		"box": [1.2, 2.3], "health": 32, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 1.7, "run_speed": 1.7, "jump": 1.2, "step": 0},
 		"brain": "steered",
@@ -65,6 +69,7 @@
 		]}
 	},
 	"matriarch": {
+		"voice": "growl",
 		"box": [1.6, 2.8], "health": 120, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 2.1, "run_speed": 2.1, "jump": 1.2, "step": 0},
 		"brain": "steered",
@@ -84,6 +89,7 @@
 	},
 	// The spitters' and the matriarch's spit: it hurts what it hits by its spitter's damage.
 	"spit": {
+		"voice": "none",
 		"box": [0.3, 0.3], "physics": "projectile",
 		"projectile": {"speed": 12, "gravity": 0, "life": 2.5, "explode": 0},
 		"model": {"parts": [
