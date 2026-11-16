@@ -51,7 +51,7 @@ happiness (green: 70 and over; yellow: 40 and over; red: below; grey: empty).
 
 ```sh
 ./build.sh run -- --game hamlet
-./build.sh run -- --game hamlet --exec "singleplayer; wait_world; /open_lan"
+./build.sh run -- --game hamlet --exec "wait_world; /open_lan"
 ./build.sh serve -- --game hamlet --universe build/hamlet-universe
 ```
 
