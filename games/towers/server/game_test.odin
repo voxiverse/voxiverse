@@ -4,6 +4,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "games:towers"
 import "server:core"
 import "server:playtest"
@@ -38,7 +39,7 @@ place :: proc(rig: ^Rig, c: ^core.Client, at: game.Block_Pos, piece: Maybe(tower
 	c.player.position = {f64(at.x) + 0.5, 3, f64(at.z) + 0.5}
 	block := game.Block.Air
 	if p, given := piece.?; given {block = d.blocks[p]}
-	r := core.apply_edit(s, c, game.edit_plain(1, 0, at, block))
+	r := core.apply_edit(s, c, protocol.edit_plain(1, 0, at, block))
 	step(rig, 2) // (charged, or paid back, before the game's tick; a notice told)
 	return r.accepted
 }
@@ -291,7 +292,7 @@ test_a_second_builder_shares_the_run :: proc(t: ^testing.T) {
 	testing.expect_value(t, purse(s, host(rig)).kills, 0)
 	step(rig, 3)
 	for id in ([]u16{0, core.player_id(s, g)}) {
-		key := game.key_player(id)
+		key := protocol.key_player(id)
 		on_host := playtest.host_record(rig, towers.Builder, key)
 		on_guest := playtest.guest_record(rig, towers.Builder, key)
 		testing.expect(
@@ -300,7 +301,7 @@ test_a_second_builder_shares_the_run :: proc(t: ^testing.T) {
 			"the purses differ",
 		)
 	}
-	mine := playtest.guest_record(rig, towers.Builder, game.key_player(core.player_id(s, g)))
+	mine := playtest.guest_record(rig, towers.Builder, protocol.key_player(core.player_id(s, g)))
 	testing.expect(t, mine != nil && mine.kills == 1 && mine.name == "guest")
 	r1, r2 := playtest.host_record(rig, towers.Run), playtest.guest_record(rig, towers.Run)
 	testing.expect(t, r1 != nil && r2 != nil && r1^ == r2^, "the run differs")

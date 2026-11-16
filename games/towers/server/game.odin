@@ -7,6 +7,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "games:towers"
 import "server:core"
 import "server:play"
@@ -376,7 +377,7 @@ run_put :: proc(s: ^core.Server) {
 				kills = u32(p.kills),
 				spent = u32(max(p.spent, 0)),
 			}
-			core.game_put(s, &c, &b, game.key_player(core.player_id(s, &o)))
+			core.game_put(s, &c, &b, protocol.key_player(core.player_id(s, &o)))
 		}
 	}
 }

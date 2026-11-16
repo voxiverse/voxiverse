@@ -1,6 +1,7 @@
 package towers
 
 import "common:game"
+import "common:protocol"
 
 // What the game replicates besides the engine's kinds (docs/games.md): the run (a
 // singleton, the same for everyone), every builder's purse and tally (keyed by player
@@ -42,7 +43,7 @@ Shot :: struct {
 	piece:    Piece,
 }
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states = {
 		{name = "towers.run", value = Run},
 		{name = "towers.builder", value = Builder, key = .Player, max_records = game.MAX_PLAYERS},

@@ -7,6 +7,7 @@ import "core:testing"
 import "client:engine"
 import "client:playtest"
 import "common:game"
+import "common:protocol"
 import "games:towers"
 import towers_server "games:towers/server"
 import "server:core"
@@ -41,7 +42,7 @@ test_towers_on_the_hud :: proc(t: ^testing.T) {
 	at := game.Block_Pos{towers.BUILD_MIN_X + 1, 0, towers.MID_Z + 2}
 	builder.player.position = {f64(at.x) + 0.5, 3, f64(at.z) + 0.5}
 	d := towers_server.state(srv)
-	r := core.apply_edit(srv, builder, game.edit_plain(1, 0, at, d.blocks[.Arrow]))
+	r := core.apply_edit(srv, builder, protocol.edit_plain(1, 0, at, d.blocks[.Arrow]))
 	testing.expect(t, r.accepted, "the tower was refused")
 	towers_server.wave_begin(srv)
 	playtest.until(rig, proc(rig: ^playtest.Rig) -> bool {return view(rig.s).shots > 0}, 10)

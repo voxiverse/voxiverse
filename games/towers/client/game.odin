@@ -9,6 +9,7 @@ import "client:engine"
 import "client:ui"
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "games:towers"
 
 // Towers' client part (the game: games/towers): it keeps the run and every builder's
@@ -71,7 +72,7 @@ started :: proc(s: ^engine.Session) {
 	}
 }
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if run, ok := engine.game_value(s, r, towers.Run); ok && run != nil {
 		v.run = run^
