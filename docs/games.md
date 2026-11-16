@@ -239,7 +239,8 @@ with both parts; any other is refused at startup with the list of those there ar
 The title screen lists the games the client was built with (`App.games`, the driver's
 `CLIENT` list), the default first and the rest by folder: each its name on a button, its
 description under it, before Singleplayer (the saved universes), Multiplayer, Options and
-Quit. The mouse, the keyboard and a pad move through it as through the rest of the menu (the
+Quit. When the games do not all fit the screen, the launcher shows as many as fit, a page at
+a time, with Previous games and More games under them (`launcher_page`, `App.launcher_page`). The mouse, the keyboard and a pad move through it as through the rest of the menu (the
 default game is lit at once). Picking a game sets `App.launch`; once the frame's UI is drawn,
 `play_game` starts a scratch world (nothing saved) playing it with the embedded server, the
 same path as `--game <id>` and `singleplayer`. `--game <id>` with no `--exec`, `--scene`,

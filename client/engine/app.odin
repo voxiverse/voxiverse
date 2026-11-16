@@ -157,6 +157,7 @@ App :: struct {
 	server_games:        []core.Game, // ... and their server parts, for a world of our own
 	game:                string, // the game a world of our own plays, by id (--game, else game.DEFAULT_GAME: client/main sets it)
 	launch:              string, // a game the title's launcher picked this frame (its id, constant data): the frame starts a world playing it after the UI (play_game)
+	launcher_page:       int, // the launcher's page, when its games do not all fit (client/screen/title.odin)
 	item_icons:          Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:                Dial_View, // the dial overlay's (overlay_dial.odin)
 	quit:                bool,

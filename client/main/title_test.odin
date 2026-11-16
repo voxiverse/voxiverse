@@ -121,25 +121,51 @@ test_launcher_lists_and_starts_every_game :: proc(t: ^testing.T) {
 	append(&order, game.DEFAULT_GAME)
 	for g in games_client.CLIENT {if g.id != game.DEFAULT_GAME {append(&order, g.id)}}
 	testing.expect_value(t, len(order), len(games.SERVER))
-	last: f32 = -1
+	// More games than fit come a page at a time (the "More games" button turns it);
+	// every game is on one page, in order.
 	about := app.ui.theme.font_size * screen.LAUNCHER_ABOUT
-	for id in order {
-		g, found := engine.game_find(app.games, id)
-		if !testing.expectf(t, found, "%s has no client part", id) {continue}
-		r, shown := ui.find_widget(&app.ui, g.name)
-		testing.expectf(t, shown, "the launcher does not list %s", g.name)
-		testing.expectf(t, r.y > last, "%s is out of order", g.name)
-		last = r.y
-		testing.expect(t, slice.contains(app.ui.texts[:], g.description), g.description)
+	listed := 0
+	for page in 0 ..< len(order) {
+		app.launcher_page = page
+		ui_frame(app)
+		last: f32 = -1
+		for id in order[listed:] {
+			g, found := engine.game_find(app.games, id)
+			if !testing.expectf(t, found, "%s has no client part", id) {break}
+			r, shown := ui.find_widget(&app.ui, g.name)
+			if !shown {break}
+			testing.expectf(t, r.y > last, "%s is out of order", g.name)
+			last = r.y
+			listed += 1
+			testing.expect(t, slice.contains(app.ui.texts[:], g.description), g.description)
+			testing.expectf(
+				t,
+				ui.measure_text(&app.ui, g.description, about) <= screen.TITLE_WIDTH,
+				"%s's description is wider than the title's column",
+				g.id,
+			)
+		}
+		singleplayer, _ := ui.find_widget(&app.ui, "Singleplayer")
+		testing.expect(t, singleplayer.y > last, "the games are not above the rest of the title")
+		if listed == len(order) {break}
+		_, more := ui.find_widget(&app.ui, engine.tr(.Title_Games_More, page + 1, page + 2))
+		more_any := more
+		for pages in page + 2 ..= len(order) {
+			_, m := ui.find_widget(&app.ui, engine.tr(.Title_Games_More, page + 1, pages))
+			more_any ||= m
+		}
 		testing.expectf(
 			t,
-			ui.measure_text(&app.ui, g.description, about) <= screen.TITLE_WIDTH,
-			"%s's description is wider than the title's column",
-			g.id,
+			more_any,
+			"page %d lists %d of %d games and has no More games",
+			page,
+			listed,
+			len(order),
 		)
 	}
-	singleplayer, _ := ui.find_widget(&app.ui, "Singleplayer")
-	testing.expect(t, singleplayer.y > last, "the games are not above the rest of the title")
+	testing.expect_value(t, listed, len(order))
+	app.launcher_page = 0
+	ui_frame(app)
 	// All of it on the screen: the last button too, however many games there are (six
 	// overflowed it: Quit Game was cut in half).
 	// (a widget's rect is what is left of it on the screen: whole, it is a row high)
@@ -162,9 +188,15 @@ test_launcher_lists_and_starts_every_game :: proc(t: ^testing.T) {
 	testing.expect_value(t, app.launch, order[1])
 	app.launch = ""
 
-	// The mouse: each game's button asks for its world; nothing starts in the UI itself.
+	// The mouse: each game's button (on its page) asks for its world; nothing starts in
+	// the UI itself.
 	for id in order {
 		g, _ := engine.game_find(app.games, id)
+		for page in 0 ..< len(order) {
+			app.launcher_page = page
+			ui_frame(app)
+			if _, shown := ui.find_widget(&app.ui, g.name); shown {break}
+		}
 		click(t, app, g.name)
 		testing.expect_value(t, app.launch, id)
 		testing.expect(t, app.session == nil && app.screen == .Title)

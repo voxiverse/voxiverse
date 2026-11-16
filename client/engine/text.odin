@@ -17,6 +17,8 @@ Text :: enum u16 {
 	Options,
 	Title_Quit_Game,
 	Title_Version, // {0}: the version
+	Title_Games_Previous, // the launcher's page before
+	Title_Games_More, // ... and after; {0}: this page, {1}: the pages
 	Game_Menu_Quit_To_Title,
 	Game_Menu_Save_And_Quit,
 	Game_Menu_Disconnect,
@@ -188,6 +190,8 @@ TEXT_EN := [Text]string {
 	.Options                                = "Options",
 	.Title_Quit_Game                        = "Quit Game",
 	.Title_Version                          = "Voxiverse {0}",
+	.Title_Games_Previous                   = "Previous games",
+	.Title_Games_More                       = "More games ({0}/{1})",
 	.Game_Menu_Quit_To_Title                = "Quit to Title",
 	.Game_Menu_Save_And_Quit                = "Save and Quit to Title",
 	.Game_Menu_Disconnect                   = "Disconnect",

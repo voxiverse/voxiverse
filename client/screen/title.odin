@@ -104,6 +104,25 @@ launcher_games :: proc(app: ^engine.App) -> []^engine.Game {
 	return list[:]
 }
 
+// launcher_page: the games of the launcher's page (all of them when they fit in room,
+// the height left for them; else as many as fit with a row to turn the pages, of
+// turn_height), the page (within the pages) and how many pages there are.
+launcher_page :: proc(
+	games: []^engine.Game,
+	page: int,
+	room, per_game, turn_height: f32,
+) -> (
+	shown: []^engine.Game,
+	at: int,
+	pages: int,
+) {
+	if f32(len(games)) * per_game <= room || len(games) == 0 {return games, 0, 1}
+	per_page := max(1, int((room - turn_height) / per_game))
+	pages = (len(games) + per_page - 1) / per_page
+	at = clamp(page, 0, pages - 1)
+	return games[at * per_page:min((at + 1) * per_page, len(games))], at, pages
+}
+
 // title_screen: the logo and splash, the launcher (each game this build has: its name, a
 // button that plays it in a scratch world, and its description), then Singleplayer (the
 // saved universes), Multiplayer, Options and Quit. A game picked is App.launch: the
@@ -116,13 +135,25 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if !app.settings.reduce_motion {
 		holiday_back(app, ctx, holiday, app.last_frame_ms / 1000)
 	}
-	games := launcher_games(app)
+	all_games := launcher_games(app)
 	about := t.font_size * LAUNCHER_ABOUT // a game's description
 	rows: f32 = 5 if app.devchat.running else 4
 	// Each game: its button and its description close under it, the spacing after both,
 	// then a gap before the rest.
-	launcher := f32(len(games)) * (t.row_height + about + 4 + t.spacing)
+	per_game := t.row_height + about + 4 + t.spacing
+	rest := rows * t.row_height + (rows - 1) * t.spacing + 80 + 2 * t.spacing
+	// More games than fit: a page of them, and a row to turn the pages.
+	games, page, pages := launcher_page(
+		all_games,
+		app.launcher_page,
+		ctx.screen.h - rest - LOGO_GAP_MIN - 2 * t.spacing,
+		per_game,
+		t.row_height + t.spacing,
+	)
+	app.launcher_page = page
+	launcher := f32(len(games)) * per_game
 	if len(games) > 0 {launcher += 2 * t.spacing}
+	if pages > 1 {launcher += t.row_height + t.spacing}
 	// The gap under the logo gives way (down to a little) so the whole title fits.
 	stack := rows * t.row_height + (rows - 1) * t.spacing + 80 + launcher
 	gap := clamp(ctx.screen.h - stack - 2 * t.spacing, LOGO_GAP_MIN, LOGO_GAP)
@@ -201,6 +232,29 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		under.y, under.h = under.y - t.spacing, about + 4 // (close under its button)
 		ui.draw_text(ctx, under, g.description, about, t.text_muted, .Center)
 		ui.pop_id(ctx)
+	}
+	if pages > 1 {
+		ui.begin_row(ctx, ui.next(ctx))
+		half := (TITLE_WIDTH - t.spacing) / 2
+		if ui.button(
+			ctx,
+			engine.tr(.Title_Games_Previous),
+			ui.next(ctx, half),
+			disabled = page == 0,
+		) {
+			app.launcher_page -= 1
+		}
+		more := engine.tr(.Title_Games_More, page + 1, pages)
+		if ui.button(
+			ctx,
+			more,
+			ui.next(ctx, half),
+			disabled = page == pages - 1,
+			id = "more games",
+		) {
+			app.launcher_page += 1
+		}
+		ui.end_row(ctx)
 	}
 	if len(games) > 0 {ui.next(ctx, t.spacing)} 	// (the games apart from the rest)
 	if ui.button(ctx, engine.tr(.Title_Singleplayer), ui.next(ctx)) {
