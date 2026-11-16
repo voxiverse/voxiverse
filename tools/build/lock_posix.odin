@@ -32,9 +32,16 @@ Build_Lock :: struct {
 }
 
 // lock_build takes path for this run and writes text into it. If another run holds
-// it, it says which and waits for it to end. ok is false only if the file cannot be
-// opened or locked at all.
-lock_build :: proc(path, text: string) -> (lock: Build_Lock, ok: bool) {
+// it, it says which and waits for it to end, unless refuse (given the holder's text)
+// says why not to wait, which is printed. ok is false if it refused, or the file cannot
+// be opened or locked.
+lock_build :: proc(
+	path, text: string,
+	refuse: proc(holder: string) -> (why: string) = nil,
+) -> (
+	lock: Build_Lock,
+	ok: bool,
+) {
 	fd := posix.open(
 		strings.clone_to_cstring(path, context.temp_allocator),
 		{.RDWR, .CREAT, .CLOEXEC},
@@ -49,6 +56,11 @@ lock_build :: proc(path, text: string) -> (lock: Build_Lock, ok: bool) {
 		if data, err := os.read_entire_file_from_path(path, context.temp_allocator);
 		   err == nil && len(strings.trim_space(string(data))) > 0 {
 			holder = strings.trim_space(string(data))
+		}
+		if why := refuse(holder) if refuse != nil else ""; why != "" {
+			fmt.eprintln(why)
+			posix.close(fd)
+			return
 		}
 		fmt.eprintfln("build: waiting for another run to end (%s)", holder)
 		if flock_fd(c.int(fd), LOCK_EX) != 0 {

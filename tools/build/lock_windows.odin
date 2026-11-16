@@ -15,9 +15,16 @@ Build_Lock :: struct {
 }
 
 // lock_build takes path for this run and writes text into it. If another run holds
-// it, it waits for it to end (the holder's text cannot be read while it is held).
+// it, it waits for it to end (the holder's text cannot be read while it is held, so
+// refuse, which the POSIX lock asks about the holder, is not asked here).
 // ok is false only if the file cannot be opened for another reason.
-lock_build :: proc(path, text: string) -> (lock: Build_Lock, ok: bool) {
+lock_build :: proc(
+	path, text: string,
+	refuse: proc(holder: string) -> (why: string) = nil,
+) -> (
+	lock: Build_Lock,
+	ok: bool,
+) {
 	wpath := windows.utf8_to_wstring(path, context.temp_allocator)
 	said := false
 	for {

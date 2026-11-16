@@ -238,7 +238,12 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   seconds (the music, the audio scenarios, seeking in each file) is one test per case, so the runner's
   threads share them; an `#assert` on the count says when a case lacks its test.
 - **This machine is the gate.** There is no remote CI. The `pre-commit` hook runs `check`, and
-  `test` passes before a change lands on `main`. `./build.sh test` turns
+  `test` passes before a change lands on `main`. `./build.sh gate` runs all of it in one
+  blocking command (`check --cross`, `test`, `bench budgets -check`, `fuzz --smoke`, each a
+  child of the gate's under its build lock, logged in `build/gate/`), goes on past a failed
+  stage and ends with one line, `gate PASSED` or `gate FAILED: <stages>`; it refuses to
+  start beside another gate or test (on POSIX, where it can read the lock's holder; on
+  Windows it waits). `./build.sh test` turns
   `ODIN_TEST_RANDOM_SEED`, `ODIN_TEST_THREADS` and `ODIN_TEST_NAMES` from the environment into
   `-define:` flags (Odin reads them only as defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh
   test` repeats a run; `-test-name:<name>` sets `ODIN_TEST_NAMES` for the named

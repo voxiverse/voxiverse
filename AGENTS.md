@@ -19,12 +19,20 @@ The code is written by agents and read by a person, so it has to read well.
 ./build.sh check            # type checks, lints, layout, formatting (the pre-commit hook runs it)
 ./build.sh test <package>   # every package you touched; all of them for a change in common/
 ./build.sh check --cross    # also compiles for Windows and macOS: for any change to platform code
+./build.sh gate             # the whole gate main passes: below
 ```
 
-`./build.sh test` with no package named is the whole gate: every package, then the image
-baselines on lavapipe (`./build.sh images`, about ten minutes on 8 cores). A change to
-`client/` or `assets/shaders` that changes a picture re-accepts its baseline in the same
-commit (`./build.sh images --accept <scene>`), saying why.
+`./build.sh gate` is the whole gate in one command: `check --cross`, every test package
+then the image baselines on lavapipe (about ten minutes on 8 cores), `bench budgets -check`
+and `fuzz --smoke`. It blocks until done, goes on past a failed stage, and ends with a
+table and one line, `gate PASSED` or `gate FAILED: <stages>`, with each failed stage's log
+(`build/gate/`) and its first error lines above it. Run it in the foreground with a long
+timeout (30 minutes) and read its last line. Never write a loop that polls for a build
+(`pgrep`, `sleep`): every `./build.sh` command blocks until it is done, a second one waits
+for the first, and a gate refuses to start beside another gate or test.
+
+A change to `client/` or `assets/shaders` that changes a picture re-accepts its baseline in
+the same commit (`./build.sh images --accept <scene>`), saying why.
 
 `./build.sh help` lists the rest (system tests, benchmarks, fuzzing, visual baselines).
 

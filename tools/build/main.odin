@@ -272,14 +272,18 @@ main :: proc() {
 		// One run at a time: the job logs, the test binaries, the content cache and the
 		// cross objects are one set of names, and two runs at once silently corrupt
 		// each other. A second run waits for the first. run, serve, debug and the tools
-		// let it go once built, so a game that is up never holds it.
+		// let it go once built, so a game that is up never holds it. A stage of a gate
+		// runs under the gate's lock; a gate refuses to wait behind another gate or test.
 		os.make_directory_all(BUILD_DIR)
-		locked: bool
-		build_lock, locked = lock_build(
-			path_join({BUILD_DIR, "lock"}),
-			fmt.tprintf("pid %d: build %s", os.get_pid(), strings.join(args, " ")),
-		)
-		if !locked {os.exit(1)}
+		if !gate_stage_run() {
+			locked: bool
+			build_lock, locked = lock_build(
+				path_join({BUILD_DIR, "lock"}),
+				fmt.tprintf("pid %d: build %s", os.get_pid(), strings.join(args, " ")),
+				gate_refusal if args[0] == "gate" else nil,
+			)
+			if !locked {os.exit(1)}
+		}
 		// The main packages import the lists of games (games.odin): every odin run needs them.
 		if !write_game_lists() {os.exit(1)}
 	}
@@ -311,6 +315,8 @@ main :: proc() {
 		ok = check()
 	case "test":
 		ok = test(args[1:])
+	case "gate":
+		ok = gate(args[1:])
 	case "system":
 		ok = system()
 	case "determinism":
@@ -414,6 +420,15 @@ usage :: proc() {
 	)
 	fmt.println(
 		"            (each option set keeps its own binary and log: build/test/<package>.speed, .address, .thread)",
+	)
+	fmt.println(
+		"  gate      the whole gate, blocking until done: check --cross, test, bench budgets -check, fuzz --smoke;",
+	)
+	fmt.println(
+		"            a line per stage as it ends, then a table and `gate PASSED` or `gate FAILED: <stages>` (logs: build/gate/)",
+	)
+	fmt.println(
+		"            (it goes on past a failed stage; it will not start while another gate or test runs here)",
 	)
 	fmt.println(
 		"  system    run the system test suite (real threads, sockets, audio devices, child processes), one test at a time",
