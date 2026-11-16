@@ -614,7 +614,8 @@ Its `Options` are the player's `name`, `seed`, `view_radius`, `everyone_cheats`,
 `rig.actions.pressed += {.Game_1}`); `guest_join` brings a second player; `client` is the
 session's player on the server; `Options.ui` draws the HUD every frame for a game whose HUD
 is clicked. The game's own debug line is `engine.game_debug_line(s)`, its scoreboard
-`engine.game_scoreboard(s)`.
+`engine.game_scoreboard(s)`. `drawn` draws the game's screen too while it is open, over the
+HUD, as the client does.
 
 ## Screenshots
 

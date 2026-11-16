@@ -192,14 +192,17 @@ client :: proc(rig: ^Rig) -> ^core.Client {
 }
 
 // draw: one frame of the HUD as the App draws it (the player list's key held: scores),
-// what was drawn left in rig.app.ui until the next.
+// and the game's screen over it while it is open, what was drawn left in rig.app.ui until
+// the next.
 draw :: proc(rig: ^Rig, scores := false) {
 	app := rig.app
 	if scores {app.actions.down += {.Player_List}} else {app.actions.down -= {.Player_List}}
 	engine.screen_view_update(app)
+	engine.game_screen_sync(app)
 	ui.begin_frame(&app.ui, {}, {WIDTH, HEIGHT}, 1)
 	hud.hud_draw(app, &app.ui)
 	hud.player_list_draw(app, &app.ui)
+	engine.game_screen_draw(app, &app.ui, true)
 }
 
 // drawn: a frame of the HUD drew a text that begins with prefix.
