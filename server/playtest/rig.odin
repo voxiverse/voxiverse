@@ -35,6 +35,7 @@ Options :: struct {
 	save_dir: string, // a universe kept on disk ("": a scratch world)
 	kit:      string, // the players' kit ("": the game's modes' own)
 	seed:     i64, // (0: the harness's)
+	plain:    bool, // guests hold the default role, not the host's (everyone_cheats off)
 }
 
 // start: the game started and every player in it, playing; false (and the test told)
@@ -47,6 +48,7 @@ start :: proc(t: ^testing.T, rig: ^Rig, g: core.Game, o := Options{}) -> bool {
 	config.save_dir = o.save_dir
 	config.kit = o.kit
 	if o.seed != 0 {config.seed = o.seed}
+	if o.plain {config.everyone_cheats = false}
 	if !testing.expect(t, core.session_start(&rig.sess, {}, false, with = config), "no server") {
 		return false
 	}
