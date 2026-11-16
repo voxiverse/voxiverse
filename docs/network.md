@@ -58,7 +58,7 @@ radius is sent any, so the baseline scenarios, which are not on a planet, are un
 ## Bandwidth baselines
 
 `server/core/bandwidth_test.odin` measures the exact bytes of a scripted session and of a crowd of
-100 sheep. `assets/baselines/net/bandwidth.txt` holds the numbers, which are rewritten with
+100 dummies (the base pack's creature that stands where it is put). `assets/baselines/net/bandwidth.txt` holds the numbers, which are rewritten with
 `-define:VX_BANDWIDTH_ACCEPT=true`, a define `./build.sh test` does not pass, so `odin test` is
 run with the driver's collections:
 

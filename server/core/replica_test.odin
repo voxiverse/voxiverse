@@ -53,8 +53,8 @@ test_game_records_keyed_by_entity :: proc(t: ^testing.T) {
 		}, sess, 600)
 	if !testing.expect(t, ok) {return}
 	s := &sess.h.srv
-	near := entity_spawn(s.home, s.registry.engine.sheep, {3.5, 0, 0.5}, false)
-	far := entity_spawn(s.home, s.registry.engine.sheep, {200.5, 0, 0.5}, false)
+	near := entity_spawn(s.home, s.registry.engine.dummy, {3.5, 0, 0.5}, false)
+	far := entity_spawn(s.home, s.registry.engine.dummy, {200.5, 0, 0.5}, false)
 	harness_step(&sess.h, 10)
 	tag := mirror_game_record(&sess.mirror, Tag, protocol.key_entity(entity_id(s.home, near)))
 	if testing.expect(t, tag != nil, "the near sheep's tag never came") {
@@ -87,7 +87,7 @@ test_entities_told_nearest_first :: proc(t: ^testing.T) {
 	defer harness_stop(h)
 	s := &h.srv
 	w := s.home
-	sheep := test_reg().engine.sheep
+	sheep := test_reg().engine.dummy
 	for i in 0 ..< protocol.MAX_KNOWN_ENTITIES {
 		a := f64(i) / protocol.MAX_KNOWN_ENTITIES * 6.28
 		entity_spawn(w, sheep, {50 * base.cos(a), 0, 50 * base.sin(a)}, false)

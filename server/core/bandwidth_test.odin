@@ -17,7 +17,7 @@ import "common:protocol"
 // Rewrite the baseline with -define:VX_BANDWIDTH_ACCEPT=true.
 
 BANDWIDTH_TICKS :: 6500 // past the water (2500), the farm (3000), the flight (4000) and the rocket (6000)
-CROWD_TICKS :: 905 // five summons of 20 (the command's cap), then 900 ticks standing among 100 sheep
+CROWD_TICKS :: 905 // five summons of 20 (the command's cap), then 900 ticks standing among 100 dummies
 BANDWIDTH_ACCEPT :: #config(VX_BANDWIDTH_ACCEPT, false)
 BANDWIDTH_FILE :: "assets/baselines/net/bandwidth.txt"
 
@@ -56,7 +56,7 @@ bandwidth_run :: proc(t: ^testing.T, name: string) -> (b: Bandwidth, ok: bool) {
 	for i in 0 ..< ticks {
 		if crowd &&
 		   i >= 1 &&
-		   i <= 5 {mirror_send(&sess.mirror, protocol.Command{"summon sheep 20"})}
+		   i <= 5 {mirror_send(&sess.mirror, protocol.Command{"summon dummy 20"})}
 		h = session_step(sess, !crowd)
 	}
 	traffic := protocol.pipe_traffic(&sess.h.pipe)

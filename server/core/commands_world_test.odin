@@ -108,12 +108,12 @@ test_world_commands :: proc(t: ^testing.T) {
 	)
 
 	// /summon with a count, /kill.
-	cmd(a, "summon sheep 3")
+	cmd(a, "summon dummy 3")
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 3})
-	testing.expect(t, ok, "summon sheep 3")
-	cmd(a, "kill sheep")
+	testing.expect(t, ok, "summon dummy 3")
+	cmd(a, "kill dummy")
 	pump(t, both)
-	testing.expect(t, said(a, "Killed 3"), "kill sheep")
+	testing.expect(t, said(a, "Killed 3"), "kill dummy")
 
 	// /tp x y z with angles, and ~ relative; the other to us by selector.
 	cmd(a, "tp 100 150 100 90 -30")

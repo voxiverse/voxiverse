@@ -48,8 +48,9 @@ which takes the game's ([games.md](games.md#the-games-pack)).
 ## Entity kinds
 
 Entity kinds are `data/entities/*.json` entries (`common/game/registry_entities.odin`); the base
-pack's are `animals.json` (`sheep`) and `engine.json` (`rocket`, `item`, `player`), with the
-numbers the engine's tables hold today. A kind is a `Kind_Id` (its registry index + 1; 0 is none)
+pack's are `animals.json` (`sheep`) and `engine.json` (`rocket`, `item`, `player`, and `dummy`,
+a creature that stands where it is put: a target to hit, what the engine's tests walk, hurt
+and save), with the numbers the engine's tables hold today. A kind is a `Kind_Id` (its registry index + 1; 0 is none)
 and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the registry is built
 (a `Pack_Error` at the value, saying the fix):
 

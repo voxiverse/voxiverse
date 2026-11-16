@@ -341,7 +341,7 @@ test_entity_death_puff :: proc(t: ^testing.T) {
 	defer delete(s.sounds)
 	defer delete(s.entities)
 	e := engine.Other_Entity {
-		kind      = s.reg.engine.sheep,
+		kind      = s.reg.engine.dummy,
 		last_seen = {10, 64, 10},
 	}
 	engine.entity_died(s, &e)
@@ -378,7 +378,7 @@ test_box_model_entity :: proc(t: ^testing.T) {
 	reg.kinds = make([]game.Kind_Info, len(reg.kinds))
 	defer delete(reg.kinds)
 	copy(reg.kinds, testkit.test_reg().kinds)
-	cube := reg.engine.sheep
+	cube := reg.engine.dummy
 	reg.kinds[int(cube) - 1].model = .Box
 	reg.kinds[int(cube) - 1].color = {200, 40, 40}
 	s.reg = &reg

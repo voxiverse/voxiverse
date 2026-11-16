@@ -330,7 +330,7 @@ fuzz_generate_commands :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		"wheat_0",
 		"water",
 		"air",
-		"sheep",
+		"dummy",
 		"all",
 		"default",
 		"world.edit",

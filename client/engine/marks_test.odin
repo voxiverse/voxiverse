@@ -59,7 +59,7 @@ test_marks_show_health_and_points :: proc(t: ^testing.T) {
 	if !testing.expect(t, joined, "never joined") {return}
 	s := rig.s
 	w := rig.h.srv.home
-	sheep := core.entity_spawn(w, rig.h.srv.registry.engine.sheep, {4.5, 0, 0.5}, false)
+	sheep := core.entity_spawn(w, rig.h.srv.registry.engine.dummy, {4.5, 0, 0.5}, false)
 	id := core.entity_id(w, sheep)
 	core.entity_harm(w, sheep, {amount = 1, kind = .Game})
 	core.harness_step(&rig.h, 10)

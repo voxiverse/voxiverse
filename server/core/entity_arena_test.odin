@@ -78,7 +78,7 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok, "never landed") {return}
 	net_send(a, protocol.Command{"time midnight"})
 	for _ in 0 ..< MAX_ENTITIES / 20 + 10 {
-		net_send(a, protocol.Command{"summon sheep 20"})
+		net_send(a, protocol.Command{"summon dummy 20"})
 		net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.05)
 	}
 	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)

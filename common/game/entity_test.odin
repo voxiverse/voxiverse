@@ -24,7 +24,7 @@ flat_query :: proc(f: ^Flat) -> Block_Query {
 @(test)
 test_entity_body :: proc(t: ^testing.T) {
 	rules := RULES_DEFAULTS
-	sheep := kind_info(test_reg(), test_reg().engine.sheep)
+	sheep := kind_info(test_reg(), test_reg().engine.dummy)
 	f := Flat {
 		ground = 10,
 	}
@@ -51,7 +51,7 @@ test_entity_body :: proc(t: ^testing.T) {
 
 @(test)
 test_ray_box :: proc(t: ^testing.T) {
-	sheep := kind_info(test_reg(), test_reg().engine.sheep)
+	sheep := kind_info(test_reg(), test_reg().engine.dummy)
 	lo, hi := entity_box(sheep, {5.5, 0, 0.5})
 	d, hit := ray_box({0.5, 0.5, 0.5}, {1, 0, 0}, lo, hi, 10)
 	testing.expectf(t, hit && abs(d - (5.5 - 0.4 - 0.5)) < 1e-9, "hit at %v", d)

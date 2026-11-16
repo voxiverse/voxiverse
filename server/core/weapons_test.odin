@@ -281,7 +281,7 @@ rules_scenario :: proc(s: ^Server, _: rawptr) {
 	w.rules.pvp = false
 	shoot_at(s, alice, chest(bob), 0)
 	res.pvp_off_hurt = hurt(bob)
-	sheep := entity_spawn(w, test_reg().engine.sheep, rig.base + {-4, 0, 0}, false)
+	sheep := entity_spawn(w, test_reg().engine.dummy, rig.base + {-4, 0, 0}, false)
 	if sheep != 0 {
 		// (tough enough to live through it: a hit takes the pistol's damage, 5)
 		entity_set_max_health(w, sheep, 20)

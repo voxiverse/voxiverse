@@ -16,7 +16,7 @@ test_spawn_tag_kill :: proc(t: ^testing.T) {
 	reg := test_registry()
 	if reg == nil {return}
 	defer game.registry_destroy(reg)
-	sheep, _ := game.registry_kind(reg, "sheep")
+	sheep, _ := game.registry_kind(reg, "dummy")
 	rocket, _ := game.registry_kind(reg, "rocket")
 
 	ew: Entity_World
@@ -115,7 +115,7 @@ test_spawn_full :: proc(t: ^testing.T) {
 	reg := test_registry()
 	if reg == nil {return}
 	defer game.registry_destroy(reg)
-	sheep, _ := game.registry_kind(reg, "sheep")
+	sheep, _ := game.registry_kind(reg, "dummy")
 	ew: Entity_World
 	entity_world_init(&ew, 1, 4)
 	defer entity_world_destroy(&ew)
@@ -169,7 +169,7 @@ test_tag_near :: proc(t: ^testing.T) {
 	reg := test_registry()
 	if reg == nil {return}
 	defer game.registry_destroy(reg)
-	sheep, _ := game.registry_kind(reg, "sheep")
+	sheep, _ := game.registry_kind(reg, "dummy")
 	rocket, _ := game.registry_kind(reg, "rocket")
 	ew: Entity_World
 	entity_world_init(&ew, 1, 8)
@@ -317,7 +317,7 @@ sync_probe :: proc(s: ^Server, data: rawptr) {
 		d.spawn_now = false
 		for dx in ([]f64{-3, 0, 3}) {
 			p := c.player.position + {dx, 6, 3}
-			ent := entity_spawn(w, test_reg().engine.sheep, p, false)
+			ent := entity_spawn(w, test_reg().engine.dummy, p, false)
 			append(&d.spawned, p)
 			_ = ent
 		}
@@ -479,7 +479,7 @@ test_store_copies_follow_the_list :: proc(t: ^testing.T) {
 	defer harness_stop(h)
 	w := h.srv.home
 	reg := w.server.registry
-	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, true)
+	sheep := entity_spawn(w, reg.engine.dummy, {8.5, 40, 8.5}, true)
 	item := spawn_item(
 		w,
 		{10.5, 40, 8.5},
@@ -518,7 +518,7 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 	defer harness_stop(h)
 	w := h.srv.home
 	reg := w.server.registry
-	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
+	sheep := entity_spawn(w, reg.engine.dummy, {8.5, 40, 8.5}, false)
 	item := spawn_item(
 		w,
 		{10.5, 40, 8.5},
@@ -537,7 +537,7 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 	)
 	testing.expect_value(t, entity_age_of(w, sheep), 0)
 	testing.expect(t, !entity_is_natural(w, sheep))
-	wild := entity_spawn(w, reg.engine.sheep, {20.5, 40, 8.5}, true)
+	wild := entity_spawn(w, reg.engine.dummy, {20.5, 40, 8.5}, true)
 	testing.expect(t, wild != 0 && entity_is_natural(w, wild))
 	testing.expect_value(t, entity_velocity(w, item), [3]f32{1, 2, 3})
 	// moved: the store says where, and how fast

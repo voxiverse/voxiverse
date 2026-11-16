@@ -414,9 +414,9 @@ act :: proc(m: ^Mirror, tick: u64, msg: protocol.Input, in_: game.Player_Input) 
 	}
 	switch tick {
 	case 50:
-		command(m, "summon sheep 2")
+		command(m, "summon dummy 2")
 	case 600:
-		command(m, "summon sheep 4")
+		command(m, "summon dummy 4")
 	case 1200:
 		command(m, "give @s wheat 5")
 	case 1300:

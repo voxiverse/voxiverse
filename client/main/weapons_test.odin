@@ -99,7 +99,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	feet := s.prediction.state.position
 	sheep := core.entity_spawn(
 		rig.h.srv.worlds[0],
-		rig.h.srv.registry.engine.sheep,
+		rig.h.srv.registry.engine.dummy,
 		feet + {0, 0, -1.4},
 		false,
 	)

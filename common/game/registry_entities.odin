@@ -225,7 +225,7 @@ Kind_Info :: struct {
 // Engine_Kinds: the base pack's kinds the engine's code acts on by name (the sheep's
 // brain, the rocket launcher, dropped stacks); 0 where a registry has no such kind.
 Engine_Kinds :: struct {
-	sheep, rocket, item, player: Kind_Id,
+	sheep, rocket, item, player, dummy: Kind_Id,
 }
 
 registry_kind :: proc(reg: ^Registry, text: string) -> (Kind_Id, bool) {
@@ -1223,6 +1223,7 @@ build_entity_kinds :: proc(b: ^Reg_Build, reg: ^Registry) {
 	}
 	reg.engine = {
 		sheep  = kind_by_full_id(reg, "voxiverse:sheep"),
+		dummy  = kind_by_full_id(reg, "voxiverse:dummy"),
 		rocket = kind_by_full_id(reg, "voxiverse:rocket"),
 		item   = kind_by_full_id(reg, "voxiverse:item"),
 		player = kind_by_full_id(reg, "voxiverse:player"),
