@@ -1070,6 +1070,104 @@ budget_fighters :: proc() -> (r: Budget_Fighters, ok: bool) {
 	return r, true
 }
 
+// ---- the battle ----
+
+Budget_Battle :: struct {
+	mean_us:  f64, // the army's minds (acquiring, keeping, striking) and the entities' tick, mean
+	worst_us: i64, // ... and the slowest
+	view_us:  f64, // one client's view under fog (entities_put and its encoding), mean a tick
+	known:    int, // ... how many it was told of at the end
+	fallen:   int, // soldiers killed, both sides
+}
+
+BUDGET_BATTLE :: 300 // soldiers, half a side
+BUDGET_BATTLE_TICKS :: 300
+BUDGET_BATTLE_SIGHT :: 16 // blocks a soldier looks for a foe within
+BUDGET_BATTLE_LOOK :: 6 // ticks between a soldier's looks (staggered by its place in the army)
+
+@(private = "file")
+BUDGET_SOLDIER_KIND :: `{"soldier": {"box": [0.6, 1.7], "health": 10, "hittable": true,
+	"physics": "walker", "walker": {"walk_speed": 3, "run_speed": 3, "jump": 1.2, "step": 0},
+	"brain": "steered", "attack": {"damage": 2, "reach": 1, "cooldown": 1},
+	"model": {"box": [120, 140, 90]}}}`
+
+// budget_battle: two armies of 150 soldiers on two teams in a world with fog, set off
+// towards each other across the platform: each soldier marches on the other side's
+// ground until it finds a foe within its sight (every few ticks, staggered), then keeps
+// by it and strikes (a real-time strategy's battle: acquiring, attack-moving, fighting),
+// and the entities' tick steers, pushes apart and moves them; and what one client of a
+// side is told of it (entities_put under fog). The work of a battle at a few hundred.
+budget_battle :: proc() -> (r: Budget_Battle, ok: bool) {
+	h := new(Harness)
+	defer free(h)
+	files := [2]game.Pack_File {
+		{"pack.json", transmute([]u8)string(BUDGET_WALKER_PACK)},
+		{"data/entities/soldier.json", transmute([]u8)string(BUDGET_SOLDIER_KIND)},
+	}
+	extra := [1]game.Pack_Source{{"budget", files[:]}}
+	w := budget_world(h, extra[:]) or_return
+	defer harness_stop(h)
+	s := &h.srv
+	budget_platform(w)
+	world_fog(w, true)
+	kind := game.registry_kind(s.registry, "budget:soldier") or_return
+	army := make([]game.Entity_Handle, BUDGET_BATTLE)
+	defer delete(army)
+	foes := make([]game.Entity_Handle, BUDGET_BATTLE)
+	defer delete(foes)
+	for &e, i in army {
+		side := i % 2
+		row, col := (i / 2) / 15, (i / 2) % 15
+		x := -12.5 - f64(row) * 2 if side == 0 else 12.5 + f64(row) * 2
+		e = entity_spawn(w, kind, {x, 61, -21.5 + f64(col) * 3}, false)
+		if e == 0 {return}
+		entity_set_team(w, e, u8(side + 1))
+		entity_set_vision(w, e, BUDGET_BATTLE_SIGHT)
+	}
+	c := new(Client)
+	defer free(c)
+	c.state, c.world, c.team = .Playing, w, 1
+	c.player.position = {-30, 61, 0}
+	protocol.sender_init(&c.tx, &s.schema)
+	defer protocol.sender_destroy(&c.tx)
+	total, view: i64
+	for t in 0 ..< BUDGET_BATTLE_TICKS {
+		s.tick += 1
+		start := base.thread_cpu_us()
+		for e, i in army {
+			if !entity_listed(w, e) {continue}
+			if (t + i) % BUDGET_BATTLE_LOOK == 0 || !entity_listed(w, foes[i]) {
+				foes[i] = 0
+				for o in entities_of(w, kind, entity_pos(w, e), BUDGET_BATTLE_SIGHT) {
+					if entity_team(w, o) != entity_team(w, e) {foes[i] = o; break}
+				}
+			}
+			if foes[i] != 0 {
+				entity_keep(w, e, entity_pos(w, foes[i]), 0, 1.2)
+				if entity_strike(w, e, foes[i]) == .Killed {r.fallen += 1}
+			} else {
+				ahead := 1.0 if entity_team(w, e) == 1 else -1.0
+				entity_keep(w, e, entity_pos(w, e) + {ahead * 4, 0, 0}, 0, 1)
+			}
+		}
+		entities_tick(w)
+		took := base.thread_cpu_us() - start
+		total += took
+		r.worst_us = max(r.worst_us, took)
+		start = base.thread_cpu_us()
+		entities_put(s, c)
+		out := make([dynamic]protocol.Outgoing, context.temp_allocator)
+		protocol.sender_flush(&c.tx, u32(s.tick), {-30, 61, 0}, &out)
+		view += base.thread_cpu_us() - start
+		protocol.sender_ack(&c.tx, u32(s.tick))
+		budget_world_tick_after(s, w)
+	}
+	r.mean_us = f64(total) / BUDGET_BATTLE_TICKS
+	r.view_us = f64(view) / BUDGET_BATTLE_TICKS
+	r.known = len(c.tx.sent.tables[int(protocol.State_Kind.Entity)].records)
+	return r, true
+}
+
 // budget_world_tick_after: the rest of a world's tick after its entities (the scenes
 // that time the entities alone): the changes' flush and the journal.
 @(private = "file")

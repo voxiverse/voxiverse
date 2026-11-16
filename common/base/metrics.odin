@@ -77,6 +77,8 @@ Metric :: enum u8 {
 	Collide_Move, // CPU ns per collide_move of a creature-sized box (0.8 x 0.9), 0.15-block delta
 	Walkers_Tick, // CPU us per entities' tick of 200 steered walkers following a route (server/core/walkers.odin)
 	Fighters_Tick, // CPU us per tick of 150 creatures keeping by a moving point, looking and striking (server/core/walkers.odin)
+	Battle_Tick, // CPU us per tick of two armies of 150 on two teams finding, keeping by and striking foes (server/core/budgets.odin)
+	Battle_View, // CPU us per tick of one side's client's view of that battle under fog: entities_put and the encoding
 	Gliders_Tick, // CPU us per entities' tick of 1000 steered walkers gliding (server/core/walkers.odin, entity_glide)
 	Gliders_View, // CPU us per tick of one client's view of them: entities_put and the snapshot's encoding
 	Planet_Build, // building the home world's climate from its relief (common/planet), ms
@@ -170,6 +172,8 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Collide_Move         = {"collide_move", "ns", false},
 	.Walkers_Tick         = {"walkers_tick", "us", false},
 	.Fighters_Tick        = {"fighters_tick", "us", false},
+	.Battle_Tick          = {"battle_tick", "us", false},
+	.Battle_View          = {"battle_view", "us", false},
 	.Gliders_Tick         = {"gliders_tick", "us", false},
 	.Gliders_View         = {"gliders_view", "us", false},
 	.Planet_Build         = {"planet_build", "ms", false},

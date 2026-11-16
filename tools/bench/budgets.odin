@@ -56,6 +56,8 @@ BUDGET_LIMITS := [?]struct {
 	{.Collide_Move, 2000},
 	{.Walkers_Tick, 3000}, // a wave of 200 on a route rebuilt every second: measured at about 0.5 ms
 	{.Fighters_Tick, 4000},
+	{.Battle_Tick, 8000}, // 300 soldiers on two sides fighting, a quarter of the tick
+	{.Battle_View, 2000}, // ... one side's client's view of them under fog
 	{.Gliders_Tick, 3000}, // 1000 citizens gliding their roads: measured at about 0.64 ms (200: 0.13 ms)
 	{.Gliders_View, 4000}, // ... one client's view of all 1000 and its snapshot's encoding: about 1.1 ms // 150 creatures hunting, looking, striking, pushed apart: measured at about 0.6 ms
 	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 1.2 s (rain 1 s)
@@ -219,6 +221,22 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) 
 		append(broken, fmt.aprintf("the fighters: %v", fighters))
 	}
 	base.metric_add(.Fighters_Tick, f32(fighters.mean_us))
+
+	fmt.printfln("scene: %s", "the battle")
+	battle, battled := core.budget_battle()
+	if !battled || battle.fallen == 0 || battle.known == 0 {
+		append(broken, fmt.aprintf("the battle: %v", battle))
+	}
+	fmt.printfln(
+		"  %.0f us a tick (worst %d), the view %.0f us, %d known, %d fell",
+		battle.mean_us,
+		battle.worst_us,
+		battle.view_us,
+		battle.known,
+		battle.fallen,
+	)
+	base.metric_add(.Battle_Tick, f32(battle.mean_us))
+	base.metric_add(.Battle_View, f32(battle.view_us))
 }
 
 // budget_planet builds the planet from the committed relief, then its peoples' 6 000

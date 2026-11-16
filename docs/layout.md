@@ -194,7 +194,7 @@ package** is enforced by the `layout` lint (see above).
 | `server/core/creatures_pack/data/entities` | Its creatures | `*.json` |
 | `server/store` | A universe's files as files, whatever server runs: their names, the save transaction (a batch staged, committed, recovered), backups and restores, export and import, migrations, compacting region files, the packs a universe lists and the registry built from them | `*.odin` |
 | `server/path` | Pathfinding over the blocks for a body of a size: a walker's way from one block to another (A*), and fields: the way to one goal from every block of an area, which many walkers share | `*.odin` |
-| `server/play` | What the server parts of games share, built on the game API alone (docs/games.md): phases and their clocks, a walled arena from a template, watchers, the admin's settings | `*.odin` |
+| `server/play` | What the server parts of games share, built on the game API alone (docs/games.md): phases and their clocks, a walled arena from a template, watchers, the admin's settings, squads (shared routes, formations, fighting) | `*.odin` |
 | `server/playtest` | A game's server tests' rig: the game on a stepped server with its players, waiting for its phases, the host's commands and what each player was told; only tests import it | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |
