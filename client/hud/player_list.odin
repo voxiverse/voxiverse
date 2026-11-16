@@ -115,10 +115,9 @@ scoreboard_draw :: proc(ctx: ^ui.Context, board: engine.Scoreboard) {
 	for i in 0 ..< n {ui.label(ctx, board.columns[i], under[i], .Right, t.text_muted)}
 	for row in board.rows {
 		line := ui.cut_top(&inner, t.row_height)
-		if row.you {ui.fill_rect(ctx, line, t.hud_fill)}
+		if row.you {ui.fill_rect(ctx, line, t.row_selected)}
 		name, at := cells(line, n)
-		color := t.focus_ring if row.you else t.text
-		ui.label_clipped(ctx, row.name, name, .Left, color)
-		for i in 0 ..< n {ui.label(ctx, row.cells[i], at[i], .Right, color)}
+		ui.label_clipped(ctx, row.name, name, .Left)
+		for i in 0 ..< n {ui.label(ctx, row.cells[i], at[i], .Right)}
 	}
 }

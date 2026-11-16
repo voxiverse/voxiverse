@@ -53,6 +53,16 @@ test_player_list_shows_a_games_scoreboard :: proc(t: ^testing.T) {
 		if i < len(board) {testing.expect_value(t, board[i], w)}
 	}
 	testing.expect(t, !has(board, "Kills"), "the engine's list was drawn too")
+
+	// The player's own row is lit, with the theme's fill for a selected row (seen on the
+	// panel's black).
+	app.actions.down += {.Player_List}
+	ui.begin_frame(&app.ui, {}, {1280, 720}, 1)
+	hud.player_list_draw(app, &app.ui)
+	lit := false
+	for v in app.ui.output.layers[.Base].vertices {lit ||= v.color == app.ui.theme.row_selected}
+	ui.end_frame(&app.ui)
+	testing.expect(t, lit, "the player's own row is not lit")
 	free_all(context.temp_allocator)
 }
 
