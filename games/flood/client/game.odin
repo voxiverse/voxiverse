@@ -4,7 +4,7 @@ import "core:fmt"
 
 import "client:engine"
 import "client:ui"
-import "common:game"
+import "common:protocol"
 import "games:flood"
 
 // Flood's client part (the game: games/flood): it keeps the round as the server last told
@@ -27,7 +27,7 @@ View :: struct {
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	if round, ok := engine.game_value(s, r, flood.Round); ok && round != nil {
 		view(s).round = round^
 	}

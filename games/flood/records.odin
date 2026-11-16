@@ -1,6 +1,6 @@
 package flood
 
-import "common:game"
+import "common:protocol"
 
 // What the game replicates besides the engine's kinds (docs/games.md): the round, as the
 // server tells each player. It changes once a second while a phase runs (seconds), and
@@ -25,6 +25,6 @@ Round :: struct {
 	under:     u8, // tenths of a second this player's head has been under water
 }
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states = {{name = "flood.round", value = Round}},
 }
