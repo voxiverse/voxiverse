@@ -112,7 +112,7 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 		{
 			"unknown brain",
 			`{"k": {"box": [1, 1], ` + WALKER + `, "brain": "hunter", "model": "item"}}`,
-			`testpack/data/entities/k.json:1:120: brain is one of "none", "grazer"; got "hunter"`,
+			`testpack/data/entities/k.json:1:120: brain is one of "none", "grazer", "steered"; got "hunter"`,
 		},
 		{
 			"unknown model",
@@ -123,6 +123,11 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 			"grazer without walker",
 			`{"k": {"box": [1, 1], "brain": "grazer", "model": "item"}}`,
 			`testpack/data/entities/k.json:1:32: brain "grazer" needs physics "walker"`,
+		},
+		{
+			"steered without walker",
+			`{"k": {"box": [1, 1], "brain": "steered", "model": "item"}}`,
+			`testpack/data/entities/k.json:1:32: brain "steered" needs physics "walker"`,
 		},
 		{
 			"black without genes",

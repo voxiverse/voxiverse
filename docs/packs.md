@@ -55,7 +55,9 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
 - `box` `[width, height]`, each 0.1..4; `health` (default 1); `saved`, `summonable`, `hittable`.
 - `physics` (`none`, `walker`, `item`, `projectile`) with its block of numbers (`walker`, `item`
   or `projectile`), required with it and refused without it.
-- `brain` (`none`, `grazer`; `grazer` needs `walker`), `with` (`wool`, `genes`, `breeding`),
+- `brain` (`none`, `grazer`, `steered`; either needs `walker`): `grazer` is the sheep's mind;
+  `steered` none, the walker stands or goes where its game sends it ([games.md](games.md#walkers)),
+  `with` (`wool`, `genes`, `breeding`),
   `looks` (at most 16; each is computed from a component the kind must have in `with`).
 - `fields`: at most 8 saved numbers, `{"name": {"type": "u8"|"u16", "min": n, "max": n}}`.
 - `model`: `sheep`, `rocket`, `item`, `player` or `{"box": [r, g, b]}`.
@@ -68,7 +70,8 @@ has their data, in this fixed order:
 
 1. age: every entity gets a tick older; a natural one with nobody within 80 blocks goes.
 2. brains: `brain: grazer`. The clocks of a kind with `breeding`, thinking (flee, look, wander,
-   graze, and mating, which makes the lamb) and steering; the wish goes to the walkers.
+   graze, and mating, which makes the lamb) and steering; the wish goes to the walkers. Then
+   `brain: steered`: the way its game sent it (a point, a route).
 3. walkers' physics: `physics: walker`. Each takes its step with the wish its brain made (none
    without a brain); one whose ground is not loaded waits.
 4. items: `physics: item`. Expiry, falling, merging, pickup.

@@ -85,6 +85,11 @@ makes it for games, documented where it is declared.
 | `block_at(w, p)` | Read a block (false: not loaded) |
 | `game_act(s, w, system)`, `Act` | A cause for the game's block changes, its actor the game: one per cause |
 | `set_block(w, p, block, act)`, `bulk_edit(w, edit, act)`, `Bulk_Edit`, `Box`, `Sphere` | Change blocks through the edit journal ([journal.md](journal.md)) |
+| `entity_spawn(w, kind, position, natural)`, `entity_gone(w, h)` | An entity of a kind (the game's pack's, `<game>:<name>`) at a place, its handle (0: the world is full); gone again, with no death to show |
+| `entity_find(w, id)`, `entity_listed(w, h)`, `entities_of(w, kind, center, radius)`, `entities_each(w)`, `entities_next(&it)`, `Entity_Iter` | An entity by its id; whether a handle is one still there; the entities of a kind near a point, nearest first; every entity, lowest id first |
+| `entity_id(w, h)`, `entity_kind(w, h)`, `entity_pos(w, h)`, `entity_health_of(w, h)`, `entity_max_health(w, h)`, `entity_set_max_health(w, h, health)` | What an entity is, where it stands, its health; its most health set (and its health with it) |
+| `entity_go(w, h, target)`, `entity_follow(w, h, route)`, `entity_stand(w, h)`, `entity_arrived(w, h)`, `entity_set_speed(w, h, speed)` | Steer a walker whose kind is `"brain": "steered"`: to a point by its own path, along a route, or still; whether it is there ([walkers](#walkers)) |
+| `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
 
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
 `registry` and `listening` (others can join: opened to the LAN, or a dedicated server); `Client`'s `state`, `world`, `player` (its position, velocity, flying), `mode`
@@ -93,6 +98,21 @@ and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's s
 through `game_rule` (`core.game_rule(s, w, "explosion_size", "1.75")`), never by assignment:
 the `import` lint refuses `w.rules.<name> = ...` in a game's code, as it refuses a name the
 list lacks.
+
+### Walkers
+
+A game's creatures are entities of kinds its pack declares as data
+(`games/<game>/pack/data/entities`, [packs.md](packs.md)): a box, health, a walker's speed
+and jump, a model. One with `"brain": "steered"` has no mind of its own
+(`server/core/walkers.odin`): it stands until the game sends it with `entity_go` (to a point,
+by an A* path of its own, planned again when a block changes on it or it is stuck) or
+`entity_follow` (along a route). A route (`route_make`) is a field over an area the game
+names: the cost of the way to its goal from every block of it (`server/path`), searched once
+for every walker that follows it, and again before its next use after a block in its area
+changes. Its body is its kind's: as wide and tall as its box, climbing a step only if it
+jumps a block high. `route_would_shut` asks, before a block is placed, whether it would
+leave the route's start or a walker following it with no way: a maze a player builds stays
+a maze, not a wall.
 
 ## The client's side: `engine.Game`
 

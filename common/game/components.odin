@@ -43,6 +43,7 @@ Physics :: struct {
 // Entity_Health: today's health.
 Entity_Health :: struct {
 	health: i32,
+	max:    i32, // its most: its kind's health, unless a game set another (entity_set_max_health)
 }
 
 Age :: struct {

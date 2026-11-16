@@ -75,6 +75,7 @@ Metric :: enum u8 {
 	Spatial_Sphere, // CPU ns per spatial_sphere of radius 16 among 2 000 entries
 	Island_Tick, // CPU us per server tick to keep the islands of 64 walking observers (common/island)
 	Collide_Move, // CPU ns per collide_move of a sheep-sized box, 0.15-block delta
+	Walkers_Tick, // CPU us per entities' tick of 200 steered walkers following a route (server/core/walkers.odin)
 	Planet_Build, // building the home world's climate from its relief (common/planet), ms
 	Planet_History, // the peoples of that planet over 6 000 years (common/planet), ms
 	Planet_Placement, // their settlements, roads and ruins on that planet (common/planet), ms
@@ -164,6 +165,7 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Spatial_Sphere       = {"spatial_sphere", "ns", false},
 	.Island_Tick          = {"island_tick", "us", false},
 	.Collide_Move         = {"collide_move", "ns", false},
+	.Walkers_Tick         = {"walkers_tick", "us", false},
 	.Planet_Build         = {"planet_build", "ms", false},
 	.Planet_History       = {"planet_history", "ms", false},
 	.Planet_Placement     = {"planet_placement", "ms", false},

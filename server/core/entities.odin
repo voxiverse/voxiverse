@@ -57,16 +57,19 @@ Brain :: struct {
 Entities :: struct {
 	lookups: int, // id lookups made (a test counts them)
 	next_id: u32,
-	budget:  int, // A* nodes left this tick
+	budget:  int, // A* nodes left this tick (the sheep's and the steered walkers')
 	rng:     base.Rng,
+	walkers: Walkers, // the routes and changed blocks of the walkers games steer (walkers.odin)
 }
 
 entities_init :: proc(e: ^Entities, seed: i64) {
 	e.next_id = 1
 	e.rng = base.rng_make(u64(seed) ~ 0x0e7e_0e7e)
+	walkers_init(&e.walkers)
 }
 
 entities_destroy :: proc(e: ^Entities) {
+	walkers_destroy(&e.walkers)
 	e^ = {}
 }
 
@@ -1099,7 +1102,7 @@ chunk_ready :: proc(w: ^World, p: [3]f64) -> bool {
 	return c != nil && c.state == .Ready && below != nil && below.state == .Ready
 }
 
-@(private = "file")
+@(private)
 turn_towards :: proc(from, to: f32, rate: f32) -> f32 {
 	d := math.mod(to - from + 3 * math.PI, math.TAU) - math.PI
 	return from + d * rate
@@ -1161,7 +1164,7 @@ Entity_World :: struct {
 	next_player_id: u32, // entities.odin: the ids of player entities
 	tag_names:      [dynamic]string, // tag i is tag_names[i-1]
 	deaths:         [dynamic]Entity_Death, // this tick's
-	infos:          [game.FIRST_SERVER_COMPONENT + 2]game.Component_Info,
+	infos:          [game.FIRST_SERVER_COMPONENT + 3]game.Component_Info,
 }
 
 @(private = "file")
@@ -1186,6 +1189,12 @@ entity_world_init :: proc(ew: ^Entity_World, seed: u64, max_entities := MAX_ENTI
 		type  = Brain,
 		size  = size_of(Brain),
 		align = align_of(Brain),
+	}
+	ew.infos[C_STEER] = game.Component_Info {
+		name  = "steer",
+		type  = Steer,
+		size  = size_of(Steer),
+		align = align_of(Steer),
 	}
 	game.spatial_init(&ew.spatial)
 	// room for the fixed list's worth of entries at once, so the tables are
@@ -1251,6 +1260,7 @@ entity_world_spawn :: proc(
 	if info.physics == .Item {set += {int(game.C_STACK), int(game.C_OWNER)}}
 	if info.physics == .Projectile {set += {int(game.C_OWNER)}}
 	if info.brain == .Grazer {set += {int(C_BRAIN)}}
+	if info.brain == .Steered {set += {int(C_STEER)}}
 	if info.hittable {set += {int(game.C_HURT_BY)}}
 	if info.model == .Player {set += {int(game.C_PLAYER_LINK)}}
 	if len(info.fields) > 0 {set += {int(game.C_FIELDS)}}
@@ -1293,6 +1303,7 @@ entity_world_spawn :: proc(
 	}
 	hp := game.Entity_Health {
 		health = i32(info.health),
+		max    = i32(info.health),
 	}
 	origin := game.Origin {
 		action = u32(act.action),
@@ -1676,7 +1687,8 @@ entities_clear :: proc(w: ^World) {
 //
 //  1. age: every entity grows a tick older; a natural one nobody is near goes.
 //  2. brains (grazer): a sheep's clocks, its thinking (which includes mating and
-//     the lamb) and its steering; the wish goes to the walkers' physics.
+//     the lamb) and its steering; the wish goes to the walkers' physics. Then the
+//     steered walkers (walkers.odin): where their game sends them.
 //  3. walkers' physics: every walker takes its step (the wish its brain made,
 //     none for a walker without a brain).
 //  4. items: a dropped stack expires, falls, merges and is picked up.
@@ -1692,7 +1704,7 @@ Blast :: struct {
 	by:     Maybe(u16), // the rocket's shooter
 }
 
-@(private = "file")
+@(private)
 Wish :: struct {
 	wish: [2]f32,
 	jump: bool,
@@ -1714,6 +1726,7 @@ entities_tick :: proc(w: ^World) {
 	wishes := make(map[game.Entity_Handle]Wish, context.temp_allocator)
 	system_age(w)
 	system_brains(w, &wishes)
+	system_steer(w, &wishes)
 	system_walkers(w, &wishes, query)
 	system_items(w)
 	system_rockets(w, &blasts)

@@ -34,8 +34,9 @@ ENTITY_PHYSICS_LIST := [?]string{"none", "walker", "item", "projectile"}
 Entity_Brain :: enum u8 {
 	None,
 	Grazer, // today's sheep: think, steer, graze, flee, mate
+	Steered, // no mind of its own: it stands, or goes where its game sends it (server/core/walkers.odin)
 }
-ENTITY_BRAIN_LIST := [?]string{"none", "grazer"}
+ENTITY_BRAIN_LIST := [?]string{"none", "grazer", "steered"}
 #assert(len(ENTITY_BRAIN_LIST) == len(Entity_Brain))
 
 // Entity_Part: an optional component a kind asks for with "with".
@@ -440,8 +441,16 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 
 	if f := field_of(m, "brain"); f != nil {
 		info.brain = Entity_Brain(choice_of(b, f, f.value, "brain", ENTITY_BRAIN_LIST[:], 0))
-		if info.brain == .Grazer && info.physics != .Walker {
-			fail_field(b, f, f.value, "brain \"grazer\" needs physics \"walker\"")
+		if info.brain != .None && info.physics != .Walker {
+			fail_field(
+				b,
+				f,
+				f.value,
+				fmt.aprintf(
+					"brain \"%s\" needs physics \"walker\"",
+					ENTITY_BRAIN_LIST[info.brain],
+				),
+			)
 		}
 	}
 	if f := field_of(m, "with"); f != nil {

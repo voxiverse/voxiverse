@@ -47,7 +47,7 @@ box_has :: proc(b: Box, p: game.Block_Pos) -> bool {
 	)
 }
 
-@(private = "file")
+@(private)
 box_overlaps :: proc(b: Box, lo, hi: game.Block_Pos) -> bool {
 	return(
 		lo.x <= b.hi.x &&
@@ -59,7 +59,7 @@ box_overlaps :: proc(b: Box, lo, hi: game.Block_Pos) -> bool {
 	)
 }
 
-@(private = "file")
+@(private)
 box_normal :: proc(b: Box) -> Box {
 	lo, hi := shape_box(b)
 	return {lo, hi}

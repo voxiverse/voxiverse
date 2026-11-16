@@ -837,3 +837,91 @@ budget_islands :: proc() -> (r: Budget_Scene) {
 	if r.done > 0 {r.done = r.want}
 	return
 }
+
+// ---- the walkers ----
+
+Budget_Walkers :: struct {
+	mean_us:  f64, // the entities' tick, mean over the scene
+	worst_us: i64, // ... and the slowest
+	moved:    int, // walkers that went at least 20 blocks
+	builds:   int, // the route's searches
+}
+
+BUDGET_WALKERS :: 200
+BUDGET_WALKER_TICKS :: 300
+
+@(private = "file")
+BUDGET_WALKER_PACK :: `{"format": 1, "namespace": "budget", "version": "1.0.0", "title": "Budget", "requires": ["voxiverse"]}`
+@(private = "file")
+BUDGET_WALKER_KIND :: `{"walker": {"box": [0.6, 0.9], "health": 5, "physics": "walker",
+	"walker": {"walk_speed": 4, "run_speed": 4, "jump": 0, "step": 0},
+	"brain": "steered", "model": {"box": [200, 60, 60]}}}`
+
+// budget_walkers: 200 steered walkers (a tower defence's wave) following one route across
+// the 100 x 100 platform, with a wall going up across their way every second, so the
+// route is searched again each time: the entities' whole tick.
+budget_walkers :: proc() -> (r: Budget_Walkers, ok: bool) {
+	h := new(Harness)
+	defer free(h)
+	files := [2]game.Pack_File {
+		{"pack.json", transmute([]u8)string(BUDGET_WALKER_PACK)},
+		{"data/entities/walker.json", transmute([]u8)string(BUDGET_WALKER_KIND)},
+	}
+	extra := [1]game.Pack_Source{{"budget", files[:]}}
+	w := budget_world(h, extra[:]) or_return
+	defer harness_stop(h)
+	s := &h.srv
+	budget_platform(w)
+	kind := game.registry_kind(s.registry, "budget:walker") or_return
+	route := route_make(
+		w,
+		{{-50, 61, -50}, {49, 63, 49}},
+		{-46, 61, 0},
+		{46, 61, 0},
+		kind,
+	) or_return
+	starts: [BUDGET_WALKERS][3]f64
+	walkers: [BUDGET_WALKERS]game.Entity_Handle
+	for i in 0 ..< BUDGET_WALKERS {
+		starts[i] = {-46.5 + f64(i % 5), 61, -40.5 + f64(i / 5) * 2}
+		walkers[i] = entity_spawn(w, kind, starts[i], false)
+		if walkers[i] == 0 || !entity_follow(w, walkers[i], route) {return}
+	}
+	total: i64
+	for t in 0 ..< BUDGET_WALKER_TICKS {
+		if t % game.TICK_RATE == game.TICK_RATE - 1 {
+			// A wall across the platform, its gap at alternate ends.
+			x := i32(-30 + 6 * (t / game.TICK_RATE))
+			z: [2]i32 = {-50, 40} if (t / game.TICK_RATE) % 2 == 0 else {-40, 49}
+			wall := Bulk_Edit {
+				shape = Box{{x, 61, z[0]}, {x, 62, z[1]}},
+				op    = .Set,
+				block = .Stone,
+			}
+			bulk_edit(w, wall, world_act(w, .Command))
+		}
+		s.tick += 1
+		start := base.thread_cpu_us()
+		entities_tick(w)
+		took := base.thread_cpu_us() - start
+		total += took
+		r.worst_us = max(r.worst_us, took)
+		budget_world_tick_after(s, w)
+	}
+	r.mean_us = f64(total) / BUDGET_WALKER_TICKS
+	for e, i in walkers {
+		d := entity_pos(w, e) - starts[i]
+		if d.x * d.x + d.z * d.z >= 20 * 20 {r.moved += 1}
+	}
+	r.builds = w.entities.walkers.builds
+	return r, true
+}
+
+// budget_world_tick_after: the rest of a world's tick after its entities (the scenes
+// that time the entities alone): the changes' flush and the journal.
+@(private = "file")
+budget_world_tick_after :: proc(s: ^Server, w: ^World) {
+	changes_flush(w)
+	journal_tick(w)
+	free_all(context.temp_allocator)
+}

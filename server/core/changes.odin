@@ -61,7 +61,10 @@ set_block :: proc(
 	query := game.Block_Query{&w.chunks, chunks_block, &s.registry.blocks, {}}
 	b = game.shape_update(s.registry, b, p, query) // (a fence set by a command joins what is beside it)
 	if !chunks_set_block(&w.chunks, p, b) {return false}
-	if old != b {channels_reset_cell(w, p)}
+	if old != b {
+		channels_reset_cell(w, p)
+		walkers_changed(w, p, p)
+	}
 	journal_entry(w, cause, p, old, b)
 	entity_lifecycle(w, p, old, b, cause)
 	mark_edited(w, game.chunk_of(p))
