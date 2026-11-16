@@ -1,5 +1,7 @@
-package core
+package path
 
+import "base:runtime"
+import "core:sync"
 import "core:testing"
 
 import "common:game"
@@ -18,7 +20,7 @@ query :: proc(b: ^Blocks) -> game.Block_Query {
 			if abs(p.x) > b.region.x || abs(p.z) > b.region.y {return .Air, false}
 			if p.y <= b.floor || p in b.solid {return .Stone, true}
 			return .Air, true
-		}, test_blocks(), {}}
+		}, &registry().blocks, {}}
 }
 
 @(private = "file")
@@ -40,12 +42,12 @@ test_path_straight_and_around :: proc(t: ^testing.T) {
 	}
 	defer delete(b.solid)
 	q := query(&b)
-	p, ok := find_path(q, {0, 1, 0}, {8, 1, 0}, 500)
+	p, ok := find(q, {0, 1, 0}, {8, 1, 0}, 500)
 	testing.expect(t, ok && p.whole && p.count == 8 && ends_at(p) == {8, 1, 0})
 
 	// A wall two blocks high from z -5 to 5 at x 4: around its end.
 	wall(&b, 4, -5, 5, 1, 2)
-	p, ok = find_path(q, {0, 1, 0}, {8, 1, 0}, 2000)
+	p, ok = find(q, {0, 1, 0}, {8, 1, 0}, 2000)
 	testing.expect(t, ok && p.whole && ends_at(p) == {8, 1, 0})
 	for s in p.steps[:p.count] {
 		testing.expectf(t, standable(q, s), "path through %v, where nothing can stand", s)
@@ -63,13 +65,13 @@ test_path_steps_and_drops :: proc(t: ^testing.T) {
 	// A one-block step: walked up.
 	wall(&b, 3, -40, 40, 1, 1)
 	for x in i32(4) ..= 40 {wall(&b, x, -40, 40, 1, 1)} 	// a raised plateau from x 3 on
-	p, ok := find_path(q, {0, 1, 0}, {6, 2, 0}, 500)
+	p, ok := find(q, {0, 1, 0}, {6, 2, 0}, 500)
 	testing.expect(t, ok && p.whole, "a one-block step is walkable")
 
 	// The other way: a drop of one, fine; a cliff of 5, not.
 	clear(&b.solid)
 	for x in i32(-40) ..= 2 {wall(&b, x, -40, 40, 1, 5)} 	// high ground (top y 5) up to x 2
-	p, ok = find_path(q, {0, 6, 0}, {6, 1, 0}, 2000)
+	p, ok = find(q, {0, 6, 0}, {6, 1, 0}, 2000)
 	testing.expect(t, ok && !p.whole, "jumped off a cliff higher than MAX_DROP")
 	testing.expect(t, p.count == 0 || ends_at(p).y == 6, "went down a cliff")
 }
@@ -84,7 +86,7 @@ test_path_no_corner_cutting :: proc(t: ^testing.T) {
 	q := query(&b)
 	b.solid[{1, 1, 0}] = true
 	b.solid[{1, 2, 0}] = true
-	p, ok := find_path(q, {0, 1, 0}, {1, 1, 1}, 200)
+	p, ok := find(q, {0, 1, 0}, {1, 1, 1}, 200)
 	testing.expect(t, ok && p.whole)
 	testing.expect(t, p.count == 2, "squeezed diagonally past a block's corner")
 }
@@ -98,7 +100,7 @@ test_path_partial :: proc(t: ^testing.T) {
 	}
 	defer delete(b.solid)
 	q := query(&b)
-	p, ok := find_path(q, {0, 1, 0}, {30, 1, 0}, 2000)
+	p, ok := find(q, {0, 1, 0}, {30, 1, 0}, 2000)
 	testing.expect(t, ok && !p.whole && p.count > 0)
 	testing.expectf(
 		t,
@@ -106,10 +108,24 @@ test_path_partial :: proc(t: ^testing.T) {
 		"stopped at %v, not at the edge of the loaded ground",
 		ends_at(p),
 	)
-	p, ok = find_path(q, {0, 1, 0}, {9, 1, 9}, 5)
+	p, ok = find(q, {0, 1, 0}, {9, 1, 9}, 5)
 	testing.expect(t, ok && !p.whole && p.count > 0)
 	e := ends_at(p)
 	testing.expect(t, e.x + e.z > 0, "a partial path that does not get closer")
-	_, ok = find_path(q, {0, 5, 0}, {3, 1, 0}, 100)
+	_, ok = find(q, {0, 5, 0}, {3, 1, 0}, 100)
 	testing.expect(t, !ok, "a path from midair")
+}
+
+// registry: the base registry, built once for the package's tests.
+@(private = "file")
+shared_registry: ^game.Registry
+@(private = "file")
+shared_once: sync.Once
+
+registry :: proc() -> ^game.Registry {
+	sync.once_do(&shared_once, proc() {
+		context.allocator = runtime.default_allocator()
+		shared_registry = game.registry_base(runtime.default_allocator())
+	})
+	return shared_registry
 }

@@ -7,10 +7,11 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "server:path"
 
 // Entities on the server: sheep and rockets. What each kind is lies in
 // the registry (game.kind_info); what it does each tick, in the systems (below). A
-// sheep thinks (a small state machine), walks its path (A*, path.odin,
+// sheep thinks (a small state machine), walks its path (A*, server/path,
 // within a shared node budget) and moves by the shared body physics; a
 // rocket flies until it hits something and explodes. Each client is told
 // about the ones near it: an Entity record (what it is) and an Entity_Motion
@@ -44,7 +45,7 @@ Brain_State :: enum u8 {
 Brain :: struct {
 	state:   Brain_State,
 	timer:   int, // ticks left in this state
-	path:    Path,
+	path:    path.Path,
 	step:    int, // the next waypoint
 	goal:    game.Block_Pos,
 	look_at: [3]f64,
@@ -815,7 +816,7 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 	}
 	for dy in ([]i32{0, 1, -1, 2, -2, 3, -3}) {
 		p := at + {0, dy, 0}
-		if standable(query, p) {
+		if path.standable(query, p) {
 			if h := entity_spawn(w, kind, {f64(p.x) + 0.5, f64(p.y), f64(p.z) + 0.5}, false);
 			   h != 0 {
 				if kind == s.registry.engine.sheep {
@@ -968,16 +969,16 @@ plan :: proc(w: ^World, h: game.Entity_Handle, target: [3]f64) -> bool {
 	goal := game.Block_Pos{i32(math.floor(target.x)), start.y, i32(math.floor(target.z))}
 	// The goal: a standable block in its column near this height.
 	for dy in ([]i32{0, 1, -1, 2, -2, 3, -3}) {
-		if standable(query, goal + {0, dy, 0}) {
+		if path.standable(query, goal + {0, dy, 0}) {
 			goal.y += dy
 			break
 		}
 	}
 	e.budget -= PATH_BUDGET_EACH
-	path, ok := find_path(query, start, goal, PATH_BUDGET_EACH)
-	if !ok || path.count == 0 {return false}
+	found, ok := path.find(query, start, goal, PATH_BUDGET_EACH)
+	if !ok || found.count == 0 {return false}
 	b := entity_brain(w, h)
-	b.path = path
+	b.path = found
 	b.step = 0
 	b.stuck = 0
 	return true
@@ -1053,7 +1054,7 @@ spawn_natural :: proc(w: ^World) {
 		top := column_top(w, x, z)
 		ground, loaded := chunks_block(&w.chunks, {x, top, z})
 		at := game.Block_Pos{x, top + 1, z}
-		if !loaded || ground != .Grass || !standable(query, at) {continue}
+		if !loaded || ground != .Grass || !path.standable(query, at) {continue}
 		center := [3]f64{f64(x) + 0.5, f64(at.y), f64(z) + 0.5}
 		if anyone_within(w, center, SPAWN_MIN) {continue}
 		herd := base.rng_int_range(r, 1, 4)
@@ -1061,7 +1062,7 @@ spawn_natural :: proc(w: ^World) {
 			jitter := [3]f64{base.rng_f64_range(r, -1.5, 1.5), 0, base.rng_f64_range(r, -1.5, 1.5)}
 			p := center + jitter
 			b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
-			if standable(query, b) {
+			if path.standable(query, b) {
 				if sheep := entity_spawn(w, w.server.registry.engine.sheep, p, true);
 				   sheep != 0 {entity_genes(w, sheep).genes = game.genes_wild(r)}
 			}

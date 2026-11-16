@@ -1,4 +1,4 @@
-package core
+package path
 
 import pq "core:container/priority_queue"
 import "core:math"
@@ -28,8 +28,8 @@ standable :: proc(q: game.Block_Query, p: game.Block_Pos) -> bool {
 	return !game.solid_at(q, p) && game.solid_at(q, p + {0, -1, 0})
 }
 
-// find_path searches from start to goal (both blocks to stand in).
-find_path :: proc(
+// find searches from start to goal (both blocks to stand in).
+find :: proc(
 	q: game.Block_Query,
 	start, goal: game.Block_Pos,
 	budget: int,

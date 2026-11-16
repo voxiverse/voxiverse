@@ -59,17 +59,19 @@ Cap: `70` files per package.
 
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
-read from the line above. The largest packages are `server/core` (70 files), `common/game`
+read from the line above. The largest packages are `server/core` (69 files), `common/game`
 (63), `client/engine` (58) and `common/base` (40); every other package has 31 or fewer. The
 cap leaves the largest no room beyond it, so a package that keeps growing splits into
 feature packages rather than get a bigger number. There is no per-folder allowance (that would
 be an exemption) and no per-file line cap. `server/core` is one cycle, which is why it is a
-single package.
+single package; what needs none of its state lives below it (`server/path`).
 
 ## Packages
 
 No package sits at the root of `client/` or `server/`; each feature has its own. `server/core`
 is the server's one package (its state is one cycle around `Server`, `Client` and `World`);
+below it, `server/path` finds ways through the blocks from a `game.Block_Query` alone, so it
+knows no server and the server imports it;
 `client/engine` holds `App`, `Session`, and the state of every feature `App` holds, and the
 feature packages (`prompt`, `menu`, `screen`, `dev`, `console`, `overlay`, `hud`, `autopilot`)
 import it, in that order, with `client/main` on top. The tests that share a fixture which needs
@@ -170,6 +172,7 @@ package** is enforced by the `layout` lint (see above).
 | `games/<game>/server` | A game's server part: its `core.Game` and its tests | `*.odin` |
 | `games/<game>/client` | A game's client part: its `engine.Game` and its tests | `*.odin` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
+| `server/path` | Pathfinding over the blocks: a walker's way from one block to another (A*) | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |
 | `server/steam` | The dedicated server's Steam: auth sessions over the game server flat API and a fake | `*.odin` |
