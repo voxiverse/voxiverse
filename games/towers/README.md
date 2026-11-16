@@ -11,7 +11,9 @@ and it is won. The results stand for 8 s, then a new run begins on a new field.
 | Wave | Creeps come out of the gate one every 0.8 s and walk to the core; build on. Once the last of them is dead or home, the wave is held: every builder gets a bonus (8 coins, 2 more each wave) |
 | Results | Won or lost, big; then a new run, the lives and every builder's coins back |
 
-The creeps (the game's pack, `pack/data/entities`: walkers it steers, none of which jumps):
+The creeps (the game's pack, `pack/data/entities`: walkers it steers, none of which jumps,
+each shaped of boxes whose legs and arms swing as it walks: a red runner all legs and a tail,
+a squat green grunt, a purple brute with a crest):
 
 | Creep | Health | Speed | Bounty | Lives at the core |
 |---|---|---|---|---|
