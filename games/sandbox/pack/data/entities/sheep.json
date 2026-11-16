@@ -1,0 +1,43 @@
+// The sheep: a walker whose mind is the sandbox's (games/sandbox/server/sheep.odin), its
+// looks the game's to show and this model's to draw, coming by itself by day on grass.
+{
+  "sheep": {
+    "box": [0.8, 0.9],
+    "health": 4,
+    "saved": true,
+    "summonable": true,
+    "hittable": true,
+    "physics": "walker",
+    "walker": {"walk_speed": 1.4, "run_speed": 4.2, "jump": 1.2, "step": 0},
+    "brain": "game",
+    "looks": ["shorn", "lamb", "black", "spotted", "in_love"],
+    "model": {
+      "parts": [
+        {"box": [-0.35, 0.35, -0.5, 0.35, 0.85, 0.45], "color": [232, 222, 200], "colors": {"black": [36, 34, 40]}, "hidden": ["shorn"]},
+        {"box": [-0.27, 0.4, -0.42, 0.27, 0.78, 0.38], "color": [204, 160, 152], "shown": ["shorn"]},
+        {"box": [-0.22, 0.6, 0.1, 0.02, 0.87, 0.3], "color": [70, 62, 60], "colors": {"black": [200, 196, 190]}, "shown": ["spotted"], "hidden": ["shorn"]},
+        {"box": [0.03, 0.6, -0.4, 0.27, 0.87, -0.2], "color": [70, 62, 60], "colors": {"black": [200, 196, 190]}, "shown": ["spotted"], "hidden": ["shorn"]},
+        {"box": [-0.17, 0.6, -0.55, 0.07, 0.87, -0.35], "color": [70, 62, 60], "colors": {"black": [200, 196, 190]}, "shown": ["spotted"], "hidden": ["shorn"]},
+        {"box": [0.34, 0.5, -0.3, 0.37, 0.8, 0.05], "color": [70, 62, 60], "colors": {"black": [200, 196, 190]}, "shown": ["spotted"], "hidden": ["shorn"]},
+        {"box": [-0.37, 0.4, 0.0, -0.34, 0.7, 0.3], "color": [70, 62, 60], "colors": {"black": [200, 196, 190]}, "shown": ["spotted"], "hidden": ["shorn"]},
+        {"box": [-0.2, 0.52, -0.83, 0.2, 0.92, -0.43], "color": [122, 92, 70], "skin": "head", "swing": "pitch", "hinge": [0, 0.72, -0.45]},
+        {"box": [-0.3, 0, -0.4, -0.14, 0.38, -0.24], "color": [122, 92, 70], "skin": "legs", "swing": "walk"},
+        {"box": [0.14, 0, -0.4, 0.3, 0.38, -0.24], "color": [122, 92, 70], "skin": "legs", "swing": "walk_back"},
+        {"box": [-0.3, 0, 0.22, -0.14, 0.38, 0.38], "color": [122, 92, 70], "skin": "legs", "swing": "walk_back"},
+        {"box": [0.14, 0, 0.22, 0.3, 0.38, 0.38], "color": [122, 92, 70], "skin": "legs", "swing": "walk"}
+      ],
+      "scale": {"lamb": 0.5},
+      "puffs": {"in_love": {"color": [236, 84, 118], "chance": 0.06, "height": 1.2}}
+    },
+    "spawn": {
+      "on": "voxiverse:grass",
+      "day": [0.27, 0.73],
+      "every": 60,
+      "chance": 0.5,
+      "cap": 6,
+      "within": 48,
+      "distance": [16, 40],
+      "group": [1, 3]
+    }
+  }
+}
