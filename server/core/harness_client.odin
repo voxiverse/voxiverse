@@ -3,6 +3,7 @@ package core
 import "base:runtime"
 import "core:fmt"
 import "core:math"
+import "core:net"
 import "core:slice"
 import "core:strings"
 import "core:sync"
@@ -549,4 +550,145 @@ test_key :: proc(name: string) -> (k: game.Account_Key) {
 test_hello :: proc(name: string) -> game.Hello {
 	schema := game.game_schema(allocator = context.temp_allocator)
 	return {game.PROTOCOL_VERSION, test_key(name).account, name, schema.engine_hash, 0, nil}
+}
+
+// Harness_Player: one more player for a test, joining a listening harness server over
+// its network as a remote client does (its account, the packs, its character), then
+// standing still: a game's tests play with it beside the mirror (two players, a
+// third...). It keeps what it is told of the game's records (harness_player_record) and
+// the notices; the test moves it on the server's side (teleport, damage...).
+Harness_Player :: struct {
+	name:     string,
+	h:        ^Harness,
+	link:     netcode.Link,
+	scratch:  ^game.Block_Array,
+	schema:   game.Schema,
+	rx:       game.Receiver,
+	welcomed: bool,
+	gone:     bool, // harness_player_leave: it no longer plays
+	sequence: u32,
+	messages: [dynamic][]u8,
+	notices:  [dynamic]string, // the text of every Notice (heap)
+}
+
+// harness_player_join: p connects to h's server (which listens) as name; the harness
+// runs it each tick from now. h and p stay where they are until harness_player_free,
+// after harness_stop.
+harness_player_join :: proc(h: ^Harness, p: ^Harness_Player, name: string) {
+	assert(h.srv.listening, "harness_player_join needs a server that listens")
+	s := &h.srv
+	p^ = {
+		name    = name,
+		h       = h,
+		scratch = new(game.Block_Array),
+		schema  = game.game_schema(s.config.game.id, s.config.game.kinds),
+	}
+	game.receiver_init(&p.rx, &p.schema, s.registry)
+	netcode.link_connect(
+		&p.link,
+		{net.IP4_Loopback, s.host.socket.port},
+		"",
+		h.net.now,
+		sim = &h.net,
+	)
+	harness_add(h, harness_player_tick, p)
+}
+
+// harness_player_leave: p disconnects, as a player who quits; it stays in the
+// harness's list doing nothing.
+harness_player_leave :: proc(p: ^Harness_Player) {
+	if p.gone {return}
+	netcode.link_close(&p.link, "left")
+	p.gone = true
+}
+
+// harness_player_free frees what p holds (after harness_stop).
+harness_player_free :: proc(p: ^Harness_Player) {
+	harness_player_leave(p)
+	free(p.scratch)
+	game.receiver_destroy(&p.rx)
+	game.schema_destroy(&p.schema)
+	for m in p.messages {netcode.link_free(&p.link, m)}
+	delete(p.messages)
+	for n in p.notices {delete(n)}
+	delete(p.notices)
+}
+
+// harness_player_client: p's client on the server (nil before it joins).
+harness_player_client :: proc(p: ^Harness_Player) -> ^Client {
+	return client_by_name(&p.h.srv, p.name)
+}
+
+// harness_player_record: what the server last put for p of the game's kind whose value
+// type is T (under key), or nil.
+harness_player_record :: proc(p: ^Harness_Player, $T: typeid, key := game.Key{}) -> ^T {
+	kind, found := game.game_kind(&p.schema, T)
+	if !found {return nil}
+	return (^T)(game.replica_get(&p.rx.live, kind, key))
+}
+
+@(private = "file")
+harness_player_send :: proc(p: ^Harness_Player, m: game.Client_Message) {
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	game.encode_client(&w, m)
+	netcode.link_send(&p.link, w.buf[:], game.message_reliable(.Client, w.buf[0]))
+}
+
+// harness_player_tick: what arrived is handled as a client handles it (the packs are
+// the server's own registry's: it claims them all), and an idle input goes back.
+@(private = "file")
+harness_player_tick :: proc(data: rawptr) {
+	p := (^Harness_Player)(data)
+	if p.gone {return}
+	s := &p.h.srv
+	now := netcode.link_now(&p.link)
+	was := p.link.state
+	netcode.link_update(&p.link, now)
+	if was != .Connected && p.link.state == .Connected {
+		k := test_key(p.name)
+		harness_player_send(
+			p,
+			game.Hello{game.PROTOCOL_VERSION, k.account, p.name, p.schema.engine_hash, 0, nil},
+		)
+	}
+	netcode.link_receive(&p.link, &p.messages)
+	for m in p.messages {
+		defer netcode.link_free(&p.link, m)
+		msg, ok := game.decode_server(m, p.scratch, s.registry)
+		if !ok {continue}
+		#partial switch v in msg {
+		case game.Packs:
+			harness_player_send(p, game.Pack_Want{})
+			harness_player_send(p, game.Packs_Ready{v.content})
+		case game.Challenge:
+			k := test_key(p.name)
+			harness_player_send(p, game.Proof{game.account_sign(&k, v.nonce)})
+		case game.Characters:
+			harness_player_send(p, game.Choose{p.name})
+		case game.Welcome:
+			p.welcomed = true
+			rules := v.rules
+			game.receiver_seed(&p.rx, int(game.State_Kind.Rules), &rules)
+		case game.State_Message:
+			got := make([dynamic]game.Received, context.temp_allocator)
+			game.receive_state(&p.rx, v.data, &got)
+			for g in got {
+				if g.op == .Event &&
+				   g.kind < p.schema.engine &&
+				   game.Event_Kind(g.kind - len(game.State_Kind)) == .Notice {
+					append(&p.notices, strings.clone((^game.Notice)(g.value).text))
+				}
+			}
+		case game.Snapshot_Message:
+			got := make([dynamic]game.Received, context.temp_allocator)
+			game.receive_snapshot(&p.rx, v.data, &got)
+		}
+	}
+	clear(&p.messages)
+	if p.welcomed {
+		p.sequence += 1
+		harness_player_send(p, game.Input{p.sequence, {}, p.rx.ack})
+	}
+	netcode.link_flush(&p.link, now)
 }

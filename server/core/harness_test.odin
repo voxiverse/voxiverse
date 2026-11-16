@@ -2,6 +2,7 @@ package core
 
 import "core:testing"
 
+import "common:game"
 import "common:netcode"
 
 @(private = "file")
@@ -57,4 +58,63 @@ test_harness_refusals :: proc(t: ^testing.T) {
 		loss = 0.1,
 	}
 	testing.expect(t, harness_refused(config), "a simulated network with conditions was taken")
+}
+
+// A second player joins beside the mirror over the harness's network: it is welcomed and
+// plays, is told the game's records and the notices sent to it, and leaving ends its
+// client as any leaving does.
+@(private = "file")
+Probe_Score :: struct {
+	points: u32,
+}
+
+@(test)
+test_harness_player_joins :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.listen = true
+	config.game = Game {
+		info = {id = "probe"},
+		kinds = {states = {{name = "probe.score", value = Probe_Score}}},
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	p := new(Harness_Player)
+	defer free(p)
+	defer harness_player_free(p)
+	defer session_stop(sess)
+	harness_player_join(&sess.h, p, "guest")
+	joined :: proc(data: rawptr) -> bool {
+		sess := (^Session)(data)
+		c := client_by_name(&sess.h.srv, "guest")
+		return sess.mirror.welcomed && c != nil && c.state == .Playing
+	}
+	_, ok := harness_step_until(&sess.h, joined, sess, 600)
+	if !testing.expect(t, ok, "the second player never joined") {return}
+	harness_step(&sess.h, 2)
+	testing.expect(t, p.welcomed)
+	s := &sess.h.srv
+	c := harness_player_client(p)
+	testing.expect(t, c != nil && c != &s.clients[0], "the guest is the mirror's seat")
+
+	score := Probe_Score{42}
+	game_put(s, c, &score)
+	notice(s, c, "hello guest")
+	harness_step(&sess.h, 3)
+	got := harness_player_record(p, Probe_Score)
+	testing.expect(t, got != nil && got.points == 42, "the guest was not told its record")
+	testing.expect(t, len(p.notices) == 1 && p.notices[0] == "hello guest")
+	testing.expect(
+		t,
+		mirror_game_record(&sess.mirror, Probe_Score) == nil,
+		"the mirror was told the guest's",
+	)
+
+	harness_player_leave(p)
+	harness_step(&sess.h, 3 * game.TICK_RATE)
+	testing.expect(
+		t,
+		harness_player_client(p) == nil || c.state != .Playing,
+		"the guest is still playing",
+	)
 }

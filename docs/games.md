@@ -276,6 +276,10 @@ KINDS :: game.Game_Kinds {
   server with different records of a game refuse each other as they do for the engine's.
 - The harness's mirror client builds its schema with the server's game, so a game's test
   reads what its players were told: `core.mirror_game_record(&sess.mirror, stopwatch.Times)`.
+  A test of a game for several players joins more beside the mirror, on a server that
+  listens: `core.harness_player_join(&sess.h, &guest, "guest")`, a client over the
+  harness's network that takes the packs, plays and stands still (the test moves it on the
+  server's side), told its records and notices as any player (`harness_player_record`).
 
 `build schema` writes the engine's kinds into the Wireshark dissector; a game's kinds are not
 in it. `build netdump` decodes with the engine's schema alone: in a trace of a session with a
