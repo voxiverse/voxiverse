@@ -244,7 +244,13 @@ the engine commit that makes it for games, documented where it is declared.
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
 `registry`, `sim_speed`, `sim_steps` and `listening` (others can join: opened to the LAN, or
 a dedicated server); `Client`'s `state`, `world`, `player` (its position, velocity, flying),
-`dead`, `mode` and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's
+`dead`, `mode` and `inventory`; `World`'s `rules`, `clock`, `address` (which world it is, a
+`starmap.Address`: Earth's is the same in every universe), `seed` (its terrain's, from the
+universe's) and `params` (its generator's parameters: `params.planet` is 1 for a world built on
+the planet model). What a game knows of the planet beyond them is `common:`'s, called
+directly: where a block is on it (`worldgen.planet_lat_lon(x, z)`), the model with its
+relief and climate (`worldgen.planet_model()`, sampled by `planet.planet_climate_at`; the
+Köppen class of a column, `worldgen.planet_climate(x, z)`). What it writes of the engine's
 state is, in `start`, a world's clock; everything else goes through the list. A world's rules
 change through `game_rule`, never by assignment: the lint refuses `w.rules.<name> = ...` in a
 game's code. Types a call returns (`Mode_Result`, `Strike`, `Structure_Fit`,
