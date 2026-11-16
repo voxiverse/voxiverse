@@ -78,13 +78,6 @@ RULE_NAMES := [Rule]string {
 	.Heavy    = "heavy",
 }
 
-RULE_TITLES := [Rule]string {
-	.Baseline = "BASELINE: the water just rose",
-	.Tide     = "TIDE: the water surged and fell back",
-	.Rot      = "ROT: wet blocks crumbled",
-	.Heavy    = "HEAVY BLAST: explosions were huge",
-}
-
 Result :: enum u8 {
 	None,
 	Won, // everyone still in stood on the goal

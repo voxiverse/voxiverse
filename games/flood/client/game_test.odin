@@ -6,6 +6,7 @@ import "core:testing"
 
 import "client:engine"
 import "client:playtest"
+import "common:base"
 import "common:game"
 import "games:flood"
 import flood_server "games:flood/server"
@@ -59,4 +60,13 @@ test_flood_on_the_hud :: proc(t: ^testing.T) {
 	// While F3 is open the engine gives the HUD only the screen below it (here from y 336):
 	// all Flood draws stays inside, the banners shrunk to fit.
 	testing.expect(t, playtest.drawn_within(rig, 336), "drawn outside the screen below F3")
+}
+
+// Every key of Flood's text table has its English.
+@(test)
+test_flood_text_table :: proc(t: ^testing.T) {
+	key, missing := base.text_missing(flood.TEXT_EN)
+	testing.expectf(t, !missing, "%v has no text", key)
+	testing.expect_value(t, flood.tr(.Made_It, 2, 3), "2 of 3 made it")
+	testing.expect_value(t, flood.rule_title(.Rot), "ROT: WET BLOCKS CRUMBLED")
 }

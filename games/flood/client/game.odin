@@ -1,7 +1,6 @@
 package flood_client
 
 import "core:fmt"
-import "core:strings"
 
 import "client:engine"
 import "client:ui"
@@ -38,15 +37,15 @@ received :: proc(s: ^engine.Session, r: game.Received) {
 status :: proc(f: flood.Round, you_y: int) -> string {
 	switch f.phase {
 	case .Waiting:
-		return "FLOOD  waiting for players"
+		return flood.tr(.Status_Waiting)
 	case .Countdown:
-		return fmt.tprintf("FLOOD  round %d  starting", f.round)
+		return flood.tr(.Status_Starting, f.round)
 	case .Playing:
-		return fmt.tprintf(
-			"FLOOD  round %d   %d:%02d   water y=%d   you y=%d   goal y=%d   alive %d/%d   on goal %d",
+		clock := fmt.tprintf("%d:%02d", f.seconds / 60, f.seconds % 60)
+		return flood.tr(
+			.Status_Playing,
 			f.round,
-			f.seconds / 60,
-			f.seconds % 60,
+			clock,
 			f.level,
 			you_y,
 			flood.GOAL_Y + 1,
@@ -55,7 +54,7 @@ status :: proc(f: flood.Round, you_y: int) -> string {
 			f.on_goal,
 		)
 	case .Reveal:
-		return fmt.tprintf("FLOOD  round %d over", f.round)
+		return flood.tr(.Status_Over, f.round)
 	}
 	return ""
 }
@@ -69,42 +68,36 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	switch f.phase {
 	case .Waiting:
 	case .Countdown:
-		engine.banner(ctx, -140, fmt.tprintf("ROUND %d", f.round), 1.5, t.focus_ring)
+		engine.banner(ctx, -140, flood.tr(.Round_Title, f.round), 1.5, t.focus_ring)
 		engine.banner(ctx, -60, fmt.tprintf("%d", f.countdown), 1.5, t.text)
-		engine.banner(ctx, 40, "Reach the glowing platform. Something is different.", 0.6, t.text)
+		engine.banner(ctx, 40, flood.tr(.Round_Goal), 0.6, t.text)
 	case .Playing:
 		switch {
 		case f.out:
-			engine.banner(ctx, -140, "WATCHING: out of this round (fly)", 1, t.log_error)
+			engine.banner(ctx, -140, flood.tr(.Watching), 1, t.log_error)
 		case f.under > 0:
-			engine.banner(
-				ctx,
-				-140,
-				fmt.tprintf("DROWNING %.1f", f32(f.under) / 10),
-				1,
-				t.log_error,
-			)
+			under := fmt.tprintf("%.1f", f32(f.under) / 10)
+			engine.banner(ctx, -140, flood.tr(.Drowning, under), 1, t.log_error)
 		case f.seconds < u16(flood.GRACE):
 			left := int(flood.GRACE) - int(f.seconds)
-			engine.banner(ctx, -140, fmt.tprintf("Water in %d", left), 1, t.focus_ring)
+			engine.banner(ctx, -140, flood.tr(.Water_In, left), 1, t.focus_ring)
 		}
 	case .Reveal:
-		head, color := "ROUND OVER", t.text
+		head, color := flood.tr(.Result_Over), t.text
 		switch f.result {
 		case .Won:
-			head, color = "ROUND WON", t.success
+			head, color = flood.tr(.Result_Won), t.success
 		case .Lost:
-			head, color = "EVERYONE DROWNED", t.log_error
+			head, color = flood.tr(.Result_Lost), t.log_error
 		case .Time_Up:
-			head, color = "TIME UP", t.log_warn
+			head, color = flood.tr(.Result_Time_Up), t.log_warn
 		case .None:
 		}
 		engine.banner(ctx, -180, head, 1.5, color)
-		engine.banner(ctx, -90, fmt.tprintf("%d of %d made it", f.made_it, f.players), 0.8, t.text)
-		engine.banner(ctx, -10, "The rule was", 0.6, t.text_muted)
-		title := strings.to_upper(flood.RULE_TITLES[f.rule], context.temp_allocator)
-		engine.banner(ctx, 60, title, 1, t.log_warn)
-		engine.banner(ctx, 140, fmt.tprintf("next round in %d", f.countdown), 0.6, t.text_muted)
+		engine.banner(ctx, -90, flood.tr(.Made_It, f.made_it, f.players), 0.8, t.text)
+		engine.banner(ctx, -10, flood.tr(.Rule_Was), 0.6, t.text_muted)
+		engine.banner(ctx, 60, flood.rule_title(f.rule), 1, t.log_warn)
+		engine.banner(ctx, 140, flood.tr(.Next_Round, f.countdown), 0.6, t.text_muted)
 	}
 }
 
