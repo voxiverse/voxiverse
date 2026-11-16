@@ -87,6 +87,11 @@ splash_choose :: proc(entries: []string, second: i64) -> string {
 // the launcher's small text (a test holds every game to it).
 TITLE_WIDTH :: 520
 
+// LOGO_GAP, LOGO_GAP_MIN: the gap under the logo, and the least it gives way to when the
+// title (its launcher growing with the games) would not fit the screen.
+LOGO_GAP :: 40
+LOGO_GAP_MIN :: 8
+
 // LAUNCHER_ABOUT: the size of a game's description, of the theme's font size.
 LAUNCHER_ABOUT :: 0.8
 
@@ -114,15 +119,14 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	games := launcher_games(app)
 	about := t.font_size * LAUNCHER_ABOUT // a game's description
 	rows: f32 = 5 if app.devchat.running else 4
-	// Each game: its button and its description (each with the spacing after it), then a
-	// gap before the rest.
-	launcher := f32(len(games)) * (t.row_height + about + 4 + 2 * t.spacing)
+	// Each game: its button and its description close under it, the spacing after both,
+	// then a gap before the rest.
+	launcher := f32(len(games)) * (t.row_height + about + 4 + t.spacing)
 	if len(games) > 0 {launcher += 2 * t.spacing}
-	column := ui.rect_center(
-		ctx.screen,
-		TITLE_WIDTH,
-		rows * t.row_height + (rows - 1) * t.spacing + 120 + launcher,
-	)
+	// The gap under the logo gives way (down to a little) so the whole title fits.
+	stack := rows * t.row_height + (rows - 1) * t.spacing + 80 + launcher
+	gap := clamp(ctx.screen.h - stack - 2 * t.spacing, LOGO_GAP_MIN, LOGO_GAP)
+	column := ui.rect_center(ctx.screen, TITLE_WIDTH, stack + gap)
 	logo := ui.cut_top(&column, 80)
 	title_text := engine.tr(.Title_Voxiverse)
 	ui.title(ctx, title_text, logo)
@@ -186,14 +190,16 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		)
 		ui.draw_text_tilted(ctx, centre, shown, size, color, angle, t.font_size * 1.05 * 1.3)
 	}
-	ui.cut_top(&column, 40)
+	ui.cut_top(&column, gap)
 	ui.begin_column(ctx, column)
 	defer ui.end_column(ctx)
 	ui.default_focus(ctx)
 	for g in games {
 		ui.push_id(ctx, g.id)
 		if ui.button(ctx, g.name, ui.next(ctx)) {app.launch = g.id}
-		ui.draw_text(ctx, ui.next(ctx, about + 4), g.description, about, t.text_muted, .Center)
+		under := ui.next(ctx, max(about + 4 - t.spacing, 1))
+		under.y, under.h = under.y - t.spacing, about + 4 // (close under its button)
+		ui.draw_text(ctx, under, g.description, about, t.text_muted, .Center)
 		ui.pop_id(ctx)
 	}
 	if len(games) > 0 {ui.next(ctx, t.spacing)} 	// (the games apart from the rest)

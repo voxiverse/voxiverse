@@ -140,6 +140,17 @@ test_launcher_lists_and_starts_every_game :: proc(t: ^testing.T) {
 	}
 	singleplayer, _ := ui.find_widget(&app.ui, "Singleplayer")
 	testing.expect(t, singleplayer.y > last, "the games are not above the rest of the title")
+	// All of it on the screen: the last button too, however many games there are (six
+	// overflowed it: Quit Game was cut in half).
+	// (a widget's rect is what is left of it on the screen: whole, it is a row high)
+	quit, _ := ui.find_widget(&app.ui, "Quit Game")
+	testing.expectf(
+		t,
+		quit.h >= app.ui.theme.row_height - 0.5,
+		"Quit Game is cut: %v on the screen %v",
+		quit,
+		app.ui.screen,
+	)
 
 	// The pad: the default game is lit at once; Down moves to the next game, A picks it.
 	pad_connect(app, .Xbox)
