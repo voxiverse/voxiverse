@@ -123,7 +123,7 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 		check_region(r, dir, fmt.tprintf("%s/regions/%s", world, e.name), e.name)
 	}
 	// Text files: their lines have the shape the loaders read.
-	check_lines(r, dir, fmt.tprintf("%s/%s", world, ENTITIES_FILE), 7, 12, false)
+	check_lines(r, dir, fmt.tprintf("%s/%s", world, ENTITIES_FILE), 7, 128, false)
 	check_lines(
 		r,
 		dir,

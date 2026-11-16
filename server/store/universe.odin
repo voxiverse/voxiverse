@@ -147,7 +147,7 @@ WORLD_FILE :: "world.cfg"
 // migrations in a registry (migrate.odin); 6: regions name their
 // blocks, universes list their packs. Older ones are refused (no migration
 // before 1.0).
-SAVE_FORMAT :: 6
+SAVE_FORMAT :: 7
 
 // UNIVERSE_LOCK: the file an open universe holds a lock on (its text is the
 // owner's process id, for the message only).

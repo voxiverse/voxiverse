@@ -1,5 +1,6 @@
 package core
 
+import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
@@ -8,6 +9,7 @@ import "core:testing"
 
 import "common:game"
 import "common:protocol"
+import "server:store"
 
 // wool_dropped: the wool lying about in client name's world.
 @(private = "file")
@@ -255,7 +257,8 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 	testing.expect(t, r.shorn[1], "the sheep over stone grew its wool back")
 }
 
-// A world saved when the animal was a critter loads with sheep in its place.
+// A world saved when the animal was a critter loads with sheep in its place (a universe
+// of format 6, whose migration names it).
 @(test)
 test_old_saves_have_sheep :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "sheep_old"}, context.temp_allocator) or_else ""
@@ -288,6 +291,16 @@ test_old_saves_have_sheep :: proc(t: ^testing.T) {
 	path := filepath.join({home_dir(dir, 24), ENTITIES_FILE}, context.temp_allocator) or_else ""
 	old := "# Voxiverse entities\ncritter 4.5000 20.0000 4.5000 1.0000 4 false\n"
 	testing.expect(t, os.write_entire_file(path, transmute([]u8)old) == nil)
+	for file in ([]string{filepath.join({dir, store.UNIVERSE_FILE}, context.temp_allocator) or_else "", filepath.join({home_dir(dir, 24), store.WORLD_FILE}, context.temp_allocator) or_else ""}) {
+		text, _ := os.read_entire_file_from_path(file, context.temp_allocator)
+		older, _ := strings.replace_all(
+			string(text),
+			fmt.tprintf("format = %d", store.SAVE_FORMAT),
+			"format = 6",
+			context.temp_allocator,
+		)
+		testing.expect(t, os.write_entire_file(file, transmute([]u8)older) == nil)
+	}
 	if !testing.expect(t, harness_start(h, config)) {return}
 	defer harness_stop(h)
 	b := new(Net_Client)

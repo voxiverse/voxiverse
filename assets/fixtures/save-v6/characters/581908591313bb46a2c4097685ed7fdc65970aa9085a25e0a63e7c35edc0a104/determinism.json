@@ -1,0 +1,49 @@
+{
+  "format": 4,
+  "world": "011f27002221130f-0f18141d071e19",
+  "position": [
+    0.5,
+    1.0,
+    0.5
+  ],
+  "look": [
+    0.0,
+    -0.7
+  ],
+  "flying": false,
+  "selected": 0,
+  "mode": "voxiverse:creative",
+  "items": [
+    {
+      "slot": 0,
+      "item": "voxiverse:rocket_launcher",
+      "count": 1,
+      "ammo": 0,
+      "data": 0
+    }
+  ],
+  "trader": {
+    "cash": 20.0,
+    "cargo": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "seen": [
+
+    ]
+  }
+,
+  "stats": {
+    "sessions": 1,
+    "sheep.fed": 1,
+    "sheep.sheared": 1,
+    "time.played": 2,
+    "xp": 7
+  }
+}

@@ -203,7 +203,7 @@ the engine commit that makes it for games, documented where it is declared.
 | Name | What it is for |
 |---|---|
 | `Game`, `Config`, `Server`, `Client`, `World`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change`, `Pickup`, `Request` | The game itself, the config `configure` changes, the session, a player, a world, and what its hooks are told |
-| `game_state(s, T)`, `game_client_state(s, c, T)` | The game's state, for the session and for a seat ([below](#the-games-state)) |
+| `game_state(s, T)`, `game_client_state(s, c, T)`, `entity_data(w, h, T)` | The game's state, for the session and for a seat; its record on an entity of its kinds ([below](#the-games-state)) |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `request_value(s, r, T)` | One of its requests, in its `request` hook, as its type ([below](#requests)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
@@ -417,6 +417,23 @@ A game declares two types and the server owns their memory (the session's arena,
 - `server_state`: one per session, zero when `start` is called: `core.game_state(s, T)`.
 - `client_state`: one per seat, zero for each player who joins (the seat's block is zeroed
   when it is freed): `core.game_client_state(s, c, T)`.
+
+- `entity_data`: a record on each entity of the game's own kinds (its pack's,
+  `<game>:<name>`): `core.entity_data(w, h, T)`, nil for an entity of another kind. Zero
+  when the entity comes to be, at most `game.MAX_ENTITY_DATA` (64) bytes of numbers,
+  booleans, enums, bit sets and fixed arrays and structs of them (`start` refuses a type
+  with a pointer, slice, string or map). It is saved and loaded with the world with the
+  entity itself, field by field by name (`entities.cfg`, [saves.md](saves.md)): a field
+  added later loads as zero. It goes to no client unless the game puts it, or what it
+  shows of it, in a record of its own keyed by the entity (`protocol.key_entity(id)`, to
+  the players who know it: `entity_known`).
+
+A game's creature whose kind is `"saved": true` outlives a restart whole: its kind, place,
+health and most health, its record, and where it was steered (`entity_go`'s point,
+`entity_keep`'s band, `entity_glide`'s points left, its speed; a route it followed is the
+game's to give it again, `entity_follow`). The game finds its creatures again by walking
+them (`entities_each`, `entities_of`) and reading their records, rather than making them
+again.
 
 A game names them once (`state :: proc(s: ^core.Server) -> ^Round {return
 core.game_state(s, Round)}`). Anything it keeps beyond these blocks it frees in its own

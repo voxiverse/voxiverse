@@ -97,6 +97,7 @@ Game :: struct {
 	kinds:         protocol.Game_Kinds, // what it replicates besides the engine (its shared package's; game_put, game_event)
 	server_state:  typeid, // its state for the session (game_state): zero at start; nil: none
 	client_state:  typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none
+	entity_data:   typeid, // its record on each entity of its pack's kinds (entity_data): zero at spawn, saved with the world; nil: none
 	configure:     proc(config: ^Config), // before anything else: may change the config
 	start:         proc(s: ^Server) -> bool, // the session is set up, no tick has run (false: start fails)
 	stop:          proc(s: ^Server), // after the last tick, before the last save
@@ -270,6 +271,12 @@ start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 	if !game.game_id_valid(config.game.id) {
 		log.errorf("server needs a game to play (Config.game; its id: %q)", config.game.id)
 		return false
+	}
+	if config.game.entity_data != nil {
+		if why := game.entity_data_plain(config.game.entity_data); why != "" {
+			log.errorf("server game's entity_data cannot be kept game=%s: %s", config.game.id, why)
+			return false
+		}
 	}
 	if config.game.configure != nil {config.game.configure(&config)}
 	if config.net != nil && (!config.stepped || config.conditions != {}) {

@@ -44,6 +44,46 @@ HARNESS_GAME :: Game {
 	},
 }
 
+// CREATURES_GAME: the game of the engine's tests that need creatures of a game's own:
+// HARNESS_GAME with a pack of neutral ones (creatures_pack: `creatures:walker`, a steered
+// walker a sheep's size that is hit, saved and summoned) and a record on each
+// (Creature_Data). A client that joins one needs its client part
+// (engine.CREATURES_GAME). harness_creatures gives it as a value to keep.
+CREATURES_GAME :: Game {
+	info = {
+		id = "creatures",
+		name = "Creatures",
+		description = "The engine's tests' game with creatures of its own.",
+	},
+	entity_data = Creature_Data,
+	pack = game.Pack_Source {
+		namespace = "creatures",
+		files = {
+			{"pack.json", #load("creatures_pack/pack.json")},
+			{"data/entities/creatures.json", #load("creatures_pack/data/entities/creatures.json")},
+		},
+	},
+}
+
+// Creature_Data: CREATURES_GAME's record on its creatures (Game.entity_data), which the
+// engine's tests set and read back.
+Creature_Data :: struct {
+	number: i32,
+	mood:   enum u8 {
+		Calm,
+		Scared,
+	},
+	home:   [3]i16,
+}
+
+// harness_creatures: CREATURES_GAME as a value with a home: a constant's slices (its
+// pack's list of files) are made where it is used, so a copy taken in a call would point
+// into that call's frame once it returned.
+harness_creatures :: proc() -> Game {return creatures_kept[0]}
+
+@(rodata, private = "file")
+creatures_kept := [1]Game{CREATURES_GAME}
+
 // harness_game: config, playing HARNESS_GAME if it names no game.
 @(private = "file")
 harness_game :: proc(config: Config) -> Config {

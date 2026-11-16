@@ -714,22 +714,28 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 	return true
 }
 
-// entities.cfg: one line per entity: kind x y z yaw health natural.
+// entities.cfg: one line per saved entity: its kind, x y z yaw health natural, then what
+// else it has as `name=value` fields: `max` (its most health, when a game set another than
+// its kind's), a dropped stack's `item count action stack_data`, a sheep's `shorn genes
+// growth love wait`, a steered walker's way (`speed`; `go=x,y,z`, `keep=x,y,z,near,far` or
+// `glide=x,y,z/x,y,z/...`: a route it followed is the game's to give it again) and the
+// game's record (`data.<field>`, Game.entity_data). A field at its default is left out.
 @(private = "file")
 write_entities :: proc(w: ^World) -> bool {
+	s := w.server
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintln(
 		&b,
-		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count action data | shorn genes growth love wait]",
+		"# Voxiverse entities (written by the server): kind x y z yaw health natural [name=value...]",
 	)
 	it := entities_each(w)
 	for e in entities_next(&it) {
-		info := game.kind_info(w.server.registry, entity_kind(w, e))
+		info := game.kind_info(s.registry, entity_kind(w, e))
 		if !info.saved {continue}
 		fmt.sbprintf(
 			&b,
 			"%s %.4f %.4f %.4f %.4f %d %v",
-			info.id, // (a save before kinds were data wrote the bare name: load_entities reads both)
+			info.id,
 			entity_pos(w, e).x,
 			entity_pos(w, e).y,
 			entity_pos(w, e).z,
@@ -737,20 +743,22 @@ write_entities :: proc(w: ^World) -> bool {
 			entity_health_of(w, e),
 			entity_is_natural(w, e),
 		)
-		if entity_kind(w, e) == w.server.registry.engine.item { 	// (and the action that dropped it: a rollback takes it back after a restart)
+		if most := entity_max_health(w, e); most != info.health {fmt.sbprintf(&b, " max=%d", most)}
+		if entity_kind(w, e) == s.registry.engine.item { 	// (and the action that dropped it: a rollback takes it back after a restart)
+			stack := entity_stack(w, e)
 			fmt.sbprintf(
 				&b,
-				" %s %d %d %d",
-				game.item_id(w.server.registry, entity_stack(w, e).item),
-				entity_stack(w, e).count,
-				entity_owner(w, e).action,
-				entity_stack(w, e).data,
+				" item=%s count=%d",
+				game.item_id(s.registry, stack.item),
+				stack.count,
 			)
+			if a := entity_owner(w, e).action; a != 0 {fmt.sbprintf(&b, " action=%d", a)}
+			if stack.data != 0 {fmt.sbprintf(&b, " stack_data=%d", stack.data)}
 		}
-		if entity_kind(w, e) == w.server.registry.engine.sheep {
+		if entity_kind(w, e) == s.registry.engine.sheep {
 			fmt.sbprintf(
 				&b,
-				" %v %d %d %d %d",
+				" shorn=%v genes=%d growth=%d love=%d wait=%d",
 				entity_wool(w, e).shorn,
 				transmute(u8)entity_genes(w, e).genes,
 				entity_breeding(w, e).growth,
@@ -758,115 +766,115 @@ write_entities :: proc(w: ^World) -> bool {
 				entity_breeding(w, e).wait,
 			)
 		}
+		if st := entity_steer(w, e); st != nil {steer_write(&b, st)}
+		if data := game.store_get(&w.entity_world.store, e, C_GAME_DATA, game.Entity_Data);
+		   data != nil {
+			game.entity_data_write(&b, s.config.game.entity_data, &data.bytes, "data")
+		}
 		strings.write_byte(&b, '\n')
 	}
 	return store_write(
-		w.server,
+		s,
 		filepath.join({w.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE,
 		b.buf[:],
 	)
 }
 
-// load_entities brings back a saved world's entities (they wait, frozen,
-// until their ground is loaded). Lines that do not read are skipped.
+// steer_write: where a steered walker was going, as entities.cfg's fields.
+@(private = "file")
+steer_write :: proc(b: ^strings.Builder, st: ^Steer) {
+	if st.speed != 0 {fmt.sbprintf(b, " speed=%v", st.speed)}
+	switch st.mode {
+	case .Stand, .Follow:
+	case .Go:
+		if !st.arrived {fmt.sbprintf(b, " go=%.4f,%.4f,%.4f", st.target.x, st.target.y, st.target.z)}
+	case .Keep:
+		fmt.sbprintf(
+			b,
+			" keep=%.4f,%.4f,%.4f,%v,%v",
+			st.target.x,
+			st.target.y,
+			st.target.z,
+			st.near,
+			st.far,
+		)
+	case .Glide:
+		if st.step >= st.path.count {return}
+		strings.write_string(b, " glide=")
+		for p, i in st.path.steps[st.step:st.path.count] {
+			fmt.sbprintf(b, "%s%d,%d,%d", "/" if i > 0 else "", p.x, p.y, p.z)
+		}
+	}
+}
+
+// load_entities brings back a saved world's entities (they wait, frozen, until their
+// ground is loaded). A line that does not read is skipped; a field it does not know is
+// skipped and named in the log.
 load_entities :: proc(w: ^World) {
 	if w.dir == "" {return}
 	path := filepath.join({w.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {return} 	// none saved (a new world, or an older one)
+	s := w.server
+	reg := s.registry
 	rest := string(data)
 	loaded, skipped := 0, 0
 	unknown := make([dynamic]string, context.temp_allocator)
+	strange := make([dynamic]string, context.temp_allocator)
 	for line in strings.split_lines_iterator(&rest) {
 		l := strings.trim_space(line)
 		if l == "" || l[0] == '#' {continue}
 		f := strings.fields(l, context.temp_allocator)
-		ok := len(f) >= 7 && len(f) <= 12
-		reg := w.server.registry
-		sheep, item := reg.engine.sheep, reg.engine.item
-		kind: game.Kind_Id
-		found := false
-		if ok {
-			// (a bare name is a base pack kind: the saves before kinds were data)
-			if k, has := game.registry_kind(reg, f[0]); has && game.kind_info(reg, k).saved {
-				kind, found = k, true
-			}
-			if f[0] == "critter" {kind, found = sheep, true} 	// (before it was a sheep)
-			if !found {append(&unknown, f[0])}
-			// An item has its stack after, a sheep whether it is shorn; no other has more.
-			// An item has its stack after; a sheep whether it is shorn (and, with
-			// its genes, growth, love and wait); no other has more.
-			if found && kind == item && (len(f) < 9 || len(f) > 11) {ok = false}
-			if found && kind == sheep && len(f) != 7 && len(f) != 8 && len(f) != 12 {ok = false}
-			if found && kind != item && kind != sheep && len(f) != 7 {ok = false}
-		}
-		pos: [3]f64
-		yaw: f32
-		health: int
-		if ok && found {
-			x, ok1 := strconv.parse_f64(f[1])
-			y, ok2 := strconv.parse_f64(f[2])
-			z, ok3 := strconv.parse_f64(f[3])
-			w, ok4 := strconv.parse_f32(f[4])
-			h, ok5 := strconv.parse_int(f[5])
-			ok =
-				ok1 &&
-				ok2 &&
-				ok3 &&
-				ok4 &&
-				ok5 &&
-				abs(x) < game.WORLD_LIMIT &&
-				abs(z) < game.WORLD_LIMIT &&
-				y > game.WORLD_MIN_Y &&
-				y < game.WORLD_MAX_Y &&
-				h > 0 &&
-				!math.is_nan(w)
-			pos, yaw, health = {x, y, z}, w, h
-		}
-		stack: game.Stack
-		action: u32
-		if ok && found && kind == item {
-			// A dropped stack: what it is.
-			item, known := game.item_by_name(w.server.registry, f[7] if len(f) >= 9 else "")
-			n, counted := strconv.parse_int(f[8] if len(f) >= 9 else "")
-			if len(f) >= 10 {
-				a, has := strconv.parse_u64(f[9], 10)
-				ok = has && a <= u64(max(u32))
-				action = u32(a)
-			}
-			data: u64 // (the game's number for it: a save before had none)
-			if len(f) == 11 {
-				d, has := strconv.parse_u64(f[10], 10)
-				ok = ok && has && d <= u64(max(u32))
-				data = d
-			}
-			ok = ok && known && counted && n > 0
-			stack = {item, min(n, game.item_stack_size(w.server.registry, item)), 0, u32(data)}
-		}
-		if !ok || !found {
+		if len(f) < 7 {
 			skipped += 1
 			continue
 		}
-		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != 0 {
-			entity_set_yaw(w, e, yaw)
-			entity_set_health(w, e, min(health, game.kind_info(reg, kind).health))
-			entity_stack(w, e)^, entity_owner(w, e).action = stack, action
-			if kind == sheep && len(f) >= 8 {entity_wool(w, e).shorn = f[7] == "true"}
-			if kind == sheep && len(f) == 12 {
-				genes, ok1 := strconv.parse_int(f[8])
-				growth, ok2 := strconv.parse_int(f[9])
-				love, ok3 := strconv.parse_int(f[10])
-				wait, ok4 := strconv.parse_int(f[11])
-				if ok1 && ok2 && ok3 && ok4 && genes >= 0 && genes < 16 {
-					entity_genes(w, e).genes = transmute(game.Genes)u8(genes)
-					br := entity_breeding(w, e)
-					br.growth = i32(clamp(growth, 0, game.LAMB_TICKS))
-					br.love = i32(clamp(love, 0, game.BREED_READY_TICKS))
-					br.wait = i32(clamp(wait, 0, game.BREED_WAIT_TICKS))
-				}
-			}
-			loaded += 1
+		// (a bare name is a base pack kind: the saves before kinds were data)
+		kind, found := game.registry_kind(reg, f[0])
+		if !found || !game.kind_info(reg, kind).saved {
+			append(&unknown, f[0])
+			continue
 		}
+		x, ok1 := strconv.parse_f64(f[1])
+		y, ok2 := strconv.parse_f64(f[2])
+		z, ok3 := strconv.parse_f64(f[3])
+		yaw, ok4 := strconv.parse_f32(f[4])
+		health, ok5 := strconv.parse_int(f[5])
+		if !ok1 ||
+		   !ok2 ||
+		   !ok3 ||
+		   !ok4 ||
+		   !ok5 ||
+		   abs(x) >= game.WORLD_LIMIT ||
+		   abs(z) >= game.WORLD_LIMIT ||
+		   y <= game.WORLD_MIN_Y ||
+		   y >= game.WORLD_MAX_Y ||
+		   health <= 0 ||
+		   math.is_nan(yaw) {
+			skipped += 1
+			continue
+		}
+		fields := make(map[string]string, 16, context.temp_allocator)
+		ok := true
+		for field in f[7:] {
+			name, eq, value := strings.partition(field, "=")
+			if eq == "" || name == "" {ok = false; break}
+			fields[name] = value
+		}
+		if !ok {
+			skipped += 1
+			continue
+		}
+		e := entity_spawn(w, kind, {x, y, z}, f[6] == "true")
+		if e == 0 {continue} 	// (the world is full)
+		entity_set_yaw(w, e, yaw)
+		if !entity_fields_read(w, e, fields, &strange) {
+			entity_gone(w, e)
+			skipped += 1
+			continue
+		}
+		entity_set_health(w, e, clamp(health, 1, entity_max_health(w, e)))
+		loaded += 1
 	}
 	slice.sort(unknown[:])
 	for name, i in unknown {
@@ -877,8 +885,127 @@ load_entities :: proc(w: ^World) {
 			path,
 		)
 	}
+	slice.sort(strange[:])
+	for name, i in strange {
+		if i > 0 && strange[i - 1] == name {continue}
+		log.warnf("server entities field not known, skipped field=%s path=%s", name, path)
+	}
 	if skipped > 0 {log.warnf("server entities skipped lines=%d path=%s", skipped, path)}
 	log.infof("server entities loaded count=%d", loaded)
+}
+
+// entity_fields_read: an entity's saved fields (entities.cfg) onto it. False when one
+// it has does not read (the line is skipped); a name none of its parts has goes to strange.
+@(private = "file")
+entity_fields_read :: proc(
+	w: ^World,
+	e: game.Entity_Handle,
+	fields: map[string]string,
+	strange: ^[dynamic]string,
+) -> bool {
+	s := w.server
+	reg := s.registry
+	kind := entity_kind(w, e)
+	int_of :: proc(fields: map[string]string, name: string, lo, hi: int) -> (int, bool) {
+		n, ok := strconv.parse_int(fields[name])
+		return n, ok && n >= lo && n <= hi
+	}
+	for name, value in fields {
+		switch {
+		case name == "max":
+			n := int_of(fields, name, 1, 1 << 30) or_return
+			entity_set_max_health(w, e, n)
+		case kind == reg.engine.item && (name == "item" || name == "count"):
+			item, known := game.item_by_name(reg, fields["item"])
+			n := int_of(fields, "count", 1, 1 << 30) or_return
+			if !known {return false}
+			entity_stack(w, e)^ = {
+				item,
+				min(n, game.item_stack_size(reg, item)),
+				0,
+				entity_stack(w, e).data,
+			}
+		case kind == reg.engine.item && name == "action":
+			n := strconv.parse_u64(value, 10) or_return
+			if n > u64(max(u32)) {return false}
+			entity_owner(w, e).action = u32(n)
+		case kind == reg.engine.item && name == "stack_data":
+			n := strconv.parse_u64(value, 10) or_return
+			if n > u64(max(u32)) {return false}
+			entity_stack(w, e).data = u32(n)
+		case kind == reg.engine.sheep && name == "shorn":
+			entity_wool(w, e).shorn = value == "true"
+		case kind == reg.engine.sheep && name == "genes":
+			entity_genes(w, e).genes = transmute(game.Genes)u8(
+				int_of(fields, name, 0, 15) or_return,
+			)
+		case kind == reg.engine.sheep && name == "growth":
+			entity_breeding(w, e).growth = i32(int_of(fields, name, 0, game.LAMB_TICKS) or_return)
+		case kind == reg.engine.sheep && name == "love":
+			entity_breeding(w, e).love = i32(
+				int_of(fields, name, 0, game.BREED_READY_TICKS) or_return,
+			)
+		case kind == reg.engine.sheep && name == "wait":
+			entity_breeding(w, e).wait = i32(
+				int_of(fields, name, 0, game.BREED_WAIT_TICKS) or_return,
+			)
+		case name == "speed" || name == "go" || name == "keep" || name == "glide":
+			steer_read(w, e, name, value) or_return
+		case strings.has_prefix(name, "data."):
+			data := game.store_get(&w.entity_world.store, e, C_GAME_DATA, game.Entity_Data)
+			if data == nil ||
+			   !game.entity_data_read(
+					   s.config.game.entity_data,
+					   &data.bytes,
+					   name[len("data."):],
+					   value,
+				   ) {
+				append(strange, name)
+			}
+		case:
+			append(strange, name)
+		}
+	}
+	if kind == reg.engine.item && game.stack_empty(entity_stack(w, e)^) {return false}
+	return true
+}
+
+// steer_read: a steered walker's saved way (steer_write) given back to it.
+@(private = "file")
+steer_read :: proc(w: ^World, e: game.Entity_Handle, name, value: string) -> bool {
+	numbers :: proc(text: string, sep: string, out: []f64) -> bool {
+		parts := strings.split(text, sep, context.temp_allocator)
+		if len(parts) != len(out) {return false}
+		for p, i in parts {
+			out[i] = strconv.parse_f64(p) or_return
+			if math.is_nan(out[i]) || abs(out[i]) >= game.WORLD_LIMIT {return false}
+		}
+		return true
+	}
+	if entity_steer(w, e) == nil {return false}
+	switch name {
+	case "speed":
+		n: [1]f64
+		numbers(value, ",", n[:]) or_return
+		entity_set_speed(w, e, f32(n[0]))
+	case "go":
+		n: [3]f64
+		numbers(value, ",", n[:]) or_return
+		entity_go(w, e, {n[0], n[1], n[2]})
+	case "keep":
+		n: [5]f64
+		numbers(value, ",", n[:]) or_return
+		entity_keep(w, e, {n[0], n[1], n[2]}, f32(n[3]), f32(n[4]))
+	case "glide":
+		points := make([dynamic]game.Block_Pos, context.temp_allocator)
+		for p in strings.split(value, "/", context.temp_allocator) {
+			n: [3]f64
+			numbers(p, ",", n[:]) or_return
+			append(&points, game.Block_Pos{i32(n[0]), i32(n[1]), i32(n[2])})
+		}
+		entity_glide(w, e, points[:]) or_return
+	}
+	return true
 }
 
 // home_address: the address of a new universe's home world: Earth's, or one
@@ -1661,15 +1788,26 @@ backups_kept :: proc(s: ^Server) -> int {
 	return store.BACKUP_KEEP
 }
 
-// store_migrate: the open's step after the format is known. Saves of an
-// older format are refused, not migrated: before 1.0 nothing is compatible
-// (the registry above is the way a later format will bring them on).
+// store_migrate: the open's step after the format is known. A save of an older format
+// the migrations reach (store.MIGRATIONS) is brought up to date, in one transaction after a
+// backup; an older one is refused.
 store_migrate :: proc(s: ^Server) -> bool {
 	st := &s.store
 	if st.format >= store.SAVE_FORMAT {return true}
-	s.refusal = store.OLDER_BUILD
-	log.errorf("server %s format=%d", store.OLDER_BUILD, st.format)
-	return false
+	if !store.migrations_reach(st.format) {
+		s.refusal = store.OLDER_BUILD
+		log.errorf("server %s format=%d", store.OLDER_BUILD, st.format)
+		return false
+	}
+	res := store.migrate_universe(st.dir, &st.disk, st.format, st.generation)
+	if !res.ok {
+		s.refusal = store.MIGRATION_FAILED
+		log.errorf("server migration failed from=%d why=%s", st.format, res.why)
+		return false
+	}
+	log.infof("server migrated the save from=%d to=%d", st.format, store.SAVE_FORMAT)
+	st.format, st.generation = store.SAVE_FORMAT, st.generation + 1
+	return true
 }
 
 // compaction_apply: the server's side once a batch committed. A dropped chunk

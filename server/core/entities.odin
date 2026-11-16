@@ -95,10 +95,38 @@ entity_spawn :: proc(
 		natural,
 	)
 	if h == 0 {return 0}
+	if kind_of_game(w.server, kind) {
+		zero: game.Entity_Data
+		_ = game.store_add(&w.entity_world.store, h, C_GAME_DATA, &zero)
+	}
 	// applied at once, so the components exist when the caller has the entity
 	game.store_apply(&w.entity_world.store)
 	entity_set_yaw(w, h, base.rng_f32_range(&e.rng, -math.PI, math.PI))
 	return h
+}
+
+// kind_of_game: the kind is the game's own (its pack's: `<game>:<name>`) and the game
+// keeps a record on each (Game.entity_data).
+kind_of_game :: proc(s: ^Server, kind: game.Kind_Id) -> bool {
+	if s.config.game.entity_data == nil {return false}
+	info := game.kind_info(s.registry, kind)
+	id := s.config.game.id
+	return(
+		info != nil &&
+		len(info.id) > len(id) &&
+		info.id[len(id)] == ':' &&
+		info.id[:len(id)] == id \
+	)
+}
+
+// entity_data: the game's record on an entity of its kinds (Game.entity_data, as the
+// type it declared): zero when the entity came to be, saved and loaded with the world
+// (entities.cfg, field by field), told to no one unless the game puts it in a record of
+// its own keyed by the entity (protocol.key_entity). nil for an entity of another kind.
+entity_data :: proc(w: ^World, h: game.Entity_Handle, $T: typeid) -> ^T {
+	assert(w.server.config.game.entity_data == T, "not the game's entity_data")
+	p := game.store_get(&w.entity_world.store, h, C_GAME_DATA, game.Entity_Data)
+	return (^T)(&p.bytes) if p != nil else nil
 }
 
 // entities_sync_spatial moves each listed entity's spatial box to its position
@@ -1232,6 +1260,7 @@ HURT_KEPT_TICKS :: game.TICK_RATE * 10 // how long Hurt_By names a killer
 // The server's own components, after the shared ones.
 C_SPATIAL_LINK :: game.FIRST_SERVER_COMPONENT
 C_BRAIN :: game.FIRST_SERVER_COMPONENT + 1 // a grazer's Brain (large: set at spawn)
+C_GAME_DATA :: game.FIRST_SERVER_COMPONENT + 3 // the game's record on an entity of its kinds (entity_data)
 
 // Spatial_Link: the entity's entry in the spatial service. Releasing it (the
 // entity despawned) removes the entry.
@@ -1273,7 +1302,7 @@ Entity_World :: struct {
 	next_player_id: u32, // entities.odin: the ids of player entities
 	tag_names:      [dynamic]string, // tag i is tag_names[i-1]
 	deaths:         [dynamic]Entity_Death, // this tick's
-	infos:          [game.FIRST_SERVER_COMPONENT + 3]game.Component_Info,
+	infos:          [game.FIRST_SERVER_COMPONENT + 4]game.Component_Info,
 }
 
 @(private = "file")
@@ -1304,6 +1333,12 @@ entity_world_init :: proc(ew: ^Entity_World, seed: u64, max_entities := MAX_ENTI
 		type  = Steer,
 		size  = size_of(Steer),
 		align = align_of(Steer),
+	}
+	ew.infos[C_GAME_DATA] = game.Component_Info {
+		name  = "game_data",
+		type  = game.Entity_Data,
+		size  = size_of(game.Entity_Data),
+		align = align_of(game.Entity_Data),
 	}
 	game.spatial_init(&ew.spatial)
 	// room for the fixed list's worth of entries at once, so the tables are

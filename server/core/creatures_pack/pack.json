@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "creatures",
+	"version": "1.0.0",
+	"title": "Creatures",
+	"description": "The engine's tests' creatures.",
+	"requires": ["voxiverse"]
+}

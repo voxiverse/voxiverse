@@ -17,8 +17,7 @@ import "common:base"
 // The rules for writing one are in docs/saves.md: it reads only files of its
 // `from` format, with readers frozen beside it; it is never edited once released;
 // it is tested from a committed fixture (assets/fixtures/save-v<from>).
-// The registry is empty: older formats are refused, not migrated, before
-// 1.0 (docs/saves.md).
+// The chain starts at format 6: an older one is refused (docs/saves.md).
 
 Migration :: struct {
 	from: int, // the format it reads; it leaves from + 1
@@ -36,7 +35,18 @@ Migrator :: struct {
 }
 
 @(rodata)
-MIGRATIONS := [?]Migration{}
+MIGRATIONS := [?]Migration {
+	{from = 6, name = "entities' fields by name", run = migrate_v6_entities},
+}
+
+// migrations_reach: the chain brings a universe of format `from` to SAVE_FORMAT.
+migrations_reach :: proc(from: int) -> bool {
+	at := from
+	for mig in MIGRATIONS {
+		if mig.from == at {at += 1}
+	}
+	return from < SAVE_FORMAT && at == SAVE_FORMAT
+}
 
 Migrate_Result :: struct {
 	from, to: int,
@@ -173,8 +183,11 @@ set_line :: proc(m: ^Migrator, rel, key, value: string) {
 // OLDER_BUILD: why a world of an older format is not opened.
 OLDER_BUILD :: "this world was made by an older build; create a new one"
 
+// MIGRATION_FAILED: why a world whose migration failed is not opened (the log says why).
+MIGRATION_FAILED :: "this world could not be brought up to date (the log says why); nothing in it was changed"
+
 // world_dirs: "worlds/<address>" for each world in the universe.
-@(private = "file")
+@(private)
 world_dirs :: proc(m: ^Migrator) -> []string {
 	out := make([dynamic]string, context.temp_allocator)
 	entries, _ := os.read_all_directory_by_path(
