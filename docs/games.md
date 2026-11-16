@@ -46,6 +46,9 @@ client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 | `joined(s, c)` | A player is playing: welcomed, in its world | the server's |
 | `left(s, c)` | A playing player leaves (still seated, its state still there); not called for those still playing when the server stops | the server's |
 | `command(s, c, name, args) -> bool` | A `/command` the server has none of (relative coordinates already expanded); the game checks its own arguments and permissions (`core.allowed`); false: unknown | the server's |
+| `hurt(s, c, harm)` | A player was hurt and lives (its health already less): `harm` is a `core.Harm`, the amount, the kind of source (`game.Source_Kind`: a fall, an explosion, a weapon...), `by` the player who did it (the one hurt, for its own rocket; nil for nobody) and the weapon's name for a shot | the server's |
+| `died(s, c, harm)` | A player died of `harm`, after the engine's death: the line told, `kills` and `deaths` counted, its things dropped (by its mode and the world's rules) | the server's |
+| `respawned(s, c)` | A dead player stands again, after the engine stood it at the world's spawn with full health and its mode's kit: the game may move it (`teleport`) and change what it holds. Also for a dead player who leaves, after `left` | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
 
 A game reaches the server through the procedures and types listed below and the fields of
@@ -64,7 +67,7 @@ makes it for games, documented where it is declared.
 
 | Name | What it is for |
 |---|---|
-| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result` | The game itself, the config `configure` changes, the session, a player, a world |
+| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result`, `Harm` | The game itself, the config `configure` changes, the session, a player, a world, what hurt a player (its hooks') |
 | `game_state(s, T)`, `game_client_state(s, c, T)` | The game's state, for the session and for a seat |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |

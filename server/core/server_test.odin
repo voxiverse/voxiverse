@@ -1028,3 +1028,86 @@ test_start_needs_a_game :: proc(t: ^testing.T) {
 	config.game = HARNESS_GAME
 	testing.expect(t, !harness_refused(config))
 }
+
+// A game is told who was hurt, who died of what and by whom, and who came back, after
+// the engine has done its part; its respawned hook may move the player it stands up.
+@(private = "file")
+Probe_Harm :: struct {
+	hurts, deaths, respawns: int,
+	last:                    Harm,
+	dead_when_told:          bool, // the engine's death was done before the hook ran
+	health_when_respawned:   f32,
+}
+
+@(test)
+test_game_harm_hooks :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.mode = "survival"
+	config.game = Game {
+		info = {id = "probe"},
+		server_state = Probe_Harm,
+		hurt = proc(s: ^Server, c: ^Client, harm: Harm) {
+			p := game_state(s, Probe_Harm)
+			p.hurts += 1
+			p.last = harm
+		},
+		died = proc(s: ^Server, c: ^Client, harm: Harm) {
+			p := game_state(s, Probe_Harm)
+			p.deaths += 1
+			p.last = harm
+			p.dead_when_told = c.dead
+		},
+		respawned = proc(s: ^Server, c: ^Client) {
+			p := game_state(s, Probe_Harm)
+			p.respawns += 1
+			p.health_when_respawned = c.health
+			teleport(s, c, {6.5, 1, 6.5}, {0, 0})
+		},
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, ok := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok, "the player never joined") {return}
+	harness_step(&sess.h, 30)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	p := game_state(s, Probe_Harm)
+
+	// Hurt: by nobody (a fall), and the amount.
+	testing.expect_value(t, damage(s, c, 3, {kind = .Fall}), Damage_Result.Hurt)
+	testing.expect_value(t, p.hurts, 1)
+	testing.expect_value(t, p.last.amount, 3)
+	testing.expect_value(t, p.last.kind, game.Source_Kind.Fall)
+	testing.expect(t, p.last.by == nil, "a fall named someone")
+	// Blocked does not count: nothing was hurt.
+	testing.expect_value(t, damage(s, c, 0, {kind = .Fall}), Damage_Result.Ignored)
+	testing.expect_value(t, p.hurts, 1)
+
+	// Died: by itself with a weapon (the player's own shot), told after the engine's death.
+	me := player_id(s, c)
+	killed := damage(s, c, 100, {kind = .Weapon, attacker = me, weapon = "pistol"})
+	testing.expect_value(t, killed, Damage_Result.Killed)
+	testing.expect_value(t, p.deaths, 1)
+	testing.expect_value(t, p.hurts, 1)
+	testing.expect(t, p.dead_when_told, "the hook ran before the death")
+	testing.expect(t, p.last.by == c, "the killer is not the player itself")
+	testing.expect_value(t, p.last.weapon, "pistol")
+	testing.expect_value(t, p.last.kind, game.Source_Kind.Weapon)
+
+	// Respawned: after the engine stood it up whole; the game moves it.
+	testing.expect(t, respawn(s, c))
+	testing.expect_value(t, p.respawns, 1)
+	testing.expect_value(t, p.health_when_respawned, c.max_health)
+	harness_step(&sess.h, 10)
+	testing.expectf(
+		t,
+		abs(c.player.position.x - 6.5) < 0.01 && abs(c.player.position.z - 6.5) < 0.01,
+		"the game did not move the player: %v",
+		c.player.position,
+	)
+	testing.expect(t, !respawn(s, c), "a living player came back")
+	testing.expect_value(t, p.respawns, 1)
+}

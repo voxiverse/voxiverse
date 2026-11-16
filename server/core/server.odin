@@ -101,6 +101,9 @@ Game :: struct {
 	joined:       proc(s: ^Server, c: ^Client), // c is playing (welcomed, in its world)
 	left:         proc(s: ^Server, c: ^Client), // c is leaving (still seated, its state still there)
 	command:      proc(s: ^Server, c: ^Client, name: string, args: []string) -> (known: bool), // a command the server has none of; known false: "Unknown server command"
+	hurt:         proc(s: ^Server, c: ^Client, harm: Harm), // c was hurt and lives (its health already less)
+	died:         proc(s: ^Server, c: ^Client, harm: Harm), // c died of harm (already told, counted and its things dropped)
+	respawned:    proc(s: ^Server, c: ^Client), // c stands again: at the world's spawn, full health, the mode's kit (the game may move it, change what it holds)
 	pack:         game.Pack_Source, // its own pack (games/<game>/pack, named for the game; its shared package's): loaded only where it is played (game_packs)
 }
 

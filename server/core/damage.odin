@@ -20,6 +20,14 @@ Damage_Source :: struct {
 	placed:   bool,
 }
 
+// Harm: what hurt a player, as a game's hurt and died hooks are told it.
+Harm :: struct {
+	amount: f32, // the health points it took
+	kind:   game.Source_Kind, // a fall, an explosion, a weapon...
+	by:     ^Client, // the player who did it (the one hurt, for its own rocket; nil: nobody, or one no longer playing)
+	weapon: string, // what a shot came from: its item's name ("" for any other)
+}
+
 Damage_Result :: enum u8 {
 	Ignored, // nothing to hurt (not playing, dead, no amount)
 	Blocked, // invulnerable, pvp off, or no health at all
@@ -56,20 +64,30 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 	}
 	event_send(s, target, .Damage_Hit, &hit)
 	session_damage(s, target, amount, source, target.health <= 0)
+	harm := Harm{amount, source.kind, attacker(s, source), source.weapon}
+	g := &s.config.game
 	if target.health <= 0 {
 		die(s, target, source)
+		if g.died != nil {g.died(s, target, harm)}
 		return .Killed
 	}
+	if g.hurt != nil {g.hurt(s, target, harm)}
 	return .Hurt
+}
+
+// attacker: the playing client the source names (nil for none).
+@(private = "file")
+attacker :: proc(s: ^Server, source: Damage_Source) -> ^Client {
+	if id, ok := source.attacker.?; ok && int(id) < len(s.clients) {
+		if a := &s.clients[id]; a.state == .Playing {return a}
+	}
+	return nil
 }
 
 // attacker_name: who the source names ("" for none).
 @(private = "file")
 attacker_name :: proc(s: ^Server, source: Damage_Source) -> string {
-	if id, ok := source.attacker.?; ok && int(id) < len(s.clients) {
-		a := &s.clients[id]
-		if a.state == .Playing {return client_name(a)}
-	}
+	if a := attacker(s, source); a != nil {return client_name(a)}
 	return ""
 }
 
@@ -116,7 +134,8 @@ die :: proc(s: ^Server, c: ^Client, source: Damage_Source) {
 }
 
 // respawn: a dead c stands at the world's spawn with full health and the
-// mode's kit (the Respawn button; also what leaving while dead does).
+// mode's kit (the Respawn button; also what leaving while dead does), and
+// then the game's respawned hook may move it and change what it holds.
 respawn :: proc(s: ^Server, c: ^Client) -> bool {
 	if !c.dead {return false}
 	c.dead = false
@@ -128,6 +147,7 @@ respawn :: proc(s: ^Server, c: ^Client) -> bool {
 	kit_give(s, c)
 	record(s, c, .Respawned, game.mode_label(s.registry, c.mode))
 	disturb(s, c)
+	if s.config.game.respawned != nil {s.config.game.respawned(s, c)}
 	return true
 }
 
