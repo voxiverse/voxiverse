@@ -67,7 +67,7 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 	if !(amount > 0) || target.state != .Playing || target.dead {return .Ignored}
 	if s.tick < target.protected_until {return .Blocked}
 	abilities := game.derive_abilities(s.registry, target.mode, &target.inventory)
-	if .Invulnerable in abilities {return .Blocked}
+	if .Invulnerable in abilities || .Bodiless in abilities {return .Blocked}
 	if attacker, by_player := source.attacker.?; by_player {
 		if int(attacker) != int(player_id(s, target)) && !target.world.rules.pvp {return .Blocked}
 	}

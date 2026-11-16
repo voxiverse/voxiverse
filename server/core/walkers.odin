@@ -304,7 +304,11 @@ entity_strike :: proc(w: ^World, h: game.Entity_Handle, target: Target) -> Strik
 	tlo, thi: [3]f64
 	switch v in target {
 	case ^Client:
-		if v == nil || v.world != w || v.state != .Playing || v.dead {return .Too_Far}
+		if v == nil ||
+		   v.world != w ||
+		   v.state != .Playing ||
+		   v.dead ||
+		   bodiless(w.server, v) {return .Too_Far}
 		tlo, thi = game.player_box(v.player)
 	case game.Entity_Handle:
 		if !entity_listed(w, v) || v == h {return .Too_Far}

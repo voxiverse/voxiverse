@@ -159,6 +159,10 @@ player_step :: proc(
 	dt: f32,
 	mods := MODS_NONE,
 ) {
+	if .Bodiless in mods.abilities {
+		player_step_bodiless(s, input, rules, dt)
+		return
+	}
 	if !rules.allow_flying || .Fly not_in mods.abilities {
 		s.flying = false
 	} else if .Toggle_Fly in input.buttons {
@@ -313,6 +317,27 @@ player_step :: proc(
 	}
 	if s.flying && s.on_ground {s.flying = false} 	// landing ends flight
 	s.jump_held = jump
+}
+
+// player_step_bodiless: a player with no body (Ability.Bodiless: a city builder's or a
+// strategist's camera, its focus on the ground) moves where its input says at once,
+// through anything: across at the world's fly speed (fly_sprint_speed with sprint),
+// up with jump and down with sneak, never above or below the world. No gravity, no
+// collision, nothing to stand on: the server and the prediction run the same step, so
+// the client's panning is predicted exactly.
+player_step_bodiless :: proc(s: ^Player_State, input: Player_Input, rules: ^Rules, dt: f32) {
+	move := input.move
+	if l := math.sqrt(move.x * move.x + move.y * move.y); l > 1 {move /= l}
+	forward := [2]f32{-base.sin(input.yaw), -base.cos(input.yaw)}
+	right := [2]f32{base.cos(input.yaw), -base.sin(input.yaw)}
+	wish := right * move.x + forward * move.y
+	speed := rules.fly_sprint_speed if .Sprint in input.buttons else rules.fly_speed
+	up: f32 = (1 if .Jump in input.buttons else 0) - (1 if .Sneak in input.buttons else 0)
+	s.velocity = {wish.x * speed, up * speed, wish.y * speed}
+	s.position += {f64(s.velocity.x * dt), f64(s.velocity.y * dt), f64(s.velocity.z * dt)}
+	s.position.y = clamp(s.position.y, WORLD_MIN_Y, WORLD_MAX_Y)
+	s.on_ground, s.flying, s.crouched, s.hooked = false, false, false, false
+	s.jump_held = .Jump in input.buttons
 }
 
 // sweep_stopped: moving the player's box along axis by delta, something stops it.

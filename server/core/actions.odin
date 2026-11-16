@@ -351,7 +351,7 @@ swing :: proc(s: ^Server, c: ^Client, held: game.Stack, melee: game.Melee_Info) 
 		}
 	}
 	for &o in s.clients {
-		if &o == c || o.world != w || o.state != .Playing || o.dead {continue}
+		if &o == c || o.world != w || o.state != .Playing || o.dead || bodiless(s, &o) {continue}
 		lo, hi := game.player_box(o.player)
 		if !within(w, eye, lo, hi, facing, least, reach) {continue}
 		source := Damage_Source {
@@ -374,6 +374,7 @@ anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.
 		if &other != c &&
 		   other.world == c.world &&
 		   other.state == .Playing &&
+		   !bodiless(s, &other) &&
 		   !game.can_place_at(&s.registry.blocks, .Air, block, pos, other.player) {
 			return true
 		}

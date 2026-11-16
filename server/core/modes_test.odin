@@ -257,3 +257,49 @@ test_spectators_change_nothing :: proc(t: ^testing.T) {
 	testing.expect_value(t, b, game.Block.Air)
 	testing.expect_value(t, c.fired_at, s.tick)
 }
+
+// A mode with the bodiless ability has no body: its player has no entity (so a blast, a
+// pickup or a walker's push finds nothing), others are not shown where it is, a block may
+// go where it is, and a blast beside it does no harm; back in survival it has a body.
+@(test)
+test_bodiless_has_no_body :: proc(t: ^testing.T) {
+	MODES :: `{"planner": {"abilities": ["bodiless"], "kit": [], "rules": {}}}`
+	PACK :: `{"format": 1, "namespace": "planning", "version": "1.0.0", "title": "Planning", "requires": ["voxiverse"]}`
+	config := harness_world()
+	config.extra_packs = []game.Pack_Source {
+		{
+			"planning",
+			{
+				{"pack.json", transmute([]u8)string(PACK)},
+				{"data/game_modes/planner.json", transmute([]u8)string(MODES)},
+			},
+		},
+	}
+	sess := new(Session)
+	defer free(sess)
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, ok := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok, "the player never joined") {return}
+	harness_step(&sess.h, 30)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	testing.expect(t, c.entity_id != 0, "a player in survival has a body")
+	planner, found := game.mode_find(s.registry, "planning:planner")
+	if !testing.expect(t, found, "the pack's mode is not there") {return}
+	testing.expect_value(t, set_game_mode(s, c, planner, {"command", ""}), Mode_Result.Ok)
+	harness_step(&sess.h, 2)
+	testing.expect(t, bodiless(s, c))
+	testing.expect_value(t, c.entity_id, game.Entity_Id(0))
+	testing.expect_value(t, len(players_near(c.world, c.player.position, 4, 4)), 0)
+	health := c.health
+	explode_by(s, "", game.block_of_position(c.player.position) + {1, 0, 0}, 3)
+	harness_step(&sess.h, 2)
+	testing.expect_value(t, c.health, health)
+	testing.expect(t, !c.dead)
+	survival, _ := game.mode_find(s.registry, "survival")
+	testing.expect_value(t, set_game_mode(s, c, survival, {"command", ""}), Mode_Result.Ok)
+	harness_step(&sess.h, 2)
+	testing.expect(t, c.entity_id != 0, "back in survival it has no body")
+}

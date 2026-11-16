@@ -81,7 +81,11 @@ shot_trace :: proc(
 	}
 	frame := rewind_frame(s, w, rewind_ticks(latency_ms))
 	for &o, i in s.clients {
-		if &o == shooter || o.state != .Playing || o.world != w || o.dead {continue}
+		if &o == shooter ||
+		   o.state != .Playing ||
+		   o.world != w ||
+		   o.dead ||
+		   bodiless(s, &o) {continue}
 		body := o.player
 		if frame != nil {
 			if b, there := rewind_body(frame.players[:], u32(i)); there {

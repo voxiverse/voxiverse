@@ -241,7 +241,7 @@ players_put :: proc(s: ^Server, c: ^Client) {
 		}
 		state_put(s, c, .Player, &record, game.key_player(id))
 		d := other.player.position - c.player.position
-		if d.x * d.x + d.z * d.z > near * near {continue}
+		if d.x * d.x + d.z * d.z > near * near || bodiless(s, &other) {continue}
 		motion := game.Player_Motion {
 			position = other.player.position,
 			yaw      = other.look[0],

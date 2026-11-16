@@ -42,10 +42,12 @@ hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, t.crosshair)
 		ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, t.crosshair)
 	}
-	hotbar(ctx, s, &app.item_icons)
-	engine.weapon_hud(ctx, s)
-	health_bar(ctx, s)
-	hud_popup(app, ctx)
+	if !engine.session_ability(s, .Bodiless) { 	// (no body: nothing in hand, no health)
+		hotbar(ctx, s, &app.item_icons)
+		engine.weapon_hud(ctx, s)
+		health_bar(ctx, s)
+		hud_popup(app, ctx)
+	}
 	screen.market_hud_line(app, ctx)
 	engine.game_hud(s, ctx, app.debug_bottom) // the game's (its client part's), below F3
 }

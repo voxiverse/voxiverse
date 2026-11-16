@@ -1614,7 +1614,8 @@ PLAYER_ID_BASE :: 1 << 30
 // (it is made at c.player.position, so it is right from the start).
 player_entity_sync :: proc(s: ^Server, c: ^Client) {
 	w := c.world
-	if c.entity_id != 0 && c.entity_world != w {player_entity_release(s, c)}
+	if c.entity_id != 0 && (c.entity_world != w || bodiless(s, c)) {player_entity_release(s, c)}
+	if bodiless(s, c) {return}
 	ew := w.entity_world
 	if c.entity_id == 0 {
 		kind, ok := game.registry_kind(s.registry, "player")

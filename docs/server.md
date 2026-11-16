@@ -92,7 +92,12 @@ What a player may do is a set of nodes: dotted lower-case words. The families in
 What a character *can do* (flying, invulnerability, `infinite_items`, `catalog`) is not a
 permission but an ability its game mode grants (`common/game/abilities.odin`). A mode with
 `spectate` only watches: the server refuses its edits, hits, uses, rockets and shots
-(`run_due_actions`), and the client does not send them.
+(`run_due_actions`), and the client does not send them. A mode with `bodiless` has no body in the
+world (a city builder's or a strategist's camera over it, `games/hamlet`'s planner): it moves
+where its input says at the world's fly speed through anything, with no gravity
+(`player_step_bodiless`, predicted as any movement), has no player entity (so a blast, a
+pickup, a projectile or a walker's push finds nothing), is shown to no one, is in the way of
+no block placed, is struck by no blow, shot or creature, and takes no harm (`core.bodiless`).
 
 ### Grants
 

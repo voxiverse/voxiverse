@@ -23,6 +23,7 @@ Ability :: enum u8 {
 	Regenerate, // health comes back by itself (the world's natural_regeneration rule)
 	Drop_On_Death, // the inventory drops where they fell (unless the world keeps it)
 	Spectate, // only watches: its edits, hits, uses, rockets and shots do nothing (the server refuses them)
+	Bodiless, // has no body in the world: moves freely (a camera's focus: player_step_bodiless), is not drawn, hit, pushed or in the way, picks nothing up
 }
 
 Abilities :: bit_set[Ability;u32]
@@ -37,6 +38,7 @@ ABILITY_NAMES := [Ability]string {
 	.Regenerate     = "regenerate",
 	.Drop_On_Death  = "drop_on_death",
 	.Spectate       = "spectate",
+	.Bodiless       = "bodiless",
 }
 
 ability_name :: proc(a: Ability) -> string {return ABILITY_NAMES[a]}

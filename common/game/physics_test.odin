@@ -671,3 +671,37 @@ test_prediction_agrees_with_the_hook :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, predicted.state == server)
 }
+
+// A player with no body (Ability.Bodiless: a camera's focus) goes straight through a
+// wall and floats where its input puts it: no gravity, no collision, the fly speed
+// across and up, never out of the world.
+@(test)
+test_bodiless_moves_through_everything :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0)
+	for y in i32(1) ..= 3 {for z in i32(-8) ..= 8 {w.solid[{3, y, z}] = true}}
+	mods := MODS_NONE
+	mods.abilities += {.Bodiless}
+	rules := RULES_DEFAULTS
+	s := Player_State {
+		position = {0.5, 2, 0.5},
+	}
+	east := Player_Input {
+		move = {1, 0},
+	} // (yaw 0: right is +x)
+	for _ in 0 ..< TICK_RATE {player_step(&s, east, &rules, query(&w), DT, mods)}
+	testing.expectf(
+		t,
+		abs(s.position.x - (0.5 + f64(rules.fly_speed))) < 1e-3,
+		"x %v",
+		s.position.x,
+	)
+	testing.expectf(t, abs(s.position.y - 2) < 1e-9, "it fell: y %v", s.position.y)
+	testing.expect(t, !s.on_ground)
+	up := Player_Input {
+		buttons = {.Jump},
+	}
+	for _ in 0 ..< 100 * TICK_RATE {player_step(&s, up, &rules, query(&w), DT, mods)}
+	testing.expect_value(t, s.position.y, f64(WORLD_MAX_Y))
+}

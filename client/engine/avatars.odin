@@ -166,7 +166,7 @@ avatars_draw :: proc(
 	own_stride := f32(0),
 	swing_at := f32(0),
 ) {
-	if s.camera_mode != .First {
+	if s.camera_mode != .First && !session_ability(s, .Bodiless) {
 		// Ourselves: the limbs swing with the ground covered, like the others'.
 		new_pos := s.prediction.state.position
 		crouched := s.prediction.state.crouched

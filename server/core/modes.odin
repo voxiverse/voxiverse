@@ -61,6 +61,15 @@ has_ability :: proc(s: ^Server, c: ^Client, a: game.Ability) -> bool {
 	return a in game.derive_abilities(s.registry, c.mode, &c.inventory)
 }
 
+// bodiless: c has no body in the world (game.Ability.Bodiless: a camera's focus): it has
+// no player entity, so nothing that finds players through the spatial service (a blast,
+// a pickup, a walker's push, a projectile) finds it; the loops over the players that
+// test their boxes (a hitscan shot, a swing, a block placed, a creature's blow) pass it,
+// and the others are not shown it.
+bodiless :: proc(s: ^Server, c: ^Client) -> bool {
+	return has_ability(s, c, .Bodiless)
+}
+
 // character_mods: the numbers and abilities physics and rules read for c.
 character_mods :: proc(s: ^Server, c: ^Client) -> game.Mods {
 	return game.derive_character(s.registry, c.mode, &c.inventory)
