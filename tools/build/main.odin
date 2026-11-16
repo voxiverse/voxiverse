@@ -317,6 +317,8 @@ main :: proc() {
 		ok = test(args[1:])
 	case "gate":
 		ok = gate(args[1:])
+	case "engine-map":
+		ok = engine_map_write()
 	case "system":
 		ok = system()
 	case "determinism":
@@ -440,6 +442,9 @@ usage :: proc() {
 		"  release-notes <tag> <file>  write a version tag's draft release notes (changes since the previous version tag, the script API's, downloads)",
 	)
 	fmt.println("  fmt       format all sources in place (odinfmt)")
+	fmt.println(
+		"  engine-map  write docs/engine-map.md, what the engine offers a game, from the source and docs/games.md's lists (check fails while it is stale)",
+	)
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
 	fmt.println(
 		"  lavapipe  fetch the pinned software Vulkan driver and runtime for Windows (prints their paths)",
@@ -860,6 +865,7 @@ check :: proc() -> bool {
 		determinism_lint() &&
 		source_lint() &&
 		import_lint() &&
+		engine_map_lint() &&
 		collections_lint() &&
 		layout_lint() &&
 		package_lists_lint() &&

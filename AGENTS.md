@@ -42,6 +42,10 @@ the same commit (`./build.sh images --accept <scene>`), saying why.
   suggestions. If a task cannot be done within them, say so instead of bending one.
 - [`docs/layout.md`](docs/layout.md): where every file goes. `check` enforces it, with no
   exemptions. A new folder needs its row in the same commit.
+- Building or changing a game: read [`docs/engine-map.md`](docs/engine-map.md) first. It
+  is every hook and every call the engine offers a game, with its signature and doc,
+  generated from the source; [`docs/games.md`](docs/games.md) says how they fit together.
+  Look there before searching the engine.
 - A rule worth having is a rule `check` enforces. When you find yourself following a
   convention that nothing checks, add the lint.
 - Write the Odin a careful Odin programmer would: the names, shapes and idioms of the

@@ -208,6 +208,11 @@ the `import` lint reads this table and refuses any other `core.<name>` in a game
 when the table names something `server/core` does not declare. A name joins the list with
 the engine commit that makes it for games, documented where it is declared.
 
+Each name's signature and doc, from this table and the kits' below, is in
+[engine-map.md](engine-map.md), which the driver writes from them and the source
+(`./build.sh engine-map`); `check` fails while it is stale or a name it lists has no doc
+comment. Read it first; this file says how the names fit together.
+
 | Name | What it is for |
 |---|---|
 | `Game`, `Config`, `Server`, `Client`, `World`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change`, `Pickup`, `Request` | The game itself, the config `configure` changes, the session, a player, a world, and what its hooks are told |
@@ -451,6 +456,17 @@ the engine's keys work as ever.
 The accessors are typed as the server's are: `engine.game_state(s, T)` checks `T` is the
 declared state type, `engine.game_value(s, r, T)` checks the kind, so a hook holds no kind
 number and no cast.
+
+### What a game's client part calls
+
+| Name | What it is for |
+|---|---|
+| `Session`, `game_state(s, T)`, `game_value(s, r, T)` | The session its hooks are given; its state, as its type; a record or event its `received` hook was given, as the type of its kind |
+| `game_screen_open(s)`, `game_screen_close(s)`, `game_screen_shown(s)` | Its screen over the world (the `screen` hook): open it, close it, whether it is open |
+| `game_action_key(s, i)`, `game_action_pressed(s, i)`, `game_key_pressed(s, i)`, `game_key_down(s, i)`, `game_key_label(s, i)` | Its actions and its own keys: the key bound to an action (for the HUD to say), an action or a key pressed this frame, a key held, the key bound to a key |
+| `Game_Key`, `MAX_GAME_KEYS`, `Command_Spec` | What its `keys` and `commands` fields hold |
+| `Game_Camera`, `Game_Camera_Kind`, `pointer_tool(s)`, `Pointer_Tool`, `Pointer_Press` | The camera its `camera` hook asks for; under a top-down or free camera, what the pointer is over and what each button did |
+| `Scoreboard`, `SCOREBOARD_COLUMNS`, `scoreboard_columns(board, ...)`, `scoreboard_row(board, name, ...)` | Filling the player list (the `scoreboard` hook) |
 
 ### What a game's HUD is made of
 

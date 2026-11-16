@@ -18,6 +18,7 @@ Plans and history don't live here: git is the history.
 | [network.md](network.md) | Network debugging tools, the state model and bandwidth baselines |
 | [server.md](server.md) | Server commands, permissions, accounts, chat and statistics |
 | [games.md](games.md) | Writing a game: its shape, a walk-through, every hook and call by task, server:play, testing, screenshots, the rules |
+| [engine-map.md](engine-map.md) | Generated (`./build.sh engine-map`): every hook of `core.Game` and `engine.Game` and every name a game may call, with its signature and doc |
 | [world.md](world.md) | Worlds and gates, items, liquids, structures and world generation |
 | [determinism.md](determinism.md) | What is bit-identical across machines and the rules that keep it so |
 | [journal.md](journal.md) | The edit journal: every block change with its cause; the one way blocks change |

@@ -707,11 +707,13 @@ GAME_KIT_DIR :: "server/play"
 // GAME_API_PACKAGE: the package the list names the declarations of.
 GAME_API_PACKAGE :: "server/core"
 
-// parse_game_api: the names the table under GAME_API_HEADING (up to the next heading)
-// lists in its first column, each backticked span's leading identifier (`teleport(s, c, ...)` is teleport).
-parse_game_api :: proc(text: string) -> []string {
+// parse_game_api: the names the table under heading (up to the next heading) lists in its
+// first column, each backticked span's leading identifier (`teleport(s, c, ...)` is teleport).
+// GAME_API_HEADING's is the list the lint holds a game to; the map reads the kits' too
+// (MAP_LISTS).
+parse_game_api :: proc(text: string, heading := GAME_API_HEADING) -> []string {
 	names := make([dynamic]string)
-	_, _, section := strings.partition(text, GAME_API_HEADING)
+	_, _, section := strings.partition(text, heading)
 	rest := section
 	for line in strings.split_lines_iterator(&rest) {
 		if strings.has_prefix(line, "#") {break} 	// (the next heading, a sub-heading too)
