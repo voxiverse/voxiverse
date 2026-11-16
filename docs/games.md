@@ -46,12 +46,12 @@ client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 | `joined(s, c)` | A player is playing: welcomed, in its world | the server's |
 | `left(s, c)` | A playing player leaves (still seated, its state still there); not called for those still playing when the server stops | the server's |
 | `command(s, c, name, args) -> bool` | A `/command` the server has none of (relative coordinates already expanded); the game checks its own arguments and permissions (`core.allowed`); false: unknown | the server's |
-| `hurt(s, c, harm)` | A player was hurt and lives (its health already less): `harm` is a `core.Harm`, the amount, the kind of source (`game.Source_Kind`: a fall, an explosion, a weapon...), `by` the player who did it (the one hurt, for its own rocket; nil for nobody) and the weapon's name for a shot | the server's |
+| `hurt(s, c, harm)` | A player was hurt and lives (its health already less): `harm` is a `core.Harm`, the amount, the kind of source (`game.Source_Kind`: a fall, an explosion, a weapon...), `by` the player who did it (the one hurt, for its own rocket; nil for nobody), `creature` the entity that did it (its id; 0 for none) and the weapon's name for a shot | the server's |
 | `died(s, c, harm)` | A player died of `harm`, after the engine's death: the line told, `kills` and `deaths` counted, its things dropped (by its mode and the world's rules) | the server's |
 | `respawned(s, c)` | A dead player stands again, after the engine stood it at the world's spawn with full health and its mode's kit: the game may move it (`teleport`) and change what it holds. Also for a dead player who leaves, after `left` | the server's |
 | `editing(s, c, at, old, new) -> string` | A player would change the block at `at` from `old` to `new` (`.Air` for a break) and the engine's rules allow it (reach, what it holds, protection still to come): `""` lets it, anything else refuses it, the block stays and the player is told that text | the server's |
 | `block_changed(s, w, change)` | Blocks of world `w` changed since the game's last tick, each told once, in order, before its next one: `change` is a `core.Block_Change`, one block (what it was and is) or a bulk edit's box (`bulk`), and `by` the player whose edit it was (nil: the world, a command, the game; one who has left by then is nil). At most `MAX_NOTED_CHANGES` a tick (more are dropped, and logged) | the server's |
-| `entity_hurt(s, w, h, harm)` | An entity of world `w` was hurt and lives (its health already less): `harm` is a `core.Entity_Harm`, the amount, the kind of source (a blast, a player's shot or blow, `.Game` for the game's own `entity_harm`), `by` the player who did it (nil: nobody, or the game) and the weapon's name for a shot | the server's |
+| `entity_hurt(s, w, h, harm)` | An entity of world `w` was hurt and lives (its health already less): `harm` is a `core.Entity_Harm`, the amount, the kind of source (a blast, a player's shot or blow, `.Game` for the game's own `entity_harm`), `by` the player who did it (nil: nobody, or the game), `creature` the entity that did it (its id; 0: none) and the weapon's name for a shot | the server's |
 | `entity_died(s, w, dead, harm)` | An entity of `w` died of `harm`: everyone who knew it was shown it die, and it is gone (`dead`, a `core.Dead_Entity`, says its id, kind and where it was) | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
 | `save(s, out)` | A save captures this tick (an autosave, `/save`, the last one): the game writes what it keeps to the `strings.Builder` as text, saved with the universe as `game.cfg` in the same transaction ([saves.md](saves.md)) | the server's (the last save: the caller's) |
@@ -97,6 +97,8 @@ makes it for games, documented where it is declared.
 | `entity_harm(w, h, harm)` | Hurt an entity (a tower's shot: `kind = .Game`, `by` the player it is credited to), told to the entity hooks as any harm is; true: it died |
 | `entity_go(w, h, target)`, `entity_follow(w, h, route)`, `entity_stand(w, h)`, `entity_arrived(w, h)`, `entity_set_speed(w, h, speed)` | Steer a walker whose kind is `"brain": "steered"`: to a point by its own path, along a route, or still; whether it is there ([walkers](#walkers)) |
 | `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
+| `entity_keep(w, h, target, near, far)`, `entity_sees(w, h, p)` | Steer a walker to keep within a band of distances from a point, facing it (chase: `0, reach`; keep distance; flee: `radius, radius + 1`); whether nothing solid lies between its eyes and a point |
+| `entity_strike(w, h, target)`, `entity_shoot(w, h, p)`, `entity_striking(w, h)`, `Target`, `Strike` | A creature's attack, its kind's `attack` data: a blow at a player or an entity within its reach, or its shot at a point, each when its cooldown allows, credited to it (`Harm.creature`, `Entity_Harm.creature`); whether it just attacked |
 
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
 `registry` and `listening` (others can join: opened to the LAN, or a dedicated server); `Client`'s `state`, `world`, `player` (its position, velocity, flying), `mode`
@@ -120,6 +122,18 @@ changes. Its body is its kind's: as wide and tall as its box, climbing a step on
 jumps a block high. `route_would_shut` asks, before a block is placed, whether it would
 leave the route's start or a walker following it with no way: a maze a player builds stays
 a maze, not a wall.
+
+A walker that fights is the same steered walker with an `attack` in its kind
+([packs.md](packs.md)). `entity_keep` holds it within a band of distances from a point the
+game gives each tick (a player's feet): it walks straight at the point when it sees it on
+its own level, by its own path when it does not (planned again when the point moves off its
+end), backs straight away when too near, and stands facing it inside the band. What it
+attacks and when is the game's: `entity_strike` lands a blow when the target's box is within
+its reach and its cooldown has run, `entity_shoot` sends its kind's shot at a point; the
+damage is its kind's, the harm is credited to the creature (a player killed by one reads
+"was beaten by <kind>"). Walkers that overlap each other or a player are pushed apart as
+they steer, so a pack does not stand in one place (players are not pushed: their clients
+move them). `games/delve` is the model.
 
 ## The client's side: `engine.Game`
 

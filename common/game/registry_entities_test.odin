@@ -213,6 +213,32 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 			`testpack/data/entities/k.json:1:32: model is a name or {"box": [r, g, b]}, each colour a whole number 0..255`,
 		},
 		{
+			"an attack on a walker with no steering",
+			`{"k": {"box": [1, 1], ` +
+			WALKER +
+			`, "attack": {"damage": 1, "reach": 1, "cooldown": 1}, "model": "item"}}`,
+			`testpack/data/entities/k.json:1:121: an attack is a steered walker's: set "brain": "steered"`,
+		},
+		{
+			"an attack number missing",
+			`{"k": {"box": [1, 1], ` +
+			WALKER +
+			`, "brain": "steered", "attack": {"damage": 1, "reach": 1}, "model": "item"}}`,
+			`testpack/data/entities/k.json:1:141: attack needs "cooldown"; add it`,
+		},
+		{
+			"a shot that is no projectile",
+			`{"k": {"box": [1, 1], ` +
+			WALKER +
+			`, "brain": "steered", "attack": {"damage": 1, "reach": 1, "cooldown": 1, "shot": "voxiverse:sheep"}, "model": "item"}}`,
+			`testpack/data/entities/k.json:1:2: attack shot "voxiverse:sheep" is not a projectile kind`,
+		},
+		{
+			"striking with no attack",
+			`{"k": {"box": [1, 1], "looks": ["striking"], "model": "item"}}`,
+			`testpack/data/entities/k.json:1:33: look "striking" is its attack's; add an "attack"`,
+		},
+		{
 			"an unknown field",
 			`{"k": {"box": [1, 1], "model": "item", "helth": 3}}`,
 			`testpack/data/entities/k.json:1:40: "helth" is not a kind field; did you mean "health"?`,

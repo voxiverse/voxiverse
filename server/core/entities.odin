@@ -135,6 +135,8 @@ entity_looks :: proc(w: ^World, reg: ^game.Registry, h: game.Entity_Handle) -> (
 			on = game.genes_spotted(entity_genes(w, h).genes)
 		case .In_Love:
 			on = entity_breeding(w, h).love > 0
+		case .Striking:
+			on = entity_striking(w, h)
 		}
 		if on {bits |= 1 << u16(i)}
 	}
@@ -375,16 +377,25 @@ explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id, by: May
 // tested: a tall box's height, and a tick of its owner's or a target's running.
 ROCKET_REACH :: 4
 
-// rocket_step flies a rocket one tick; where it hit, if it did.
-rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool) {
+// Shot_Hit: what a projectile's step met: a player (its seat) or an entity (its id),
+// or neither (a block, its life's end, the edge of the loaded world).
+Shot_Hit :: struct {
+	player: int, // -1: none
+	entity: u32, // 0: none
+}
+
+// rocket_step flies a projectile one tick; where it hit, and what, if it did. It flies
+// through the creature that shot it.
+rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool, what: Shot_Hit) {
+	what.player = -1
 	s := w.server
 	if f32(entity_age_of(w, h)) * game.TICK_SECONDS >
-	   game.kind_info(s.registry, entity_kind(w, h)).projectile.life {return entity_pos(w, h), true}
+	   game.kind_info(s.registry, entity_kind(w, h)).projectile.life {return entity_pos(w, h), true, what}
 	v := entity_velocity(w, h)
 	v.y -= game.kind_info(s.registry, entity_kind(w, h)).projectile.gravity * game.TICK_SECONDS
 	entity_set_velocity(w, h, v)
 	speed := math.sqrt(f64(v.x * v.x + v.y * v.y + v.z * v.z))
-	if speed < 1e-6 {return entity_pos(w, h), true}
+	if speed < 1e-6 {return entity_pos(w, h), true, what}
 	dir := [3]f64{f64(v.x), f64(v.y), f64(v.z)} / speed
 	step := speed * f64(game.TICK_SECONDS)
 	from := entity_pos(w, h) + {0, 0.15, 0}
@@ -394,7 +405,7 @@ rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool)
 	if b, ok := game.raycast(query, from, dir, step); ok {
 		nearest, hit_at, hit = b.distance, from + dir * b.distance, true
 	} else if !chunk_ready(w, from) {
-		return from, true // flew out of the loaded world
+		return from, true, what // flew out of the loaded world
 	}
 	// Who the step can reach comes from the spatial service: the boxes it
 	// holds are where things stood at the end of the last tick, so it asks
@@ -413,14 +424,18 @@ rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool)
 		&near,
 	)
 	slice.sort(near[:])
+	shooter := entity_owner(w, h).entity
 	for id in near {
+		if u32(id) == shooter && shooter != 0 {continue}
 		other, there := entity_find(w, u32(id))
 		if !there {continue}
 		oinfo := game.kind_info(s.registry, entity_kind(w, other))
 		if !oinfo.hittable {continue}
 		lo, hi := game.entity_box(oinfo, entity_pos(w, other))
-		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
-		   ok {nearest, hit_at, hit = d, from + dir * d, true}
+		if d, ok := game.ray_box(from, dir, lo, hi, nearest); ok {
+			nearest, hit_at, hit = d, from + dir * d, true
+			what = {-1, u32(id)}
+		}
 	}
 	clear(&near)
 	game.spatial_sphere(&ew.spatial, mid, reach, {all = {.Player}}, &near)
@@ -439,14 +454,16 @@ rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool)
 		   (i == int(entity_owner(w, h).client) &&
 				   entity_age_of(w, h) < game.TICK_RATE / 3) {continue}
 		lo, hi := game.player_box(c.player)
-		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
-		   ok {nearest, hit_at, hit = d, from + dir * d, true}
+		if d, ok := game.ray_box(from, dir, lo, hi, nearest); ok {
+			nearest, hit_at, hit = d, from + dir * d, true
+			what = {i, 0}
+		}
 	}
-	if hit {return hit_at, true}
+	if hit {return hit_at, true, what}
 	entity_set_pos(w, h, entity_pos(w, h) + dir * step)
 	entity_set_yaw(w, h, f32(math.atan2(-dir.x, -dir.z)))
 	entity_set_pitch(w, h, clamp(f32(math.asin(clamp(dir.y, -1, 1))), -1.5, 1.5)) // within the protocol's limit
-	return {}, false
+	return {}, false, what
 }
 
 forward :: proc(yaw, pitch: f32) -> [3]f64 {
@@ -488,10 +505,11 @@ entity_attack :: proc(
 // Entity_Harm: what hurt an entity, as a game's entity_hurt and entity_died hooks are
 // told it.
 Entity_Harm :: struct {
-	amount: int, // the health it took
-	kind:   game.Source_Kind, // a hit, an explosion, a weapon, the game...
-	by:     ^Client, // the player who did it (nil: nobody, or the game itself)
-	weapon: string, // what a shot came from: its item's name ("" for any other)
+	amount:   int, // the health it took
+	kind:     game.Source_Kind, // a hit, an explosion, a weapon, the game...
+	by:       ^Client, // the player who did it (nil: nobody, or the game itself)
+	creature: u32, // the entity that did it (its id; 0: none; it may be gone)
+	weapon:   string, // what a shot came from: its item's name ("" for any other)
 }
 
 // Dead_Entity: an entity that died, as the entity_died hook is told it (it is gone
@@ -1847,8 +1865,14 @@ system_rockets :: proc(w: ^World, blasts: ^[dynamic]Blast) {
 	for h in entities_next(&it) {
 		info := kind_of(w, h)
 		if info.physics != .Projectile {continue}
-		if at, hit := rocket_step(w, h); hit {
+		if at, hit, what := rocket_step(w, h); hit {
 			owner := entity_owner(w, h)
+			if info.projectile.explode == 0 {
+				// A shot that does not explode hurts what it hit, and is gone.
+				shot_lands(w, h, what)
+				entity_died(w, h)
+				continue
+			}
 			blast := Blast{{at, f64(info.projectile.explode)}, Action_Id(owner.action), nil}
 			// (the shooter still in its seat: one who left is nobody, whoever sits there now)
 			shooter := Player_Ref{u16(max(owner.client, 0)), owner.generation}

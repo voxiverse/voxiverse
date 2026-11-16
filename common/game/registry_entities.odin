@@ -56,8 +56,9 @@ Entity_Look :: enum u8 {
 	Black, // Genes
 	Spotted, // Genes
 	In_Love, // Breeding
+	Striking, // its attack: a blow or a shot was just made (a kind with an "attack")
 }
-ENTITY_LOOK_LIST := [?]string{"shorn", "lamb", "black", "spotted", "in_love"}
+ENTITY_LOOK_LIST := [?]string{"shorn", "lamb", "black", "spotted", "in_love", "striking"}
 #assert(len(ENTITY_LOOK_LIST) == len(Entity_Look))
 
 // Entity_Looks: a set of looks. On the wire a kind's looks are bit i for its i-th look
@@ -81,17 +82,19 @@ look_bits :: proc(info: ^Kind_Info, set: Entity_Looks) -> (bits: u16) {
 	return
 }
 
-// entity_look_part: the component a look is computed from.
-entity_look_part :: proc(l: Entity_Look) -> Entity_Part {
+// entity_look_part: the component a look is computed from (false: none of the parts;
+// Striking is its kind's attack's).
+entity_look_part :: proc(l: Entity_Look) -> (Entity_Part, bool) {
 	switch l {
 	case .Shorn:
-		return .Wool
+		return .Wool, true
 	case .Lamb, .In_Love:
-		return .Breeding
+		return .Breeding, true
 	case .Black, .Spotted:
-		return .Genes
+		return .Genes, true
+	case .Striking:
 	}
-	return .Wool
+	return .Wool, false
 }
 
 Entity_Model :: enum u8 {
@@ -151,6 +154,17 @@ Kind_Spawn_Rule :: struct {
 	group:    [2]int, // size, inclusive
 }
 
+// Kind_Attack_Info: how a creature fights (its "attack"), all of it data: a blow at
+// what is within its reach, or a shot of a projectile kind; then it waits its cooldown.
+// The game says when and at whom (server/core: entity_strike, entity_shoot).
+Kind_Attack_Info :: struct {
+	damage:    f32, // health points a blow or a shot takes
+	reach:     f32, // blocks between its box and the target's within which a blow lands
+	cooldown:  f32, // seconds between blows or shots
+	shot:      Kind_Id, // the projectile kind it shoots (0: it only strikes)
+	shot_name: string, // ... as the pack names it ("": none)
+}
+
 Kind_Info :: struct {
 	id:         string,
 	box:        [2]f32, // width (x and z), height
@@ -169,6 +183,7 @@ Kind_Info :: struct {
 	model:      Entity_Model,
 	color:      [3]u8, // model Box
 	spawn:      Maybe(Kind_Spawn_Rule),
+	attack:     Maybe(Kind_Attack_Info), // it fights (a steered walker)
 }
 
 // Engine_Kinds: the base pack's kinds the engine's code acts on by name (the sheep's
@@ -221,6 +236,7 @@ ENTITY_FIELDS := []string {
 	"fields",
 	"model",
 	"spawn",
+	"attack",
 	"override",
 }
 @(private)
@@ -229,6 +245,8 @@ WALKER_KEYS := []string{"walk_speed", "run_speed", "jump", "step"}
 PROJECTILE_KEYS := []string{"speed", "gravity", "life", "explode"}
 @(private)
 ITEM_KEYS := []string{"pickup_delay", "owner_delay", "range", "merge", "life", "throw"}
+@(private)
+ATTACK_KEYS := []string{"damage", "reach", "cooldown"}
 @(private)
 SPAWN_KEYS := []string{"on", "day", "every", "chance", "cap", "within", "distance", "group"}
 
@@ -480,6 +498,9 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 			}
 		}
 	}
+	if f := field_of(m, "attack"); f != nil {
+		info.attack = read_attack(b, f, &info)
+	}
 	if f := field_of(m, "looks"); f != nil {
 		if f.value.kind != .Array {
 			fail_field(b, f, f.value, "looks is a list of names such as \"shorn\"")
@@ -512,7 +533,7 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 					continue
 				}
 				look := Entity_Look(at)
-				if entity_look_part(look) not_in info.with {
+				if part, has := entity_look_part(look); has && part not_in info.with {
 					fail_field(
 						b,
 						f,
@@ -520,9 +541,13 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 						fmt.aprintf(
 							"look \"%s\" is computed from \"%s\"; add it to \"with\"",
 							e.s,
-							ENTITY_PART_LIST[entity_look_part(look)],
+							ENTITY_PART_LIST[part],
 						),
 					)
+					continue
+				}
+				if look == .Striking && info.attack == nil {
+					fail_field(b, f, e, "look \"striking\" is its attack's; add an \"attack\"")
 					continue
 				}
 				append(&looks, look)
@@ -669,6 +694,38 @@ read_kind_fields :: proc(b: ^Reg_Build, f: ^Def_Field) -> []Kind_Field {
 		append(&out, fld)
 	}
 	return out[:]
+}
+
+// read_attack: {"damage": n, "reach": n, "cooldown": n} and, for a shooter, "shot":
+// the projectile kind's id (resolved once every kind is read: build_entity_kinds).
+@(private)
+read_attack :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) -> (a: Kind_Attack_Info) {
+	v := f.value
+	if info.brain != .Steered {
+		fail_field(b, f, v, "an attack is a steered walker's: set \"brain\": \"steered\"")
+	}
+	if v.kind != .Object {
+		fail_field(b, f, v, "attack is an object with \"damage\", \"reach\", \"cooldown\"")
+		return
+	}
+	numbers := make([dynamic]Json_Member, context.temp_allocator)
+	for m in v.members {
+		if m.key != "shot" {
+			append(&numbers, m)
+			continue
+		}
+		if m.value.kind != .String || m.value.s == "" {
+			fail_field(b, f, m.value, "attack shot is a projectile kind's id")
+			continue
+		}
+		a.shot_name = strings.clone(m.value.s)
+	}
+	only := v
+	only.members = numbers[:]
+	o: [3]f64
+	read_numbers(b, f, only, "attack", ATTACK_KEYS, {0, 0, 0.05}, {1000, 64, 600}, &o)
+	a.damage, a.reach, a.cooldown = f32(o[0]), f32(o[1]), f32(o[2])
+	return
 }
 
 @(private)
@@ -843,6 +900,27 @@ build_entity_kinds :: proc(b: ^Reg_Build, reg: ^Registry) {
 		reg.kinds[i] = read_entity_kind(b, reg, &m)
 		reg.ids[.Entity][m.id] = u32(i)
 	}
+	// A shooter's shot, once every kind is known: a projectile kind.
+	for &k, i in reg.kinds {
+		a, fights := &k.attack.?
+		if !fights || a.shot_name == "" {continue}
+		m := &b.defs[.Entity][i]
+		full := a.shot_name
+		if id, ok := id_parse(a.shot_name); ok {
+			full = strings.concatenate({id.namespace, ":", id.name}, context.temp_allocator)
+		}
+		a.shot = kind_by_full_id(reg, full)
+		if a.shot == 0 || reg.kinds[a.shot - 1].physics != .Projectile {
+			fail(
+				b,
+				m.pack,
+				m.file,
+				m.line,
+				m.column,
+				fmt.aprintf("attack shot \"%s\" is not a projectile kind", a.shot_name),
+			)
+		}
+	}
 	reg.engine = {
 		sheep  = kind_by_full_id(reg, "voxiverse:sheep"),
 		rocket = kind_by_full_id(reg, "voxiverse:rocket"),
@@ -874,6 +952,9 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 			k.model,
 			k.color,
 		)
+		if a, has := k.attack.?; has {
+			fmt.sbprintf(sb, " attack=%v %v %v %s", a.damage, a.reach, a.cooldown, a.shot_name)
+		}
 		if s, has := k.spawn.?; has {
 			fmt.sbprintf(
 				sb,

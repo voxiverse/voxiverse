@@ -58,7 +58,13 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
 - `brain` (`none`, `grazer`, `steered`; either needs `walker`): `grazer` is the sheep's mind;
   `steered` none, the walker stands or goes where its game sends it ([games.md](games.md#walkers)),
   `with` (`wool`, `genes`, `breeding`),
-  `looks` (at most 16; each is computed from a component the kind must have in `with`).
+  `looks` (at most 16; each is computed from a component the kind must have in `with`, but
+  `striking`, which is its attack's: a blow or a shot a moment ago).
+- `attack` (a `steered` walker's): `{"damage": n, "reach": blocks, "cooldown": seconds}` and,
+  for a shooter, `"shot"`: a projectile kind's id. The game says when and at whom
+  (`entity_strike`, `entity_shoot`: [games.md](games.md#walkers)); a blow lands within `reach`
+  of the target's box, a shot flies straight at its point and, with `explode` 0, hurts what it
+  hits by the damage instead of going off.
 - `fields`: at most 8 saved numbers, `{"name": {"type": "u8"|"u16", "min": n, "max": n}}`.
 - `model`: `sheep`, `rocket`, `item`, `player` or `{"box": [r, g, b]}`.
 - `spawn`: natural spawning (`on` a block matcher, `day` fractions, `every` ticks, `chance`, `cap`,
@@ -71,11 +77,13 @@ has their data, in this fixed order:
 1. age: every entity gets a tick older; a natural one with nobody within 80 blocks goes.
 2. brains: `brain: grazer`. The clocks of a kind with `breeding`, thinking (flee, look, wander,
    graze, and mating, which makes the lamb) and steering; the wish goes to the walkers. Then
-   `brain: steered`: the way its game sent it (a point, a route).
+   `brain: steered`: the way its game sent it (a point, a route, a band of distances from a
+   point), its attack's cooldown, and a push out of any walker or player it overlaps.
 3. walkers' physics: `physics: walker`. Each takes its step with the wish its brain made (none
    without a brain); one whose ground is not loaded waits.
 4. items: `physics: item`. Expiry, falling, merging, pickup.
-5. rockets: `physics: projectile`. Flight and hits; the explosions wait for the end.
+5. rockets: `physics: projectile`. Flight and hits; the explosions wait for the end (a
+   projectile with `explode` 0 hurts what it hit and is gone).
 6. explosions: the blasts the rockets made go off.
 
 A kind in a pack that is a walker with no brain falls and stands still; nothing in the code names it.

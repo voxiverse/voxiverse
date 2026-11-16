@@ -15,6 +15,8 @@ import "common:game"
 Damage_Source :: struct {
 	kind:     game.Source_Kind,
 	attacker: Maybe(u16), // the player who did it
+	creature: u32, // the entity that did it (its id; 0: none): a creature's blow or shot
+	kind_of:  game.Kind_Id, // ... its kind (named in the message, though it is gone)
 	weapon:   string, // its item's name, for the message
 	pos:      [3]f64, // where it came from (when placed)
 	placed:   bool,
@@ -22,10 +24,11 @@ Damage_Source :: struct {
 
 // Harm: what hurt a player, as a game's hurt and died hooks are told it.
 Harm :: struct {
-	amount: f32, // the health points it took
-	kind:   game.Source_Kind, // a fall, an explosion, a weapon...
-	by:     ^Client, // the player who did it (the one hurt, for its own rocket; nil: nobody, or one no longer playing)
-	weapon: string, // what a shot came from: its item's name ("" for any other)
+	amount:   f32, // the health points it took
+	kind:     game.Source_Kind, // a fall, an explosion, a weapon...
+	by:       ^Client, // the player who did it (the one hurt, for its own rocket; nil: nobody, or one no longer playing)
+	creature: u32, // the entity that did it (its id; 0: none; it may be gone)
+	weapon:   string, // what a shot came from: its item's name ("" for any other)
 }
 
 Damage_Result :: enum u8 {
@@ -65,7 +68,7 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 	}
 	event_send(s, target, .Damage_Hit, &hit)
 	session_damage(s, target, amount, source, target.health <= 0)
-	harm := Harm{amount, source.kind, attacker(s, source), source.weapon}
+	harm := Harm{amount, source.kind, attacker(s, source), source.creature, source.weapon}
 	g := &s.config.game
 	if target.health <= 0 {
 		die(s, target, source)
@@ -89,6 +92,8 @@ attacker :: proc(s: ^Server, source: Damage_Source) -> ^Client {
 @(private = "file")
 attacker_name :: proc(s: ^Server, source: Damage_Source) -> string {
 	if a := attacker(s, source); a != nil {return client_name(a)}
+	if info := game.kind_info(s.registry, source.kind_of);
+	   info != nil {return game.kind_name(info)}
 	return ""
 }
 

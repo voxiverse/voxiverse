@@ -41,6 +41,7 @@ Steer_Mode :: enum u8 {
 	Stand, // still, where it is
 	Go, // to a point (target), by its own path
 	Follow, // along a route
+	Keep, // within a band of distances from a point: closer when further, away when nearer
 }
 
 Steer :: struct {
@@ -52,8 +53,16 @@ Steer :: struct {
 	plan:    bool, // Go: a new way is wanted
 	speed:   f32, // blocks a second (0: its kind's walk_speed)
 	stuck:   int, // ticks without moving while it wants to
-	arrived: bool, // at its point, or at the route's goal
+	arrived: bool, // at its point, or at the route's goal (Keep: within its band)
+	near:    f32, // Keep: the band, blocks from target (horizontally)
+	far:     f32,
+	planned: [3]f64, // the target its path was planned to (Keep plans again when it moved)
+	ready:   int, // ticks until its attack is ready again
+	struck:  int, // ticks its Striking look still shows
 }
+
+STRIKE_SHOW :: game.TICK_RATE / 3 // ticks a blow or a shot shows (the Striking look)
+SEPARATION :: 2.5 // blocks a second at which walkers that overlap move apart
 
 // Route: a field to one goal over an area, for one body, searched again when a
 // block in its area changed (dirty).
@@ -234,6 +243,201 @@ entity_follow :: proc(w: ^World, h: game.Entity_Handle, route: Route_Handle) -> 
 	return true
 }
 
+// entity_keep: the walker keeps within near..far blocks (horizontally) of target,
+// facing it: it walks closer when further (straight on when it sees the point, else by
+// its own path) and backs away when nearer. Chasing is keep(0, reach), keeping
+// distance keep(range - 2, range), fleeing keep(radius, radius + 1). Called again with
+// a moving target (a player's feet each tick), it plans again only when the target has
+// moved off its path's end. False for an entity that is not a steered walker.
+entity_keep :: proc(w: ^World, h: game.Entity_Handle, target: [3]f64, near, far: f32) -> bool {
+	st := entity_steer(w, h)
+	if st == nil {return false}
+	if st.mode != .Keep {st.plan, st.path.count, st.step, st.stuck = true, 0, 0, 0}
+	st.mode, st.target = .Keep, target
+	st.near, st.far = max(near, 0), max(far, near, 0.1)
+	return true
+}
+
+// entity_sees: nothing solid lies between the entity's eyes (near the top of its box)
+// and p.
+entity_sees :: proc(w: ^World, h: game.Entity_Handle, p: [3]f64) -> bool {
+	info := kind_info_of(w, h)
+	eye := entity_pos(w, h) + {0, f64(info.box[1]) * 0.85, 0}
+	return sees(w, eye, p)
+}
+
+@(private)
+sees :: proc(w: ^World, from, to: [3]f64) -> bool {
+	d := to - from
+	l := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
+	if l < 1e-6 {return true}
+	_, blocked := game.raycast(walk_query(w), from, d / l, l)
+	return !blocked
+}
+
+// Target: what a creature attacks: a player, or another entity.
+Target :: union {
+	^Client,
+	game.Entity_Handle,
+}
+
+// Strike: what an attack came to.
+Strike :: enum u8 {
+	Not_Ready, // its cooldown is still running (or it has no attack)
+	Too_Far, // the target is out of its reach (or gone)
+	Refused, // it landed and did nothing (the target cannot be hurt: protected, a mode...)
+	Hit,
+	Killed,
+}
+
+// entity_strike: the creature strikes at target with its kind's attack, if the attack
+// is ready and the target within its reach (box to box): the damage its kind says (a
+// game's harming hook may change it), credited to the creature; then it waits its
+// cooldown, and shows the Striking look. A struck entity is knocked back as a
+// player's blow knocks it.
+entity_strike :: proc(w: ^World, h: game.Entity_Handle, target: Target) -> Strike {
+	st := entity_steer(w, h)
+	info := kind_info_of(w, h)
+	a, fights := info.attack.?
+	if st == nil || !fights || st.ready > 0 {return .Not_Ready}
+	lo, hi := game.entity_box(info, entity_pos(w, h))
+	tlo, thi: [3]f64
+	switch v in target {
+	case ^Client:
+		if v == nil || v.world != w || v.state != .Playing || v.dead {return .Too_Far}
+		tlo, thi = game.player_box(v.player)
+	case game.Entity_Handle:
+		if !entity_listed(w, v) || v == h {return .Too_Far}
+		tlo, thi = game.entity_box(kind_info_of(w, v), entity_pos(w, v))
+	}
+	if box_gap(lo, hi, tlo, thi) > f64(a.reach) {return .Too_Far}
+	attack_begin(w, h, st, a, (tlo + thi) / 2)
+	id := entity_id(w, h)
+	switch v in target {
+	case ^Client:
+		source := Damage_Source {
+			kind     = .Hit,
+			creature = id,
+			kind_of  = entity_kind(w, h),
+			pos      = entity_pos(w, h),
+			placed   = true,
+		}
+		switch damage(w.server, v, a.damage, source) {
+		case .Hurt:
+			return .Hit
+		case .Killed:
+			return .Killed
+		case .Ignored, .Blocked:
+			return .Refused
+		}
+	case game.Entity_Handle:
+		harm := Entity_Harm {
+			amount   = max(int(math.round(a.damage)), 1),
+			kind     = .Hit,
+			creature = id,
+		}
+		return .Killed if entity_attack(w, v, entity_pos(w, h), harm) else .Hit
+	}
+	return .Refused
+}
+
+// entity_shoot: the creature shoots its kind's shot at p, if its attack is ready (the
+// game judges range and sight: entity_sees): the projectile flies from its chest
+// straight at p and hurts what it hits by the attack's damage, credited to the
+// creature. False: not ready, or no shot, or the world is full.
+entity_shoot :: proc(w: ^World, h: game.Entity_Handle, p: [3]f64) -> bool {
+	st := entity_steer(w, h)
+	info := kind_info_of(w, h)
+	a, fights := info.attack.?
+	if st == nil || !fights || a.shot == 0 || st.ready > 0 {return false}
+	from := entity_pos(w, h) + {0, f64(info.box[1]) * 0.7, 0}
+	d := p - from
+	l := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
+	if l < 1e-6 {return false}
+	dir := d / l
+	shot := entity_spawn(w, a.shot, from, false)
+	if shot == 0 {return false}
+	attack_begin(w, h, st, a, p)
+	speed := game.kind_info(w.server.registry, a.shot).projectile.speed
+	entity_set_velocity(w, shot, {f32(dir.x), f32(dir.y), f32(dir.z)} * speed)
+	entity_set_look(w, shot, f32(math.atan2(-dir.x, -dir.z)), f32(math.asin(clamp(dir.y, -1, 1))))
+	owner := entity_owner(w, shot)
+	owner.entity, owner.damage = entity_id(w, h), a.damage
+	return true
+}
+
+// attack_begin: the attack is spent: the cooldown starts, the look shows, it faces at.
+@(private = "file")
+attack_begin :: proc(
+	w: ^World,
+	h: game.Entity_Handle,
+	st: ^Steer,
+	a: game.Kind_Attack_Info,
+	at: [3]f64,
+) {
+	st.ready = max(int(math.round(a.cooldown * game.TICK_RATE)), 1)
+	st.struck = STRIKE_SHOW
+	d := at - entity_pos(w, h)
+	if d.x * d.x + d.z * d.z > 1e-6 {entity_set_yaw(w, h, f32(math.atan2(-d.x, -d.z)))}
+}
+
+// entity_striking: the creature struck or shot a moment ago (its Striking look).
+entity_striking :: proc(w: ^World, h: game.Entity_Handle) -> bool {
+	st := entity_steer(w, h)
+	return st != nil && st.struck > 0
+}
+
+// shot_lands: a projectile that does not explode hit a player or an entity (what): the
+// damage its owner gave it, credited to its shooter (a creature or a player).
+shot_lands :: proc(w: ^World, h: game.Entity_Handle, what: Shot_Hit) {
+	s := w.server
+	owner := entity_owner(w, h)
+	kind := entity_kind(w, h)
+	shooter: Maybe(u16)
+	if owner.client >= 0 &&
+	   player_of(s, Player_Ref{u16(owner.client), owner.generation}) !=
+		   nil {shooter = u16(owner.client)}
+	from_kind: game.Kind_Id
+	if owner.entity != 0 {
+		if e, there := entity_find(w, owner.entity); there {from_kind = entity_kind(w, e)}
+	}
+	if what.player >= 0 && what.player < len(s.clients) {
+		damage(
+			s,
+			&s.clients[what.player],
+			owner.damage,
+			{
+				kind = .Weapon,
+				attacker = shooter,
+				creature = owner.entity,
+				kind_of = from_kind,
+				weapon = game.kind_name(game.kind_info(s.registry, kind)),
+				pos = entity_pos(w, h),
+				placed = true,
+			},
+		)
+	} else if what.entity != 0 {
+		if e, there := entity_find(w, what.entity); there {
+			harm := Entity_Harm {
+				amount   = max(int(math.round(owner.damage)), 1),
+				kind     = .Weapon,
+				creature = owner.entity,
+				weapon   = game.kind_name(game.kind_info(s.registry, kind)),
+			}
+			if seat, set := shooter.?; set {harm.by = &s.clients[seat]}
+			entity_attack(w, e, entity_pos(w, h), harm)
+		}
+	}
+}
+
+// box_gap: how far apart two boxes are (0: they touch or overlap).
+@(private = "file")
+box_gap :: proc(alo, ahi, blo, bhi: [3]f64) -> f64 {
+	g: [3]f64
+	for i in 0 ..< 3 {g[i] = max(blo[i] - ahi[i], alo[i] - bhi[i], 0)}
+	return math.sqrt(g.x * g.x + g.y * g.y + g.z * g.z)
+}
+
 // entity_stand: the walker stops where it is.
 entity_stand :: proc(w: ^World, h: game.Entity_Handle) {
 	if st := entity_steer(w, h); st != nil {st.mode, st.arrived = .Stand, false}
@@ -277,8 +481,10 @@ system_steer :: proc(w: ^World, wishes: ^map[game.Entity_Handle]Wish) {
 				}
 			}
 		}
+		if st.ready > 0 {st.ready -= 1}
+		if st.struck > 0 {st.struck -= 1}
 		wish, jump := steer_walk(w, h, st, info, body, query)
-		wishes[h] = {wish, jump}
+		wishes[h] = {wish + separation(w, h, info), jump}
 	}
 }
 
@@ -330,34 +536,133 @@ steer_walk :: proc(
 			return
 		}
 		st.arrived = false
-		if st.plan || st.step >= st.path.count || st.stuck > STUCK_TICKS {
-			if !plan_way(w, st, at, body, query) {return}
+		ok: bool
+		toward, ok = path_toward(w, st, pos, at, body, query)
+		if !ok {return}
+	case .Keep:
+		d := st.target - pos
+		flat := math.sqrt(d.x * d.x + d.z * d.z)
+		if flat > 1e-6 {
+			face := f32(math.atan2(-d.x, -d.z))
+			entity_set_yaw(w, h, turn_towards(entity_yaw(w, h), face, 0.4))
 		}
-		next := st.path.steps[st.step]
-		toward = path.body_center(next, body)
-		flat := toward - pos
-		if flat.x * flat.x + flat.z * flat.z < 0.2 * 0.2 && abs(f64(next.y) - pos.y) < 0.6 {
-			st.step += 1
-			if st.step >= st.path.count {
-				if !st.path.whole {st.plan = true}
-				toward = st.target
-			} else {
-				toward = path.body_center(st.path.steps[st.step], body)
-			}
+		st.arrived = flat >= f64(st.near) && flat <= f64(st.far)
+		switch {
+		case st.arrived:
+			return
+		case flat < f64(st.near):
+			// Too near: straight back, away from it.
+			away := [2]f64{-d.x, -d.z} / max(flat, 1e-6)
+			if flat < 1e-6 {away = {1, 0}}
+			speed := st.speed if st.speed > 0 else info.walker.walk_speed
+			wish = {f32(away.x), f32(away.y)} * speed
+			vel := entity_velocity(w, h)
+			jump =
+				entity_on_ground(w, h) && body.climb > 0 && abs(vel.x) + abs(vel.z) < 0.1 * speed
+			return
+		case abs(d.y) < 1.5 && sees(w, pos + {0, 0.5, 0}, st.target + {0, 0.5, 0}):
+			// In sight on its own level: straight at it.
+			toward = st.target
+			st.plan = true // (a path, when it is out of sight again, starts afresh)
+		case:
+			moved := st.target - st.planned
+			if moved.x * moved.x + moved.z * moved.z > 2 * 2 {st.plan = true}
+			ok: bool
+			toward, ok = path_toward(w, st, pos, at, body, query)
+			if !ok {return}
 		}
-		if st.step >= st.path.count {toward = st.target}
 	}
 	speed := st.speed if st.speed > 0 else info.walker.walk_speed
 	to := [2]f64{toward.x - pos.x, toward.z - pos.z}
 	dist := math.sqrt(to.x * to.x + to.y * to.y)
 	if dist > 1e-6 {
 		wish = {f32(to.x / dist), f32(to.y / dist)} * speed
-		entity_set_yaw(w, h, turn_towards(entity_yaw(w, h), f32(math.atan2(-to.x, -to.y)), 0.3))
+		if st.mode != .Keep {
+			entity_set_yaw(
+				w,
+				h,
+				turn_towards(entity_yaw(w, h), f32(math.atan2(-to.x, -to.y)), 0.3),
+			)
+		}
 	}
 	vel := entity_velocity(w, h)
 	blocked := entity_on_ground(w, h) && abs(vel.x) + abs(vel.z) < 0.1 * speed
 	if blocked {st.stuck += 1} else {st.stuck = 0}
 	jump = entity_on_ground(w, h) && body.climb > 0 && (toward.y > pos.y + 0.5 || blocked)
+	return
+}
+
+// path_toward: the block the walker heads for next on its way to st.target by its own
+// path, planned again when wanted (a block changed on it, it ran out, it is stuck);
+// false while it has no way (the budget is spent, or there is none).
+@(private = "file")
+path_toward :: proc(
+	w: ^World,
+	st: ^Steer,
+	pos: [3]f64,
+	at: game.Block_Pos,
+	body: path.Body,
+	query: game.Block_Query,
+) -> (
+	toward: [3]f64,
+	ok: bool,
+) {
+	if st.plan || st.step >= st.path.count || st.stuck > STUCK_TICKS {
+		if !plan_way(w, st, at, body, query) {return}
+	}
+	next := st.path.steps[st.step]
+	toward = path.body_center(next, body)
+	flat := toward - pos
+	if flat.x * flat.x + flat.z * flat.z < 0.2 * 0.2 && abs(f64(next.y) - pos.y) < 0.6 {
+		st.step += 1
+		if st.step >= st.path.count {
+			if !st.path.whole {st.plan = true}
+			toward = st.target
+		} else {
+			toward = path.body_center(st.path.steps[st.step], body)
+		}
+	}
+	if st.step >= st.path.count {toward = st.target}
+	return toward, true
+}
+
+// separation: a walker overlapping another walker or a player moves out of it, at up
+// to SEPARATION blocks a second (players are not pushed: their own clients move them).
+@(private = "file")
+separation :: proc(w: ^World, h: game.Entity_Handle, info: ^game.Kind_Info) -> (push: [2]f32) {
+	pos := entity_pos(w, h)
+	r := f64(info.box[0]) / 2
+	near := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_sphere(
+		&w.entity_world.spatial,
+		pos,
+		r + 1 + ROCKET_REACH / 2,
+		{all = {.Hittable}, exclude = game.Entity_Id(entity_id(w, h))},
+		&near,
+	)
+	away :: proc(from, other: [3]f64, room: f64, salt: u32) -> [2]f32 {
+		d := [2]f64{from.x - other.x, from.z - other.z}
+		l := math.sqrt(d.x * d.x + d.y * d.y)
+		if l >= room || abs(from.y - other.y) > 1.5 {return {}}
+		if l < 1e-4 {
+			// (one on top of another: apart by their ids, the same way every run)
+			a := f64(salt % 16) * math.TAU / 16
+			return {f32(base.cos(a)), f32(base.sin(a))} * SEPARATION
+		}
+		return {f32(d.x / l), f32(d.y / l)} * f32(1 - l / room) * SEPARATION
+	}
+	for id in near {
+		other, there := entity_find(w, u32(id))
+		if !there {continue}
+		oinfo := kind_info_of(w, other)
+		if oinfo.physics != .Walker {continue}
+		push += away(pos, entity_pos(w, other), r + f64(oinfo.box[0]) / 2, u32(id))
+	}
+	for i in players_near(w, pos, r + 1, 2) {
+		c := &w.server.clients[i]
+		if c.dead {continue}
+		push += away(pos, c.player.position, r + game.PLAYER_WIDTH / 2, entity_id(w, h))
+	}
 	return
 }
 
@@ -389,6 +694,7 @@ plan_way :: proc(
 		return false
 	}
 	st.path = found
+	st.planned = st.target
 	if found.count == 0 && found.whole {return false} 	// (there already)
 	return found.count > 0
 }

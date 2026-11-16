@@ -1,5 +1,6 @@
 package core
 
+import "core:math"
 import "core:testing"
 
 import "common:game"
@@ -14,7 +15,19 @@ WALKERS_PACK :: `{"format": 1, "namespace": "walkers", "version": "1.0.0", "titl
 WALKERS_KINDS :: `{
 	"creep": {"box": [0.6, 0.9], "health": 5, "hittable": true, "physics": "walker",
 	          "walker": {"walk_speed": 4, "run_speed": 4, "jump": 0, "step": 0},
-	          "brain": "steered", "model": {"box": [200, 60, 60]}}
+	          "brain": "steered", "model": {"box": [200, 60, 60]}},
+	"brute": {"box": [0.8, 1.6], "health": 20, "hittable": true, "physics": "walker",
+	          "walker": {"walk_speed": 3, "run_speed": 3, "jump": 1.2, "step": 0},
+	          "brain": "steered", "attack": {"damage": 3, "reach": 1, "cooldown": 1},
+	          "looks": ["striking"], "model": {"box": [90, 140, 60]}},
+	"archer": {"box": [0.6, 1.7], "health": 8, "hittable": true, "physics": "walker",
+	          "walker": {"walk_speed": 3, "run_speed": 3, "jump": 1.2, "step": 0},
+	          "brain": "steered",
+	          "attack": {"damage": 2, "reach": 1, "cooldown": 0.5, "shot": "walkers:bolt"},
+	          "model": {"box": [60, 140, 90]}},
+	"bolt": {"box": [0.2, 0.2], "physics": "projectile",
+	         "projectile": {"speed": 24, "gravity": 0, "life": 3, "explode": 0},
+	         "model": "rocket"}
 }`
 
 // The ground the tests walk on.
@@ -339,4 +352,201 @@ test_entity_harm_tells_the_game :: proc(t: ^testing.T) {
 	testing.expect_value(t, told.hurt, 3)
 	testing.expect(t, told.harm.kind == .Explosion && told.harm.by == nil)
 	testing.expect_value(t, entity_health_of(w, other), 2)
+}
+
+// --- Creatures that fight ------------------------------------------------------
+
+// Fight: a test game's record of how its player was hurt and died.
+@(private = "file")
+Fight :: struct {
+	hurt:  int,
+	died:  bool,
+	harm:  Harm, // the last
+	lines: int,
+}
+
+@(private = "file")
+Fight_Rig :: struct {
+	sess:  Session,
+	files: [2]game.Pack_File,
+}
+
+// fight_start: the walkers' pack in a stepped session whose mirror player (survival)
+// stands at the spawn, 0.5 0 0.5, its hurts and death counted.
+@(private = "file")
+fight_start :: proc(t: ^testing.T, rig: ^Fight_Rig) -> bool {
+	rig.files = {
+		{"pack.json", transmute([]u8)string(WALKERS_PACK)},
+		{"data/entities/creep.json", transmute([]u8)string(WALKERS_KINDS)},
+	}
+	config := harness_world()
+	config.mode = "survival"
+	config.game = {
+		info = {id = "walkers", name = "Walkers"},
+		pack = {"walkers", rig.files[:]},
+		server_state = Fight,
+		hurt = proc(s: ^Server, c: ^Client, harm: Harm) {
+			f := game_state(s, Fight)
+			f.hurt += 1
+			f.harm = harm
+		},
+		died = proc(s: ^Server, c: ^Client, harm: Harm) {
+			f := game_state(s, Fight)
+			f.died, f.harm = true, harm
+		},
+	}
+	if !testing.expect(t, session_start(&rig.sess, {}, false, with = config)) {return false}
+	ready :: proc(data: rawptr) -> bool {
+		rig := (^Fight_Rig)(data)
+		s := &rig.sess.h.srv
+		return(
+			rig.sess.mirror.welcomed &&
+			s.clients[0].state == .Playing &&
+			world_ready(s.home, {GROUND.lo - {0, 16, 0}, GROUND.hi}) \
+		)
+	}
+	world_keep(rig.sess.h.srv.home, {GROUND.lo - {0, 16, 0}, GROUND.hi})
+	_, ok := harness_step_until(&rig.sess.h, ready, rig, 600)
+	return testing.expect(t, ok, "never played")
+}
+
+// A brute set on the player (keep 0..reach, strike each tick) walks to it and strikes
+// by its kind's numbers, a blow a second, the blows credited to it; the player dies of
+// it and the line names it.
+@(test)
+test_creature_chases_and_strikes :: proc(t: ^testing.T) {
+	rig := new(Fight_Rig)
+	defer free(rig)
+	if !fight_start(t, rig) {
+		session_stop(&rig.sess)
+		return
+	}
+	defer session_stop(&rig.sess)
+	s := &rig.sess.h.srv
+	w := s.home
+	c := &s.clients[0]
+	brute, _ := game.registry_kind(s.registry, "walkers:brute")
+	e := entity_spawn(w, brute, {-9.5, 0, 0.5}, false)
+	if !testing.expect(t, e != 0) {return}
+	testing.expect_value(t, entity_strike(w, e, c), Strike.Too_Far)
+	f := game_state(s, Fight)
+	full := c.health
+	first := -1
+	striking := false
+	for tick in 0 ..< 600 {
+		if c.dead {break}
+		entity_keep(w, e, c.player.position, 0, 0.6)
+		if entity_strike(w, e, c) == .Hit && first < 0 {
+			first = tick
+			testing.expect_value(t, c.health, full - 3)
+			testing.expect_value(t, entity_strike(w, e, c), Strike.Not_Ready)
+		}
+		striking ||= entity_looks(w, s.registry, e) != 0
+		harness_step(&rig.sess.h)
+	}
+	testing.expectf(t, first > 0 && first < 120, "the first blow came at tick %d", first)
+	testing.expect(t, striking, "the brute never showed its Striking look")
+	testing.expect(t, f.died, "the player never died")
+	testing.expect_value(t, f.harm.creature, entity_id(w, e))
+	testing.expect_value(t, f.harm.kind, game.Source_Kind.Hit)
+	testing.expect_value(t, f.harm.by, (^Client)(nil))
+	// The blows were a second apart: the player's 20 health took 7 blows.
+	testing.expectf(t, f.hurt == 6, "hurt %d times before dying", f.hurt)
+	line := game.death_text(.Hit, "p", attacker_name_of(s, f.harm), "", false)
+	testing.expect_value(t, line, "p was beaten by brute")
+}
+
+// attacker_name_of: the name a harm's creature goes by (its kind's).
+@(private = "file")
+attacker_name_of :: proc(s: ^Server, harm: Harm) -> string {
+	h, there := entity_find(s.home, harm.creature)
+	if !there {return ""}
+	return game.kind_name(game.kind_info(s.registry, entity_kind(s.home, h)))
+}
+
+// An archer told to keep 5..7 blocks from the player backs away when too near, closes
+// in when too far, and its bolts, shot when ready and in sight, hurt the player by its
+// attack's damage, credited to it; a wall between them hides the player from it.
+@(test)
+test_creature_keeps_its_distance_and_shoots :: proc(t: ^testing.T) {
+	rig := new(Fight_Rig)
+	defer free(rig)
+	if !fight_start(t, rig) {
+		session_stop(&rig.sess)
+		return
+	}
+	defer session_stop(&rig.sess)
+	s := &rig.sess.h.srv
+	w := s.home
+	c := &s.clients[0]
+	archer, _ := game.registry_kind(s.registry, "walkers:archer")
+	e := entity_spawn(w, archer, {2.5, 0, 0.5}, false)
+	if !testing.expect(t, e != 0) {return}
+	distance :: proc(w: ^World, e: game.Entity_Handle, c: ^Client) -> f64 {
+		d := entity_pos(w, e) - c.player.position
+		return math.sqrt(d.x * d.x + d.z * d.z)
+	}
+	for _ in 0 ..< 90 {
+		entity_keep(w, e, c.player.position, 5, 7)
+		harness_step(&rig.sess.h)
+	}
+	d := distance(w, e, c)
+	testing.expectf(t, d >= 4.8 && d <= 7.2, "backed away to %v", d)
+	testing.expect(t, entity_arrived(w, e))
+	// Shooting from there: the bolts land.
+	f := game_state(s, Fight)
+	full := c.health
+	shots := 0
+	for _ in 0 ..< 45 {
+		entity_keep(w, e, c.player.position, 5, 7)
+		chest := c.player.position + {0, 1, 0}
+		if entity_sees(w, e, chest) && entity_shoot(w, e, chest) {shots += 1}
+		harness_step(&rig.sess.h)
+	}
+	testing.expectf(t, shots >= 2 && shots <= 4, "%d shots in 1.5 s at 2 a second", shots)
+	testing.expectf(t, c.health <= full - 4, "health %v of %v", c.health, full)
+	testing.expect_value(t, f.harm.creature, entity_id(w, e))
+	testing.expect_value(t, f.harm.kind, game.Source_Kind.Weapon)
+	// A wall between them: it does not see the player.
+	p := entity_pos(w, e)
+	mid := (p + c.player.position) / 2
+	bulk_edit(
+		w,
+		{shape = Box{{i32(mid.x) - 1, 0, -6}, {i32(mid.x) + 1, 4, 6}}, op = .Set, block = .Stone},
+		world_act(w, .Structure),
+	)
+	harness_step(&rig.sess.h)
+	testing.expect(t, !entity_sees(w, e, c.player.position + {0, 1, 0}))
+	// Far off: it closes in (round the wall, by its path).
+	e2 := entity_spawn(w, archer, {20.5, 0, 0.5}, false)
+	for _ in 0 ..< 150 {
+		entity_keep(w, e2, c.player.position + {6, 0, 0}, 0, 1)
+		harness_step(&rig.sess.h)
+	}
+	testing.expectf(t, entity_arrived(w, e2), "the archer is at %v", entity_pos(w, e2))
+}
+
+// Two walkers put in one place move apart, and one does not stand inside the player.
+@(test)
+test_walkers_keep_apart :: proc(t: ^testing.T) {
+	rig := new(Fight_Rig)
+	defer free(rig)
+	if !fight_start(t, rig) {
+		session_stop(&rig.sess)
+		return
+	}
+	defer session_stop(&rig.sess)
+	s := &rig.sess.h.srv
+	w := s.home
+	c := &s.clients[0]
+	brute, _ := game.registry_kind(s.registry, "walkers:brute")
+	a := entity_spawn(w, brute, {5.5, 0, 5.5}, false)
+	b := entity_spawn(w, brute, {5.5, 0, 5.5}, false)
+	inside := entity_spawn(w, brute, c.player.position, false)
+	for e in ([]game.Entity_Handle{a, b, inside}) {entity_stand(w, e)}
+	harness_step(&rig.sess.h, 30)
+	d := entity_pos(w, a) - entity_pos(w, b)
+	testing.expectf(t, math.sqrt(d.x * d.x + d.z * d.z) >= 0.7, "a and b %v apart", d)
+	d = entity_pos(w, inside) - c.player.position
+	testing.expectf(t, math.sqrt(d.x * d.x + d.z * d.z) >= 0.6, "inside the player: %v", d)
 }
