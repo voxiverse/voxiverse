@@ -17,17 +17,17 @@ import "common:game"
 import "common:starmap"
 import "server:store"
 
-// Singleplayer's saves: one
-// directory each under saves/ in the user data directory (or VX_SAVES),
-// written by the server (server/core/save.odin): a universe (universe.cfg) or,
-// an older save, a single world (world.cfg). The screen shows them as
-// cards, the one played last first: a galaxy thumbnail drawn from the seed,
-// the name, the game mode and when it was played. A click selects a card; a
-// double-click (or Confirm on the selected one) enters the universe (the
-// server puts the character where it last stood); a card's
-// "..." menu has Rename, Export and Delete (confirmed); New Universe opens
-// the creation screen (screen_creation.odin) and Import brings an exported
-// universe in from a file. Players see "universe"; the code says universe.
+// A game's page: its name and its one line, then its saves and only its saves (a save is
+// one directory under saves/ in the user data directory, or VX_SAVES, written by the
+// server, server/core/save.odin: a universe, universe.cfg, or, an older save, a single
+// world, world.cfg). New is at the top (sandbox's opens the creation screen,
+// creation.odin; another game's asks for a name), then the saves in a list that
+// scrolls, the one played last first: each its name, when it was last played and how
+// long it has been played (sandbox's with its galaxy and its game mode). A click selects
+// a save, a double-click (or Confirm) plays it; Play, Rename, Delete (asked first) and
+// Export act on the selected one, Import brings an exported save in, Back returns to the
+// games. A game whose rounds keep nothing (engine.game_keeps) has a page with Play
+// alone. Players see "universe" in sandbox; the code says universe for every save.
 
 DOUBLE_CLICK :: 400 * time.Millisecond // (the multiplayer list's)
 
@@ -64,11 +64,12 @@ worlds_clear :: proc(w: ^engine.Universes_Screen) {
 	clear(&w.entries)
 }
 
-// universes_refresh lists the saves: directories with a universe.cfg, or a
-// world.cfg (from before universes), most recently played first.
+// universes_refresh lists the saves of every game: directories with a universe.cfg, or a
+// world.cfg (from before universes), most recently played first. The page's first save
+// is selected.
 universes_refresh :: proc(w: ^engine.Universes_Screen) {
 	worlds_clear(w)
-	w.selected, w.mode, w.scroll = -1, .List, 0
+	w.mode, w.list = .List, {}
 	message_set(w, "")
 	dir := saves_dir()
 	entries, err := os.read_all_directory_by_path(dir, context.temp_allocator)
@@ -95,15 +96,41 @@ universes_refresh :: proc(w: ^engine.Universes_Screen) {
 	)
 }
 
+// universes_open: the page of the game id (constant data), its saves read.
+universes_open :: proc(app: ^engine.App, id: string) {
+	app.universes.game = id
+	universes_refresh(&app.universes)
+	app.screen = .Universes
+}
+
+// page_game: the game whose page it is ("" before one was opened: the default game's).
+page_game :: proc(w: ^engine.Universes_Screen) -> string {
+	return w.game if w.game != "" else game.DEFAULT_GAME
+}
+
+// page_saves: the page's saves, as places in entries (temp allocator).
+page_saves :: proc(w: ^engine.Universes_Screen) -> []int {
+	shown := make([dynamic]int, 0, len(w.entries), context.temp_allocator)
+	for &e, i in w.entries {if entry_game(&e) == page_game(w) {append(&shown, i)}}
+	return shown[:]
+}
+
+// page_selected: the selected save's place in entries (-1: none).
+page_selected :: proc(w: ^engine.Universes_Screen) -> int {
+	shown := page_saves(w)
+	s := w.list.selected
+	return shown[s] if s >= 0 && s < len(shown) else -1
+}
+
 @(private = "file")
 message_set :: proc(w: ^engine.Universes_Screen, text: string) {
 	delete(w.message)
 	w.message = strings.clone(text) if text != "" else ""
 }
 
-// entry_read_config takes what a card shows from the universe's config file:
+// entry_read_config takes what a save's row shows from the universe's config file:
 // the seed (a thumbnail is its galaxy), the game it plays, the game mode and whether
-// it changed.
+// it changed, and its age (the time played).
 @(private = "file")
 entry_read_config :: proc(e: ^engine.Save_Entry, cfg: string) {
 	data, err := os.read_entire_file_from_path(cfg, context.temp_allocator)
@@ -122,6 +149,8 @@ entry_read_config :: proc(e: ^engine.Save_Entry, cfg: string) {
 			e.game_id = strings.clone(value)
 		case "mode_changed":
 			e.mode_changed = value == "true"
+		case "age":
+			if n, ok := strconv.parse_i64(value); ok && n > 0 {e.age = n}
 		}
 	}
 	starmap.galaxy_stars(starmap.seed_glyphs(e.seed), e.stars[:])
@@ -191,6 +220,15 @@ world_create :: proc(app: ^engine.App, name, seed_text: string, earth := false) 
 	engine.enter_world(app, plan.path, i64(plan.seed), mode = plan.mode, earth = plan.earth)
 }
 
+// save_create makes a new save of the game id called name (a free variant of it) and
+// enters it: a game other than sandbox, on the world the game is made on (the scratch
+// world's seed), as its Play in a scratch world was.
+save_create :: proc(app: ^engine.App, id, name: string) {
+	plan := universe_plan(name, engine.SCRATCH_SEED, "creative")
+	log.infof("saves creating name=%q game=%s", filepath.base(plan.path), id)
+	engine.enter_world(app, plan.path, i64(plan.seed), game_id = id)
+}
+
 // last_played: when a save was last played, as people say it.
 last_played :: proc(t, now: time.Time) -> string {
 	ago := time.duration_seconds(time.diff(t, now))
@@ -210,16 +248,32 @@ last_played :: proc(t, now: time.Time) -> string {
 	return fmt.tprintf("%d %v %d", d, m, y)
 }
 
+// time_played: how long a save has been played (its age in ticks), as people say it.
+time_played :: proc(ticks: i64) -> string {
+	minutes := ticks / (game.TICK_RATE * 60)
+	switch {
+	case minutes < 1:
+		return engine.tr(.Universes_Time_Under_Minute)
+	case minutes < 60:
+		return engine.tr(.Universes_Time_Minutes, minutes)
+	}
+	return engine.tr(.Universes_Time_Hours, minutes / 60, minutes % 60)
+}
+
 universes_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "saves")
 	defer ui.pop_id(ctx)
 	w := &app.universes
+	if !engine.game_keeps(app, page_game(w)) {
+		play_page(app, ctx)
+		return
+	}
 	switch w.mode {
 	case .List:
 		saves_list(app, ctx)
-	case .Menu:
+	case .New:
 		saves_list(app, ctx)
-		save_menu(app, ctx)
+		save_new_dialog(app, ctx)
 	case .Edit:
 		save_edit(app, ctx)
 	case .Delete:
@@ -231,115 +285,207 @@ universes_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	}
 }
 
-SAVE_ROW :: 104 // a universe's card
+SAVE_ROW :: 64 // a save's row
 SAVES_WIDTH :: 640
-THUMB :: 88
+THUMB :: 48
+
+// page_heading: the game's name and its one line, cut from the top of area.
+@(private = "file")
+page_heading :: proc(app: ^engine.App, ctx: ^ui.Context, area: ^ui.Rect) {
+	t := &ctx.theme
+	w := &app.universes
+	name, about := page_game(w), ""
+	if g, known := engine.game_find(app.games, page_game(w)); known {
+		name, about = g.name, g.description
+	}
+	ui.title(ctx, name, ui.cut_top(area, 60))
+	ui.draw_text(ctx, ui.cut_top(area, 24), about, t.font_size * GAME_ABOUT, t.text_muted, .Center)
+	ui.cut_top(area, 2 * t.spacing)
+}
+
+// play_page: the page of a game whose rounds keep nothing: Play, in a world kept
+// nowhere, and Back.
+@(private = "file")
+play_page :: proc(app: ^engine.App, ctx: ^ui.Context) {
+	t := &ctx.theme
+	w := &app.universes
+	area := ui.rect_center(
+		ctx.screen,
+		SAVES_WIDTH,
+		84 + 2 * t.spacing + 4 * t.row_height + 3 * t.spacing,
+	)
+	page_heading(app, ctx, &area)
+	name := page_game(w)
+	if g, known := engine.game_find(app.games, name); known {name = g.name}
+	ui.label(
+		ctx,
+		engine.tr(.Universes_Keeps_Nothing, name),
+		ui.cut_top(&area, t.row_height),
+		.Center,
+		t.text_muted,
+	)
+	ui.cut_top(&area, t.spacing)
+	if w.message !=
+	   "" {ui.label(ctx, w.message, ui.cut_top(&area, t.row_height), .Center, t.text_muted)}
+	column := ui.rect_center(area, 300, 2 * t.row_height + t.spacing)
+	ui.begin_column(ctx, column)
+	defer ui.end_column(ctx)
+	ui.default_focus(ctx)
+	if ui.button(ctx, engine.tr(.Universes_Play), ui.next(ctx)) {
+		if engine.game_hostable(app, page_game(w)) {
+			app.launch = page_game(w) // (the frame starts it: play_game)
+		} else {
+			message_set(w, engine.tr(.Universes_Game_Missing, page_game(w)))
+		}
+	}
+	if ui.button(ctx, engine.tr(.Credits_Back), ui.next(ctx)) {singleplayer_open(app)}
+}
 
 @(private = "file")
 saves_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	w := &app.universes
 	t := &ctx.theme
-	area := ui.rect_center(ctx.screen, SAVES_WIDTH, ctx.screen.h - 60)
-	ui.title(ctx, engine.tr(.Universes_Title), ui.cut_top(&area, 70))
+	sandbox := page_game(w) == game.DEFAULT_GAME
+	shown := page_saves(w)
+	area := ui.rect_center(ctx.screen, SAVES_WIDTH, ctx.screen.h - 40)
+	page_heading(app, ctx, &area)
+	// New, first: what a page without saves is for.
+	ui.default_focus(ctx)
+	new_text := engine.tr(.Universes_New_Universe if sandbox else .Universes_New_Save)
+	if ui.button(ctx, new_text, ui.cut_top(&area, t.row_height)) {
+		if sandbox {
+			creation_open(app)
+		} else {
+			name, _ := engine.game_find(app.games, page_game(w))
+			clear(&w.name)
+			append(
+				&w.name,
+				engine.tr(
+					.Universes_Default_Name,
+					name.name if name != nil else page_game(w),
+					len(shown) + 1,
+				),
+			)
+			w.mode = .New
+			message_set(w, "")
+		}
+		return
+	}
+	ui.cut_top(&area, t.spacing)
 	buttons := ui.cut_bottom(&area, 2 * t.row_height + t.spacing)
 	ui.cut_bottom(&area, 2 * t.spacing)
 	if w.message !=
-	   "" {ui.label(ctx, w.message, ui.cut_top(&area, t.row_height), .Center, t.text_muted)}
-	ui.fill_rect(ctx, area, t.list_fill)
-	ui.stroke_rect(ctx, area, 1, t.list_border)
-	if len(w.entries) == 0 {
-		ui.label(ctx, engine.tr(.Universes_None_Yet), area, .Center, t.text_muted)
-	}
-	visible := int(area.h / SAVE_ROW)
-	first := int(w.scroll)
-	enter := -1
-	// One focusable widget for a pad or keyboard: Up and Down move the
-	// selection, Confirm enters it; the cards below are for the mouse.
-	list := ui.list_nav(ctx, "saves", area, len(w.entries), &w.selected, &first, visible, SAVE_ROW)
-	w.scroll = f32(first)
-	if list.clicked && w.selected >= 0 {enter = w.selected}
-	ui.push_clip_rect(ctx, area)
-	for i in first ..< min(len(w.entries), first + visible + 1) {
-		e := &w.entries[i]
-		card := ui.Rect{area.x, area.y + f32(i - first) * SAVE_ROW, area.w, SAVE_ROW}
-		ui.push_id_int(ctx, i)
-		it := ui.interact(ctx, ui.get_id(ctx, "card"), card, focusable = false, label = e.name)
-		if it.hovered {ui.fill_rect(ctx, card, t.row_selected)}
-		if w.selected == i {
-			ui.fill_rect(ctx, card, t.row_hover)
-			ui.stroke_rect(ctx, ui.rect_shrink(card, 1), 1, t.text)
-		}
-		inner := ui.rect_shrink(card, 8)
-		thumb := ui.cut_left(&inner, THUMB)
-		draw_galaxy(ctx, thumb, e.stars[:], 1)
-		ui.cut_left(&inner, 12)
-		// Its menu, on top of the card: a click here is not a click on the card.
-		menu := ui.cut_right(&inner, 44)
-		menu.h = t.row_height
-		menu_clicked := ui.button(ctx, engine.tr(.Universes_Card_Menu), menu)
-		ui.pop_id(ctx)
-		mode_text := engine.tr(
-			.Universes_Mode_Survival if e.mode == MODE_SURVIVAL else .Universes_Mode_Creative,
-		)
-		if e.mode_changed {mode_text = engine.tr(.Universes_Mode_Changed, mode_text)}
-		if g, known := engine.game_find(app.games, entry_game(e)); known {
-			mode_text = engine.tr(.Universes_Game_Mode, g.name, mode_text)
+	   "" {ui.label(ctx, w.message, ui.cut_bottom(&area, t.row_height), .Center, t.text_muted)}
+
+	view := ui.list_begin(ctx, "saves", area, len(shown), SAVE_ROW, &w.list)
+	play := -1
+	small := t.font_size * 0.8
+	for row in view.first ..< view.last {
+		e := &w.entries[shown[row]]
+		r, it := ui.list_row(ctx, &view, row, e.name)
+		if it.clicked && card_click(w, row, time.tick_now()) {play = shown[row]}
+		inner := ui.rect_shrink(r, 8)
+		if sandbox {
+			draw_galaxy(ctx, ui.cut_left(&inner, THUMB), e.stars[:], 1)
+			ui.cut_left(&inner, 12)
+		} else {
+			ui.cut_left(&inner, 4)
 		}
 		ui.draw_text(ctx, ui.cut_top(&inner, t.font_size + 8), e.name, t.font_size, t.text, .Left)
-		small := t.font_size * 0.8
-		ui.draw_text(
-			ctx,
-			ui.cut_top(&inner, small + 4),
-			engine.tr(
-				.Universes_Card_Info,
-				mode_text,
-				last_played(e.played, engine.app_wall(app)),
-			),
-			small,
-			t.text_muted,
-			.Left,
-		)
-		if menu_clicked {
-			w.selected, w.mode = i, .Menu
-		} else if it.clicked && card_click(w, i, time.tick_now()) {
-			enter = i
+		info := engine.tr(.Universes_Played_When, last_played(e.played, engine.app_wall(app)))
+		if e.age > 0 {
+			info = engine.tr(
+				.Universes_Info,
+				info,
+				engine.tr(.Universes_Played_For, time_played(e.age)),
+			)
 		}
+		if sandbox {
+			mode := engine.tr(
+				.Universes_Mode_Survival if e.mode == MODE_SURVIVAL else .Universes_Mode_Creative,
+			)
+			if e.mode_changed {mode = engine.tr(.Universes_Mode_Changed, mode)}
+			info = engine.tr(.Universes_Info, mode, info)
+		}
+		ui.draw_text(ctx, ui.cut_top(&inner, small + 4), info, small, t.text_muted, .Left)
 	}
-	ui.pop_clip_rect(ctx)
-	if enter >= 0 && w.mode == .List {
-		save_play(app, enter)
+	if ui.list_end(ctx, &view) {play = page_selected(w)}
+	if len(shown) == 0 {
+		ui.label(
+			ctx,
+			engine.tr(.Universes_None_Yet if sandbox else .Universes_Saves_None),
+			area,
+			.Center,
+			t.text_muted,
+		)
+	}
+	if play >= 0 && w.mode == .List {
+		save_play(app, play)
 		return
 	}
 
-	half := (buttons.w - 2 * t.spacing) / 3
+	// Play, Rename, Delete for the selected save; then Export, Import and Back.
+	selected := page_selected(w)
+	none := selected < 0
+	quarter := (buttons.w - 2 * t.spacing) / 4
 	top := ui.cut_top(&buttons, t.row_height)
 	ui.cut_top(&buttons, t.spacing)
 	if ui.button(
 		ctx,
-		engine.tr(.Universes_New_Universe),
-		ui.cut_left(&top, 2 * half + t.spacing),
+		engine.tr(.Universes_Play),
+		ui.cut_left(&top, 2 * quarter),
+		disabled = none,
 	) {
-		creation_open(app)
+		save_play(app, selected)
 		return
 	}
 	ui.cut_left(&top, t.spacing)
-	if ui.button(ctx, engine.tr(.Universes_Import), top) {
+	if ui.button(ctx, engine.tr(.Universes_Rename), ui.cut_left(&top, quarter), disabled = none) {
+		clear(&w.name)
+		append(&w.name, w.entries[selected].name)
+		w.mode = .Edit
+		message_set(w, "")
+		return
+	}
+	ui.cut_left(&top, t.spacing)
+	if ui.button(ctx, engine.tr(.Universes_Delete), top, disabled = none) {
+		w.mode = .Delete
+		return
+	}
+	third := (buttons.w - 2 * t.spacing) / 3
+	if ui.button(
+		ctx,
+		engine.tr(.Universes_Export),
+		ui.cut_left(&buttons, third),
+		disabled = none,
+	) {
+		path, why := save_export(w.entries[selected].name, "")
+		if why != "" {
+			message_set(w, engine.tr(.Universes_Export_Failed, why))
+		} else {
+			engine.toast(app, .Universes_Exported_To, path)
+		}
+	}
+	ui.cut_left(&buttons, t.spacing)
+	if ui.button(ctx, engine.tr(.Universes_Import), ui.cut_left(&buttons, third)) {
 		clear(&w.path)
 		w.mode = .Import
 		message_set(w, "")
 	}
-	if ui.button(ctx, engine.tr(.Credits_Back), buttons) {app.screen = .Title}
+	ui.cut_left(&buttons, t.spacing)
+	if ui.button(ctx, engine.tr(.Credits_Back), buttons) {singleplayer_open(app)}
 }
 
-// card_click: a click on card i at now. One click selects the card; a second
-// on the same card within DOUBLE_CLICK says to play it.
+// card_click: a click on save i at now. One click selects it; a second on the same save
+// within DOUBLE_CLICK says to play it.
 card_click :: proc(w: ^engine.Universes_Screen, i: int, now: time.Tick) -> (play: bool) {
-	if w.selected == i && time.tick_diff(w.last_click, now) < DOUBLE_CLICK {return true}
-	w.selected, w.last_click = i, now
+	if w.last_row == i && time.tick_diff(w.last_click, now) < DOUBLE_CLICK {return true}
+	w.list.selected, w.last_row, w.last_click = i, i, now
 	return false
 }
 
-// save_play opens universe i (universe_enter); why it could not is said on the list.
+// save_play opens the save at i in entries (universe_enter); why it could not is said on
+// the page.
 save_play :: proc(app: ^engine.App, i: int) {
 	w := &app.universes
 	if i < 0 || i >= len(w.entries) {return}
@@ -367,49 +513,40 @@ entry_game :: proc(e: ^engine.Save_Entry) -> string {
 	return e.game_id if e.game_id != "" else game.DEFAULT_GAME
 }
 
-// save_menu: a card's menu, over the list.
+// save_new_dialog asks a new save's name (a game other than sandbox) and makes it.
 @(private = "file")
-save_menu :: proc(app: ^engine.App, ctx: ^ui.Context) {
+save_new_dialog :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	w := &app.universes
 	t := &ctx.theme
-	if w.selected < 0 || w.selected >= len(w.entries) {
-		w.mode = .List
-		return
-	}
-	e := w.entries[w.selected]
-	ui.push_id(ctx, "card menu")
+	ui.push_id(ctx, "new dialog")
 	defer ui.pop_id(ctx)
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	box := ui.rect_center(ctx.screen, 360, 5 * t.row_height + 5 * t.spacing + 2 * t.padding)
+	box := ui.rect_center(ctx.screen, 460, 4 * t.row_height + 4 * t.spacing + 2 * t.padding)
 	ui.panel(ctx, box)
 	ui.layout_begin(ctx, ui.rect_shrink(box, t.padding))
 	defer ui.layout_end(ctx)
-	ui.label(ctx, e.name, ui.next(ctx), .Center)
-	if ui.button(ctx, engine.tr(.Universes_Rename), ui.next(ctx)) {
-		clear(&w.name)
-		append(&w.name, e.name)
-		w.mode = .Edit
-		message_set(w, "")
-		return
-	}
-	if ui.button(ctx, engine.tr(.Universes_Export), ui.next(ctx)) {
-		path, why := save_export(e.name, "")
-		w.mode = .List
-		if why != "" {
-			message_set(w, engine.tr(.Universes_Export_Failed, why))
-		} else {
-			engine.toast(app, .Universes_Exported_To, path)
-		}
-		return
-	}
-	if ui.button(ctx, engine.tr(.Universes_Delete), ui.next(ctx)) {
-		w.mode = .Delete
-		return
-	}
+	ui.label(ctx, engine.tr(.Universes_New_Save_Title), ui.next(ctx), .Center)
+	ui.label(ctx, engine.tr(.Universes_Name), ui.next(ctx), .Left, t.text_muted)
 	ui.default_focus(ctx)
-	if ui.button(ctx, engine.tr(.Dial_Cancel), ui.next(ctx)) {w.mode = .List}
+	submitted := ui.text_input(ctx, "name", &w.name, ui.next(ctx))
+	row := ui.next(ctx)
+	cancel := ui.cut_right(&row, (row.w - t.spacing) / 2)
+	ui.cut_right(&row, t.spacing)
+	named := save_dir_name(string(w.name[:])) != ""
+	if ui.button(ctx, engine.tr(.Universes_Create_Save), row, disabled = !named) ||
+	   (submitted && named) {
+		if !engine.game_hostable(app, page_game(w)) {
+			message_set(w, engine.tr(.Universes_Game_Missing, page_game(w)))
+			w.mode = .List
+			return
+		}
+		save_create(app, page_game(w), string(w.name[:]))
+		w.mode = .List
+		return
+	}
+	if ui.button(ctx, engine.tr(.Dial_Cancel), cancel) {w.mode = .List}
 }
 
 // save_import_dialog asks for the exported file's path.
@@ -445,11 +582,12 @@ save_import_dialog :: proc(app: ^engine.App, ctx: ^ui.Context) {
 save_edit :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	w := &app.universes
 	t := &ctx.theme
-	if w.selected < 0 || w.selected >= len(w.entries) {
+	selected := page_selected(w)
+	if selected < 0 {
 		w.mode = .List
 		return
 	}
-	e := w.entries[w.selected]
+	e := w.entries[selected]
 	column := ui.rect_center(ctx.screen, 420, 7 * (t.row_height + t.spacing) + 70)
 	ui.title(ctx, engine.tr(.Universes_Rename_Title), ui.cut_top(&column, 70))
 	ui.layout_begin(ctx, column)
@@ -484,12 +622,13 @@ save_edit :: proc(app: ^engine.App, ctx: ^ui.Context) {
 save_delete_confirm :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	w := &app.universes
 	t := &ctx.theme
-	if w.selected < 0 || w.selected >= len(w.entries) {
+	selected := page_selected(w)
+	if selected < 0 {
 		w.mode = .List
 		return
 	}
-	e := w.entries[w.selected]
-	ui.push_id(ctx, "delete dialog") // (its Delete is not the card menu's)
+	e := w.entries[selected]
+	ui.push_id(ctx, "delete dialog") // (its Delete is not the page's)
 	defer ui.pop_id(ctx)
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)

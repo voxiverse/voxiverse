@@ -208,9 +208,10 @@ list_row :: proc(
 		view.state.selected = i
 		ctx.focused = view.id
 	}
-	if it.hovered {fill_rect(ctx, r, t.row_selected)}
+	// Hovered or selected: a faint fill; selected: the white outline too (the text on it
+	// stays as it reads on black).
+	if it.hovered || view.state.selected == i {fill_rect(ctx, r, t.row_selected)}
 	if view.state.selected == i {
-		fill_rect(ctx, r, t.row_hover)
 		stroke_rect(ctx, rect_shrink(r, 1), 1, t.text)
 	}
 	return

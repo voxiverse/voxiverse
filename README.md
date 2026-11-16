@@ -134,13 +134,18 @@ git tag -a v0.21.0 -m "Pre-Alpha 1"
 
 ### Saves
 
-**Singleplayer** lists your saves, most recently played first. From this screen you can:
+**Singleplayer** lists the games. Choose one to see its page: its saves and no other game's,
+most recently played first, each with when it was last played and how long it has been
+played. From a game's page you can:
 
-- play a save (or double-click it);
-- create a save. Its seed is under More options: any text is accepted, and an empty seed
-  selects a random one;
-- rename a save or open its folder (Edit);
-- delete a save.
+- start a new save (**New Universe** in Sandbox opens the universe creation screen, where
+  any text is a seed and an empty seed selects a random one; **New Save** elsewhere asks
+  for a name);
+- play the selected save (or double-click it);
+- rename a save or open its folder, delete it (asked first), export it to one file, or
+  import one.
+
+A game whose rounds keep nothing between plays (Flood) has **Play** instead of saves.
 
 The game saves every minute and when you leave the world. Saves are stored in
 `voxiverse/saves` in your user data directory: `~/.local/share` on Linux, `%LOCALAPPDATA%` on

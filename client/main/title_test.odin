@@ -1,5 +1,6 @@
 package main
 
+import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:testing"
@@ -103,13 +104,19 @@ test_splash_motion :: proc(t: ^testing.T) {
 	}
 }
 
-// The launcher: the title lists every game this build has (the default first, then by
-// folder), each a button with its description under it, on one line within the column;
-// the rest of the title follows. Picking one, by the mouse or by the pad as the rest of
-// the menu is driven, asks for a world playing it (App.launch, which the frame starts),
-// and the session that world's server part makes plays that game.
+// Singleplayer: every game this build has (the default first, then by folder), each its
+// name and its one line (within TITLE_WIDTH), in a list that scrolls to the last; none on
+// the title. Choosing one opens its page: a game that keeps something shows New and its
+// saves, one that keeps nothing a single Play, which asks for a world playing it
+// (App.launch, which the frame starts); the session that world's server part makes
+// plays that game.
 @(test)
-test_launcher_lists_and_starts_every_game :: proc(t: ^testing.T) {
+test_singleplayer_lists_and_opens_every_game :: proc(t: ^testing.T) {
+	dir := "build/test/singleplayer_saves"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	screen.saves_override = dir
+	defer screen.saves_override = ""
 	r := rig_make(t)
 	defer rig_free(r)
 	app := r.app
@@ -121,90 +128,75 @@ test_launcher_lists_and_starts_every_game :: proc(t: ^testing.T) {
 	append(&order, game.DEFAULT_GAME)
 	for g in games_client.CLIENT {if g.id != game.DEFAULT_GAME {append(&order, g.id)}}
 	testing.expect_value(t, len(order), len(games.SERVER))
-	// More games than fit come a page at a time (the "More games" button turns it);
-	// every game is on one page, in order.
-	about := app.ui.theme.font_size * screen.LAUNCHER_ABOUT
-	listed := 0
-	for page in 0 ..< len(order) {
-		app.launcher_page = page
-		ui_frame(app)
-		last: f32 = -1
-		for id in order[listed:] {
-			g, found := engine.game_find(app.games, id)
-			if !testing.expectf(t, found, "%s has no client part", id) {break}
-			r, shown := ui.find_widget(&app.ui, g.name)
-			if !shown {break}
-			testing.expectf(t, r.y > last, "%s is out of order", g.name)
-			last = r.y
-			listed += 1
-			testing.expect(t, slice.contains(app.ui.texts[:], g.description), g.description)
-			testing.expectf(
-				t,
-				ui.measure_text(&app.ui, g.description, about) <= screen.TITLE_WIDTH,
-				"%s's description is wider than the title's column",
-				g.id,
-			)
-		}
-		singleplayer, _ := ui.find_widget(&app.ui, "Singleplayer")
-		testing.expect(t, singleplayer.y > last, "the games are not above the rest of the title")
-		if listed == len(order) {break}
-		_, more := ui.find_widget(&app.ui, engine.tr(.Title_Games_More, page + 1, page + 2))
-		more_any := more
-		for pages in page + 2 ..= len(order) {
-			_, m := ui.find_widget(&app.ui, engine.tr(.Title_Games_More, page + 1, pages))
-			more_any ||= m
-		}
-		testing.expectf(
-			t,
-			more_any,
-			"page %d lists %d of %d games and has no More games",
-			page,
-			listed,
-			len(order),
-		)
-	}
-	testing.expect_value(t, listed, len(order))
-	app.launcher_page = 0
-	ui_frame(app)
-	// All of it on the screen: the last button too, however many games there are (six
-	// overflowed it: Quit Game was cut in half).
-	// (a widget's rect is what is left of it on the screen: whole, it is a row high)
-	quit, _ := ui.find_widget(&app.ui, "Quit Game")
-	testing.expectf(
-		t,
-		quit.h >= app.ui.theme.row_height - 0.5,
-		"Quit Game is cut: %v on the screen %v",
-		quit,
-		app.ui.screen,
-	)
-
-	// The pad: the default game is lit at once; Down moves to the next game, A picks it.
-	pad_connect(app, .Xbox)
-	pad_frame(app)
-	first, _ := engine.game_find(app.games, order[0])
-	testing.expect_value(t, ui.focused_label(&app.ui), first.name)
-	pad_go(app, .Down)
-	pad_tap(app, .A)
-	testing.expect_value(t, app.launch, order[1])
-	app.launch = ""
-
-	// The mouse: each game's button (on its page) asks for its world; nothing starts in
-	// the UI itself.
 	for id in order {
 		g, _ := engine.game_find(app.games, id)
-		for page in 0 ..< len(order) {
-			app.launcher_page = page
-			ui_frame(app)
-			if _, shown := ui.find_widget(&app.ui, g.name); shown {break}
-		}
-		click(t, app, g.name)
-		testing.expect_value(t, app.launch, id)
-		testing.expect(t, app.session == nil && app.screen == .Title)
-		app.launch = ""
+		_, on_title := ui.find_widget(&app.ui, g.name)
+		testing.expectf(t, !on_title, "%s is on the title", g.name)
 	}
 
-	// What the frame then starts: a world hosted with that game's server part, whose
-	// session plays it (on the stepped server; the embedded one runs on its own thread).
+	click(t, app, "Singleplayer")
+	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
+	about := app.ui.theme.font_size * screen.GAME_ABOUT
+	last: f32 = -1
+	for id, i in order {
+		g, found := engine.game_find(app.games, id)
+		if !testing.expectf(t, found, "%s has no client part", id) {break}
+		// (one below the view: scrolled to)
+		if _, shown := ui.find_widget(&app.ui, g.name); !shown {
+			app.singleplayer.list.selected = i
+			app.singleplayer.list.first = i
+			ui_frame(app)
+			last = -1
+		}
+		r, shown := ui.find_widget(&app.ui, g.name)
+		if !testing.expectf(t, shown, "%s is not listed", g.name) {continue}
+		testing.expectf(t, r.y > last, "%s is out of order", g.name)
+		last = r.y
+		testing.expect(t, slice.contains(app.ui.texts[:], g.description), g.description)
+		testing.expectf(
+			t,
+			ui.measure_text(&app.ui, g.description, about) <= screen.TITLE_WIDTH,
+			"%s's description is wider than the list",
+			g.id,
+		)
+	}
+
+	// Each game's page: its name; New and its saves, or Play alone.
+	for id in order {
+		g, _ := engine.game_find(app.games, id)
+		app.singleplayer.list = {
+			selected = -1,
+		}
+		app.screen = .Singleplayer
+		ui_frame(app)
+		for i, at in order {if i == id {app.singleplayer.list.first = at}}
+		ui_frame(app)
+		click(t, app, g.name)
+		testing.expect_value(t, app.screen, engine.Screen.Universes)
+		testing.expect_value(t, app.universes.game, id)
+		testing.expect(
+			t,
+			slice.contains(app.ui.texts[:], g.name),
+			"the page is not headed by its game",
+		)
+		if engine.game_keeps(app, id) {
+			_, has_new := ui.find_widget(
+				&app.ui,
+				"New Universe" if id == game.DEFAULT_GAME else "New Save",
+			)
+			testing.expectf(t, has_new, "%s's page has no New", id)
+		} else {
+			click(t, app, "Play")
+			testing.expect_value(t, app.launch, id)
+			testing.expect(t, app.session == nil, "nothing starts in the UI itself")
+			app.launch = ""
+		}
+	}
+	testing.expect(t, !engine.game_keeps(app, "flood"), "Flood's rounds keep nothing")
+	testing.expect(t, engine.game_keeps(app, "foundry"), "Foundry keeps its factory")
+
+	// What the frame starts: a world hosted with that game's server part, whose session
+	// plays it (on the stepped server; the embedded one runs on its own thread).
 	for id in order {
 		hosted := engine.host_game(app, id)
 		testing.expect_value(t, hosted.id, id)

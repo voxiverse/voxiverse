@@ -38,7 +38,8 @@ Screen :: enum u8 {
 	Title,
 	Options,
 	Credits,
-	Universes,
+	Singleplayer, // the games, to choose one (client/screen/singleplayer.odin)
+	Universes, // one game's page: its saves (client/screen/universes.odin)
 	Creation,
 	Multiplayer,
 	Game, // a session exists
@@ -157,8 +158,8 @@ App :: struct {
 	games:               []Game, // the games' client parts this build has (client/main gives the list the driver writes)
 	server_games:        []core.Game, // ... and their server parts, for a world of our own
 	game:                string, // the game a world of our own plays, by id (--game, else game.DEFAULT_GAME: client/main sets it)
-	launch:              string, // a game the title's launcher picked this frame (its id, constant data): the frame starts a world playing it after the UI (play_game)
-	launcher_page:       int, // the launcher's page, when its games do not all fit (client/screen/title.odin)
+	launch:              string, // a game to play this frame in a world kept nowhere (its id, constant data: --game, a game page's Play): the frame starts it after the UI (play_game)
+	singleplayer:        Singleplayer_Screen, // the list of the games (client/screen/singleplayer.odin)
 	item_icons:          Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:                Dial_View, // the dial overlay's (overlay_dial.odin)
 	quit:                bool,
@@ -345,7 +346,8 @@ enter_world :: proc(
 }
 
 // play_game starts a world of our own playing the game id: a scratch world (nothing
-// saved), as `singleplayer` starts one for App.game. The title's launcher and --game.
+// saved), as `singleplayer` starts one for App.game: --game, and the Play of a game whose
+// rounds keep nothing (client/screen/universes.odin).
 play_game :: proc(app: ^App, id: string) {
 	enter_world(app, "", SCRATCH_SEED, game_id = id)
 }
@@ -365,6 +367,17 @@ host_game :: proc(app: ^App, id: string) -> core.Game {
 game_hostable :: proc(app: ^App, id: string) -> bool {
 	_, client := game_find(app.games, id)
 	return client && host_game(app, id).id == id
+}
+
+// game_keeps: a world of the game id is worth saving: its server part keeps something
+// of it between runs (a save of its own, its files of a world, a record on a character or
+// a machine). One that keeps none (Flood: every round starts afresh) is played in a
+// scratch world, and its page shows Play instead of saves. A game this build lacks is
+// taken to keep (its saves are listed, to say why they do not open).
+game_keeps :: proc(app: ^App, id: string) -> bool {
+	g := host_game(app, id)
+	if g.id != id {return true}
+	return g.save != nil || g.world_save != nil || g.character_data != nil || g.machine_data != nil
 }
 
 // upload_target: where this world's events go: the collector, if the player

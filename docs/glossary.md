@@ -7,7 +7,7 @@ One word per thing, in code, docs and UI alike. Where the code uses another word
 | Term | Is | In code |
 |---|---|---|
 | Universe | One game instance: a running server and everything it keeps. A dedicated server is one universe; singleplayer runs one inside the client. Its save directory holds `universe.cfg` (format, seed, home world, default game mode, kit, packs, age), `characters/`, `permissions.cfg`, `community.cfg` and `worlds/`. Its name is the directory's name | `core.Server`, `core.Store` and the save directory (`server/core/save.odin`) |
-| Save | What players call a universe they play alone: the Singleplayer screen lists saves. The code says universe, except the list entry | `engine.Save_Entry` (`client/engine/universes.odin`) |
+| Save | What players call a universe they play alone: a game's page lists that game's saves. The code says universe, except the list entry | `engine.Save_Entry` (`client/engine/universes.odin`) |
 | World | One voxel space in a universe: an address, a seed, a generator with its parameters, rules, clock, chunks, entities, liquids, a spawn, gates, a journal, and `worlds/<address>/`. There is no "planet" in code; content may present worlds as planets | `core.World` (`server/core/worlds.odin`) |
 | Home world | The universe's default world, always loaded; its spawn receives new characters. Its address is derived from the universe seed | `Server.home`, `game.address_derive` |
 | Loaded / unloaded world | Loaded: in memory and ticking (someone is in it or in an open gate, or was `WORLD_IDLE_SECONDS` ago). Unloaded: only on disk, or only an address (never visited: its kind follows from the address when first needed) | `world_load`, `WORLD_IDLE_SECONDS` |
@@ -57,4 +57,4 @@ One word per thing, in code, docs and UI alike. Where the code uses another word
 | Variables | The mechanism all of the above are read, set and saved through | `base.Var` |
 | Permissions | Nodes, roles and grants, per universe | `core.Permissions` |
 
-**Interface names** (code, docs and UI use them): Title screen, Universes screen, Universe creation, Multiplayer screen, Options, Game menu, Player menu, Section (a page of the player menu: Inventory and Statistics are shown; Map, Journal, Character and Atlas are declared and hidden), Container view (the chest beside the inventory), HUD, Overlay, Toast, Dev panels. The Singleplayer screen is the universes screen (`client/screen/universes.odin`).
+**Interface names** (code, docs and UI use them): Title screen, Singleplayer screen (the games), Game page (a game's saves: the universes screen), Universe creation, Multiplayer screen, Options, Game menu, Player menu, Section (a page of the player menu: Inventory and Statistics are shown; Map, Journal, Character and Atlas are declared and hidden), Container view (the chest beside the inventory), HUD, Overlay, Toast, Dev panels. The Singleplayer screen is `client/screen/singleplayer.odin`, a game's page `client/screen/universes.odin`.

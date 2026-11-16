@@ -22,6 +22,7 @@ import "common:base"
 import "common:game"
 import "common:protocol"
 import "common:starmap"
+import games_client "generated:games/client"
 
 // A UI test's app: the font, the UI and the base registry (a screen's
 // artwork takes its colours from it), nothing else.
@@ -55,6 +56,8 @@ ui_frame :: proc(app: ^engine.App, input: ui.Input = {}) {
 		screen.options_screen(app, &app.ui)
 	case .Credits:
 		screen.credits_screen(app, &app.ui)
+	case .Singleplayer:
+		screen.singleplayer_screen(app, &app.ui)
 	case .Universes:
 		screen.universes_screen(app, &app.ui)
 	case .Creation:
@@ -221,20 +224,16 @@ test_keys_by_place :: proc(t: ^testing.T) {
 	testing.expect_value(t, engine.key_label(nil, .Mouse_Right), "Right Button")
 }
 
-// open_menu opens the card menu of the universe called name.
-open_menu :: proc(t: ^testing.T, app: ^engine.App, name: string, loc := #caller_location) {
-	for e, i in app.universes.entries {
-		if e.name == name {
-			app.universes.selected, app.universes.mode = i, .Menu
-			ui_frame(app)
-			return
-		}
-	}
-	testing.expectf(t, false, "no universe called %s", name, loc = loc)
+// select_save selects the save called name on its game's page, as a click on its row
+// does (once: a second click soon after plays it).
+select_save :: proc(t: ^testing.T, app: ^engine.App, name: string, loc := #caller_location) {
+	s := screen.page_selected(&app.universes)
+	if s >= 0 && app.universes.entries[s].name == name {return}
+	click(t, app, name, loc)
 }
 
-// The universes screen: the saves newest first; rename and delete (asked
-// first) from a card's menu.
+// A game's page: its saves newest first; Rename and Delete (asked first) of the one
+// selected.
 @(test)
 test_saves_screen :: proc(t: ^testing.T) {
 	dir := "build/test/saves"
@@ -257,8 +256,8 @@ test_saves_screen :: proc(t: ^testing.T) {
 	app.screen = .Universes
 	ui_frame(app)
 
-	// A card's menu: Rename takes the name, renamed on Save.
-	open_menu(t, app, "Castle")
+	// Rename takes the selected save's name, renamed on Save.
+	select_save(t, app, "Castle")
 	click(t, app, "Rename")
 	testing.expect_value(t, app.universes.mode, engine.Saves_Mode.Edit)
 	clear(&app.universes.name)
@@ -269,12 +268,11 @@ test_saves_screen :: proc(t: ^testing.T) {
 	testing.expect(t, os.exists("build/test/saves/Fort") && !os.exists("build/test/saves/Castle"))
 
 	// Delete: asked first; Cancel keeps it, Delete does not.
-	open_menu(t, app, "Fort")
+	select_save(t, app, "Fort")
 	click(t, app, "Delete")
 	testing.expect_value(t, app.universes.mode, engine.Saves_Mode.Delete)
 	click(t, app, "Cancel")
 	testing.expect(t, os.exists("build/test/saves/Fort"))
-	open_menu(t, app, "Fort")
 	click(t, app, "Delete")
 	ui_frame(app)
 	click(t, app, "Delete") // the dialog's
@@ -346,12 +344,15 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 			played = engine.app_wall(app),
 		},
 	)
-	app.screen = .Universes
+	app.games = games_client.CLIENT
+	app.screen = .Singleplayer
 	check(t, app, "Singleplayer")
-	app.universes.selected = 0
+	app.screen = .Universes
+	check(t, app, "a game's page")
+	app.universes.list.selected = 0
 	for mode in engine.Saves_Mode {
 		app.universes.mode = mode
-		check(t, app, fmt.tprint("Singleplayer", mode))
+		check(t, app, fmt.tprint("a game's page", mode))
 	}
 	screen.multiplayer_open(app)
 	for mode in engine.Multiplayer_Mode {
@@ -666,19 +667,26 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	r := rig_make(t)
 	defer rig_free(r)
 	app := r.app
+	app.games = games_client.CLIENT
 	pad_connect(app, .Xbox)
 	testing.expect_value(t, app.actions.device, engine.Device.Pad)
 
-	// The title: Singleplayer is lit at once; A opens the saves.
+	// The title: Singleplayer is lit at once; A opens the games, the list lit; A opens
+	// the first's page (sandbox's), New lit.
 	testing.expect_value(t, ui.focused_label(&app.ui), "Singleplayer")
 	pad_tap(app, .A)
+	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
+	testing.expect_value(t, ui.focused_label(&app.ui), "games")
+	pad_tap(app, .A)
 	testing.expect_value(t, app.screen, engine.Screen.Universes)
-	testing.expect_value(t, len(app.universes.entries), 2)
-	// The list: Down selects, and leaves at its last row.
+	testing.expect_value(t, app.universes.game, game.DEFAULT_GAME)
+	testing.expect_value(t, len(screen.page_saves(&app.universes)), 2)
+	testing.expect_value(t, ui.focused_label(&app.ui), "New Universe")
+	// The saves: Down enters them, Down selects, and leaves at the last.
+	pad_go(app, .Down)
 	testing.expect_value(t, ui.focused_label(&app.ui), "saves")
 	pad_go(app, .Down)
-	pad_go(app, .Down)
-	testing.expect_value(t, app.universes.selected, 1)
+	testing.expect_value(t, app.universes.list.selected, 1)
 	pad_go(app, .Down)
 	testing.expect(t, ui.focused_label(&app.ui) != "saves", "Down at the last row leaves the list")
 
@@ -704,6 +712,8 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_focus(t, app, "Ignite")
 	pad_tap(app, .B) // (no Cancel button: B goes back)
 	testing.expect_value(t, app.screen, engine.Screen.Universes)
+	pad_tap(app, .B)
+	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
 	pad_tap(app, .B)
 	testing.expect_value(t, app.screen, engine.Screen.Title)
 

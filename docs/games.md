@@ -36,8 +36,8 @@ rules, so the records and requests a game declares are the protocol's types.
 
 What names a game is declared once, in its shared package, and both parts take it: a
 `game.Game_Info` holding its id (the folder's name), the name players read and a line saying
-what it is. The launcher lists the games by them; the description is one line in the
-launcher's small text, at most the title's column wide (`screen.TITLE_WIDTH`; a
+what it is. Singleplayer lists the games by them ([Singleplayer](#singleplayer)); the
+description is one line in its small text, at most `screen.TITLE_WIDTH` wide (a
 `client/main` test measures every game's). `core.Game` and `engine.Game` hold it by
 `using`, so `g.id` reads as a field of either.
 
@@ -61,8 +61,7 @@ are known to git (`git add --intent-to-add`), so right after it `./build.sh chec
 --game <id>` plays it. It refuses an id that is not a game's (singular snake_case, at most
 `game.MAX_GAME_ID`), one that is an Odin keyword or a package its parts import (`game`,
 `core`, `engine`...), and one whose folder is there. The files are
-`tools/build/game_template/`'s. Then make the rule the game's own, and its README, and
-re-accept the launcher's baselines when it is committed ([The launcher](#the-launcher)).
+`tools/build/game_template/`'s. Then make the rule the game's own, and its README.
 
 ## A walk-through
 
@@ -548,22 +547,25 @@ ours)"). A client without that game fails the session before playing with "the s
 
 A world of our own plays the game `voxiverse --game <id>` names (default: `sandbox`), but a
 saved universe plays the game it records (`universe.cfg`'s `game`, [saves.md](saves.md)): the
-universes screen and the `universe` command open it with that game, and a universe of a game
+game's page and the `universe` command open it with that game, and a universe of a game
 this build lacks is not opened. The client starts its embedded server with that game's
 server part (`App.server_games`). The dedicated server runs one with `voxiverse-server --game
 <id>`.
 
-### The launcher
+### Singleplayer
 
-The title screen lists the games the client was built with, the default first and the rest
-by folder: each its name on a button, its description under it, before Singleplayer,
-Multiplayer, Options and Quit. When they do not all fit the screen, the launcher shows as
-many as fit, a page at a time, with Previous games and More games under them
-(`launcher_page`, `App.launcher_page`). Picking a game starts a scratch world (nothing saved)
-playing it with the embedded server, the same path as `--game <id>`. `--game <id>` with no
-`--exec`, `--scene`, `--check` or `--benchmark` skips the title and goes straight into that
-world. The title's image baselines show the launcher's pages: a new game changes them, and
-its commit re-accepts them.
+The title has no games of its own: its Singleplayer lists the games the client was built
+with (`screen.singleplayer_games`: the default first, the rest by folder), each its name,
+its description and how many saves it has, in a list that scrolls (`ui.list_begin`). Each
+game is self-contained: choosing one opens its page (`client/screen/universes.odin`), its
+name and description over its saves and no other game's. New is at the top: sandbox's opens
+the universe creation screen, another game's asks a name and makes a save of it on the
+scratch world's seed (`screen.save_create`, the world the game is made on). A game whose
+server part keeps nothing between runs (`engine.game_keeps`: no `save`, `world_save`,
+`character_data` or `machine_data`; Flood) has Play instead, which starts a scratch world
+playing it (`App.launch`, `engine.play_game`), the same path as `--game <id>`. `--game <id>`
+with no `--exec`, `--scene`, `--check` or `--benchmark` skips the title and goes straight
+into that world. A new game appears in the list with nothing more to do.
 
 ## The game's pack
 

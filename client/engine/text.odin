@@ -17,8 +17,20 @@ Text :: enum u16 {
 	Options,
 	Title_Quit_Game,
 	Title_Version, // {0}: the version
-	Title_Games_Previous, // the launcher's page before
-	Title_Games_More, // ... and after; {0}: this page, {1}: the pages
+	Universes_New_Save, // a game page's New (sandbox's: Universes_New_Universe)
+	Universes_New_Save_Title,
+	Universes_Default_Name, // {0}: the game, {1}: a number
+	Universes_Play,
+	Universes_Keeps_Nothing, // {0}: the game
+	Universes_Saves_None, // a game page with no saves (sandbox's: Universes_None_Yet)
+	Universes_Saves_Count, // {0}: how many (the Singleplayer list)
+	Universes_Saves_One,
+	Universes_Info, // {0}, {1}: two parts of a save's line
+	Universes_Played_When, // {0}: when (last_played)
+	Universes_Played_For, // {0}: how long (time_played)
+	Universes_Time_Under_Minute,
+	Universes_Time_Minutes, // {0}: minutes
+	Universes_Time_Hours, // {0}: hours, {1}: minutes
 	Game_Menu_Quit_To_Title,
 	Game_Menu_Save_And_Quit,
 	Game_Menu_Disconnect,
@@ -115,7 +127,6 @@ Text :: enum u16 {
 	Universes_Open_Folder,
 	Universes_Save,
 	Universes_It_Will_Be_Lost_Forever,
-	Universes_Title,
 	Universes_New_Universe,
 	Universes_Import,
 	Universes_Import_Path,
@@ -123,7 +134,6 @@ Text :: enum u16 {
 	Universes_Import_Failed,
 	Universes_Export_Failed,
 	Universes_Exported_To,
-	Universes_Card_Menu,
 	Universes_Rename,
 	Universes_Rename_Title,
 	Universes_Export,
@@ -132,8 +142,6 @@ Text :: enum u16 {
 	Universes_Mode_Creative,
 	Universes_Mode_Survival,
 	Universes_Mode_Changed,
-	Universes_Card_Info,
-	Universes_Game_Mode,
 	Universes_Game_Missing,
 	Universes_None_Yet,
 	Universes_Last_Just_Now,
@@ -168,8 +176,20 @@ TEXT_EN := [Text]string {
 	.Options                                = "Options",
 	.Title_Quit_Game                        = "Quit Game",
 	.Title_Version                          = "Voxiverse {0}",
-	.Title_Games_Previous                   = "Previous games",
-	.Title_Games_More                       = "More games ({0}/{1})",
+	.Universes_New_Save                     = "New Save",
+	.Universes_New_Save_Title               = "New Save",
+	.Universes_Default_Name                 = "{0} {1}",
+	.Universes_Play                         = "Play",
+	.Universes_Keeps_Nothing                = "Every round of {0} starts afresh: there is nothing to save.",
+	.Universes_Saves_None                   = "No saves yet: New Save starts one",
+	.Universes_Saves_Count                  = "{0} saves",
+	.Universes_Saves_One                    = "1 save",
+	.Universes_Info                         = "{0}  ·  {1}",
+	.Universes_Played_When                  = "played {0}",
+	.Universes_Played_For                   = "{0} in all",
+	.Universes_Time_Under_Minute            = "under a minute",
+	.Universes_Time_Minutes                 = "{0} min",
+	.Universes_Time_Hours                   = "{0} h {1} min",
 	.Game_Menu_Quit_To_Title                = "Quit to Title",
 	.Game_Menu_Save_And_Quit                = "Save and Quit to Title",
 	.Game_Menu_Disconnect                   = "Disconnect",
@@ -266,7 +286,6 @@ TEXT_EN := [Text]string {
 	.Universes_Open_Folder                  = "Open Folder",
 	.Universes_Save                         = "Save",
 	.Universes_It_Will_Be_Lost_Forever      = "This cannot be undone.",
-	.Universes_Title                        = "Universes",
 	.Universes_New_Universe                 = "New Universe",
 	.Universes_Import                       = "Import",
 	.Universes_Import_Path                  = "Path of the exported universe (.vxu)",
@@ -274,17 +293,14 @@ TEXT_EN := [Text]string {
 	.Universes_Import_Failed                = "The universe could not be imported: {0}",
 	.Universes_Export_Failed                = "The universe could not be exported: {0}",
 	.Universes_Exported_To                  = "Exported to {0}",
-	.Universes_Card_Menu                    = "...",
 	.Universes_Rename                       = "Rename",
-	.Universes_Rename_Title                 = "Rename Universe",
+	.Universes_Rename_Title                 = "Rename",
 	.Universes_Export                       = "Export",
 	.Universes_Folder_Failed                = "The folder could not be opened",
 	.Universes_Rename_Failed                = "The universe could not be renamed",
 	.Universes_Mode_Creative                = "Creative",
 	.Universes_Mode_Survival                = "Survival",
 	.Universes_Mode_Changed                 = "{0} (changed)",
-	.Universes_Card_Info                    = "{0}  ·  played {1}",
-	.Universes_Game_Mode                    = "{0}, {1}",
 	.Universes_Game_Missing                 = "This universe plays {0}, a game this version does not have",
 	.Universes_None_Yet                     = "No universes yet: New Universe starts one",
 	.Universes_Last_Just_Now                = "just now",

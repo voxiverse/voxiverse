@@ -32,7 +32,7 @@ creation_open :: proc(app: ^engine.App) {
 	c := &app.creation
 	if c.stars == nil {c.stars = make([]starmap.Star, CREATION_STARS)}
 	clear(&c.name)
-	text := engine.tr(.Creation_Default_Name, len(app.universes.entries) + 1)
+	text := engine.tr(.Creation_Default_Name, len(page_saves(&app.universes)) + 1)
 	append(&c.name, text)
 	clear(&c.seed_text)
 	c.mode = MODE_CREATIVE
@@ -226,7 +226,14 @@ creation_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 creation_ignite :: proc(app: ^engine.App) {
 	c := &app.creation
 	plan := universe_plan(string(c.name[:]), c.seed, c.mode, !c.alien)
-	engine.enter_world(app, plan.path, i64(plan.seed), mode = plan.mode, earth = plan.earth)
+	engine.enter_world(
+		app,
+		plan.path,
+		i64(plan.seed),
+		mode = plan.mode,
+		earth = plan.earth,
+		game_id = page_game(&app.universes), // (sandbox's page: the creation screen is its New)
+	)
 	if app.session == nil {return} 	// (it could not start: the message says why)
 	ignite_start(app, c.stars, c.seed)
 }

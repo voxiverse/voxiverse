@@ -1,5 +1,6 @@
 package engine
 
+import "client:ui"
 import "common:starmap"
 import "core:time"
 
@@ -9,6 +10,7 @@ Save_Entry :: struct {
 	name:         string, // the directory's name (what players see)
 	path:         string,
 	played:       time.Time, // its config file's last change: when it was last saved
+	age:          i64, // ticks the universe has run, across runs (universe.cfg's age): the time played
 	seed:         u64, // the universe's seed (its home world's address, its galaxy)
 	game_id:      string, // the game it plays, as universe.cfg says it ("": from before games were recorded)
 	mode:         string, // the universe's default game mode, as universe.cfg says it
@@ -18,19 +20,27 @@ Save_Entry :: struct {
 
 Saves_Mode :: enum u8 {
 	List,
-	Menu, // a card's menu: Rename, Export, Delete
+	New, // naming a new save (a game other than sandbox: sandbox's New is the creation screen)
 	Edit, // rename (and open the folder)
 	Delete, // confirming
 	Import, // asking for the file
 }
 
+// Singleplayer_Screen: the games, to choose one.
+Singleplayer_Screen :: struct {
+	list: ui.Scroll_List, // the game selected and the first in view
+}
+
+// Universes_Screen: a game's page, its saves. It lists every save on the disk and shows
+// its game's.
 Universes_Screen :: struct {
-	entries:    [dynamic]Save_Entry,
+	game:       string, // the game whose page it is, by id (constant data)
+	entries:    [dynamic]Save_Entry, // every save, of every game, the one played last first
 	mode:       Saves_Mode,
-	selected:   int, // -1: none (the card the menu, rename or delete is about)
-	last_click: time.Tick, // the selected card's last click (a second within DOUBLE_CLICK plays it)
-	scroll:     f32, // cards scrolled
-	name:       [dynamic]u8, // Edit's name
+	list:       ui.Scroll_List, // the page's saves: the one selected (its place among them) and the first in view
+	last_row:   int, // the save clicked last (its place on the page) ...
+	last_click: time.Tick, // ... and when (a second click on it within DOUBLE_CLICK plays it)
+	name:       [dynamic]u8, // Edit's and New's name
 	path:       [dynamic]u8, // Import's file
 	message:    string, // why the last action failed (shown on the list)
 }

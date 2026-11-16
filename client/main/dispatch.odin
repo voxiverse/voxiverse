@@ -124,6 +124,8 @@ app_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		screen.options_screen(app, ctx)
 	case .Credits:
 		screen.credits_screen(app, ctx)
+	case .Singleplayer:
+		screen.singleplayer_screen(app, ctx)
 	case .Universes:
 		screen.universes_screen(app, ctx)
 	case .Creation:

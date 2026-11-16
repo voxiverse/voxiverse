@@ -25,9 +25,12 @@ escape :: proc(app: ^engine.App) {
 		return
 	}
 	switch app.screen {
+	case .Singleplayer:
+		app.screen = .Title
 	case .Universes:
-		// A card's menu, rename, delete or import back to the list first.
-		if app.universes.mode != .List {app.universes.mode = .List} else {app.screen = .Title}
+		// New, rename, delete or import back to the page first, then to the games.
+		if app.universes.mode !=
+		   .List {app.universes.mode = .List} else {screen.singleplayer_open(app)}
 	case .Creation:
 		app.screen = .Universes
 	case .Options:

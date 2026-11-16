@@ -14,8 +14,8 @@ import "generated:games"
 import games_client "generated:games/client"
 import "server:core"
 
-// The universes screen's cards (screen_universes.odin): the order, what a
-// card knows from its config, Export and Import through the buttons. (Rename
+// A game's page (screen/universes.odin): the order, what a save knows from its config,
+// that a page shows its game's saves only, Export and Import through the buttons. (Rename
 // and Delete's one confirmation: menus_test.odin's test_saves_screen; that
 // entering a universe puts the character where it last stood:
 // server/core/gamemode_test.odin.)
@@ -56,7 +56,7 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 	screen.saves_override = dir
 	defer screen.saves_override = ""
 	make_universe(dir, "Oldest", 1, "creative", 72 * time.Hour)
-	make_universe(dir, "Newest", 42, "survival", time.Minute)
+	make_universe(dir, "Newest", 42, "survival\nage = 126000", time.Minute) // (70 minutes run)
 	make_universe(dir, "Middle", 7, "creative", 5 * time.Hour)
 	app := ui_app(t)
 	defer ui_app_free(app)
@@ -69,14 +69,15 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 	newest := app.universes.entries[0]
 	testing.expect_value(t, newest.seed, 42)
 	testing.expect_value(t, newest.mode, "survival")
+	testing.expect_value(t, newest.age, 126000)
 	testing.expect(t, newest.stars[0].home, "the thumbnail's home star")
 	galaxy: [engine.THUMB_STARS]starmap.Star
 	starmap.galaxy_stars(starmap.seed_glyphs(42), galaxy[:])
 	testing.expect(t, newest.stars == galaxy, "the thumbnail is the seed's galaxy")
-	// The screen draws them, the name and the mode and the time on each.
+	// The page draws them: the name, the mode, when it was played and for how long.
 	app.screen = .Universes
 	ui_frame(app)
-	for want in ([]string{"Newest", "Oldest", "Survival"}) {
+	for want in ([]string{"Newest", "Oldest", "Survival", "played 1 min ago", "1 h 10 min in all"}) {
 		found := false
 		for text in app.ui.texts {if strings.contains(text, want) {found = true}}
 		testing.expectf(t, found, "no %s on the cards", want)
@@ -84,9 +85,9 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-// A card knows the game its universe plays (universe.cfg's game; one from before games
-// were recorded plays sandbox) and shows its name; a universe of a game this build lacks
-// is not opened, and the list says why.
+// A save knows the game its universe plays (universe.cfg's game; one from before games
+// were recorded plays sandbox), and a game's page shows its saves and no other game's; a
+// universe of a game this build lacks is not opened, and its page says why.
 @(test)
 test_cards_know_their_game :: proc(t: ^testing.T) {
 	dir := "build/test/cards_game"
@@ -109,13 +110,17 @@ test_cards_know_their_game :: proc(t: ^testing.T) {
 	testing.expect_value(t, e[1].game_id, "flood")
 	testing.expect_value(t, e[2].game_id, "")
 	testing.expect_value(t, screen.entry_game(&e[2]), "sandbox")
-	app.screen = .Universes
-	ui_frame(app)
-	for want in ([]string{"Flood, Creative", "Sandbox, Creative"}) {
-		found := false
-		for text in app.ui.texts {if strings.contains(text, want) {found = true}}
-		testing.expectf(t, found, "no %s on the cards", want)
+	shows :: proc(app: ^engine.App, want: string) -> bool {
+		for text in app.ui.texts {if text == want {return true}}
+		return false
 	}
+	screen.universes_open(app, "sandbox")
+	ui_frame(app)
+	testing.expect(t, shows(app, "Older"), "sandbox's page lacks its save")
+	testing.expect(t, !shows(app, "Flooded") && !shows(app, "Elsewhere"), "another game's save")
+	screen.universes_open(app, "nonesuch")
+	ui_frame(app)
+	testing.expect(t, shows(app, "Elsewhere") && !shows(app, "Older"), "nonesuch's page")
 	screen.save_play(app, 0)
 	testing.expect(t, app.session == nil, "a universe of a game this build lacks was opened")
 	testing.expect_value(
@@ -158,13 +163,11 @@ test_export_and_import_through_the_cards :: proc(t: ^testing.T) {
 	defer screen.universes_destroy(&app.universes)
 	defer screen.creation_destroy(&app.creation)
 	defer overlay.toasts_destroy(&app.toasts)
-	screen.universes_refresh(&app.universes)
+	screen.universes_open(app, "harness") // (the game the server_made universe plays)
 	testing.expect_value(t, len(app.universes.entries), 1)
-	app.screen = .Universes
 	ui_frame(app)
 
-	open_menu(t, app, "Castle")
-	click(t, app, "Export")
+	click(t, app, "Export") // (the save played last is selected)
 	archive := filepath.join({dir, "Castle.vxu"}, context.temp_allocator) or_else ""
 	testing.expect(t, os.exists(archive), "the archive was written")
 	testing.expect_value(t, app.universes.mode, engine.Saves_Mode.List)
@@ -200,7 +203,7 @@ test_export_and_import_through_the_cards :: proc(t: ^testing.T) {
 @(test)
 test_a_click_selects_and_a_double_click_plays :: proc(t: ^testing.T) {
 	w: engine.Universes_Screen
-	w.selected = -1
+	w.list.selected = -1
 	t0 := time.Tick {
 		_nsec = 1_000_000_000,
 	}
@@ -208,9 +211,9 @@ test_a_click_selects_and_a_double_click_plays :: proc(t: ^testing.T) {
 			_nsec = t._nsec + n * 1_000_000,
 		}}
 	testing.expect(t, !screen.card_click(&w, 1, t0), "one click only selects")
-	testing.expect_value(t, w.selected, 1)
+	testing.expect_value(t, w.list.selected, 1)
 	testing.expect(t, !screen.card_click(&w, 0, ms(t0, 100)), "a click on another card selects it")
-	testing.expect_value(t, w.selected, 0)
+	testing.expect_value(t, w.list.selected, 0)
 	testing.expect(
 		t,
 		!screen.card_click(&w, 0, ms(t0, 900)),
