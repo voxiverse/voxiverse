@@ -64,7 +64,9 @@ bigger for a critical hit, red when it is yours). F3 shows the dungeon's seed, t
 where the pointer is.
 
 Server commands: `/delve` (the dungeon), and with the permission `delve.admin` (the host has
-it) `/delve down` (the next dungeon now) and `/delve depth <1..99>`. Each delver's level,
+it) `/delve down` (the next dungeon now), `/delve depth <1..99>`, `/delve goto <start|boss>`,
+`/delve spawn <biter|husk|spitter|brute|warden> [elite]` (awake, beside you) and `/delve loot`
+(a roll of loot at your feet). Each delver's level,
 experience and deepest dungeon are kept with the universe by name (`game.cfg`); its weapons
 and coins are its character's.
 

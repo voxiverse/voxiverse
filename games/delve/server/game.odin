@@ -295,8 +295,10 @@ put_records :: proc(s: ^core.Server) {
 	}
 }
 
-// command: /delve shows the dungeon; /delve down takes everyone to the next one now,
-// /delve depth <n> to a dungeon of that depth (the admin's).
+// command: /delve shows the dungeon; the admin's: /delve down takes everyone to the
+// next one now, /delve depth <n> to a dungeon of that depth, /delve goto <start|boss>
+// moves the admin there, /delve spawn <creature> [elite] makes one awake beside it,
+// /delve loot drops a roll of loot at its feet.
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
 	if name != "delve" {return false}
 	d := state(s)
@@ -329,8 +331,37 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 			return true
 		}
 		dungeon_begin(s, n)
+	case len(args) == 2 && args[0] == "goto":
+		switch args[1] {
+		case "start":
+			core.teleport(s, c, start_point(s), {0, -0.6}, flying = false)
+		case "boss":
+			// (at the warden's room's door: its middle less a few blocks)
+			p := room_point(d.plan.rooms[d.plan.boss].area)
+			core.teleport(s, c, p + {0, 0, 3}, {0, -0.6}, flying = false)
+		case:
+			core.notice(s, c, "Usage: delve goto <start|boss>")
+		}
+	case (len(args) == 2 || len(args) == 3) && args[0] == "spawn":
+		for foe, f in delve.FOES {
+			if foe.kind != args[1] {continue}
+			at := c.player.position + {3, 0, 0}
+			if h := foe_spawn(s, f, at, len(args) == 3 && args[2] == "elite"); h != 0 {
+				slot := foe_of(s, core.entity_id(s.home, h))
+				slot.awake, slot.prey = true, core.player_ref(s, c)
+			}
+			return true
+		}
+		core.notice(s, c, "Usage: delve spawn <biter|husk|spitter|brute|warden> [elite]")
+	case len(args) == 1 && args[0] == "loot":
+		loot(s, c.player.position + {1.5, 0, 0}, 3, 25, 1)
+		loot(s, c.player.position + {-1.5, 0, 1}, 1, 7, 1)
 	case:
-		core.notice(s, c, "Usage: delve [down | depth <1..99>]")
+		core.notice(
+			s,
+			c,
+			"Usage: delve [down | depth <1..99> | goto <start|boss> | spawn <creature> [elite] | loot]",
+		)
 	}
 	return true
 }

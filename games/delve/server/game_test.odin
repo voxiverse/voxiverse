@@ -423,3 +423,31 @@ test_two_delvers_share_it :: proc(t: ^testing.T) {
 		testing.expect_value(t, theirs.kills, 1)
 	}
 }
+
+// The admin's commands: a creature made awake beside it, a roll of loot at its feet, to
+// the warden's door.
+@(test)
+test_admin_commands :: proc(t: ^testing.T) {
+	rig := new(Rig)
+	defer free(rig)
+	if !rig_start(t, rig) {
+		rig_stop(rig)
+		return
+	}
+	defer rig_stop(rig)
+	s := srv(rig)
+	clear_dungeon(s)
+	c := host(rig)
+	testing.expect(t, command(s, c, "delve", {"spawn", "husk", "elite"}))
+	d := state(s)
+	if testing.expect_value(t, d.foe_count, 1) {
+		testing.expect(t, d.foes[0].awake && d.foes[0].elite && d.foes[0].name_len > 0)
+	}
+	before := core.entities_of(s.home, s.registry.engine.item, c.player.position, 4)
+	testing.expect(t, command(s, c, "delve", {"loot"}))
+	after := core.entities_of(s.home, s.registry.engine.item, c.player.position, 4)
+	testing.expect(t, len(after) >= len(before) + 2, "no loot dropped")
+	testing.expect(t, command(s, c, "delve", {"goto", "boss"}))
+	boss := room_point(d.plan.rooms[d.plan.boss].area)
+	testing.expect(t, flat_distance(c.player.position, boss) < 4, "not at the warden's room")
+}
