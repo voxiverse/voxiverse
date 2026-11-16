@@ -74,22 +74,17 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	}
 	if split, ok := engine.game_value(s, r, rally.Split); ok && split != nil {
 		gate :=
-			"FINISH" if split.checkpoint == rally.CHECKPOINTS else fmt.tprintf("GATE %d", split.checkpoint)
+			rally.tr(.Finish) if split.checkpoint == rally.CHECKPOINTS else rally.tr(.Gate, split.checkpoint)
 		if split.compared {
-			text := fmt.tprintf(
-				"%s  %s  %s",
+			text := rally.tr(
+				.Split_Compared,
 				gate,
 				rally.clock(split.ticks),
 				rally.delta(split.delta),
 			)
 			engine.flash(&v.split, s, text, .Good if split.delta < 0 else .Warn)
 		} else {
-			engine.flash(
-				&v.split,
-				s,
-				fmt.tprintf("%s  %s", gate, rally.clock(split.ticks)),
-				.Plain,
-			)
+			engine.flash(&v.split, s, rally.tr(.Split, gate, rally.clock(split.ticks)), .Plain)
 		}
 	}
 	if f, ok := engine.game_value(s, r, rally.Finish); ok && f != nil {
@@ -99,60 +94,45 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 			engine.flash(
 				&v.finish,
 				s,
-				fmt.tprintf("COURSE RECORD: %s %s", f.name, rally.clock(f.ticks)),
+				rally.tr(.Course_Record, f.name, rally.clock(f.ticks)),
 				.Good,
 				5,
 			)
 		case mine && f.personal:
-			engine.flash(
-				&v.finish,
-				s,
-				fmt.tprintf("PERSONAL BEST: %s", rally.clock(f.ticks)),
-				.Good,
-				5,
-			)
+			engine.flash(&v.finish, s, rally.tr(.Personal_Best, rally.clock(f.ticks)), .Good, 5)
 		case mine:
-			engine.flash(
-				&v.finish,
-				s,
-				fmt.tprintf("FINISHED: %s", rally.clock(f.ticks)),
-				.Plain,
-				5,
-			)
+			engine.flash(&v.finish, s, rally.tr(.Finished, rally.clock(f.ticks)), .Plain, 5)
 		}
 	}
 }
 
 // best_text: a time, or "-" for none.
-best_text :: proc(ticks: u32) -> string {return rally.clock(ticks) if ticks > 0 else "-"}
+best_text :: proc(ticks: u32) -> string {return(
+		rally.clock(ticks) if ticks > 0 else rally.tr(.None) \
+	)}
 
 // status: the line at the top of the screen.
 status :: proc(s: ^engine.Session) -> string {
 	v := view(s)
 	r := v.race
 	me := mine(s)
-	record := "-"
-	if r.record > 0 {record = fmt.tprintf("%s (%s)", rally.clock(r.record), r.record_name)}
+	record := rally.tr(.None)
+	if r.record > 0 {record = rally.tr(.Record, rally.clock(r.record), r.record_name)}
 	switch r.phase {
 	case .Waiting:
-		return "RALLY  waiting for racers"
+		return rally.tr(.Status_Waiting)
 	case .Countdown:
-		return fmt.tprintf(
-			"RALLY  race %d   starting   best %s   record %s",
-			r.race,
-			best_text(me.best),
-			record,
-		)
+		return rally.tr(.Status_Starting, r.race, best_text(me.best), record)
 	case .Racing:
-		where_ := fmt.tprintf("gate %d/%d", me.next, rally.CHECKPOINTS)
+		where_ := rally.tr(.At_Gate, me.next, rally.CHECKPOINTS)
 		switch {
 		case !me.racing:
-			where_ = "watching"
+			where_ = rally.tr(.Watching)
 		case me.time > 0:
-			where_ = fmt.tprintf("finished %s", rally.clock(me.time))
+			where_ = rally.tr(.Finished_At, rally.clock(me.time))
 		}
-		return fmt.tprintf(
-			"RALLY  race %d   %s   %s   best %s   record %s",
+		return rally.tr(
+			.Status_Racing,
 			r.race,
 			where_,
 			rally.clock(r.ticks),
@@ -160,7 +140,7 @@ status :: proc(s: ^engine.Session) -> string {
 			record,
 		)
 	case .Results:
-		return fmt.tprintf("RALLY  race %d over   next in %ds   record %s", r.race, r.left, record)
+		return rally.tr(.Status_Over, r.race, r.left, record)
 	}
 	return ""
 }
@@ -177,23 +157,23 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	switch r.phase {
 	case .Waiting:
 	case .Countdown:
-		engine.banner(ctx, -140, fmt.tprintf("RACE %d", r.race), 1.5, t.focus_ring)
+		engine.banner(ctx, -140, rally.tr(.Race_Title, r.race), 1.5, t.focus_ring)
 		engine.banner(ctx, -60, fmt.tprintf("%d", r.left), 1.5, t.text)
-		engine.banner(ctx, 40, "Every gate in order. Hook and rockets allowed.", 0.6, t.text)
+		engine.banner(ctx, 40, rally.tr(.Rules), 0.6, t.text)
 	case .Racing:
 		engine.flash_draw(ctx, &v.split, s, -200, 0.8)
 		engine.flash_draw(ctx, &v.finish, s, -120, 1.1)
 	case .Results:
 		engine.flash_draw(ctx, &v.finish, s, -250, 0.8)
-		engine.banner(ctx, -180, "RACE OVER", 1.5, t.focus_ring)
+		engine.banner(ctx, -180, rally.tr(.Race_Over), 1.5, t.focus_ring)
 		at := f32(-90)
 		for b, i in ranked(v) {
 			if i >= 4 {break}
-			line := fmt.tprintf(
-				"%d. %s  %s",
+			line := rally.tr(
+				.Placing,
 				i + 1,
 				b.seat.name,
-				rally.clock(b.seat.time) if b.seat.time > 0 else "did not finish",
+				rally.clock(b.seat.time) if b.seat.time > 0 else rally.tr(.No_Finish),
 			)
 			engine.banner(
 				ctx,
@@ -204,7 +184,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			)
 			at += 60
 		}
-		engine.banner(ctx, at + 20, fmt.tprintf("next race in %d", r.left), 0.6, t.text_muted)
+		engine.banner(ctx, at + 20, rally.tr(.Next_Race, r.left), 0.6, t.text_muted)
 	}
 }
 
@@ -214,7 +194,7 @@ marks :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	me := mine(s)
 	for k in 1 ..= rally.CHECKPOINTS {
 		g := v.course.checkpoints[k]
-		label := "FINISH" if k == rally.CHECKPOINTS else fmt.tprintf("GATE %d", k)
+		label := rally.tr(.Finish) if k == rally.CHECKPOINTS else rally.tr(.Gate, k)
 		engine.world_label(s, ctx, {f64(g.x) + 0.5, f64(g.y) + 4.6, f64(g.z) + 0.5}, label)
 		if me.racing && int(me.next) == k {
 			engine.world_box(s, {g.x, g.y, g.z - 2}, {g.x, g.y + 2, g.z + 2}, {90, 230, 110, 255})
@@ -247,10 +227,17 @@ ranked :: proc(v: ^View) -> []Ranked {
 scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 	v := view(s)
 	r := v.race
-	board.title = fmt.tprintf("Rally: race %d, record %s", r.race, best_text(r.record))
-	engine.scoreboard_columns(board, "Gate", "Time", "Best", "Resets")
+	board.title = rally.tr(.Board_Title, r.race, best_text(r.record))
+	engine.scoreboard_columns(
+		board,
+		rally.tr(.Column_Gate),
+		rally.tr(.Column_Time),
+		rally.tr(.Column_Best),
+		rally.tr(.Column_Resets),
+	)
 	for b in ranked(v) {
-		gate := "done" if b.seat.time > 0 else fmt.tprintf("%d/%d", b.seat.next, rally.CHECKPOINTS)
+		gate :=
+			rally.tr(.Done) if b.seat.time > 0 else rally.tr(.Gate_Of, b.seat.next, rally.CHECKPOINTS)
 		engine.scoreboard_row(
 			board,
 			b.seat.name,
