@@ -5,8 +5,10 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
+import "common:access"
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Open to LAN's two settings (the client's dialog sends them as commands): the
 // guests' game mode (the rule default_game_mode: a guest who joins gets it,
@@ -91,7 +93,7 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 	testing.expect(t, !may(srv, "bob", "teleport.tp"))
 	testing.expect(t, may(srv, "alice", "teleport.tp"))
 	// Allow commands: the mod role, for the guest already in, at once.
-	net_send(alice, game.Command{"rule guest_role mod"})
+	net_send(alice, protocol.Command{"rule guest_role mod"})
 	testing.expect(
 		t,
 		net_wait(
@@ -103,7 +105,7 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 		"bob has the mod role",
 	)
 	testing.expect(t, !may(srv, "bob", "server.open_lan"), "mod is not admin")
-	net_send(alice, game.Command{"rule guest_role default"})
+	net_send(alice, protocol.Command{"rule guest_role default"})
 	testing.expect(
 		t,
 		net_wait(
@@ -116,7 +118,7 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 	)
 
 	// The guests' game mode: a guest who joins afterwards has it, not the universe's.
-	net_send(alice, game.Command{"rule default_game_mode survival"})
+	net_send(alice, protocol.Command{"rule default_game_mode survival"})
 	testing.expect(
 		t,
 		net_wait(
@@ -136,8 +138,8 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 	testing.expect_value(t, alice.mode, "voxiverse:creative") // (the host's own is theirs)
 
 	// Close LAN: the port is shut, the guests' role is gone.
-	net_send(alice, game.Command{"rule guest_role mod"})
-	net_send(alice, game.Command{"close_lan"})
+	net_send(alice, protocol.Command{"rule guest_role mod"})
+	net_send(alice, protocol.Command{"close_lan"})
 	testing.expect(
 		t,
 		net_wait(t, {alice, bob}, proc(_: []^Net_Client) -> bool {return !listening(lan_srv)}, 5),
@@ -250,7 +252,7 @@ test_guest_fires_the_launcher_on_an_opened_world :: proc(t: ^testing.T) {
 	testing.expect(t, may(srv, "alice", "world.fire"), "the host may fire")
 	testing.expect(t, !may(srv, "bob", "world.fire"), "(the old world: not yet)")
 
-	net_send(alice, game.Command{"open_lan"})
+	net_send(alice, protocol.Command{"open_lan"})
 	testing.expect(
 		t,
 		net_wait(
@@ -262,7 +264,7 @@ test_guest_fires_the_launcher_on_an_opened_world :: proc(t: ^testing.T) {
 		"bob may fire once the world is open",
 	)
 	testing.expect_value(t, fired_at_of(srv, "bob"), 0)
-	net_send(bob, game.Fire{bob.seq, 0, 0})
+	net_send(bob, protocol.Fire{bob.seq, 0, 0})
 	testing.expect(
 		t,
 		net_wait(
@@ -280,10 +282,10 @@ test_new_world_default_role_may_fire :: proc(t: ^testing.T) {
 	p: Permissions
 	defer permissions_destroy(&p)
 	permissions_parse(&p, DEFAULT_PERMISSIONS)
-	grants := make([dynamic]game.Grant, context.temp_allocator)
+	grants := make([dynamic]access.Grant, context.temp_allocator)
 	resolve(&p, "bob", nil, false, &grants, context.temp_allocator)
-	testing.expect(t, game.allowed(grants[:], "world.fire"))
-	testing.expect(t, game.allowed(grants[:], "world.edit"))
-	testing.expect(t, !game.allowed(grants[:], "world.summon"))
-	testing.expect(t, !game.allowed(grants[:], "teleport.tp"))
+	testing.expect(t, access.allowed(grants[:], "world.fire"))
+	testing.expect(t, access.allowed(grants[:], "world.edit"))
+	testing.expect(t, !access.allowed(grants[:], "world.summon"))
+	testing.expect(t, !access.allowed(grants[:], "teleport.tp"))
 }

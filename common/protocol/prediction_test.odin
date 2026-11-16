@@ -1,18 +1,19 @@
-package game
+package protocol
 
+import "common:game"
 import "core:math"
 import "core:testing"
 
 @(private = "file")
 World :: struct {
-	solid: map[Block_Pos]bool,
+	solid: map[game.Block_Pos]bool,
 }
 
 @(private = "file")
-query :: proc(w: ^World) -> Block_Query {
-	return {w, proc(data: rawptr, p: Block_Pos) -> (Block, bool) {
+query :: proc(w: ^World) -> game.Block_Query {
+	return {w, proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 			return .Stone if p in (^World)(data).solid else .Air, true
-		}, test_blocks(), {}}
+		}, game.test_blocks(), {}}
 }
 
 @(private = "file")
@@ -27,8 +28,8 @@ make_world :: proc() -> World {
 
 // A scripted player: walks, turns, jumps, sprints, flies.
 @(private = "file")
-scripted_input :: proc(tick: int) -> Player_Input {
-	in_ := Player_Input {
+scripted_input :: proc(tick: int) -> game.Player_Input {
+	in_ := game.Player_Input {
 		move = {0.3 * f32(math.sin(f64(tick) * 0.05)), 1},
 		yaw  = -math.PI / 2 + 0.4 * f32(math.sin(f64(tick) * 0.02)),
 	}
@@ -49,10 +50,10 @@ simulate :: proc(
 	ticks: int,
 ) -> (
 	client: Prediction,
-	server: Player_State,
+	server: game.Player_State,
 ) {
-	rules := RULES_DEFAULTS
-	start := Player_State {
+	rules := game.RULES_DEFAULTS
+	start := game.Player_State {
 		position = {0.5, 1, 0.5},
 	}
 	prediction_init(&client, start)
@@ -85,7 +86,7 @@ simulate :: proc(
 			ordered_remove(&to_server, 0)
 		}
 		buf: [INPUT_BUDGET_MAX]Input
-		for msg in input_queue_tick(&queue, &buf) {player_step(&server, msg.input, &rules, query(server_world), TICK_SECONDS)}
+		for msg in input_queue_tick(&queue, &buf) {game.player_step(&server, msg.input, &rules, query(server_world), game.TICK_SECONDS)}
 		append(&to_client, struct {
 			due: int,
 			msg: Own_Player,
@@ -283,4 +284,108 @@ test_input_buffer_drains_when_silent :: proc(t: ^testing.T) {
 	for _ in 0 ..< 2 * INPUT_TARGET_MAX + 2 {input_queue_tick(&q, &buf)}
 	testing.expect_value(t, q.last, 2)
 	testing.expect_value(t, q.count, 0)
+}
+
+// Prediction and the server agree with mods, tick for tick, including an air jump.
+@(test)
+test_prediction_agrees_with_mods :: proc(t: ^testing.T) {
+	w: game.Test_World
+	defer delete(w.solid)
+	game.floor(&w, 0, 40)
+	rules := game.RULES_DEFAULTS
+	mods := game.Mods{1.1, 1.1, 1, game.BASE_HEALTH + 4, {.Fly}, {}}
+	start := game.Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	predicted: Prediction
+	prediction_init(&predicted, start)
+	server := start
+	for tick in 0 ..< 200 {
+		in_ := game.Player_Input {
+			move    = {0.3, 1},
+			buttons = {.Jump} if tick % 25 < 2 || tick % 25 == 8 else {},
+		}
+		msg := prediction_tick(&predicted, in_, &rules, game.test_world_query(&w), mods)
+		game.player_step(
+			&server,
+			msg.input,
+			&rules,
+			game.test_world_query(&w),
+			game.TICK_SECONDS,
+			mods,
+		)
+		testing.expectf(
+			t,
+			predicted.state == server,
+			"tick %d: predicted %v, the server %v",
+			tick,
+			predicted.state,
+			server,
+		)
+		if predicted.state != server {break}
+	}
+	// Reconciling with the server's state and the pending inputs gives the same again.
+	prediction_reconcile(
+		&predicted,
+		{acked = predicted.next_sequence - 1, state = server},
+		&rules,
+		game.test_world_query(&w),
+		mods,
+	)
+	testing.expect(t, predicted.state == server)
+}
+
+// Prediction and the server step agree with the hook, tick for tick.
+@(test)
+test_prediction_agrees_with_the_hook :: proc(t: ^testing.T) {
+	w: game.Test_World
+	defer delete(w.solid)
+	game.floor(&w, 0, 40)
+	game.hook_wall(&w, 25)
+	rules := game.RULES_DEFAULTS
+	mods := game.MODS_NONE
+	mods.grapple = game.HOOK
+	start := game.Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	predicted: Prediction
+	prediction_init(&predicted, start)
+	server := start
+	hooked_ticks := 0
+	for tick in 0 ..< 200 {
+		in_ := game.Player_Input {
+			pitch   = 0.15,
+			move    = {0.2, 0.5},
+			buttons = {.Grapple} if tick % 100 < 40 else {},
+		}
+		msg := prediction_tick(&predicted, in_, &rules, game.test_world_query(&w), mods)
+		game.player_step(
+			&server,
+			msg.input,
+			&rules,
+			game.test_world_query(&w),
+			game.TICK_SECONDS,
+			mods,
+		)
+		if server.hooked {hooked_ticks += 1}
+		if !testing.expectf(
+			t,
+			predicted.state == server,
+			"tick %d: %v against %v",
+			tick,
+			predicted.state,
+			server,
+		) {break}
+	}
+	testing.expect(t, hooked_ticks > 20, "it never hooked")
+	prediction_reconcile(
+		&predicted,
+		{acked = predicted.next_sequence - 1, state = server},
+		&rules,
+		game.test_world_query(&w),
+		mods,
+	)
+	testing.expect(t, predicted.state == server)
 }

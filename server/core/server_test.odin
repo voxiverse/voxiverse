@@ -9,8 +9,10 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // A scripted client: joins, then flies in a straight line, keeping the
 // chunks it is sent (and dropping those it is told to), as the real client
@@ -18,25 +20,25 @@ import "common:game"
 
 @(private)
 Fake_Client :: struct {
-	endpoint:       game.Endpoint,
+	endpoint:       protocol.Endpoint,
 	stepper:        ^Harness, // wait_until steps this harness's ticks (nil: real time)
-	key:            game.Account_Key, // (fake_hello)
+	key:            access.Account_Key, // (fake_hello)
 	has:            map[game.Chunk_Pos]struct{},
-	welcome:        game.Welcome,
+	welcome:        protocol.Welcome,
 	welcomed:       bool,
 	rejected:       string,
 	scratch:        ^game.Block_Array,
 	chunks:         int, // chunk messages received
 	packs_changed:  u64, // the content of the last Packs_Changed
 	unloads:        int,
-	player:         game.Own_Player, // the latest
+	player:         protocol.Own_Player, // the latest
 	rx:             State_Rx, // (made when first needed, in the temp allocator)
 	rules:          game.Rules,
-	results:        [dynamic]game.Edit_Result,
-	columns:        map[[2]i32]game.Column,
+	results:        [dynamic]protocol.Edit_Result,
+	columns:        map[[2]i32]protocol.Column,
 	column_updates: int,
 	clock:          f64, // the world time, derived from the Clock record and the newest tick
-	anchor:         Maybe(game.Clock), // the last Clock record
+	anchor:         Maybe(protocol.Clock), // the last Clock record
 	notices:        [dynamic]string, // (temp allocator)
 	bulk_left:      int, // chunks a bulk edit sends again (after Bulk_Begin)
 	variables:      string, // the last Variables (temp allocator)
@@ -53,37 +55,37 @@ fake_hello :: proc(t: ^testing.T, c: ^Fake_Client, name: string) -> bool {
 }
 
 @(private)
-fake_send :: proc(c: ^Fake_Client, m: game.Client_Message) {
+fake_send :: proc(c: ^Fake_Client, m: protocol.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.encode_client(&w, m)
-	game.send(c.endpoint, w.buf[:])
+	protocol.encode_client(&w, m)
+	protocol.send(c.endpoint, w.buf[:])
 }
 
 @(private = "file")
 fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
-	packets := make([dynamic]game.Packet, context.temp_allocator)
-	game.receive(c.endpoint, &packets)
+	packets := make([dynamic]protocol.Packet, context.temp_allocator)
+	protocol.receive(c.endpoint, &packets)
 	for p in packets {
-		defer game.packet_free(c.endpoint, p)
-		m, ok := game.decode_server(p, c.scratch, test_reg())
+		defer protocol.packet_free(c.endpoint, p)
+		m, ok := protocol.decode_server(p, c.scratch, test_reg())
 		if !testing.expect(t, ok, "server sent an invalid message") {continue}
 		if c.rx.schema.kinds == nil {state_rx_init(&c.rx, context.temp_allocator)}
 		switch v in m {
-		case game.Challenge:
-			fake_send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
-		case game.Characters: // (tests name their character in Hello)
-		case game.Packs, game.Pack_Part: // (no packs in these universes)
-		case game.Market_View: // (the market tests read it through the net harness)
-		case game.Packs_Changed:
+		case protocol.Challenge:
+			fake_send(c, protocol.Proof{access.account_sign(&c.key, v.nonce)})
+		case protocol.Characters: // (tests name their character in Hello)
+		case protocol.Packs, protocol.Pack_Part: // (no packs in these universes)
+		case protocol.Market_View: // (the market tests read it through the net harness)
+		case protocol.Packs_Changed:
 			c.packs_changed = v.content
-		case game.Welcome:
+		case protocol.Welcome:
 			c.welcome, c.welcomed, c.rules = v, true, v.rules
 			rules := v.rules
-			game.receiver_seed(&c.rx.rx, int(game.State_Kind.Rules), &rules)
-		case game.Reject:
+			protocol.receiver_seed(&c.rx.rx, int(protocol.State_Kind.Rules), &rules)
+		case protocol.Reject:
 			c.rejected = v.reason
-		case game.Chunk_Message:
+		case protocol.Chunk_Message:
 			testing.expectf(
 				t,
 				[2]i32{v.pos.x, v.pos.z} in c.columns,
@@ -97,54 +99,57 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			}
 			c.has[v.pos] = {}
 			c.chunks += 1
-		case game.State_Message, game.Snapshot_Message:
+		case protocol.State_Message, protocol.Snapshot_Message:
 			for g in state_rx_take(t, &c.rx, m) {
 				if g.op == .Event {
-					#partial switch game.Event_Kind(g.kind - len(game.State_Kind)) {
+					#partial switch protocol.Event_Kind(g.kind - len(protocol.State_Kind)) {
 					case .Notice:
 						if c.notices ==
 						   nil {c.notices = make([dynamic]string, context.temp_allocator)}
 						append(
 							&c.notices,
-							strings.clone((^game.Notice)(g.value).text, context.temp_allocator),
+							strings.clone(
+								(^protocol.Notice)(g.value).text,
+								context.temp_allocator,
+							),
 						)
 					}
 					continue
 				}
-				#partial switch game.State_Kind(g.kind) {
+				#partial switch protocol.State_Kind(g.kind) {
 				case .Own_Player:
-					c.player = (^game.Own_Player)(g.value)^
+					c.player = (^protocol.Own_Player)(g.value)^
 				case .Rules:
 					c.rules = (^game.Rules)(g.value)^
 				case .Clock:
-					c.anchor = (^game.Clock)(g.value)^
+					c.anchor = (^protocol.Clock)(g.value)^
 				case .Variables:
 					c.variables = strings.clone(
-						(^game.Variables)(g.value).text,
+						(^protocol.Variables)(g.value).text,
 						context.temp_allocator,
 					)
 				case .Selection:
-					c.selection = (^game.Selection)(g.value).corners
+					c.selection = (^protocol.Selection)(g.value).corners
 				}
 			}
 			if a, anchored := c.anchor.?; anchored {
 				behind := f64(c.rx.rx.tick - a.tick) * f64(game.TICK_SECONDS)
 				c.clock = game.advance_time(a.time, max(behind, 0), &c.rules)
 			}
-		case game.Edit_Result:
+		case protocol.Edit_Result:
 			append(&c.results, v)
-		case game.Column:
+		case protocol.Column:
 			if v.pos in c.columns {c.column_updates += 1}
 			c.columns[v.pos] = v
-		case game.Bulk_Begin:
+		case protocol.Bulk_Begin:
 			c.bulk_left = int(v.count)
-		case game.Pong,
-		     game.Stats_Page,
-		     game.Telemetry_Ack,
-		     game.World_Changed,
-		     game.Dev_Ack,
-		     game.Dev_Replies: // not checked here
-		case game.Unload_Chunk:
+		case protocol.Pong,
+		     protocol.Stats_Page,
+		     protocol.Telemetry_Ack,
+		     protocol.World_Changed,
+		     protocol.Dev_Ack,
+		     protocol.Dev_Replies: // not checked here
+		case protocol.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)
 			delete_key(&c.has, v.pos)
 			c.unloads += 1
@@ -214,7 +219,7 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 	STEP :: 2 * game.CHUNK_SIZE
 	for step in 1 ..= 1500 / STEP {
 		pos.x += STEP
-		fake_send(&c, game.Teleport{pos, 0, 0})
+		fake_send(&c, protocol.Teleport{pos, 0, 0})
 		@(static) step_x: f64
 		step_x = pos.x
 		ok := wait_until(
@@ -273,7 +278,7 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 @(test)
 test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 	Case :: struct {
-		first:  game.Client_Message,
+		first:  protocol.Client_Message,
 		raw:    []u8,
 		reason: string,
 		cheats: bool, // the client may cheat
@@ -281,8 +286,8 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 	}
 	cases := []Case {
 		{
-			first = game.Hello {
-				game.PROTOCOL_VERSION + 1,
+			first = protocol.Hello {
+				protocol.PROTOCOL_VERSION + 1,
 				test_key("old").account,
 				"old",
 				0,
@@ -291,10 +296,10 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 			},
 			reason = "protocol version mismatch",
 		},
-		{first = game.Input{}, reason = "message before hello"},
-		{first = game.Teleport{}, reason = "message before hello"},
+		{first = protocol.Input{}, reason = "message before hello"},
+		{first = protocol.Teleport{}, reason = "message before hello"},
 		// Commands are for players: not before hello, even where allowed.
-		{first = game.Command{"summon"}, reason = "message before hello", cheats = true},
+		{first = protocol.Command{"summon"}, reason = "message before hello", cheats = true},
 		{raw = {0xee, 1, 2}, reason = "invalid message"},
 	}
 	for tc in cases {
@@ -314,7 +319,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 			scratch  = new(game.Block_Array),
 		}
 		if tc.raw != nil {
-			game.send(c.endpoint, tc.raw)
+			protocol.send(c.endpoint, tc.raw)
 		} else {
 			if tc.hello {fake_hello(t, &c, "tester")}
 			fake_send(&c, tc.first)
@@ -324,7 +329,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 			wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.rejected != ""}),
 		)
 		testing.expect_value(t, c.rejected, tc.reason)
-		testing.expect(t, game.is_closed(c.endpoint))
+		testing.expect(t, protocol.is_closed(c.endpoint))
 		testing.expect(t, harness_stop(h)) // a bad client is not a server failure
 		free(c.scratch)
 		delete(c.has)
@@ -347,8 +352,8 @@ test_server_refuses_without_permission :: proc(t: ^testing.T) {
 	defer delete(c.has)
 	defer delete(c.columns)
 	fake_hello(t, &c, "tester")
-	fake_send(&c, game.Command{"summon"})
-	fake_send(&c, game.Teleport{})
+	fake_send(&c, protocol.Command{"summon"})
+	fake_send(&c, protocol.Teleport{})
 	testing.expect(
 		t,
 		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return len(c.notices) >= 2}),
@@ -358,7 +363,7 @@ test_server_refuses_without_permission :: proc(t: ^testing.T) {
 		testing.expect_value(t, c.notices[1], "You may not do that here (teleport.tp)")
 	}
 	testing.expect_value(t, c.rejected, "")
-	testing.expect(t, !game.is_closed(c.endpoint))
+	testing.expect(t, !protocol.is_closed(c.endpoint))
 	testing.expect(t, harness_stop(h))
 }
 
@@ -389,7 +394,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	// Joined, and standing on the ground once its chunks exist.
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 	for i in 1 ..= 60 { 	// a second of standing still lets it fall and land
-		fake_send(&c, game.Input{u32(i), {}, 0})
+		fake_send(&c, protocol.Input{u32(i), {}, 0})
 		harness_step(h)
 		fake_receive(t, &c)
 	}
@@ -409,11 +414,11 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 		i32(math.floor(feet.z)),
 	}
 	head := below + {0, 2, 0}
-	edits := []game.Edit {
-		game.edit_plain(1, 60, below, .Air), // break the block underfoot: fine
-		game.edit_plain(2, 60, head, .Stone), // place inside the player: no
-		game.edit_plain(3, 60, below + {0, 0, 30}, .Air), // out of reach: no
-		game.edit_plain(4, 60, below + {0, -200, 0}, .Stone), // not loaded: no
+	edits := []protocol.Edit {
+		protocol.edit_plain(1, 60, below, .Air), // break the block underfoot: fine
+		protocol.edit_plain(2, 60, head, .Stone), // place inside the player: no
+		protocol.edit_plain(3, 60, below + {0, 0, 30}, .Air), // out of reach: no
+		protocol.edit_plain(4, 60, below + {0, -200, 0}, .Stone), // not loaded: no
 	}
 	for e in edits {fake_send(&c, e)}
 	// The results come at once; the column at the end of the tick.
@@ -432,7 +437,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	// server's ticks: a busy machine's server runs late ticks back to back).
 	sent_at := stats(srv).tick
 	for i in 61 ..= 150 {
-		fake_send(&c, game.Input{u32(i), {move = {0, 1}, yaw = -math.PI / 2}, 0})
+		fake_send(&c, protocol.Input{u32(i), {move = {0, 1}, yaw = -math.PI / 2}, 0})
 	}
 	harness_step(h, game.TICK_RATE)
 	fake_receive(t, &c)
@@ -440,7 +445,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	applied := f64(c.player.acked - 60)
 	testing.expectf(
 		t,
-		applied <= ticks + game.INPUT_BUDGET_MAX + 1,
+		applied <= ticks + protocol.INPUT_BUDGET_MAX + 1,
 		"applied %v inputs in %v ticks",
 		applied,
 		ticks,
@@ -482,11 +487,11 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 
 	// Hover in open air at y 100 (flying), where the chunks are all air.
-	fake_send(&c, game.Teleport{{0.5, 100, 0.5}, 0, 0})
+	fake_send(&c, protocol.Teleport{{0.5, 100, 0.5}, 0, 0})
 	seq: u32 = 0
 	for i in 0 ..< 45 {
 		seq += 1
-		fake_send(&c, game.Input{seq, {buttons = {.Toggle_Fly} if i == 0 else {}}, 0})
+		fake_send(&c, protocol.Input{seq, {buttons = {.Toggle_Fly} if i == 0 else {}}, 0})
 		harness_step(h)
 		fake_receive(t, &c)
 	}
@@ -502,10 +507,10 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 	// Place a block 12 blocks ahead (out of reach now), after the 30 inputs
 	// that fly there, sent before them.
 	target := game.Block_Pos{12, 101, 0}
-	fake_send(&c, game.edit_plain(1, seq + 30, target, .Stone))
+	fake_send(&c, protocol.edit_plain(1, seq + 30, target, .Stone))
 	for _ in 0 ..< 30 {
 		seq += 1
-		fake_send(&c, game.Input{seq, {move = {0, 1}, yaw = -math.PI / 2}, 0})
+		fake_send(&c, protocol.Input{seq, {move = {0, 1}, yaw = -math.PI / 2}, 0})
 		harness_step(h)
 		fake_receive(t, &c)
 	}
@@ -557,7 +562,7 @@ test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
 	seq: u32
 	look :: proc(t: ^testing.T, h: ^Harness, c: ^Fake_Client, seq: ^u32) {
 		seq^ += 1
-		fake_send(c, game.Input{seq^, {}, 0})
+		fake_send(c, protocol.Input{seq^, {}, 0})
 		harness_step(h, 2)
 		fake_receive(t, c)
 	}
@@ -577,7 +582,7 @@ test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
 	testing.expect(t, c.clock > before, "time did not go on after the freeze")
 
 	// Open to the LAN: freezing does nothing.
-	fake_send(&c, game.Command{"open_lan"})
+	fake_send(&c, protocol.Command{"open_lan"})
 	harness_step(h, 3)
 	freeze(srv, true)
 	harness_step(h, 33)
@@ -652,7 +657,7 @@ test_admin_commands :: proc(t: ^testing.T) {
 	}
 	for tc in cases {
 		clear(&c.notices)
-		fake_send(&c, game.Command{tc.command})
+		fake_send(&c, protocol.Command{tc.command})
 		@(static) want: string
 		want = tc.answer
 		got := wait_until(
@@ -670,7 +675,7 @@ test_admin_commands :: proc(t: ^testing.T) {
 		game.Block_Pos{x + 1, y + 1, z + 1},
 	}
 	testing.expect_value(t, c.selection, want_selection)
-	fake_send(&c, game.Command{"sel"})
+	fake_send(&c, protocol.Command{"sel"})
 	cleared := wait_until(
 		t,
 		&c,
@@ -741,7 +746,7 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 			),
 		)
 		testing.expect(t, strings.contains(c.variables, "worldgen.tree_density = 1"), c.variables)
-		fake_send(&c, game.Set_Rule{"worldgen.tree_density", "0"})
+		fake_send(&c, protocol.Set_Rule{"worldgen.tree_density", "0"})
 		testing.expect(
 			t,
 			wait_until(
@@ -754,7 +759,7 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 			),
 		)
 		clear(&c.notices)
-		fake_send(&c, game.Command{"regen 2"})
+		fake_send(&c, protocol.Command{"regen 2"})
 		testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {
 				for n in c.notices {if strings.has_prefix(n, "regen: ") {return true}}
 				return false
@@ -812,7 +817,7 @@ test_structures_round_trip :: proc(t: ^testing.T) {
 	answers = 0
 	run :: proc(t: ^testing.T, c: ^Fake_Client, command: string) -> string {
 		clear(&c.notices)
-		fake_send(c, game.Command{command})
+		fake_send(c, protocol.Command{command})
 		got := wait_until(
 			t,
 			c,
@@ -1118,7 +1123,7 @@ test_game_harm_hooks :: proc(t: ^testing.T) {
 // Pressed: the test game's tally of its actions.
 @(private = "file")
 Pressed :: struct {
-	count: [game.MAX_GAME_ACTIONS]int,
+	count: [protocol.MAX_GAME_ACTIONS]int,
 	who:   ^Client,
 }
 
@@ -1151,13 +1156,13 @@ test_game_action_reaches_the_game :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok) {return}
 	s := &sess.h.srv
 	p := game_state(s, Pressed)
-	mirror_send(&sess.mirror, game.Game_Action{2, 0})
-	mirror_send(&sess.mirror, game.Game_Action{0, 0})
+	mirror_send(&sess.mirror, protocol.Game_Action{2, 0})
+	mirror_send(&sess.mirror, protocol.Game_Action{0, 0})
 	harness_step(&sess.h, 3)
-	testing.expect_value(t, p.count, [game.MAX_GAME_ACTIONS]int{1, 0, 1})
+	testing.expect_value(t, p.count, [protocol.MAX_GAME_ACTIONS]int{1, 0, 1})
 	testing.expect(t, p.who == &s.clients[0])
 	damage(s, &s.clients[0], 1000, {kind = .Command})
-	mirror_send(&sess.mirror, game.Game_Action{0, 0})
+	mirror_send(&sess.mirror, protocol.Game_Action{0, 0})
 	harness_step(&sess.h, 3)
 	testing.expect_value(t, p.count[0], 1)
 }

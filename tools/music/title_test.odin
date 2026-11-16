@@ -1,6 +1,6 @@
 package music_tool
 
-import "common:game"
+import "common:starmap"
 import "core:slice"
 import "core:testing"
 
@@ -50,7 +50,7 @@ test_title_hook_three_times_then_the_theme :: proc(t: ^testing.T) {
 
 @(test)
 test_earth_hook_is_singable :: proc(t: ^testing.T) {
-	hook := game.motif_of(game.earth_address())
+	hook := starmap.motif_of(starmap.earth_address())
 	lo, hi := 127, 0
 	longest := 0
 	for h, i in hook {
@@ -63,8 +63,8 @@ test_earth_hook_is_singable :: proc(t: ^testing.T) {
 		}
 	}
 	testing.expectf(t, hi - lo <= 18, "range of %d semitones", hi - lo)
-	testing.expect_value(t, int(hook[game.MOTIF_NOTES - 1].length), longest)
-	for h, i in hook[:game.MOTIF_NOTES - 1] {
+	testing.expect_value(t, int(hook[starmap.MOTIF_NOTES - 1].length), longest)
+	for h, i in hook[:starmap.MOTIF_NOTES - 1] {
 		testing.expectf(t, int(h.length) < longest, "note %d is as long as the last", i)
 	}
 }

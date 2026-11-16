@@ -7,6 +7,7 @@ import "core:testing"
 
 import "common:game"
 import "common:island"
+import "common:protocol"
 
 @(private = "file")
 home: ^World
@@ -72,10 +73,10 @@ test_players_islands_follow_them :: proc(t: ^testing.T) {
 	testing.expect(t, alice.island.chunks >= 49, "the island is smaller than a view")
 
 	// Alice flies far away: two islands.
-	net_send(alice, game.Command{"tp 4000.5 80 4000.5"})
+	net_send(alice, protocol.Command{"tp 4000.5 80 4000.5"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return island_count() == 2})
 	testing.expect(t, ok, "far apart they are not two islands")
-	net_send(alice, game.Command{"islands"})
+	net_send(alice, protocol.Command{"islands"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		for n in cs[0].notices {
 			if strings.has_prefix(game.format_strip(n), "2 islands") {return true}
@@ -85,7 +86,7 @@ test_players_islands_follow_them :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "/islands did not list two")
 
 	// And back to bob: one.
-	net_send(alice, game.Command{"tp bob"})
+	net_send(alice, protocol.Command{"tp bob"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return island_count() == 1})
 	testing.expect(t, ok, "together they are not one island")
 }

@@ -6,6 +6,7 @@ import "core:path/filepath"
 import "core:slice"
 
 import "common:game"
+import "common:starmap"
 import "common:worldgen"
 
 // Replay (docs/journal.md): the journal applied onto a snapshot of the world
@@ -156,7 +157,7 @@ read_snapshot_region :: proc(
 	name := fmt.tprintf("r.%d.%d.vxr", region.x, region.y)
 	path :=
 		filepath.join(
-			{dir, WORLDS_DIR, game.address_dir(w.address), "regions", name},
+			{dir, WORLDS_DIR, starmap.address_dir(w.address), "regions", name},
 			context.temp_allocator,
 		) or_else name
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)

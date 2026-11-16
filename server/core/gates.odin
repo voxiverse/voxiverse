@@ -4,6 +4,8 @@ import "core:log"
 import "core:math"
 
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import "common:worldgen"
 
 // Gates (common/worldgen/gates.odin has their shape and places): a player dials
@@ -30,7 +32,7 @@ Gate :: struct {
 	locked:    int, // chevrons lit
 	next_at:   u64, // tick of the next lock, or of closing
 	outgoing:  bool, // dialed here (travelling in goes to `to`); else the far end
-	to:        game.Address, // the far end's world
+	to:        starmap.Address, // the far end's world
 	far:       worldgen.Structure, // the far end's gate (outgoing only)
 }
 
@@ -42,11 +44,11 @@ gate_find :: proc(w: ^World, s: worldgen.Structure) -> ^Gate {
 }
 
 // gate_dial: c dials the gate a block of which is at pos; "" or why not.
-gate_dial :: proc(s: ^Server, c: ^Client, d: game.Dial) -> string {
+gate_dial :: proc(s: ^Server, c: ^Client, d: protocol.Dial) -> string {
 	w := c.world
 	gs, is_gate := worldgen.gate_containing(&w.chunks.gen, d.gate)
 	if !is_gate {return "that is not a gate"}
-	if !game.address_valid(d.address) {return "that is not an address"}
+	if !starmap.address_valid(d.address) {return "that is not an address"}
 	centre := worldgen.gate_at(gs, 5, 5)
 	dx := c.player.position - {f64(centre.x), f64(centre.y), f64(centre.z)}
 	if dx.x * dx.x + dx.y * dx.y + dx.z * dx.z >
@@ -69,8 +71,8 @@ gate_dial :: proc(s: ^Server, c: ^Client, d: game.Dial) -> string {
 	log.infof(
 		"server gate dialed by=%s from=%s to=%s",
 		client_name(c),
-		game.address_dir(w.address),
-		game.address_dir(d.address),
+		starmap.address_dir(w.address),
+		starmap.address_dir(d.address),
 	)
 	record(s, c, .Gate_Dial, "opened")
 	return ""
@@ -92,7 +94,7 @@ gates_tick :: proc(w: ^World) {
 			case .Dialing:
 				g.locked += 1
 				g.next_at = s.tick + GATE_LOCK_TICKS
-				if g.locked == game.WORLD_LENGTH {
+				if g.locked == starmap.WORLD_LENGTH {
 					g.phase = .Open
 					g.next_at = s.tick + gate_open_ticks(s)
 				}

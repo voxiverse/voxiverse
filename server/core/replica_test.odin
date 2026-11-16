@@ -4,6 +4,7 @@ import "core:testing"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // A game's records keyed by entity (a creature's name and rank): put to a player for the
 // entities it knows (entity_known), they reach it under the entity's id and go when the
@@ -16,7 +17,7 @@ Tag :: struct {
 }
 
 @(private = "file")
-TAG_KINDS :: game.Game_Kinds {
+TAG_KINDS :: protocol.Game_Kinds {
 	states = {{name = "tags.tag", value = Tag, key = .Entity, max_records = 64}},
 }
 
@@ -36,7 +37,7 @@ test_game_records_keyed_by_entity :: proc(t: ^testing.T) {
 					id := entity_id(s.home, h)
 					if !entity_known(&c, id) {continue}
 					tag := Tag{"Grimtooth", true}
-					game_put(s, &c, &tag, game.key_entity(id))
+					game_put(s, &c, &tag, protocol.key_entity(id))
 				}
 			}
 		},
@@ -55,14 +56,14 @@ test_game_records_keyed_by_entity :: proc(t: ^testing.T) {
 	near := entity_spawn(s.home, s.registry.engine.sheep, {3.5, 0, 0.5}, false)
 	far := entity_spawn(s.home, s.registry.engine.sheep, {200.5, 0, 0.5}, false)
 	harness_step(&sess.h, 10)
-	tag := mirror_game_record(&sess.mirror, Tag, game.key_entity(entity_id(s.home, near)))
+	tag := mirror_game_record(&sess.mirror, Tag, protocol.key_entity(entity_id(s.home, near)))
 	if testing.expect(t, tag != nil, "the near sheep's tag never came") {
 		testing.expect_value(t, tag.name, "Grimtooth")
 		testing.expect(t, tag.elite)
 	}
 	testing.expect(
 		t,
-		mirror_game_record(&sess.mirror, Tag, game.key_entity(entity_id(s.home, far))) == nil,
+		mirror_game_record(&sess.mirror, Tag, protocol.key_entity(entity_id(s.home, far))) == nil,
 		"a tag for an entity the player does not know",
 	)
 	id := entity_id(s.home, near)
@@ -70,7 +71,7 @@ test_game_records_keyed_by_entity :: proc(t: ^testing.T) {
 	harness_step(&sess.h, 4)
 	testing.expect(
 		t,
-		mirror_game_record(&sess.mirror, Tag, game.key_entity(id)) == nil,
+		mirror_game_record(&sess.mirror, Tag, protocol.key_entity(id)) == nil,
 		"the tag stayed",
 	)
 }
@@ -87,8 +88,8 @@ test_entities_told_nearest_first :: proc(t: ^testing.T) {
 	s := &h.srv
 	w := s.home
 	sheep := test_reg().engine.sheep
-	for i in 0 ..< game.MAX_KNOWN_ENTITIES {
-		a := f64(i) / game.MAX_KNOWN_ENTITIES * 6.28
+	for i in 0 ..< protocol.MAX_KNOWN_ENTITIES {
+		a := f64(i) / protocol.MAX_KNOWN_ENTITIES * 6.28
 		entity_spawn(w, sheep, {50 * base.cos(a), 0, 50 * base.sin(a)}, false)
 	}
 	near: [10]u32
@@ -98,13 +99,18 @@ test_entities_told_nearest_first :: proc(t: ^testing.T) {
 	c := new(Client)
 	defer free(c)
 	c.state, c.world = .Playing, w
-	game.sender_init(&c.tx, &s.schema)
-	defer game.sender_destroy(&c.tx)
+	protocol.sender_init(&c.tx, &s.schema)
+	defer protocol.sender_destroy(&c.tx)
 	entities_put(s, c)
 	for id in near {
 		testing.expectf(
 			t,
-			game.replica_get(&c.tx.cur, int(game.State_Kind.Entity), game.key_entity(id)) != nil,
+			protocol.replica_get(
+				&c.tx.cur,
+				int(protocol.State_Kind.Entity),
+				protocol.key_entity(id),
+			) !=
+			nil,
 			"the entity %d beside it was not told",
 			id,
 		)

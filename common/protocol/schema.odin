@@ -1,6 +1,7 @@
-package game
+package protocol
 
 import "base:runtime"
+import "common:game"
 import "core:fmt"
 import "core:mem"
 import "core:reflect"
@@ -55,25 +56,16 @@ State_Kind_Info :: struct {
 	max_records:   int, // at most this many records at a time (singletons: 1)
 	version:       u8, // bumped when a value keeps its type but changes meaning
 	predicted:     Predicted,
-	check:         proc(reg: ^Registry, value: rawptr) -> bool, // what the types cannot say; nil if none
+	check:         proc(reg: ^game.Registry, value: rawptr) -> bool, // what the types cannot say; nil if none
 }
 
 Event_Kind_Info :: struct {
 	name:    string,
 	value:   typeid,
 	version: u8,
-	check:   proc(reg: ^Registry, value: rawptr) -> bool,
+	check:   proc(reg: ^game.Registry, value: rawptr) -> bool,
 }
 
-// Game_Info: what names a game (docs/games.md), declared once in its shared package
-// and taken by both of its parts (core.Game and engine.Game hold it by `using`): its
-// id (its folder's name in games/, what Welcome names), the name players read and a
-// line saying what it is, both in plain English (the launcher's list of games).
-Game_Info :: struct {
-	id:          string,
-	name:        string,
-	description: string,
-}
 
 // Game_Kinds: the state and event kinds a game replicates besides the engine's
 // (docs/games.md), declared as data in its shared package. A kind's name starts with
@@ -150,7 +142,7 @@ schema_error_text :: proc(e: Schema_Error) -> string {
 schema_make :: proc(
 	states: []State_Kind_Info,
 	events: []Event_Kind_Info,
-	game := Game_Kinds{},
+	kinds := Game_Kinds{},
 	allocator := context.allocator,
 ) -> (
 	s: Schema,
@@ -160,7 +152,7 @@ schema_make :: proc(
 	s.engine = len(states) + len(events)
 	s.kinds = make(
 		[]Schema_Kind,
-		s.engine + len(game.states) + len(game.events) + len(game.requests),
+		s.engine + len(kinds.states) + len(kinds.events) + len(kinds.requests),
 		allocator,
 	)
 	next := 0
@@ -196,9 +188,9 @@ schema_make :: proc(
 	}
 	err = add_states(&s, &next, states)
 	if err.reason == "" {err = add_events(&s, &next, events)}
-	if err.reason == "" {err = add_states(&s, &next, game.states)}
-	if err.reason == "" {err = add_events(&s, &next, game.events)}
-	if err.reason == "" {err = add_events(&s, &next, game.requests, requests = true)}
+	if err.reason == "" {err = add_states(&s, &next, kinds.states)}
+	if err.reason == "" {err = add_events(&s, &next, kinds.events)}
+	if err.reason == "" {err = add_events(&s, &next, kinds.requests, requests = true)}
 	if err.reason != "" {
 		schema_destroy(&s)
 		return {}, err
@@ -224,9 +216,9 @@ schema_make :: proc(
 
 @(private = "file")
 text_hash :: proc(text: string) -> u64 {
-	h := hasher_make()
-	hasher_bytes(&h, transmute([]u8)text)
-	return hasher_finish(h)
+	h := game.hasher_make()
+	game.hasher_bytes(&h, transmute([]u8)text)
+	return game.hasher_finish(h)
 }
 
 // game_kind: the id of the game's kind (one of kinds[engine:]) whose value type is value.

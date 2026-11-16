@@ -10,6 +10,7 @@ import "core:time"
 import "common:base"
 import "common:game"
 import "common:island"
+import "common:protocol"
 
 // The server's timed scenes (`build bench budgets`). A test
 // never asserts a time: the tests call these for what the scene does (a save
@@ -964,8 +965,8 @@ budget_gliders :: proc() -> (r: Budget_Gliders, ok: bool) {
 	defer free(c)
 	c.state, c.world = .Playing, w
 	c.player.position = {0, 61, 0}
-	game.sender_init(&c.tx, &s.schema)
-	defer game.sender_destroy(&c.tx)
+	protocol.sender_init(&c.tx, &s.schema)
+	defer protocol.sender_destroy(&c.tx)
 	total, put: i64
 	bytes: int
 	for _ in 0 ..< BUDGET_GLIDER_TICKS {
@@ -983,17 +984,17 @@ budget_gliders :: proc() -> (r: Budget_Gliders, ok: bool) {
 		r.worst_us = max(r.worst_us, took)
 		start = base.thread_cpu_us()
 		entities_put(s, c)
-		out := make([dynamic]game.Outgoing, context.temp_allocator)
-		game.sender_flush(&c.tx, u32(s.tick), {0, 61, 0}, &out)
+		out := make([dynamic]protocol.Outgoing, context.temp_allocator)
+		protocol.sender_flush(&c.tx, u32(s.tick), {0, 61, 0}, &out)
 		put += base.thread_cpu_us() - start
 		for o in out {bytes += len(o.data)}
-		game.sender_ack(&c.tx, u32(s.tick))
+		protocol.sender_ack(&c.tx, u32(s.tick))
 		budget_world_tick_after(s, w)
 	}
 	r.mean_us = f64(total) / BUDGET_GLIDER_TICKS
 	r.put_us = f64(put) / BUDGET_GLIDER_TICKS
 	r.bytes = f64(bytes) / BUDGET_GLIDER_TICKS
-	r.known = len(c.tx.sent.tables[int(game.State_Kind.Entity)].records)
+	r.known = len(c.tx.sent.tables[int(protocol.State_Kind.Entity)].records)
 	return r, true
 }
 

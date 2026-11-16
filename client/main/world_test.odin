@@ -10,6 +10,7 @@ import "client:screen"
 import "client:testkit"
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Chunks at the top and bottom of the world are meshed once their neighbours
 // inside the world have arrived (outside counts as air above, bedrock below).
@@ -156,7 +157,7 @@ settled_world :: proc(t: ^testing.T, w: ^engine.World, fill: game.Block, arena: 
 	for z in i32(-1) ..= 1 {
 		for y in i32(-1) ..= 1 {
 			for x in i32(-1) ..= 1 {
-				m := game.Chunk_Message {
+				m := protocol.Chunk_Message {
 					pos        = {x, y, z},
 					uniform    = fill,
 					is_uniform = true,
@@ -254,7 +255,7 @@ test_opens_hole :: proc(t: ^testing.T) {
 add_columns :: proc(w: ^engine.World, r: i32) {
 	for z in -r ..= r {
 		for x in -r ..= r {
-			c := game.Column {
+			c := protocol.Column {
 				pos = {x, z},
 			}
 			for &h in c.heights {h = 0}
@@ -381,7 +382,7 @@ test_box_model_entity :: proc(t: ^testing.T) {
 	reg.kinds[int(cube) - 1].model = .Box
 	reg.kinds[int(cube) - 1].color = {200, 40, 40}
 	s.reg = &reg
-	s.entities, _ = base.map_make_fixed(map[u32]engine.Other_Entity, game.MAX_KNOWN_ENTITIES)
+	s.entities, _ = base.map_make_fixed(map[u32]engine.Other_Entity, protocol.MAX_KNOWN_ENTITIES)
 	defer delete(s.entities)
 	s.puffs = make([dynamic]engine.Puff, 0, engine.MAX_PUFFS)
 	defer delete(s.puffs)

@@ -1,12 +1,12 @@
 package planet
 
 import "common:base"
-import "common:game"
+import "common:starmap"
 import "core:testing"
 
 @(private = "file")
-address_n :: proc(n: u64) -> game.Address {
-	return game.address_derive(n * 7919 + 13)
+address_n :: proc(n: u64) -> starmap.Address {
+	return starmap.address_derive(n * 7919 + 13)
 }
 
 @(private = "file")
@@ -166,7 +166,7 @@ relief_world_check :: proc(t: ^testing.T, n: int) {
 @(test)
 test_relief_for_world_home :: proc(t: ^testing.T) {
 	seed := u64(77)
-	home := game.address_derive(seed)
+	home := starmap.address_derive(seed)
 	testing.expect(t, relief_is_home(home, seed))
 	testing.expect(t, !relief_is_home(address_n(3), seed))
 	// With no Earth file the home world is generated like any other.

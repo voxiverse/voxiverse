@@ -9,7 +9,9 @@ import "core:strings"
 import "core:mem/virtual"
 
 import "client:ui"
+import "common:access"
 import "common:game"
+import "common:protocol"
 
 // The player's account: a key pair made on first launch and kept beside the
 // settings (account.key: the private key's 32 bytes in hex). Whoever has
@@ -22,7 +24,7 @@ ACCOUNT_FILE :: "account.key"
 account_load :: proc(app: ^App) {
 	settings, ok := settings_path()
 	if !ok {
-		app.account = game.account_key_make()
+		app.account = access.account_key_make()
 		return
 	}
 	path :=
@@ -35,16 +37,16 @@ account_load :: proc(app: ^App) {
 			transmute([]u8)strings.trim_space(string(data)),
 			context.temp_allocator,
 		)
-		if decoded && game.account_key_set(&app.account, seed) {return}
+		if decoded && access.account_key_set(&app.account, seed) {return}
 		log.errorf(
 			"account file not understood, not replaced path=%s (a new account for this run)",
 			path,
 		)
-		app.account = game.account_key_make()
+		app.account = access.account_key_make()
 		return
 	}
-	app.account = game.account_key_make()
-	seed := game.account_key_seed(&app.account)
+	app.account = access.account_key_make()
+	seed := access.account_key_seed(&app.account)
 	text := hex.encode(seed[:], context.temp_allocator)
 	os.make_directory_all(filepath.dir(settings))
 	if err := os.write_entire_file(path, text); err != nil {
@@ -53,7 +55,7 @@ account_load :: proc(app: ^App) {
 		log.infof(
 			"account made path=%s account=%s",
 			path,
-			game.account_text(app.account.account)[:16],
+			access.account_text(app.account.account)[:16],
 		)
 	}
 }
@@ -97,7 +99,7 @@ characters_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	}
 	if chosen != "" {
 		s.config.name = strings.clone(chosen, virtual.arena_allocator(&s.arena))
-		send_message(s, game.Choose{chosen})
+		send_message(s, protocol.Choose{chosen})
 		s.state = .Connecting
 		clear(&app.new_character)
 	}

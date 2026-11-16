@@ -7,6 +7,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "server:path"
 
 // Entities on the server: sheep and rockets. What each kind is lies in
@@ -305,7 +306,7 @@ explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id, by: May
 		c := &s.clients[i]
 		d := c.player.position - center
 		if d.x * d.x + d.z * d.z < 160 * 160 {
-			blast := game.Explosion{center, f32(radius)}
+			blast := protocol.Explosion{center, f32(radius)}
 			event_send(s, c, .Explosion, &blast)
 		}
 	}
@@ -763,18 +764,18 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 		{none = {.Player}},
 		&around,
 	)
-	if len(around) > game.MAX_KNOWN_ENTITIES {nearest_first(w, c.player.position, around[:])}
-	for id in around[:min(len(around), game.MAX_KNOWN_ENTITIES)] {
+	if len(around) > protocol.MAX_KNOWN_ENTITIES {nearest_first(w, c.player.position, around[:])}
+	for id in around[:min(len(around), protocol.MAX_KNOWN_ENTITIES)] {
 		h, _ := entity_find(w, u32(id))
 		if h == 0 {continue}
-		key := game.key_entity(u32(id))
-		record := game.Entity_Record{entity_kind(w, h), entity_stack(w, h)^, 0, 0}
+		key := protocol.key_entity(u32(id))
+		record := protocol.Entity_Record{entity_kind(w, h), entity_stack(w, h)^, 0, 0}
 		if hp := entity_health(w, h); hp != nil {
 			record.health = u16(clamp(hp.health, 0, 65535))
 			record.max_health = u16(clamp(hp.max, 0, 65535))
 		}
 		state_put(s, c, .Entity, &record, key)
-		motion := game.Entity_Motion {
+		motion := protocol.Entity_Motion {
 			entity_pos(w, h),
 			entity_yaw(w, h),
 			entity_pitch(w, h),
@@ -809,7 +810,12 @@ nearest_first :: proc(w: ^World, p: [3]f64, ids: []game.Entity_Id) {
 entity_known :: proc(c: ^Client, id: u32) -> bool {
 	return(
 		c.tx.schema != nil &&
-		game.replica_get(&c.tx.sent, int(game.State_Kind.Entity), game.key_entity(id)) != nil \
+		protocol.replica_get(
+			&c.tx.sent,
+			int(protocol.State_Kind.Entity),
+			protocol.key_entity(id),
+		) !=
+			nil \
 	)
 }
 
@@ -831,7 +837,7 @@ entity_retire :: proc(w: ^World, h: game.Entity_Handle, died: bool) {
 		for i in entity_watchers(w, entity_pos(w, h)) {
 			c := &s.clients[i]
 			if entity_known(c, id) {
-				death := game.Entity_Died{id}
+				death := protocol.Entity_Died{id}
 				event_send(s, c, .Entity_Died, &death)
 			}
 		}
@@ -847,7 +853,7 @@ entity_hurt_shown :: proc(w: ^World, id: u32) {
 	for i in entity_watchers(w, entity_pos(w, h)) {
 		c := &s.clients[i]
 		if entity_known(c, id) {
-			hurt := game.Entity_Hurt{id}
+			hurt := protocol.Entity_Hurt{id}
 			event_send(s, c, .Entity_Hurt, &hurt)
 		}
 	}
@@ -1609,7 +1615,7 @@ world_entity_kill :: proc(w: ^World, h: game.Entity_Handle, cause: u8, act: Act)
 	entity_kill(ew, h, cause, act)
 	if len(ew.deaths) == before {return}
 	s := w.server
-	died := game.Entity_Died{u32(ew.deaths[before].id)}
+	died := protocol.Entity_Died{u32(ew.deaths[before].id)}
 	for &c in s.clients {
 		if c.state == .Playing && c.world == w && entity_known(&c, died.entity) {
 			event_send(s, &c, .Entity_Died, &died)

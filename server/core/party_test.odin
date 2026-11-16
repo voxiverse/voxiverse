@@ -9,6 +9,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "common:telemetry"
 
 // The LAN party's hardening. Six and eight scripted bots play survival
@@ -91,7 +92,7 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 		c.move = {}
 		b.dead_for += 1
 		if b.dead_for == 12 + int(roll(b) % 20) {
-			net_send(c, game.Respawn{})
+			net_send(c, protocol.Respawn{})
 			b.dead_for = 0
 		}
 		return
@@ -107,7 +108,7 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 		b.reported = true
 		net_send(
 			c,
-			game.Telemetry_Report {
+			protocol.Telemetry_Report {
 				count = 3,
 				entries = {
 					{u8(telemetry.Kind.Client_Info), "linux", {3, 90, 1500}},
@@ -124,7 +125,7 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 	} else if tick % 1800 == 100 {
 		net_send(
 			c,
-			game.Telemetry_Report {
+			protocol.Telemetry_Report {
 				count = 1,
 				entries = {
 					{u8(telemetry.Kind.Client_Frames), "", {6000, 9000, 14000}},
@@ -142,8 +143,8 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 	// Jumps: now and then a run of presses.
 	if tick >= b.jump_until && roll(b) % 60 == 0 {b.jump_until = tick + 10}
 	if tick < b.jump_until && tick % 4 < 2 {c.buttons += {.Jump}}
-	if operator && tick % 1200 == 300 {net_send(c, game.Command{"gamemode creative"})}
-	if operator && tick % 1200 == 900 {net_send(c, game.Command{"gamemode survival"})}
+	if operator && tick % 1200 == 300 {net_send(c, protocol.Command{"gamemode creative"})}
+	if operator && tick % 1200 == 900 {net_send(c, protocol.Command{"gamemode survival"})}
 	// Walk: a direction for a while, strafing and stopping at random.
 	if tick >= b.turn_at {
 		b.turn_at = tick + 20 + int(roll(b) % 60)
@@ -158,7 +159,7 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 		b.inv_seq += 1
 		net_send(
 			c,
-			game.Inventory_Request {
+			protocol.Inventory_Request {
 				b.inv_seq,
 				{
 					kind = .Select,
@@ -187,15 +188,15 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 		return
 	}
 	if selected == 3 {
-		if tick % 150 == int(roll(b) % 150) {net_send(c, game.Fire{c.seq, yaw, pitch})}
+		if tick % 150 == int(roll(b) % 150) {net_send(c, protocol.Fire{c.seq, yaw, pitch})}
 		return
 	}
 	if c.inventory.slots[selected].ammo == 0 {
-		net_send(c, game.Reload{})
+		net_send(c, protocol.Reload{})
 	} else {
-		net_send(c, game.Shoot{c.seq, u8(selected), true, yaw, pitch})
+		net_send(c, protocol.Shoot{c.seq, u8(selected), true, yaw, pitch})
 	}
-	if roll(b) % 400 == 0 {net_send(c, game.Reload{})}
+	if roll(b) % 400 == 0 {net_send(c, protocol.Reload{})}
 }
 
 // party_budget: the most bytes a tick a bot may be sent downstream: the

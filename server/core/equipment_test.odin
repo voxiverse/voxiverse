@@ -5,6 +5,7 @@ import "core:path/filepath"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // The exit check, two players over UDP: armor goes on through the
 // inventory's own actions (only into the slot it fits; swapping; quick
@@ -57,8 +58,8 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 	for id, name in bob.others {if name == "alice" {alice_id = id}}
 
 	// The cap onto the head: taken from the catalog, put on.
-	net_send(alice, game.Inventory_Request{1, {.Take, game.CURSOR_SLOT, int(cap_)}})
-	net_send(alice, game.Inventory_Request{2, {.Click, head, 0}})
+	net_send(alice, protocol.Inventory_Request{1, {.Take, game.CURSOR_SLOT, int(cap_)}})
+	net_send(alice, protocol.Inventory_Request{2, {.Click, head, 0}})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return cs[0].inv_acked == 2
 	})
@@ -70,8 +71,8 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, game.stack_empty(alice.inventory.cursor))
 
 	// Boots into the head slot: refused (the cursor keeps them); into the feet: on.
-	net_send(alice, game.Inventory_Request{3, {.Take, game.CURSOR_SLOT, int(boots)}})
-	net_send(alice, game.Inventory_Request{4, {.Click, head, 0}})
+	net_send(alice, protocol.Inventory_Request{3, {.Take, game.CURSOR_SLOT, int(boots)}})
+	net_send(alice, protocol.Inventory_Request{4, {.Click, head, 0}})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 4})
 	testing.expect(
 		t,
@@ -80,7 +81,7 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 		alice.inventory.equipment[.Head].item == cap_,
 		"the wrong slot took them",
 	)
-	net_send(alice, game.Inventory_Request{5, {.Click, feet, 0}})
+	net_send(alice, protocol.Inventory_Request{5, {.Click, feet, 0}})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 5})
 	testing.expect(t, ok && alice.inventory.equipment[.Feet].item == boots)
 
@@ -96,13 +97,13 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, bob.worn[alice_id], want)
 
 	// Shift-click takes a piece off, and puts it on again.
-	net_send(alice, game.Inventory_Request{6, {.Quick_Move, head, 0}}) // off: into the inventory
+	net_send(alice, protocol.Inventory_Request{6, {.Quick_Move, head, 0}}) // off: into the inventory
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 6})
 	testing.expect(t, ok && game.stack_empty(alice.inventory.equipment[.Head]))
 	testing.expect_value(t, game.inventory_count(&alice.inventory, cap_), 1)
 	slot := -1
 	for st, i in alice.inventory.slots {if st.item == cap_ {slot = i}}
-	net_send(alice, game.Inventory_Request{7, {.Quick_Move, slot, 0}}) // on again
+	net_send(alice, protocol.Inventory_Request{7, {.Quick_Move, slot, 0}}) // on again
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 7})
 	testing.expect(t, ok && alice.inventory.equipment[.Head].item == cap_)
 

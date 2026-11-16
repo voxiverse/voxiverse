@@ -11,6 +11,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 @(private = "file")
 config :: proc(dir: string) -> Config {
@@ -93,12 +94,12 @@ record_at :: proc(srv: ^Server, pos: game.Block_Pos) -> Block_Data {
 @(private = "file")
 request :: proc(a: ^Net_Client, n: ^u32, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
 	n^ += 1
-	net_send(a, game.Inventory_Request{n^, {kind, slot, arg}})
+	net_send(a, protocol.Inventory_Request{n^, {kind, slot, arg}})
 }
 
 @(private = "file")
 open_chest :: proc(t: ^testing.T, srv: ^Server, a: ^Net_Client, pos: game.Block_Pos) -> bool {
-	net_send(a, game.Use_Block{pos, 0})
+	net_send(a, protocol.Use_Block{pos, 0})
 	return net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return cs[0].inventory.chest_open})
 }
 
@@ -123,7 +124,7 @@ test_chest_keeps_and_spills :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok, "never landed") {return}
 	pos := beside(srv, "a")
 	// Not a chest (nothing there): it does not open.
-	net_send(a, game.Use_Block{pos, 0})
+	net_send(a, protocol.Use_Block{pos, 0})
 	pause(t, {a}, 0.3)
 	testing.expect(t, !a.inventory.chest_open, "air opened as a chest")
 	put_block(srv, pos, .Chest)

@@ -10,9 +10,11 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // The uploader: what a server (a player's singleplayer world, a dedicated
 // server) does to get its event log to a collector. Every interval, and a
@@ -32,7 +34,7 @@ CONNECT_TIMEOUT :: 5 * time.Second
 Uploader :: struct {
 	dir:       string,
 	server:    net.Endpoint,
-	key:       game.Account_Key,
+	key:       access.Account_Key,
 	interval:  time.Duration,
 	thread:    ^thread.Thread,
 	stop:      bool, // (atomic)
@@ -52,7 +54,7 @@ uploader_open :: proc(
 	u: ^Uploader,
 	dir: string,
 	server: net.Endpoint,
-	key: game.Account_Key,
+	key: access.Account_Key,
 	interval := 30 * time.Second,
 	sim: ^netcode.Simnet = nil,
 ) {
@@ -69,7 +71,7 @@ uploader_start :: proc(
 	u: ^Uploader,
 	dir: string,
 	server: net.Endpoint,
-	key: game.Account_Key,
+	key: access.Account_Key,
 	interval := 30 * time.Second,
 ) {
 	uploader_open(u, dir, server, key, interval)
@@ -187,7 +189,7 @@ upload_pass :: proc(u: ^Uploader) {
 	for path in reports {
 		data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 		if err != nil {continue}
-		text := string(data[:min(len(data), game.MAX_BATCH_TEXT)])
+		text := string(data[:min(len(data), protocol.MAX_BATCH_TEXT)])
 		if !send_batch(u, {.Report, "", 0, text}, "", u64(len(text))) {return}
 		os.remove(path)
 	}
@@ -214,28 +216,28 @@ connect :: proc(u: ^Uploader) -> bool {
 		}
 		uploader_wait(u)
 	}
-	up_send(u, game.Hello{game.PROTOCOL_VERSION, u.key.account, "", 0, 0, nil})
+	up_send(u, protocol.Hello{protocol.PROTOCOL_VERSION, u.key.account, "", 0, 0, nil})
 	msg, ok := wait_message(u)
-	challenge, is_challenge := msg.(game.Challenge)
+	challenge, is_challenge := msg.(protocol.Challenge)
 	if !ok || !is_challenge {
 		netcode.link_close(&u.link, "no challenge")
 		return false
 	}
-	up_send(u, game.Proof{game.account_sign(&u.key, challenge.nonce)})
+	up_send(u, protocol.Proof{access.account_sign(&u.key, challenge.nonce)})
 	return true
 }
 
 @(private)
-up_send :: proc(u: ^Uploader, m: game.Client_Message) {
+up_send :: proc(u: ^Uploader, m: protocol.Client_Message) {
 	clear(&u.writer.buf)
-	game.encode_client(&u.writer, m)
+	protocol.encode_client(&u.writer, m)
 	netcode.link_send(&u.link, u.writer.buf[:], true)
 	netcode.link_flush(&u.link, uploader_now(u))
 }
 
 // wait_message: the next message from the collector, within the timeout.
 @(private)
-wait_message :: proc(u: ^Uploader) -> (m: game.Server_Message, ok: bool) {
+wait_message :: proc(u: ^Uploader) -> (m: protocol.Server_Message, ok: bool) {
 	start := uploader_now(u)
 	got := make([dynamic][]u8, context.temp_allocator)
 	for time.tick_diff(start, uploader_now(u)) < ACK_TIMEOUT {
@@ -246,10 +248,13 @@ wait_message :: proc(u: ^Uploader) -> (m: game.Server_Message, ok: bool) {
 		netcode.link_receive(&u.link, &got)
 		for data in got {
 			defer netcode.link_free(&u.link, data)
-			if msg, decoded := game.decode_server(data, u.scratch); decoded && !ok {
+			if msg, decoded := protocol.decode_server(data, u.scratch); decoded && !ok {
 				m, ok = msg, true
-				if ack, is_ack := m.(game.Telemetry_Ack); is_ack { 	// (its day is a view into the packet)
-					m = game.Telemetry_Ack{strings.clone(ack.day, context.temp_allocator), ack.end}
+				if ack, is_ack := m.(protocol.Telemetry_Ack); is_ack { 	// (its day is a view into the packet)
+					m = protocol.Telemetry_Ack {
+						strings.clone(ack.day, context.temp_allocator),
+						ack.end,
+					}
 				}
 			}
 		}
@@ -261,12 +266,12 @@ wait_message :: proc(u: ^Uploader) -> (m: game.Server_Message, ok: bool) {
 }
 
 @(private)
-send_batch :: proc(u: ^Uploader, batch: game.Telemetry_Batch, day: string, end: u64) -> bool {
+send_batch :: proc(u: ^Uploader, batch: protocol.Telemetry_Batch, day: string, end: u64) -> bool {
 	up_send(u, batch)
 	for {
 		m, ok := wait_message(u)
 		if !ok {return false}
-		if ack, is_ack := m.(game.Telemetry_Ack); is_ack && ack.day == day && ack.end == end {
+		if ack, is_ack := m.(protocol.Telemetry_Ack); is_ack && ack.day == day && ack.end == end {
 			sync.mutex_lock(&u.mutex)
 			u.acked += 1
 			sync.mutex_unlock(&u.mutex)

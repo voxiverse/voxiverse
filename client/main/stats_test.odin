@@ -7,7 +7,7 @@ import "client:engine"
 import "client:menu"
 import "client:testkit"
 import "client:ui"
-import "common:game"
+import "common:protocol"
 import "common:telemetry"
 
 // The tree of counters: groups with totals, closed until opened (open all
@@ -55,14 +55,14 @@ test_stats_numbers_by_unit :: proc(t: ^testing.T) {
 
 // received: what the client sent to its server (decoded).
 @(private = "file")
-received :: proc(f: ^Overlay_Fixture) -> []game.Client_Message {
-	out := make([dynamic]game.Client_Message, context.temp_allocator)
-	packets := make([dynamic]game.Packet, context.temp_allocator)
-	server := game.Endpoint{&f.pipe, .Server}
-	game.receive(server, &packets)
+received :: proc(f: ^Overlay_Fixture) -> []protocol.Client_Message {
+	out := make([dynamic]protocol.Client_Message, context.temp_allocator)
+	packets := make([dynamic]protocol.Packet, context.temp_allocator)
+	server := protocol.Endpoint{&f.pipe, .Server}
+	protocol.receive(server, &packets)
 	for p in packets {
-		defer game.packet_free(server, p)
-		if m, ok := game.decode_client(p, testkit.test_reg()); ok {append(&out, m)}
+		defer protocol.packet_free(server, p)
+		if m, ok := protocol.decode_client(p, testkit.test_reg()); ok {append(&out, m)}
 	}
 	return out[:]
 }
@@ -81,7 +81,7 @@ test_stats_overlay :: proc(t: ^testing.T) {
 	menu.stats_open(f.app)
 	msgs := received(&f)
 	testing.expect_value(t, len(msgs), 1)
-	if req, is_req := msgs[0].(game.Stats_Request);
+	if req, is_req := msgs[0].(protocol.Stats_Request);
 	   testing.expect(t, is_req) {testing.expect_value(t, req.filter, "")}
 	engine.stats_data_take(
 		&f.s.player_stats,
@@ -106,7 +106,7 @@ test_stats_overlay :: proc(t: ^testing.T) {
 	overlay_frame(&f, {})
 	msgs = received(&f)
 	if len(msgs) == 1 {
-		req, is_req := msgs[0].(game.Stats_Request)
+		req, is_req := msgs[0].(protocol.Stats_Request)
 		testing.expect(t, is_req && req.filter == "san", "the search was not asked for")
 	} else {
 		testing.expect_value(t, len(msgs), 1)
@@ -139,9 +139,9 @@ test_client_reports :: proc(t: ^testing.T) {
 	testing.expect(t, found, "no overlay report")
 	engine.telemetry_send(f.s, &f.app.reporter)
 	msgs := received(&f)
-	report: game.Telemetry_Report
+	report: protocol.Telemetry_Report
 	for m in msgs {
-		if r, ok := m.(game.Telemetry_Report); ok {report = r}
+		if r, ok := m.(protocol.Telemetry_Report); ok {report = r}
 	}
 	testing.expect(t, report.count >= 2, "the report did not arrive")
 	if report.count >= 2 {

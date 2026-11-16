@@ -6,7 +6,7 @@ import "client:engine"
 import planet "client:planet"
 import "client:starfield"
 import "client:ui"
-import "common:game"
+import "common:starmap"
 
 // Ignite: the big bang after
 // the creation screen's button. The galaxy view collapses to a point, flashes
@@ -43,7 +43,7 @@ ui_cue :: proc(app: ^engine.App, name: string) {
 	append(&app.cues, name)
 }
 
-ignite_start :: proc(app: ^engine.App, stars: []game.Star, seed: u64) {
+ignite_start :: proc(app: ^engine.App, stars: []starmap.Star, seed: u64) {
 	i := &app.ignite
 	i^ = {
 		active = true,
@@ -189,7 +189,7 @@ ignite_draw :: proc(ctx: ^ui.Context, i: ^engine.Ignite) {
 			ui.fill_rect(
 				ctx,
 				{p.x - size / 2, p.y - size / 2, size, size},
-				ui.Color(game.star_color(s)),
+				ui.Color(starmap.star_color(s)),
 			)
 		}
 		size := 2 + 6 * f.point_alpha

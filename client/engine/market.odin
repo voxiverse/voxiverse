@@ -1,6 +1,6 @@
 package engine
 
-import "common:game"
+import "common:protocol"
 
 // The market as the client knows it (the server is the authority: docs/world.md, the economy).
 // A Market_View from the server says the player stands in a town; one with a reason says they
@@ -9,11 +9,11 @@ import "common:game"
 // Market_State: the last view and what the market screen has chosen.
 Market_State :: struct {
 	here:     bool, // standing in a town: a view is held
-	town:     [game.MAX_MARKET_NAME]u8,
+	town:     [protocol.MAX_MARKET_NAME]u8,
 	town_len: int,
 	cash:     f64,
-	goods:    [game.MARKET_GOODS]game.Market_Good,
-	refusal:  game.Market_Reason, // why the last trade was refused (.None: it was not)
+	goods:    [protocol.MARKET_GOODS]protocol.Market_Good,
+	refusal:  protocol.Market_Reason, // why the last trade was refused (.None: it was not)
 	views:    int, // views taken (a test counts them)
 	good:     int, // the good selected on the screen
 	quantity: f32, // the units a buy or sell asks for
@@ -29,7 +29,7 @@ market_town :: proc(m: ^Market_State) -> string {return string(m.town[:m.town_le
 
 // market_take keeps a Market_View: a view replaces what is held; Away leaves the town; any
 // other reason is a refusal of the last trade and changes nothing else.
-market_take :: proc(m: ^Market_State, v: game.Market_View) {
+market_take :: proc(m: ^Market_State, v: protocol.Market_View) {
 	m.views += 1
 	m.ask = false
 	switch v.reason {
@@ -48,7 +48,7 @@ market_take :: proc(m: ^Market_State, v: game.Market_View) {
 
 // market_trade asks the server to buy or sell the chosen quantity of good (a Market_Trade).
 market_trade :: proc(s: ^Session, m: ^Market_State, good: int, sell: bool) {
-	if !m.here || good < 0 || good >= game.MARKET_GOODS {return}
+	if !m.here || good < 0 || good >= protocol.MARKET_GOODS {return}
 	m.ask = true
-	send_message(s, game.Market_Trade{good = u8(good), sell = sell, quantity = m.quantity})
+	send_message(s, protocol.Market_Trade{good = u8(good), sell = sell, quantity = m.quantity})
 }

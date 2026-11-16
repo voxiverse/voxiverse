@@ -10,7 +10,7 @@ import "core:testing"
 
 import "client:audio"
 import "client:testkit"
-import "common:game"
+import "common:protocol"
 import "common:worldgen"
 
 // The music director, on a clock and seed of its own: no mixer, the
@@ -300,7 +300,7 @@ test_tracks_fit_the_place :: proc(t: ^testing.T) {
 	}
 	// A world without biomes: only pieces tagged for any place.
 	d.last = -1
-	pick := director_pick(&d, {biome = game.NO_BIOME, time_of_day = 0.9, world_home = true})
+	pick := director_pick(&d, {biome = protocol.NO_BIOME, time_of_day = 0.9, world_home = true})
 	testing.expect_value(t, pick, 2)
 	free_all(context.temp_allocator)
 }

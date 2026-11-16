@@ -17,10 +17,12 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:intervention"
 import "common:planet"
+import "common:starmap"
 import "common:worldgen"
 
 // Saving: a universe is a directory: universe.cfg (format, seed, the game it
@@ -59,7 +61,7 @@ LEGACY_PLAYER :: "Player"
 Store :: struct {
 	dir:            string, // the universe's ("" = not saved)
 	players:        map[string]Player_Record, // by name: online, or not yet written (player_data.odin)
-	characters:     map[string]game.Account, // every character's account, by name
+	characters:     map[string]access.Account, // every character's account, by name
 	writer:         game.Writer,
 	last_save:      u64, // the tick of the last save
 	// The disk (save_tx.odin): the disk, the save worker, and the save in flight.
@@ -164,7 +166,7 @@ world_dir_open :: proc(w: ^World) -> bool {
 	if s.store.dir == "" {return true}
 	w.dir = strings.clone(
 		filepath.join(
-			{s.store.dir, WORLDS_DIR, game.address_dir(w.address)},
+			{s.store.dir, WORLDS_DIR, starmap.address_dir(w.address)},
 			context.temp_allocator,
 		) or_else "",
 	)
@@ -183,7 +185,6 @@ world_dir_open :: proc(w: ^World) -> bool {
 	}
 	return read_world_file(w, string(data), path)
 }
-
 
 store_close :: proc(s: ^Server) {
 	st := &s.store
@@ -460,7 +461,7 @@ write_universe_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "game = %s", s.config.game.id)
-	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
+	fmt.sbprintfln(&b, "home = %s", starmap.address_dir(s.home.address))
 	fmt.sbprintfln(&b, "mode = %s", mode_config_text(s.config.mode))
 	if s.config.mode_changed {fmt.sbprintfln(&b, "mode_changed = true")}
 	fmt.sbprintfln(&b, "kit = %s", kit_text(s.registry, s.kit[:]))
@@ -521,7 +522,7 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				return false
 			}
 		case key == "home":
-			a, ok := game.address_parse(value, {})
+			a, ok := starmap.address_parse(value, {})
 			if !ok {
 				log.errorf(
 					"server universe's home address not understood path=%s home=%q",
@@ -592,7 +593,7 @@ write_world_file :: proc(w: ^World) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&b, "# Voxiverse world (written by the server)")
 	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
-	fmt.sbprintfln(&b, "address = %s", game.address_dir(w.address))
+	fmt.sbprintfln(&b, "address = %s", starmap.address_dir(w.address))
 	fmt.sbprintfln(&b, "seed = %d", w.seed)
 	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[w.generator])
 	fmt.sbprintfln(&b, "time = %.17f", w.clock) // (exact: reloaded, it may not run back)
@@ -882,9 +883,9 @@ load_entities :: proc(w: ^World) {
 
 // home_address: the address of a new universe's home world: Earth's, or one
 // made from the seed (the alien start).
-home_address :: proc(s: ^Server) -> game.Address {
-	if s.config.earth {return game.earth_address()}
-	return game.address_derive(u64(s.config.seed))
+home_address :: proc(s: ^Server) -> starmap.Address {
+	if s.config.earth {return starmap.earth_address()}
+	return starmap.address_derive(u64(s.config.seed))
 }
 
 // interventions.vxi: the world's interventions log (common/intervention), in the save
@@ -1205,7 +1206,7 @@ economy_sync :: proc(w: ^World, observers: [][2]f64) {
 			we.alloc = context.allocator if w.server.config.stepped else runtime.heap_allocator()
 		}
 		we.next = Economy_Job {
-			address       = game.address_hash(w.address),
+			address       = starmap.address_hash(w.address),
 			seed          = u64(w.seed),
 			day           = day,
 			decade        = decade,

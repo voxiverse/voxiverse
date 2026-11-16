@@ -1,5 +1,6 @@
-package game
+package protocol
 
+import "common:game"
 import "core:math"
 
 // Movement authority, both halves:
@@ -39,19 +40,18 @@ INPUT_TARGET_MAX :: 3 // deepest jitter buffer: inputs kept waiting
 INPUT_CATCHUP_AT :: 2 // backlog beyond the target that is worked off
 INPUT_STALL_BACKLOG :: 12 // backlog (inputs) that counts as a real stall
 INPUT_WINDOW :: 32 // ticks the arrival spread is measured over
-TICK_SECONDS :: f32(1) / TICK_RATE
 
 Prediction :: struct {
 	pending:       [PREDICTION_PENDING]Input, // ring, oldest first from head
 	head, count:   int,
 	next_sequence: u32,
-	state:         Player_State, // predicted, after the last input
-	previous:      Player_State, // one tick earlier: render interpolates between them
+	state:         game.Player_State, // predicted, after the last input
+	previous:      game.Player_State, // one tick earlier: render interpolates between them
 	error:         [3]f64, // visual offset left by corrections; decays
 	corrections:   int, // reconciliations that moved the player (statistics)
 }
 
-prediction_init :: proc(p: ^Prediction, state: Player_State) {
+prediction_init :: proc(p: ^Prediction, state: game.Player_State) {
 	p^ = {
 		state         = state,
 		previous      = state,
@@ -63,10 +63,10 @@ prediction_init :: proc(p: ^Prediction, state: Player_State) {
 // message to send.
 prediction_tick :: proc(
 	p: ^Prediction,
-	input: Player_Input,
-	rules: ^Rules,
-	q: Block_Query,
-	mods := MODS_NONE,
+	input: game.Player_Input,
+	rules: ^game.Rules,
+	q: game.Block_Query,
+	mods := game.MODS_NONE,
 ) -> Input {
 	msg := Input {
 		sequence = p.next_sequence,
@@ -80,7 +80,7 @@ prediction_tick :: proc(
 	p.pending[(p.head + p.count) % PREDICTION_PENDING] = msg
 	p.count += 1
 	p.previous = p.state
-	player_step(&p.state, msg.input, rules, q, TICK_SECONDS, mods)
+	game.player_step(&p.state, msg.input, rules, q, game.TICK_SECONDS, mods)
 	return msg
 }
 
@@ -88,9 +88,9 @@ prediction_tick :: proc(
 prediction_reconcile :: proc(
 	p: ^Prediction,
 	u: Own_Player,
-	rules: ^Rules,
-	q: Block_Query,
-	mods := MODS_NONE,
+	rules: ^game.Rules,
+	q: game.Block_Query,
+	mods := game.MODS_NONE,
 	teleported := false, // the state did not come from inputs: no smoothing
 ) {
 	for p.count > 0 && sequence_before_or_at(p.pending[p.head].sequence, u.acked) {
@@ -99,12 +99,12 @@ prediction_reconcile :: proc(
 	}
 	s := u.state
 	for i in 0 ..< p.count {
-		player_step(
+		game.player_step(
 			&s,
 			p.pending[(p.head + i) % PREDICTION_PENDING].input,
 			rules,
 			q,
-			TICK_SECONDS,
+			game.TICK_SECONDS,
 			mods,
 		)
 	}
@@ -263,11 +263,11 @@ PLAYER_FIELD_NAMES := [Player_Field]string {
 }
 
 // player_fields hashes each field of s to 32 bits (hash_value's walk).
-player_fields :: proc(s: Player_State) -> (fields: [Player_Field]u32) {
+player_fields :: proc(s: game.Player_State) -> (fields: [Player_Field]u32) {
 	fold :: proc(v: any) -> u32 {
-		h := hasher_make()
-		hash_value(&h, v)
-		x := hasher_finish(h)
+		h := game.hasher_make()
+		game.hash_value(&h, v)
+		x := game.hasher_finish(h)
 		return u32(x) ~ u32(x >> 32)
 	}
 	s := s
@@ -281,7 +281,7 @@ player_fields :: proc(s: Player_State) -> (fields: [Player_Field]u32) {
 	hook := struct {
 		hooked:   bool,
 		anchor:   [3]f64,
-		block:    Block_Pos,
+		block:    game.Block_Pos,
 		cooldown: u16,
 	}{s.hooked, s.anchor, s.hook_block, s.hook_cooldown}
 	fields[.Hook] = fold(hook)

@@ -7,6 +7,7 @@ import "core:path/filepath"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Hot reload of the packs (development builds, `Config.pack_watch`): a
 // pack author edits a file and sees it in the running game. It is a
@@ -168,7 +169,7 @@ reload_apply :: proc(s: ^Server) {
 	for &c in s.clients {
 		if c.state == .Gone || c.state == .Free {continue}
 		if _, local := c.link.(Local); local {
-			if c.state == .Playing {send_message(s, &c, game.Packs_Changed{s.registry.hash})}
+			if c.state == .Playing {send_message(s, &c, protocol.Packs_Changed{s.registry.hash})}
 		} else {
 			disconnect(s, &c, "the server reloaded its packs; join again")
 		}

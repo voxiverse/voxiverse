@@ -8,6 +8,8 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import "common:worldgen"
 
 // The exit check over UDP: misdials are refused; a dialed gate opens,
@@ -52,7 +54,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	here, has := worldgen.arrival_gate(&home_gen)
 	if !testing.expect(t, has, "no gate at home") {return}
 	// A world of this galaxy, and its gate (worked out here as anywhere).
-	away := game.address_derive(77)
+	away := starmap.address_derive(77)
 	away.galaxy = home.galaxy
 	far_world := World {
 		server  = srv,
@@ -88,7 +90,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 			return false
 		}
 		front, yaw := worldgen.gate_front(g)
-		net_send(c, game.Command{fmt.tprintf("tp %.1f %.1f %.1f", front.x, front.y, front.z)})
+		net_send(c, protocol.Command{fmt.tprintf("tp %.1f %.1f %.1f", front.x, front.y, front.z)})
 		c.look = {yaw + 3.14159265, 0}
 		@(static) want: [3]f64
 		want = front
@@ -121,7 +123,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 
 	// Misdials: another galaxy, this very world, not a gate (and a symbol
 	// twice is not an address: no Dial decodes).
-	misdial :: proc(t: ^testing.T, c: ^Net_Client, d: game.Dial, why: string) {
+	misdial :: proc(t: ^testing.T, c: ^Net_Client, d: protocol.Dial, why: string) {
 		before := len(c.notices)
 		net_send(c, d)
 		@(static) n: int
@@ -136,7 +138,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	}
 	ring := worldgen.gate_at(here, 0, 5)
 	elsewhere := away
-	elsewhere.galaxy = game.address_derive(5).galaxy
+	elsewhere.galaxy = starmap.address_derive(5).galaxy
 	misdial(t, alice, {ring, elsewhere}, "galaxy")
 	misdial(t, alice, {ring, home}, "own world")
 	misdial(t, alice, {ring - {0, 40, 0}, away}, "not a gate")
@@ -144,18 +146,18 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	// Dial: the chevrons light, the horizon forms; walk in.
 	@(static) gate: worldgen.Structure
 	gate = here
-	net_send(alice, game.Dial{ring, away})
+	net_send(alice, protocol.Dial{ring, away})
 	ok = net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return gate_seen(cs[0], gate, .Gate_Horizon)
 		}, 10)
 	if !testing.expect(t, ok, "the gate never opened") {return}
 	chevrons := worldgen.gate_chevrons(here)
-	for c in chevrons[:game.WORLD_LENGTH] {
+	for c in chevrons[:starmap.WORLD_LENGTH] {
 		b, _ := net_block(alice, c)
 		testing.expect_value(t, b, game.Block.Gate_Chevron_Lit)
 	}
 	alice.move = {0, 1}
-	@(static) want: game.Address
+	@(static) want: starmap.Address
 	@(static) front: [3]f64
 	want = away
 	front, _ = worldgen.gate_front(there)
@@ -182,7 +184,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		}, 15)
 	testing.expect(t, ok, "the far gate never closed")
 	if !testing.expect(t, walk_up(t, alice, there)) {return}
-	net_send(alice, game.Dial{worldgen.gate_at(there, 10, 5), home})
+	net_send(alice, protocol.Dial{worldgen.gate_at(there, 10, 5), home})
 	ok = net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return gate_seen(cs[0], gate, .Gate_Horizon)
 		}, 10)

@@ -1,4 +1,4 @@
-package game
+package access
 
 import "core:crypto/ed25519"
 import "core:encoding/hex"

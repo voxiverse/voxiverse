@@ -8,6 +8,7 @@ import "core:testing"
 
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // Scenarios with invariants. A scenario is data: steps (a tick, a player, an
 // operation) played on the harness (harness.odin) by one runner. Player 0 is the
@@ -130,7 +131,7 @@ bot_of :: proc(r: ^Run, who: int, s: Step) -> ^Bot {
 
 // mirror_op: the mirror's steps that need the input they follow (its sequence).
 @(private = "file")
-mirror_op :: proc(data: rawptr, msg: game.Input, in_: game.Player_Input) {
+mirror_op :: proc(data: rawptr, msg: protocol.Input, in_: game.Player_Input) {
 	r := (^Run)(data)
 	m := &r.sess.mirror
 	for s in r.queue {
@@ -138,7 +139,7 @@ mirror_op :: proc(data: rawptr, msg: game.Input, in_: game.Player_Input) {
 		case .Place, .Break:
 			m.edit_id += 1
 			b := s.block if s.op == .Place else .Air
-			e := game.edit_plain(
+			e := protocol.edit_plain(
 				m.edit_id,
 				msg.sequence,
 				feet_of(m.prediction.state.position) + s.off,
@@ -149,7 +150,7 @@ mirror_op :: proc(data: rawptr, msg: game.Input, in_: game.Player_Input) {
 		case .Use:
 			mirror_send(
 				m,
-				game.Use_Block{feet_of(m.prediction.state.position) + s.off, msg.sequence},
+				protocol.Use_Block{feet_of(m.prediction.state.position) + s.off, msg.sequence},
 			)
 		case .Click:
 			inventory(m, s.kind, s.slot, s.arg)
@@ -162,11 +163,11 @@ mirror_op :: proc(data: rawptr, msg: game.Input, in_: game.Player_Input) {
 				continue
 			}
 			yaw, pitch := aim_at(game.player_eye(me.player), to.player.position + {0, 1.6, 0})
-			mirror_send(m, game.Shoot{msg.sequence, 0, true, yaw, clamp(pitch, -1.5, 1.5)})
+			mirror_send(m, protocol.Shoot{msg.sequence, 0, true, yaw, clamp(pitch, -1.5, 1.5)})
 		case .Respawn:
-			mirror_send(m, game.Respawn{})
+			mirror_send(m, protocol.Respawn{})
 		case .Reload:
-			mirror_send(m, game.Reload{})
+			mirror_send(m, protocol.Reload{})
 		case .Join, .Leave, .Walk, .Stand, .Jump, .Fly:
 		}
 	}
@@ -183,15 +184,15 @@ bot_op :: proc(r: ^Run, b: ^Bot, who: int, s: Step) {
 		blk := s.block if s.op == .Place else .Air
 		net_send(
 			c,
-			game.edit_plain(b.edit_id, c.seq, feet_of(c.update.state.position) + s.off, blk),
+			protocol.edit_plain(b.edit_id, c.seq, feet_of(c.update.state.position) + s.off, blk),
 		)
 	case .Use:
-		net_send(c, game.Use_Block{feet_of(c.update.state.position) + s.off, c.seq})
+		net_send(c, protocol.Use_Block{feet_of(c.update.state.position) + s.off, c.seq})
 	case .Click:
 		b.inv_seq += 1
-		net_send(c, game.Inventory_Request{b.inv_seq, {s.kind, s.slot, s.arg}})
+		net_send(c, protocol.Inventory_Request{b.inv_seq, {s.kind, s.slot, s.arg}})
 	case .Command:
-		net_send(c, game.Command{s.text})
+		net_send(c, protocol.Command{s.text})
 	case .Shoot:
 		me, to := server_client(r, who), server_client(r, s.target)
 		if me == nil || to == nil {
@@ -199,11 +200,11 @@ bot_op :: proc(r: ^Run, b: ^Bot, who: int, s: Step) {
 			return
 		}
 		yaw, pitch := aim_at(game.player_eye(me.player), to.player.position + {0, 1.6, 0})
-		net_send(c, game.Shoot{c.seq, 0, true, yaw, clamp(pitch, -1.5, 1.5)})
+		net_send(c, protocol.Shoot{c.seq, 0, true, yaw, clamp(pitch, -1.5, 1.5)})
 	case .Respawn:
-		net_send(c, game.Respawn{})
+		net_send(c, protocol.Respawn{})
 	case .Reload:
-		net_send(c, game.Reload{})
+		net_send(c, protocol.Reload{})
 	case .Walk:
 		c.move, c.look = {f32(s.v.x), f32(s.v.y)}, {f32(s.v.z), 0}
 	case .Stand:

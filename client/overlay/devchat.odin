@@ -8,7 +8,8 @@ import "core:time"
 import "client:engine"
 import "client:ui"
 import "common:base"
-import "common:game"
+import "common:protocol"
+import "common:starmap"
 import "server:collector"
 
 // Developer chat (docs/telemetry.md, "Developer chat"): the conversation with
@@ -28,7 +29,7 @@ devchat_context :: proc(app: ^engine.App, attach: bool) -> collector.Chat_Contex
 	s := app.session
 	if !attach || s == nil {return ctx}
 	if s.config.save_dir != "" {ctx.universe = filepath.base(s.config.save_dir)}
-	ctx.world = game.address_text(s.welcome.address)
+	ctx.world = starmap.address_text(s.welcome.address)
 	ctx.has_tick, ctx.tick = true, u64(max(s.render_clock.time, 0))
 	p := s.prediction.state.position
 	ctx.has_pos, ctx.pos = true, {i32(p.x), i32(p.y), i32(p.z)}
@@ -82,7 +83,7 @@ devchat_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	devchat_lines(app, ctx, area, entries)
 
 	ui.checkbox(ctx, engine.tr(.Devchat_Attach), &app.devchat_attach, attach_rect)
-	counter := fmt.tprintf("%d / %d", len(app.devchat_line.text), game.MAX_DEV_TEXT)
+	counter := fmt.tprintf("%d / %d", len(app.devchat_line.text), protocol.MAX_DEV_TEXT)
 	counter_rect := ui.cut_right(&input_rect, 110)
 	ui.label(ctx, counter, counter_rect, .Right, t.text_muted)
 	submitted := ui.text_input(

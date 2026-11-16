@@ -4,7 +4,7 @@ import "core:math"
 
 import "client:engine"
 import "client:ui"
-import "common:game"
+import "common:protocol"
 
 // The death screen: how it happened and a Respawn button. It opens when the
 // server says the player is dead (Health.dead) and closes when it says they
@@ -25,7 +25,7 @@ death_sync :: proc(app: ^engine.App) {
 
 // death_respawn: the button.
 death_respawn :: proc(app: ^engine.App) {
-	if s := app.session; s != nil && s.dead {engine.send_message(s, game.Respawn{})}
+	if s := app.session; s != nil && s.dead {engine.send_message(s, protocol.Respawn{})}
 }
 
 // death_wait: whole seconds until the player may come back (0: now).

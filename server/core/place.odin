@@ -2,7 +2,7 @@ package core
 
 import "core:math"
 
-import "common:game"
+import "common:protocol"
 import "common:worldgen"
 
 // The place record: the biome under the player's feet and the world's
@@ -11,12 +11,12 @@ import "common:worldgen"
 
 PLACE_TICKS :: 15
 
-#assert(len(worldgen.Biome) <= game.MAX_BIOMES)
+#assert(len(worldgen.Biome) <= protocol.MAX_BIOMES)
 
 // music_place_of: where a player standing at feet is, in w.
-music_place_of :: proc(w: ^World, feet: [3]f64) -> game.Place {
+music_place_of :: proc(w: ^World, feet: [3]f64) -> protocol.Place {
 	gen := &w.chunks.gen
-	if gen.kind != .Earth {return {biome = game.NO_BIOME}}
+	if gen.kind != .Earth {return {biome = protocol.NO_BIOME}}
 	percent :: proc(v: f32) -> i8 {return i8(clamp(math.round(v * 100), -100, 100))}
 	x, z := i32(math.floor(feet.x)), i32(math.floor(feet.z))
 	return {

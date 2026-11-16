@@ -6,6 +6,7 @@ import "core:slice"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Actions: what a player does besides moving (edit a block, hit an entity,
 // fire a rocket). Each says which of its inputs it came after, and waits
@@ -14,12 +15,12 @@ import "common:game"
 // messages arrive.
 
 Action :: union {
-	game.Edit,
-	game.Attack,
-	game.Use_Entity,
-	game.Use_Block,
-	game.Fire,
-	game.Shoot,
+	protocol.Edit,
+	protocol.Attack,
+	protocol.Use_Entity,
+	protocol.Use_Block,
+	protocol.Fire,
+	protocol.Shoot,
 }
 
 // FIRE_EVERY: ticks between a player's rockets.
@@ -36,7 +37,7 @@ swing_near :: proc(s: ^Server, c: ^Client) {
 		if &o == c || o.state != .Playing || o.world != c.world {continue}
 		d := o.player.position - c.player.position
 		if d.x * d.x + d.y * d.y + d.z * d.z > SHOT_HEARD * SHOT_HEARD {continue}
-		swung := game.Swung {
+		swung := protocol.Swung {
 			player = player_id(s, c),
 		}
 		event_send(s, &o, .Swung, &swung)
@@ -48,7 +49,7 @@ swing_near :: proc(s: ^Server, c: ^Client) {
 queue_action :: proc(s: ^Server, c: ^Client, a: Action) {
 	w := c.world
 	if c.action_count == MAX_QUEUED_ACTIONS {
-		if e, edit := a.(game.Edit); edit {send_message(s, c, edit_refused(w, e))}
+		if e, edit := a.(protocol.Edit); edit {send_message(s, c, edit_refused(w, e))}
 		return
 	}
 	c.actions[c.action_count] = a
@@ -61,30 +62,30 @@ run_due_actions :: proc(s: ^Server, c: ^Client) {
 	n := 0
 	for ; n < c.action_count; n += 1 {
 		a := c.actions[n]
-		if !game.sequence_before_or_at(action_after(a), c.inputs.last) {break}
+		if !protocol.sequence_before_or_at(action_after(a), c.inputs.last) {break}
 		if c.dead || has_ability(s, c, .Spectate) { 	// (the dead do nothing, nor do those who only watch)
-			if e, edit := a.(game.Edit); edit {send_message(s, c, edit_refused(c.world, e))}
+			if e, edit := a.(protocol.Edit); edit {send_message(s, c, edit_refused(c.world, e))}
 			continue
 		}
 		switch v in a {
-		case game.Edit:
+		case protocol.Edit:
 			swing_near(s, c)
 			send_message(s, c, apply_edit(s, c, v))
-		case game.Attack:
+		case protocol.Attack:
 			swing_near(s, c)
 			attack(s, c, v)
-		case game.Use_Entity:
+		case protocol.Use_Entity:
 			swing_near(s, c)
 			use_entity(s, c, v.entity)
-		case game.Use_Block:
+		case protocol.Use_Block:
 			swing_near(s, c)
 			use_block(s, c, v.pos)
-		case game.Fire:
+		case protocol.Fire:
 			if s.tick >= c.fired_at + FIRE_EVERY {
 				c.fired_at = s.tick
 				fire(s, c, v.yaw, v.pitch)
 			}
-		case game.Shoot:
+		case protocol.Shoot:
 			weapon_shoot(s, c, v)
 		}
 	}
@@ -95,26 +96,26 @@ run_due_actions :: proc(s: ^Server, c: ^Client) {
 @(private = "file")
 action_after :: proc(a: Action) -> u32 {
 	switch v in a {
-	case game.Edit:
+	case protocol.Edit:
 		return v.after
-	case game.Attack:
+	case protocol.Attack:
 		return v.after
-	case game.Use_Entity:
+	case protocol.Use_Entity:
 		return v.after
-	case game.Use_Block:
+	case protocol.Use_Block:
 		return v.after
-	case game.Fire:
+	case protocol.Fire:
 		return v.after
-	case game.Shoot:
+	case protocol.Shoot:
 		return v.after
 	}
 	return 0
 }
 
 // edit_refused: the answer to an edit nobody looked at: the blocks as they are.
-edit_refused :: proc(w: ^World, e: game.Edit) -> game.Edit_Result {
+edit_refused :: proc(w: ^World, e: protocol.Edit) -> protocol.Edit_Result {
 	current, _ := chunks_block(&w.chunks, e.pos)
-	r := game.Edit_Result {
+	r := protocol.Edit_Result {
 		id    = e.id,
 		pos   = e.pos,
 		block = current,
@@ -122,7 +123,7 @@ edit_refused :: proc(w: ^World, e: game.Edit) -> game.Edit_Result {
 	cell, _, two := game.companion(w.server.registry, current, e.pos)
 	if !two {cell, _, two = game.companion(w.server.registry, e.block, e.pos)}
 	if b, there := chunks_block(&w.chunks, cell); two && there {
-		r.companion = game.Companion_Record{cell, b}
+		r.companion = protocol.Companion_Record{cell, b}
 	}
 	return r
 }
@@ -130,10 +131,10 @@ edit_refused :: proc(w: ^World, e: game.Edit) -> game.Edit_Result {
 // apply_edit checks an edit against the shared rules, from where the server
 // has the player, and applies it if it passes. An edit of a two-cell block (a
 // door) answers for the other cell too.
-apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
+apply_edit :: proc(s: ^Server, c: ^Client, e: protocol.Edit) -> protocol.Edit_Result {
 	result, cell, two := apply_edit_cells(s, c, e)
 	if b, there := chunks_block(&c.world.chunks, cell); two && there {
-		result.companion = game.Companion_Record{cell, b}
+		result.companion = protocol.Companion_Record{cell, b}
 	}
 	return result
 }
@@ -144,9 +145,9 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 apply_edit_cells :: proc(
 	s: ^Server,
 	c: ^Client,
-	e: game.Edit,
+	e: protocol.Edit,
 ) -> (
-	result: game.Edit_Result,
+	result: protocol.Edit_Result,
 	cell: game.Block_Pos,
 	two: bool,
 ) {
@@ -262,7 +263,7 @@ apply_edit_cells :: proc(
 // by its own ray; the server only checks it was possible. With a melee weapon
 // in hand it is a swing instead (whatever entity it names; 0: none).
 @(private = "file")
-attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
+attack :: proc(s: ^Server, c: ^Client, a: protocol.Attack) {
 	w := c.world
 	held := game.inventory_held(&c.inventory)
 	if info, known := game.item_info(s.registry, held.item); known && !game.stack_empty(held) {
@@ -386,7 +387,7 @@ anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.
 // the cell and the state the client sent (an edit with no context: only a
 // type with the default rule, in its default state, at e.pos).
 @(private = "file")
-placement_agrees :: proc(s: ^Server, c: ^Client, e: game.Edit) -> bool {
+placement_agrees :: proc(s: ^Server, c: ^Client, e: protocol.Edit) -> bool {
 	t := &s.registry.blocks
 	type := game.block_type_of(t, e.block)
 	if e.face == game.EDIT_FACE_PLAIN {

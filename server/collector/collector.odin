@@ -12,9 +12,11 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 import steam_common "common:steam"
 import "common:telemetry"
 import steam_server "server:steam"
@@ -51,8 +53,8 @@ Peer_State :: enum u8 {
 
 Collector_Peer :: struct {
 	state:    Peer_State,
-	nonce:    game.Nonce,
-	account:  game.Account,
+	nonce:    access.Nonce,
+	account:  access.Account,
 	steam_id: u64, // its SteamID, only when `steam` accepted the Hello's ticket (0: none)
 	pid:      string, // (heap)
 	window:   time.Tick,
@@ -85,7 +87,7 @@ Collector :: struct {
 	port:           int,
 	now:            time.Tick, // the step's time (the OS's on the thread, the network's when stepped)
 	// admins.cfg: who developer chat hears (devchat.odin)
-	admins:         game.Admins,
+	admins:         access.Admins,
 	steam:          ^steam_server.Server, // checks Hello tickets (nil or off: tickets are ignored, `steam:` admins never match); the caller opens and shuts it, and runs its callbacks while the collector is stepped by hand
 	admins_text:    string, // (heap) the file as last read
 	admins_loaded:  bool,
@@ -141,7 +143,7 @@ collector_close :: proc(c: ^Collector) {
 	delete(c.peers)
 	for k in c.cursors {delete(k)}
 	delete(c.cursors)
-	game.admins_destroy(&c.admins)
+	access.admins_destroy(&c.admins)
 	delete(c.admins_text)
 	delete(c.dir)
 	c^ = {}
@@ -187,9 +189,9 @@ collector_step :: proc(c: ^Collector, now: time.Tick) {
 }
 
 @(private)
-send :: proc(c: ^Collector, peer: netcode.Peer_Id, m: game.Server_Message) {
+send :: proc(c: ^Collector, peer: netcode.Peer_Id, m: protocol.Server_Message) {
 	clear(&c.writer.buf)
-	game.encode_server(&c.writer, m, nil)
+	protocol.encode_server(&c.writer, m, nil)
 	netcode.host_send(&c.host, peer, c.writer.buf[:], true)
 }
 
@@ -207,14 +209,14 @@ refuse :: proc(c: ^Collector, peer: netcode.Peer_Id, why: string) {
 handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 	p, known := &c.peers[id]
 	if !known || p.state == .Dropped {return}
-	m, ok := game.decode_client(data)
+	m, ok := protocol.decode_client(data)
 	if !ok {
 		refuse(c, id, "invalid message")
 		return
 	}
 	switch v in m {
-	case game.Hello:
-		if p.state != .Connected || v.protocol != game.PROTOCOL_VERSION {
+	case protocol.Hello:
+		if p.state != .Connected || v.protocol != protocol.PROTOCOL_VERSION {
 			refuse(c, id, "unexpected hello or protocol")
 			return
 		}
@@ -228,15 +230,15 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 				p.steam_id = v.steam_id
 			}
 		}
-		p.nonce = game.nonce_make()
+		p.nonce = access.nonce_make()
 		p.state = .Proving
-		send(c, id, game.Challenge{p.nonce})
-	case game.Proof:
+		send(c, id, protocol.Challenge{p.nonce})
+	case protocol.Proof:
 		if p.state != .Proving {
 			refuse(c, id, "unexpected proof")
 			return
 		}
-		if !game.account_verify(p.account, p.nonce, v.signature) {
+		if !access.account_verify(p.account, p.nonce, v.signature) {
 			sync.mutex_lock(&c.mutex)
 			c.stats.forged += 1
 			sync.mutex_unlock(&c.mutex)
@@ -246,7 +248,7 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 		p.pid = pid_of(c, p.account)
 		p.state = .Ready
 		p.window = c.now
-	case game.Telemetry_Batch:
+	case protocol.Telemetry_Batch:
 		if p.state != .Ready {
 			refuse(c, id, "a batch before a proof")
 			return
@@ -256,7 +258,7 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 			return
 		}
 		take_batch(c, id, p, v)
-	case game.Dev_Message:
+	case protocol.Dev_Message:
 		if p.state != .Ready {
 			refuse(c, id, "a message before a proof")
 			return
@@ -266,7 +268,7 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 			return
 		}
 		take_dev_message(c, id, p, v)
-	case game.Dev_Fetch:
+	case protocol.Dev_Fetch:
 		if p.state != .Ready {
 			refuse(c, id, "a fetch before a proof")
 			return
@@ -276,31 +278,31 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 			return
 		}
 		take_dev_fetch(c, id, p, v)
-	case game.Input,
-	     game.Ping,
-	     game.Teleport,
-	     game.Set_Rule,
-	     game.Edit,
-	     game.Command,
-	     game.Attack,
-	     game.Use_Entity,
-	     game.Use_Block,
-	     game.Prediction_Check,
-	     game.Pack_Want,
-	     game.Packs_Ready,
-	     game.Respawn,
-	     game.Shoot,
-	     game.Reload,
-	     game.Market_Trade,
-	     game.Game_Action,
-	     game.Game_Request,
-	     game.Fire,
-	     game.Chat,
-	     game.Inventory_Request,
-	     game.Choose,
-	     game.Dial,
-	     game.Stats_Request,
-	     game.Telemetry_Report:
+	case protocol.Input,
+	     protocol.Ping,
+	     protocol.Teleport,
+	     protocol.Set_Rule,
+	     protocol.Edit,
+	     protocol.Command,
+	     protocol.Attack,
+	     protocol.Use_Entity,
+	     protocol.Use_Block,
+	     protocol.Prediction_Check,
+	     protocol.Pack_Want,
+	     protocol.Packs_Ready,
+	     protocol.Respawn,
+	     protocol.Shoot,
+	     protocol.Reload,
+	     protocol.Market_Trade,
+	     protocol.Game_Action,
+	     protocol.Game_Request,
+	     protocol.Fire,
+	     protocol.Chat,
+	     protocol.Inventory_Request,
+	     protocol.Choose,
+	     protocol.Dial,
+	     protocol.Stats_Request,
+	     protocol.Telemetry_Report:
 		refuse(c, id, "this is a telemetry collector")
 	}
 }
@@ -317,7 +319,7 @@ rate_ok :: proc(c: ^Collector, p: ^Collector_Peer) -> bool {
 
 // pid_of: the anonymous id of an account: the first 8 bytes of the salted hash, in hex.
 @(private)
-pid_of :: proc(c: ^Collector, a: game.Account) -> string {
+pid_of :: proc(c: ^Collector, a: access.Account) -> string {
 	input := make([]u8, len(c.salt) + len(a), context.temp_allocator)
 	copy(input, c.salt[:])
 	acc := a
@@ -332,7 +334,7 @@ take_batch :: proc(
 	c: ^Collector,
 	id: netcode.Peer_Id,
 	p: ^Collector_Peer,
-	b: game.Telemetry_Batch,
+	b: protocol.Telemetry_Batch,
 ) {
 	switch b.kind {
 	case .Report:
@@ -351,7 +353,7 @@ take_batch :: proc(
 		sync.mutex_lock(&c.mutex)
 		c.stats.reports += 1
 		sync.mutex_unlock(&c.mutex)
-		send(c, id, game.Telemetry_Ack{"", u64(len(b.text))})
+		send(c, id, protocol.Telemetry_Ack{"", u64(len(b.text))})
 	case .Events:
 		if !valid_day(b.day) {
 			refuse(c, id, "a bad day")
@@ -374,7 +376,7 @@ take_batch :: proc(
 			sync.mutex_lock(&c.mutex)
 			c.stats.duplicates += 1
 			sync.mutex_unlock(&c.mutex)
-			send(c, id, game.Telemetry_Ack{b.day, end}) // (it was written before)
+			send(c, id, protocol.Telemetry_Ack{b.day, end}) // (it was written before)
 			return
 		}
 		for line in lines {
@@ -386,7 +388,7 @@ take_batch :: proc(
 		c.stats.accepted_batches += 1
 		c.stats.accepted_lines += u64(count)
 		sync.mutex_unlock(&c.mutex)
-		send(c, id, game.Telemetry_Ack{b.day, end})
+		send(c, id, protocol.Telemetry_Ack{b.day, end})
 	}
 }
 

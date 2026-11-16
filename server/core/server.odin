@@ -13,9 +13,11 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 import "common:telemetry"
 import "common:worldgen"
 import "server:collector"
@@ -36,7 +38,7 @@ import steam_server "server:steam"
 // (default 30 s) and at stop, as this account.
 Upload :: struct {
 	address:  net.Endpoint,
-	key:      game.Account_Key,
+	key:      access.Account_Key,
 	interval: time.Duration,
 }
 
@@ -91,7 +93,7 @@ Config :: struct {
 // server's, in its tick.
 Game :: struct {
 	using info:    game.Game_Info, // its id (its folder's name in games/: the dedicated server's --game), name and description (its shared package's)
-	kinds:         game.Game_Kinds, // what it replicates besides the engine (its shared package's; game_put, game_event)
+	kinds:         protocol.Game_Kinds, // what it replicates besides the engine (its shared package's; game_put, game_event)
 	server_state:  typeid, // its state for the session (game_state): zero at start; nil: none
 	client_state:  typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none
 	configure:     proc(config: ^Config), // before anything else: may change the config
@@ -195,10 +197,10 @@ Server :: struct {
 	slow_logged:       time.Tick, // when a slow tick was last logged
 	config:            Config,
 	capacity:          int, // chunks
-	local:             game.Endpoint, // the in-process player's pipe (none: a dedicated server)
+	local:             protocol.Endpoint, // the in-process player's pipe (none: a dedicated server)
 	thread:            ^Thread,
 	stopping:          bool, // (atomic)
-	schema:            game.Schema, // what is replicated to clients (state_kinds.odin)
+	schema:            protocol.Schema, // what is replicated to clients (state_kinds.odin)
 	time_stopped:      bool, // the clock stands still (the local player paused): clients are given a new anchor every tick
 	frozen:            bool, // (atomic) the local player paused: time and entities stand still
 	sim_speed:         int, // the world's steps a tick, as the game set it (sim_speed_set; 0: paused; 1 at start)
@@ -229,7 +231,7 @@ Server :: struct {
 	listening:         bool,
 	capture:           netcode.Capture, // (config.capture)
 	perms:             Permissions, // who may do what (permissions.odin)
-	admins:            game.Admins, // admins.cfg: accounts and SteamIDs that have the role admin (permissions.odin)
+	admins:            access.Admins, // admins.cfg: accounts and SteamIDs that have the role admin (permissions.odin)
 	community:         Community, // nicknames, mutes, homes, warps, bans (community.odin)
 	chat:              Chat_State, // (chat.odin)
 	kit:               [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
@@ -246,7 +248,7 @@ Server :: struct {
 	uploading:         bool,
 	ledger:            Ledger, // every item made or unmade (ledger.odin)
 	desyncs:           int, // checks that differed (desync.odin)
-	desync_fields:     [game.Player_Field]int, // ... and in which fields
+	desync_fields:     [protocol.Player_Field]int, // ... and in which fields
 	checks_judged:     int, // checks compared
 	checks_skipped:    int, // checks not compared: the player was not quiet
 	hash_root:         u64, // a stepped server's chain of tick hashes (state_hash.odin)
@@ -262,7 +264,7 @@ KICK_DELAY :: game.TICK_RATE
 // start sets up the session and starts the server thread. s must stay at
 // its address until stop. local: the in-process player's end of a pipe
 // ({} for none).
-start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
+start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 	config := config
 	if !game.game_id_valid(config.game.id) {
 		log.errorf("server needs a game to play (Config.game; its id: %q)", config.game.id)
@@ -273,7 +275,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		log.warnf("a simulated network needs a stepped server and no conditions of its own")
 		return false
 	}
-	assert(config.view_radius > 0 && config.view_radius <= game.MAX_VIEW_RADIUS)
+	assert(config.view_radius > 0 && config.view_radius <= protocol.MAX_VIEW_RADIUS)
 	assert(
 		config.view_height > 0 &&
 		config.view_height <= game.MAX_VIEW_HEIGHT &&
@@ -283,7 +285,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	s^ = {}
 	s.config, s.local = config, local
 	s.sim_speed = 1
-	s.schema = game.game_schema(config.game.id, config.game.kinds)
+	s.schema = protocol.game_schema(config.game.id, config.game.kinds)
 	assert(config.perturb.what == .None || config.stepped, "perturb is for stepped servers")
 	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
 	s.config.max_players = min(s.config.max_players, game.MAX_PLAYERS)
@@ -378,7 +380,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 			return false
 		}
 	}
-	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
+	game.writer_init(&s.writer, arena, protocol.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
 	if local.pipe != nil {
 		s.clients[0].state = .Connecting
 		s.clients[0].link = Local{}
@@ -462,7 +464,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	store_close(s)
 	permissions_destroy(&s.perms)
 	community_destroy(&s.community)
-	game.admins_destroy(&s.admins)
+	access.admins_destroy(&s.admins)
 	for w in s.worlds {world_close(w)} 	// (first: it joins the generator workers, which read the registry)
 	delete(s.worlds)
 	game.registry_destroy(s.registry)
@@ -470,7 +472,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	reload_destroy(s)
 	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
-	game.schema_destroy(&s.schema)
+	protocol.schema_destroy(&s.schema)
 	ledger_destroy(&s.ledger)
 	base.queue_destroy(&s.calls)
 	refusal := s.refusal // (a failed start says why, after the rest is gone)
@@ -862,9 +864,9 @@ tick :: proc(s: ^Server) {
 @(private = "file")
 receive_messages :: proc(s: ^Server) {
 	if s.local.pipe != nil {
-		packets := make([dynamic]game.Packet, context.temp_allocator)
-		game.receive(s.local, &packets)
-		defer for p in packets {game.packet_free(s.local, p)}
+		packets := make([dynamic]protocol.Packet, context.temp_allocator)
+		protocol.receive(s.local, &packets)
+		defer for p in packets {protocol.packet_free(s.local, p)}
 		for p in packets {handle(s, &s.clients[0], p)}
 	}
 	if !s.listening {return}
@@ -920,7 +922,7 @@ proved :: proc(s: ^Server, c: ^Client) {
 	if c.wanted_len == 0 {
 		c.state = .Choosing
 		names := characters_of(s, c.account)
-		send_message(s, c, game.Characters{strings.join(names, " ", context.temp_allocator)})
+		send_message(s, c, protocol.Characters{strings.join(names, " ", context.temp_allocator)})
 		return
 	}
 	enter(s, c, string(c.wanted[:c.wanted_len]))
@@ -959,7 +961,7 @@ enter :: proc(s: ^Server, c: ^Client, name: string) {
 handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	w := c.world
 	if c.state == .Free || c.state == .Gone {return}
-	m, ok := game.decode_client(p, s.registry)
+	m, ok := protocol.decode_client(p, s.registry)
 	if !ok {
 		disconnect(s, c, "invalid message")
 		return
@@ -968,7 +970,12 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	if c.state != .Playing {
 		handshake: bool
 		#partial switch _ in m {
-		case game.Hello, game.Proof, game.Choose, game.Ping, game.Pack_Want, game.Packs_Ready:
+		case protocol.Hello,
+		     protocol.Proof,
+		     protocol.Choose,
+		     protocol.Ping,
+		     protocol.Pack_Want,
+		     protocol.Packs_Ready:
 			handshake = true
 		}
 		if !handshake {
@@ -979,29 +986,29 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	// What needs permission (refused with a word; commands check their own).
 	node := ""
 	#partial switch v in m {
-	case game.Teleport:
+	case protocol.Teleport:
 		node = "teleport.tp"
-	case game.Set_Rule:
+	case protocol.Set_Rule:
 		node = "world.gen" if strings.has_prefix(v.name, "worldgen.") else NODE_RULE
-	case game.Fire:
+	case protocol.Fire:
 		node = "world.fire"
-	case game.Edit:
+	case protocol.Edit:
 		node = "world.edit"
-	case game.Chat:
+	case protocol.Chat:
 		node = "chat.send"
 	}
 	if node != "" && !allowed(s, c, node) {
-		if e, edit := m.(game.Edit); edit {send_message(s, c, edit_refused(w, e))}
+		if e, edit := m.(protocol.Edit); edit {send_message(s, c, edit_refused(w, e))}
 		notice(s, c, fmt.tprintf("You may not do that here (%s)", node))
 		return
 	}
 	switch v in m {
-	case game.Hello:
+	case protocol.Hello:
 		if c.state != .Connecting {
 			disconnect(s, c, "unexpected hello")
 			return
 		}
-		if v.protocol != game.PROTOCOL_VERSION {
+		if v.protocol != protocol.PROTOCOL_VERSION {
 			disconnect(s, c, "protocol version mismatch")
 			return
 		}
@@ -1025,7 +1032,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		if why := steam_hello(s, v); why != "" {
 			log.infof(
 				"server steam join refused account=%s why=%q",
-				game.account_text(v.account),
+				access.account_text(v.account),
 				why,
 			)
 			disconnect(s, c, why)
@@ -1034,16 +1041,16 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		if steam_on(s) && len(v.ticket) > 0 {c.steam_id = v.steam_id}
 		c.account = v.account
 		c.wanted_len = copy(c.wanted[:], v.character)
-		c.nonce = game.nonce_make()
+		c.nonce = access.nonce_make()
 		c.state = .Proving
-		send_message(s, c, game.Challenge{c.nonce})
-	case game.Proof:
+		send_message(s, c, protocol.Challenge{c.nonce})
+	case protocol.Proof:
 		if c.state != .Proving {
 			disconnect(s, c, "unexpected proof")
 			return
 		}
-		if !game.account_verify(c.account, c.nonce, v.signature) {
-			log.warnf("server account proof failed account=%s", game.account_text(c.account))
+		if !access.account_verify(c.account, c.nonce, v.signature) {
+			log.warnf("server account proof failed account=%s", access.account_text(c.account))
 			disconnect(s, c, "the account's proof is wrong")
 			return
 		}
@@ -1054,66 +1061,66 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		}
 		if packs_begin(s, c) {return}
 		proved(s, c)
-	case game.Pack_Want:
+	case protocol.Pack_Want:
 		pack_want(s, c, v)
-	case game.Packs_Ready:
+	case protocol.Packs_Ready:
 		if pack_ready(s, c, v) {proved(s, c)}
-	case game.Choose:
+	case protocol.Choose:
 		if c.state != .Choosing || !game.name_valid(v.character) {
 			disconnect(s, c, "unexpected choice")
 			return
 		}
 		enter(s, c, v.character)
-	case game.Input:
-		if v.snapshot <= u32(s.tick) {game.sender_ack(&c.tx, v.snapshot)} 	// (a client cannot hold a snapshot not sent yet)
-		if !game.input_queue_push(&c.inputs, v) {disturb(s, c)} 	// (refused: it was predicted, not applied)
-	case game.Prediction_Check:
+	case protocol.Input:
+		if v.snapshot <= u32(s.tick) {protocol.sender_ack(&c.tx, v.snapshot)} 	// (a client cannot hold a snapshot not sent yet)
+		if !protocol.input_queue_push(&c.inputs, v) {disturb(s, c)} 	// (refused: it was predicted, not applied)
+	case protocol.Prediction_Check:
 		c.check = v
-	case game.Teleport:
+	case protocol.Teleport:
 		land(s, c, v.position, {v.yaw, v.pitch}, .Exact)
-	case game.Set_Rule:
+	case protocol.Set_Rule:
 		if strings.has_prefix(v.name, "worldgen.") {
 			set_worldgen(s, c, v.name, v.value)
 			return
 		}
 		rule_set(s, c, w, v.name, v.value)
-	case game.Ping:
-		send_message(s, c, game.Pong{v.id})
-	case game.Command:
+	case protocol.Ping:
+		send_message(s, c, protocol.Pong{v.id})
+	case protocol.Command:
 		admin(s, c, v.command)
-	case game.Chat:
+	case protocol.Chat:
 		chat_say(s, c, v.text)
-	case game.Inventory_Request:
+	case protocol.Inventory_Request:
 		inventory_request(s, c, v)
-	case game.Dial:
+	case protocol.Dial:
 		notice_if(s, c, gate_dial(s, c, v))
-	case game.Edit:
+	case protocol.Edit:
 		queue_action(s, c, v)
-	case game.Attack:
+	case protocol.Attack:
 		queue_action(s, c, v)
-	case game.Use_Entity:
+	case protocol.Use_Entity:
 		queue_action(s, c, v)
-	case game.Use_Block:
+	case protocol.Use_Block:
 		queue_action(s, c, v)
-	case game.Fire:
+	case protocol.Fire:
 		queue_action(s, c, v)
-	case game.Shoot:
+	case protocol.Shoot:
 		queue_action(s, c, v)
-	case game.Reload:
+	case protocol.Reload:
 		weapon_reload(s, c)
-	case game.Market_Trade:
+	case protocol.Market_Trade:
 		market_trade(s, c, v)
-	case game.Game_Action:
+	case protocol.Game_Action:
 		if g := &s.config.game; g.action != nil && !c.dead {g.action(s, c, int(v.index))}
-	case game.Game_Request:
+	case protocol.Game_Request:
 		request_receive(s, c, v)
-	case game.Telemetry_Batch, game.Dev_Message, game.Dev_Fetch:
+	case protocol.Telemetry_Batch, protocol.Dev_Message, protocol.Dev_Fetch:
 		disconnect(s, c, "this is not a telemetry collector")
-	case game.Respawn:
+	case protocol.Respawn:
 		respawn_ask(s, c) // (refused while alive or before the delay: nothing happens)
-	case game.Stats_Request:
+	case protocol.Stats_Request:
 		stats_request(s, c, v)
-	case game.Telemetry_Report:
+	case protocol.Telemetry_Report:
 		telemetry_report(s, c, v)
 	}
 }
@@ -1124,7 +1131,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 send_message :: proc(
 	s: ^Server,
 	c: ^Client,
-	m: game.Server_Message,
+	m: protocol.Server_Message,
 	blocks: ^game.Chunk_Blocks = nil,
 	reliable := false,
 ) -> (
@@ -1132,20 +1139,25 @@ send_message :: proc(
 ) {
 	if c.link == nil {return}
 	clear(&s.writer.buf)
-	game.encode_server(&s.writer, m, blocks)
+	protocol.encode_server(&s.writer, m, blocks)
 	data := s.writer.buf[:]
 	switch l in c.link {
 	case Local:
-		game.send(s.local, data)
+		protocol.send(s.local, data)
 	case netcode.Peer_Id:
-		netcode.host_send(&s.host, l, data, reliable || game.message_reliable(.Server, data[0]))
+		netcode.host_send(
+			&s.host,
+			l,
+			data,
+			reliable || protocol.message_reliable(.Server, data[0]),
+		)
 	}
 	return len(data)
 }
 
 // broadcast sends m to every player (in world, if given: its news).
 @(private)
-broadcast :: proc(s: ^Server, m: game.Server_Message, world: ^World = nil) {
+broadcast :: proc(s: ^Server, m: protocol.Server_Message, world: ^World = nil) {
 	for &c in s.clients {
 		if c.state == .Playing && (world == nil || c.world == world) {send_message(s, &c, m)}
 	}
@@ -1156,12 +1168,12 @@ broadcast :: proc(s: ^Server, m: game.Server_Message, world: ^World = nil) {
 notice :: proc(s: ^Server, c: ^Client, text: string) {
 	log.info("server notice ", text)
 	text := text
-	if len(text) > game.MAX_NOTICE_TEXT {
-		cut := game.MAX_NOTICE_TEXT
+	if len(text) > protocol.MAX_NOTICE_TEXT {
+		cut := protocol.MAX_NOTICE_TEXT
 		for cut > 0 && text[cut] & 0xc0 == 0x80 {cut -= 1} 	// (a whole letter)
 		text = text[:cut]
 	}
-	shown := game.Notice{text}
+	shown := protocol.Notice{text}
 	event_send(s, c, .Notice, &shown)
 }
 
@@ -1202,11 +1214,11 @@ update_info :: proc(s: ^Server) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
 	name := s.config.name if s.config.name != "" else "Voxiverse server"
-	game.encode_server_info(
+	protocol.encode_server_info(
 		&w,
 		{
-			protocol = game.PROTOCOL_VERSION,
-			name = name[:min(len(name), game.MAX_SERVER_NAME)],
+			protocol = protocol.PROTOCOL_VERSION,
+			name = name[:min(len(name), protocol.MAX_SERVER_NAME)],
 			players = players,
 			max_players = s.config.max_players,
 			password = s.config.password != "",

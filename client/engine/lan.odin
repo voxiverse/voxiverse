@@ -1,6 +1,7 @@
 package engine
 
 import "common:game"
+import "common:protocol"
 import "core:net"
 
 Lan_Dialog :: struct {
@@ -54,6 +55,6 @@ lan_address :: proc() -> string {
 // close_lan asks our own server to stop taking players from the LAN.
 close_lan :: proc(app: ^App) {
 	if s := app.session; s != nil && session_hosting(s) && s.state == .Playing {
-		send_message(s, game.Command{"close_lan"})
+		send_message(s, protocol.Command{"close_lan"})
 	}
 }

@@ -8,8 +8,10 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
+import "common:access"
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Who may do what (common/game/permissions.odin has the rules): roles grant
 // nodes and inherit other roles; players have roles and grants of their
@@ -173,7 +175,7 @@ permissions_parse :: proc(p: ^Permissions, text: string) {
 				player = player_perms(p, value)
 			}
 		case "account":
-			a, parsed := game.account_parse(value)
+			a, parsed := access.account_parse(value)
 			ok = parsed
 			if ok {
 				role = nil
@@ -183,7 +185,7 @@ permissions_parse :: proc(p: ^Permissions, text: string) {
 			ok = role != nil && short_name_valid(value)
 			if ok {append(&role.inherits, strings.clone(value))}
 		case "grant":
-			_, ok = game.grant_parse(value, 0)
+			_, ok = access.grant_parse(value, 0)
 			if ok &&
 			   role !=
 				   nil {append(&role.grants, strings.clone(value))} else if ok && player != nil {append(&player.grants, strings.clone(value))} else {ok = false}
@@ -285,17 +287,22 @@ map_entry_of :: proc(m: ^map[string]string, key: string) -> (k, v: string, ok: b
 resolve :: proc(
 	p: ^Permissions,
 	name: string,
-	account: Maybe(game.Account),
+	account: Maybe(access.Account),
 	owner: bool,
-	out: ^[dynamic]game.Grant,
+	out: ^[dynamic]access.Grant,
 	allocator := context.allocator,
 	guest_role := "", // the world's rule: a role everyone has besides default
 	admin := false, // listed in admins.cfg: has the role admin
 ) {
-	if owner {append(out, game.Grant{strings.clone("*", allocator), true, 0})}
-	add :: proc(out: ^[dynamic]game.Grant, texts: []string, rank: int, allocator: mem.Allocator) {
+	if owner {append(out, access.Grant{strings.clone("*", allocator), true, 0})}
+	add :: proc(
+		out: ^[dynamic]access.Grant,
+		texts: []string,
+		rank: int,
+		allocator: mem.Allocator,
+	) {
 		for t in texts {
-			if g, ok := game.grant_parse(t, rank); ok {
+			if g, ok := access.grant_parse(t, rank); ok {
 				g.pattern = strings.clone(g.pattern, allocator)
 				append(out, g)
 			}
@@ -331,10 +338,10 @@ resolve :: proc(
 // called ACCOUNT_PREFIX + its hex (`account <hex>` in permissions.cfg).
 ACCOUNT_PREFIX :: "account:"
 
-account_key :: proc(account: Maybe(game.Account)) -> string {
+account_key :: proc(account: Maybe(access.Account)) -> string {
 	a, ok := account.?
 	if !ok {return ""}
-	return strings.concatenate({ACCOUNT_PREFIX, game.account_text(a)}, context.temp_allocator)
+	return strings.concatenate({ACCOUNT_PREFIX, access.account_text(a)}, context.temp_allocator)
 }
 
 // meta_of: player name's metadata key: their own, else the nearest role's.
@@ -412,7 +419,7 @@ admins_open :: proc(s: ^Server) {
 	path := filepath.join({s.store.dir, ADMINS_FILE}, context.temp_allocator) or_else ADMINS_FILE
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {return}
-	if bad := game.admins_parse(&s.admins, string(data)); bad > 0 {
+	if bad := access.admins_parse(&s.admins, string(data)); bad > 0 {
 		log.warnf(
 			"server admins.cfg: lines that are not an account key or steam:<id> count=%d",
 			bad,
@@ -439,9 +446,9 @@ refresh_grants :: proc(s: ^Server, c: ^Client) {
 		is_owner(s, c),
 		&c.grants,
 		guest_role = guest,
-		admin = game.is_admin(&s.admins, c.account, c.steam_id),
+		admin = access.is_admin(&s.admins, c.account, c.steam_id),
 	)
-	grants := game.Grants{game.grants_text(c.grants[:]), commands_allowed(s, c)}
+	grants := protocol.Grants{access.grants_text(c.grants[:]), commands_allowed(s, c)}
 	state_put(s, c, .Grants, &grants)
 }
 
@@ -453,5 +460,5 @@ permissions_changed :: proc(s: ^Server) {
 
 // allowed: c may do node.
 allowed :: proc(s: ^Server, c: ^Client, node: string) -> bool {
-	return game.allowed(c.grants[:], node)
+	return access.allowed(c.grants[:], node)
 }

@@ -5,6 +5,7 @@ import "core:math"
 import "core:strings"
 
 import "common:game"
+import "common:protocol"
 
 // The desync detector (docs/determinism.md): the client hashes the state it
 // predicted every DESYNC_CHECK_INPUTS inputs (a Prediction_Check); the server
@@ -80,21 +81,21 @@ check_judge :: proc(s: ^Server, c: ^Client, sequence: u32) {
 	check, has := c.check.?
 	if !has || check.sequence != sequence {return}
 	c.check = nil
-	if s.tick - c.disturbed < game.DESYNC_QUIET_TICKS {
+	if s.tick - c.disturbed < protocol.DESYNC_QUIET_TICKS {
 		s.checks_skipped += 1
 		return
 	}
 	s.checks_judged += 1
-	mine := game.player_fields(c.player)
+	mine := protocol.player_fields(c.player)
 	if mine == check.fields {return}
 	s.desyncs += 1
-	for f in game.Player_Field {
+	for f in protocol.Player_Field {
 		if mine[f] != check.fields[f] {s.desync_fields[f] += 1}
 	}
 	names := make([dynamic]string, context.temp_allocator)
-	for f in game.Player_Field {
+	for f in protocol.Player_Field {
 		if mine[f] !=
-		   check.fields[f] {append(&names, strings.to_lower(game.PLAYER_FIELD_NAMES[f], context.temp_allocator))}
+		   check.fields[f] {append(&names, strings.to_lower(protocol.PLAYER_FIELD_NAMES[f], context.temp_allocator))}
 	}
 	log.warnf(
 		"server desync player=%s sequence=%d fields=%s",

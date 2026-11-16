@@ -87,7 +87,6 @@ test_chunk_set_and_compact :: proc(t: ^testing.T) {
 
 // test_terrain fills dst with something like terrain (stone, dirt, grass,
 // air, pockets) for tests that need realistic chunks.
-@(private)
 test_terrain :: proc(seed: i64, dst: ^Block_Array) {
 	for &b, i in dst {
 		l := local_from_index(i)

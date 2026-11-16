@@ -1,6 +1,9 @@
-package game
+package protocol
 
+import "common:access"
 import "common:base"
+import "common:game"
+import "common:starmap"
 import "core:fmt"
 import "core:math"
 import "core:os"
@@ -8,51 +11,48 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
-
 @(private = "file")
-encode_s :: proc(m: Server_Message, blocks: ^Chunk_Blocks = nil) -> [dynamic]u8 {
-	w: Writer
-	writer_init(&w, context.temp_allocator)
+encode_s :: proc(m: Server_Message, blocks: ^game.Chunk_Blocks = nil) -> [dynamic]u8 {
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
 	encode_server(&w, m, blocks)
 	return w.buf
 }
 
 @(private = "file")
 encode_c :: proc(m: Client_Message) -> [dynamic]u8 {
-	w: Writer
-	writer_init(&w, context.temp_allocator)
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
 	encode_client(&w, m)
 	return w.buf
 }
 
 @(test)
 test_messages_round_trip :: proc(t: ^testing.T) {
-	scratch := new(Block_Array)
+	scratch := new(game.Block_Array)
 	defer free(scratch)
 
-	account: Account
-	account[0], account[31] = 7, 9
+	key: access.Account
+	key[0], key[31] = 7, 9
 	hello, ok := decode_client_t(
-		encode_c(
-			Hello{PROTOCOL_VERSION, account, "Ünïcode name", 0xfeed_beef_0123_4567, 0, nil},
-		)[:],
+		encode_c(Hello{PROTOCOL_VERSION, key, "Ünïcode name", 0xfeed_beef_0123_4567, 0, nil})[:],
 	)
 	testing.expect(t, ok)
 	testing.expect_value(t, hello.(Hello).character, "Ünïcode name")
-	testing.expect(t, hello.(Hello).account == account)
+	testing.expect(t, hello.(Hello).account == key)
 	testing.expect_value(t, hello.(Hello).schema, u64(0xfeed_beef_0123_4567))
-	sig: Signature
+	sig: access.Signature
 	sig[63] = 1
 	proof: Client_Message
 	proof, ok = decode_client_t(encode_c(Proof{sig})[:])
 	testing.expect(t, ok && proof.(Proof).signature == sig)
-	nonce: Nonce
+	nonce: access.Nonce
 	nonce[5] = 3
 	challenge: Server_Message
 	challenge, ok = decode_server_t(encode_s(Challenge{nonce})[:], scratch)
 	testing.expect(t, ok && challenge.(Challenge).nonce == nonce)
 	move: Client_Message
-	input := Player_Input{{0.5, -1}, 1.25, -0.5, {.Jump, .Sprint}}
+	input := game.Player_Input{{0.5, -1}, 1.25, -0.5, {.Jump, .Sprint}}
 	move, ok = decode_client_t(encode_c(Input{42, input, 1 << 20})[:])
 	got := move.(Input)
 	testing.expect(t, ok && got.sequence == 42 && got.input == quantize_input(input))
@@ -61,9 +61,9 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	tp, ok = decode_client_t(encode_c(Teleport{{1.5, -2e6, 3}, 2, 0.5})[:])
 	testing.expect(t, ok && tp.(Teleport) == Teleport{{1.5, -2e6, 3}, 2, 0.5})
 	edit: Client_Message
-	edit, ok = decode_client_t(encode_c(edit_plain(5, 9, {-3, WORLD_MIN_Y, 7}, .Sand))[:])
-	testing.expect(t, ok && edit.(Edit) == edit_plain(5, 9, {-3, WORLD_MIN_Y, 7}, .Sand))
-	placed := Edit{6, 10, {1, 2, 3}, Block(60), {1, 1, 3}, 2, {8, 16, 0}}
+	edit, ok = decode_client_t(encode_c(edit_plain(5, 9, {-3, game.WORLD_MIN_Y, 7}, .Sand))[:])
+	testing.expect(t, ok && edit.(Edit) == edit_plain(5, 9, {-3, game.WORLD_MIN_Y, 7}, .Sand))
+	placed := Edit{6, 10, {1, 2, 3}, game.Block(60), {1, 1, 3}, 2, {8, 16, 0}}
 	edit, ok = decode_client_t(encode_c(placed)[:])
 	testing.expect(t, ok && edit.(Edit) == placed)
 	for bad in ([]Edit{{face = 8}, {hit = {17, 0, 0}}}) {
@@ -79,7 +79,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	column := Column {
 		pos = {-7, 12},
 	}
-	for &h, i in column.heights {h = i32(i % 37) - 20 if i != 5 else WORLD_MIN_Y}
+	for &h, i in column.heights {h = i32(i % 37) - 20 if i != 5 else game.WORLD_MIN_Y}
 	col: Server_Message
 	col_bytes := encode_s(column)
 	col, ok = decode_server_t(col_bytes[:], scratch)
@@ -108,13 +108,13 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, !ok)
 	welcome := Welcome {
 		PROTOCOL_VERSION,
-		TICK_RATE,
+		game.TICK_RATE,
 		3,
 		{0, 40.5, 0},
 		12,
 		6,
-		RULES_DEFAULTS,
-		address_derive(7),
+		game.RULES_DEFAULTS,
+		starmap.address_derive(7),
 		0,
 		"",
 		"stopwatch",
@@ -122,11 +122,11 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	}
 	moved: Server_Message
 	moved, ok = decode_server_t(
-		encode_s(World_Changed{address_derive(8), RULES_DEFAULTS})[:],
+		encode_s(World_Changed{starmap.address_derive(8), game.RULES_DEFAULTS})[:],
 		scratch,
 	)
-	testing.expect(t, ok && moved.(World_Changed).address == address_derive(8))
-	_, ok = decode_server_t(encode_s(World_Changed{{}, RULES_DEFAULTS})[:], scratch)
+	testing.expect(t, ok && moved.(World_Changed).address == starmap.address_derive(8))
+	_, ok = decode_server_t(encode_s(World_Changed{{}, game.RULES_DEFAULTS})[:], scratch)
 	testing.expect(t, !ok, "an address with a symbol twice")
 	m: Server_Message
 	m, ok = decode_server_t(encode_s(welcome)[:], scratch)
@@ -145,13 +145,13 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && ping.(Ping).id == 77)
 	m, ok = decode_server_t(encode_s(Pong{78})[:], scratch)
 	testing.expect(t, ok && m.(Pong).id == 78)
-	m, ok = decode_server_t(encode_s(Unload_Chunk{{-5, CHUNK_MIN_Y, 1 << 20}})[:], scratch)
-	testing.expect(t, ok && m.(Unload_Chunk).pos == {-5, CHUNK_MIN_Y, 1 << 20})
+	m, ok = decode_server_t(encode_s(Unload_Chunk{{-5, game.CHUNK_MIN_Y, 1 << 20}})[:], scratch)
+	testing.expect(t, ok && m.(Unload_Chunk).pos == {-5, game.CHUNK_MIN_Y, 1 << 20})
 	req := Inventory_Request{9, {.Swap_Hotbar, 20, 3}}
 	asked: Client_Message
 	asked, ok = decode_client_t(encode_c(req)[:])
 	testing.expect(t, ok && asked.(Inventory_Request) == req)
-	_, ok = decode_client_t(encode_c(Inventory_Request{9, {.Click, ALL_SLOTS, 0}})[:])
+	_, ok = decode_client_t(encode_c(Inventory_Request{9, {.Click, game.ALL_SLOTS, 0}})[:])
 	testing.expect(t, !ok)
 	m, ok = decode_server_t(encode_s(Bulk_Begin{9})[:], scratch)
 	testing.expect(t, ok && m.(Bulk_Begin).count == 9)
@@ -174,9 +174,9 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
 	at, ok = decode_client_t(encode_c(Use_Block{{-4, 70, 9}, 41})[:])
 	testing.expect(t, ok && at.(Use_Block) == Use_Block{{-4, 70, 9}, 41})
-	at, ok = decode_client_t(encode_c(Inventory_Request{3, {.Click, ALL_SLOTS - 1, 0}})[:])
+	at, ok = decode_client_t(encode_c(Inventory_Request{3, {.Click, game.ALL_SLOTS - 1, 0}})[:])
 	testing.expect(t, ok, "the last chest slot did not decode")
-	_, ok = decode_client_t(encode_c(Inventory_Request{3, {.Click, ALL_SLOTS, 0}})[:])
+	_, ok = decode_client_t(encode_c(Inventory_Request{3, {.Click, game.ALL_SLOTS, 0}})[:])
 	testing.expect(t, !ok, "a slot past the chest decoded")
 	check := Prediction_Check {
 		sequence = 90,
@@ -300,20 +300,20 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		testing.expectf(t, !tok, "%v decoded", bad)
 	}
 	// Names: letters, digits, _ and -, 1..16 of them.
-	for name in ([]string{"a", "Player_1", "x-y", "0123456789abcdef"}) {testing.expectf(t, name_valid(name), "%q", name)}
-	for name in ([]string{"", "with space", "0123456789abcdefg", "é", "a/b"}) {testing.expectf(t, !name_valid(name), "%q", name)}
+	for name in ([]string{"a", "Player_1", "x-y", "0123456789abcdef"}) {testing.expectf(t, game.name_valid(name), "%q", name)}
+	for name in ([]string{"", "with space", "0123456789abcdefg", "é", "a/b"}) {testing.expectf(t, !game.name_valid(name), "%q", name)}
 }
 
 @(test)
 test_chunk_round_trip :: proc(t: ^testing.T) {
-	arrays: Block_Arrays
-	testing.expect(t, block_arrays_init(&arrays, 16) == nil)
-	defer block_arrays_destroy(&arrays)
-	scratch := new(Block_Array)
+	arrays: game.Block_Arrays
+	testing.expect(t, game.block_arrays_init(&arrays, 16) == nil)
+	defer game.block_arrays_destroy(&arrays)
+	scratch := new(game.Block_Array)
 	defer free(scratch)
 
 	// Uniform.
-	stone := Chunk_Blocks {
+	stone := game.Chunk_Blocks {
 		uniform = .Stone,
 	}
 	m, ok := decode_server_t(encode_s(Chunk_Message{pos = {1, 2, 3}}, &stone)[:], scratch)
@@ -321,47 +321,47 @@ test_chunk_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && c.is_uniform && c.uniform == .Stone && c.pos == {1, 2, 3})
 
 	// Real terrain, and the worst case: every block differs from the last.
-	terrain := Chunk_Blocks{}
-	terrain.array, _ = block_arrays_take(&arrays)
-	test_terrain(9, terrain.array)
-	worst := Chunk_Blocks{}
-	worst.array, _ = block_arrays_take(&arrays)
-	for &b, i in worst.array {b = Block(1 + i % (len(Block) - 1))}
-	for blocks in ([]^Chunk_Blocks{&terrain, &worst}) {
+	terrain := game.Chunk_Blocks{}
+	terrain.array, _ = game.block_arrays_take(&arrays)
+	game.test_terrain(9, terrain.array)
+	worst := game.Chunk_Blocks{}
+	worst.array, _ = game.block_arrays_take(&arrays)
+	for &b, i in worst.array {b = game.Block(1 + i % (len(game.Block) - 1))}
+	for blocks in ([]^game.Chunk_Blocks{&terrain, &worst}) {
 		bytes := encode_s(Chunk_Message{pos = {0, -1, 0}}, blocks)
 		testing.expect(t, len(bytes) <= MAX_MESSAGE_SIZE)
 		m, ok = decode_server_t(bytes[:], scratch)
 		c = m.(Chunk_Message)
 		testing.expect(t, ok && !c.is_uniform && scratch^ == blocks.array^)
 	}
-	chunk_release(&terrain, &arrays)
-	chunk_release(&worst, &arrays)
+	game.chunk_release(&terrain, &arrays)
+	game.chunk_release(&worst, &arrays)
 }
 
 // Every proper prefix of a valid message is invalid.
 @(test)
 test_truncated_messages_fail :: proc(t: ^testing.T) {
-	scratch := new(Block_Array)
+	scratch := new(game.Block_Array)
 	defer free(scratch)
-	arrays: Block_Arrays
-	testing.expect(t, block_arrays_init(&arrays, 16) == nil)
-	defer block_arrays_destroy(&arrays)
-	terrain := Chunk_Blocks{}
-	terrain.array, _ = block_arrays_take(&arrays)
-	defer chunk_release(&terrain, &arrays)
-	test_terrain(9, terrain.array)
+	arrays: game.Block_Arrays
+	testing.expect(t, game.block_arrays_init(&arrays, 16) == nil)
+	defer game.block_arrays_destroy(&arrays)
+	terrain := game.Chunk_Blocks{}
+	terrain.array, _ = game.block_arrays_take(&arrays)
+	defer game.chunk_release(&terrain, &arrays)
+	game.test_terrain(9, terrain.array)
 
 	server := [][dynamic]u8 {
 		encode_s(
 			Welcome {
 				PROTOCOL_VERSION,
-				TICK_RATE,
+				game.TICK_RATE,
 				1,
 				{},
 				8,
 				4,
-				RULES_DEFAULTS,
-				address_derive(1),
+				game.RULES_DEFAULTS,
+				starmap.address_derive(1),
 				0xfeed,
 				"voxiverse@1.0.0",
 				"stopwatch",
@@ -418,259 +418,259 @@ test_hello_steam :: proc(t: ^testing.T) {
 
 @(test)
 test_invalid_values_fail :: proc(t: ^testing.T) {
-	scratch := new(Block_Array)
+	scratch := new(game.Block_Array)
 	defer free(scratch)
 
 	bad_server :: proc(
 		t: ^testing.T,
-		scratch: ^Block_Array,
+		scratch: ^game.Block_Array,
 		what: string,
-		build: proc(w: ^Writer),
+		build: proc(w: ^game.Writer),
 	) {
-		w: Writer
-		writer_init(&w, context.temp_allocator)
+		w: game.Writer
+		game.writer_init(&w, context.temp_allocator)
 		build(&w)
 		_, ok := decode_server_t(w.buf[:], scratch)
 		testing.expectf(t, !ok, "accepted: %s", what)
 	}
-	bad_client :: proc(t: ^testing.T, what: string, build: proc(w: ^Writer)) {
-		w: Writer
-		writer_init(&w, context.temp_allocator)
+	bad_client :: proc(t: ^testing.T, what: string, build: proc(w: ^game.Writer)) {
+		w: game.Writer
+		game.writer_init(&w, context.temp_allocator)
 		build(&w)
 		_, ok := decode_client_t(w.buf[:])
 		testing.expectf(t, !ok, "accepted: %s", what)
 	}
 
-	bad_server(t, scratch, "empty message", proc(w: ^Writer) {})
-	bad_server(t, scratch, "unknown kind", proc(w: ^Writer) {write_u8(w, 200)})
-	bad_server(t, scratch, "kind 0", proc(w: ^Writer) {write_u8(w, 0)})
+	bad_server(t, scratch, "empty message", proc(w: ^game.Writer) {})
+	bad_server(t, scratch, "unknown kind", proc(w: ^game.Writer) {game.write_u8(w, 200)})
+	bad_server(t, scratch, "kind 0", proc(w: ^game.Writer) {game.write_u8(w, 0)})
 	bad_server(
 		t,
 		scratch,
 		"chunk pos past the world limit",
-		proc(w: ^Writer) {
-			write_u8(w, 4) // Unload_Chunk
-			write_i32(w, CHUNK_LIMIT)
-			write_i32(w, 0)
-			write_i32(w, 0)
+		proc(w: ^game.Writer) {
+			game.write_u8(w, 4) // Unload_Chunk
+			game.write_i32(w, game.CHUNK_LIMIT)
+			game.write_i32(w, 0)
+			game.write_i32(w, 0)
 		},
 	)
 	bad_server(
 		t,
 		scratch,
 		"chunk above the world",
-		proc(w: ^Writer) {
-			write_u8(w, 4) // Unload_Chunk
-			write_i32(w, 0)
-			write_i32(w, CHUNK_MAX_Y)
-			write_i32(w, 0)
+		proc(w: ^game.Writer) {
+			game.write_u8(w, 4) // Unload_Chunk
+			game.write_i32(w, 0)
+			game.write_i32(w, game.CHUNK_MAX_Y)
+			game.write_i32(w, 0)
 		},
 	)
-	bad_server(t, scratch, "view radius too large", proc(w: ^Writer) {
-		write_u8(w, 1)
-		write_u32(w, PROTOCOL_VERSION)
-		write_u32(w, TICK_RATE)
-		for _ in 0 ..< 3 {write_f64(w, 0)}
-		write_u32(w, MAX_VIEW_RADIUS + 1)
-		write_u32(w, 4)
-		rules := RULES_DEFAULTS
-		write_vars(w, rules_table(), &rules)
+	bad_server(t, scratch, "view radius too large", proc(w: ^game.Writer) {
+		game.write_u8(w, 1)
+		game.write_u32(w, PROTOCOL_VERSION)
+		game.write_u32(w, game.TICK_RATE)
+		for _ in 0 ..< 3 {game.write_f64(w, 0)}
+		game.write_u32(w, MAX_VIEW_RADIUS + 1)
+		game.write_u32(w, 4)
+		rules := game.RULES_DEFAULTS
+		write_vars(w, game.rules_table(), &rules)
 	})
-	bad_server(t, scratch, "view height zero", proc(w: ^Writer) {
-		write_u8(w, 1)
-		write_u32(w, PROTOCOL_VERSION)
-		write_u32(w, TICK_RATE)
-		for _ in 0 ..< 3 {write_f64(w, 0)}
-		write_u32(w, 8)
-		write_u32(w, 0)
-		rules := RULES_DEFAULTS
-		write_vars(w, rules_table(), &rules)
+	bad_server(t, scratch, "view height zero", proc(w: ^game.Writer) {
+		game.write_u8(w, 1)
+		game.write_u32(w, PROTOCOL_VERSION)
+		game.write_u32(w, game.TICK_RATE)
+		for _ in 0 ..< 3 {game.write_f64(w, 0)}
+		game.write_u32(w, 8)
+		game.write_u32(w, 0)
+		rules := game.RULES_DEFAULTS
+		write_vars(w, game.rules_table(), &rules)
 	})
-	bad_server(t, scratch, "view height too large", proc(w: ^Writer) {
-		write_u8(w, 1)
-		write_u32(w, PROTOCOL_VERSION)
-		write_u32(w, TICK_RATE)
-		for _ in 0 ..< 3 {write_f64(w, 0)}
-		write_u32(w, 8)
-		write_u32(w, MAX_VIEW_HEIGHT + 1)
-		rules := RULES_DEFAULTS
-		write_vars(w, rules_table(), &rules)
+	bad_server(t, scratch, "view height too large", proc(w: ^game.Writer) {
+		game.write_u8(w, 1)
+		game.write_u32(w, PROTOCOL_VERSION)
+		game.write_u32(w, game.TICK_RATE)
+		for _ in 0 ..< 3 {game.write_f64(w, 0)}
+		game.write_u32(w, 8)
+		game.write_u32(w, game.MAX_VIEW_HEIGHT + 1)
+		rules := game.RULES_DEFAULTS
+		write_vars(w, game.rules_table(), &rules)
 	})
 
-	chunk_header :: proc(w: ^Writer) {
-		write_u8(w, 3) // Chunk
-		for _ in 0 ..< 3 {write_i32(w, 0)}
+	chunk_header :: proc(w: ^game.Writer) {
+		game.write_u8(w, 3) // Chunk
+		for _ in 0 ..< 3 {game.write_i32(w, 0)}
 	}
 	bad_server(
 		t,
 		scratch,
 		"column height above the world",
-		proc(w: ^Writer) {
-			write_u8(w, 10) // Column
-			write_i32(w, 0)
-			write_i32(w, 0)
-			write_svarint(w, WORLD_MAX_Y)
-			for _ in 1 ..< CHUNK_SIZE * CHUNK_SIZE {write_svarint(w, 0)}
+		proc(w: ^game.Writer) {
+			game.write_u8(w, 10) // Column
+			game.write_i32(w, 0)
+			game.write_i32(w, 0)
+			game.write_svarint(w, game.WORLD_MAX_Y)
+			for _ in 1 ..< game.CHUNK_SIZE * game.CHUNK_SIZE {game.write_svarint(w, 0)}
 		},
 	)
-	bad_server(t, scratch, "uniform chunk of an unknown block", proc(w: ^Writer) {
+	bad_server(t, scratch, "uniform chunk of an unknown block", proc(w: ^game.Writer) {
 		chunk_header(w)
-		write_u8(w, 0)
-		write_u16(w, u16(len(Block) + BASE_NEW_STATES))
+		game.write_u8(w, 0)
+		game.write_u16(w, u16(len(game.Block) + game.BASE_NEW_STATES))
 	})
-	bad_server(t, scratch, "unknown chunk encoding", proc(w: ^Writer) {
+	bad_server(t, scratch, "unknown chunk encoding", proc(w: ^game.Writer) {
 		chunk_header(w)
-		write_u8(w, 2)
+		game.write_u8(w, 2)
 	})
-	bad_server(t, scratch, "empty palette", proc(w: ^Writer) {
+	bad_server(t, scratch, "empty palette", proc(w: ^game.Writer) {
 		chunk_header(w)
-		write_u8(w, 1)
-		write_varint(w, 0)
+		game.write_u8(w, 1)
+		game.write_varint(w, 0)
 	})
-	bad_server(t, scratch, "palette of an unknown block", proc(w: ^Writer) {
+	bad_server(t, scratch, "palette of an unknown block", proc(w: ^game.Writer) {
 		chunk_header(w)
-		write_u8(w, 1)
-		write_varint(w, 1)
-		write_u16(w, 999)
-		write_varint(w, CHUNK_VOLUME)
-		write_varint(w, 0)
+		game.write_u8(w, 1)
+		game.write_varint(w, 1)
+		game.write_u16(w, 999)
+		game.write_varint(w, game.CHUNK_VOLUME)
+		game.write_varint(w, 0)
 	})
-	bad_server(t, scratch, "runs past the chunk", proc(w: ^Writer) {
+	bad_server(t, scratch, "runs past the chunk", proc(w: ^game.Writer) {
 		chunk_header(w)
-		write_u8(w, 1)
-		write_varint(w, 1)
-		write_u16(w, 1)
-		write_varint(w, CHUNK_VOLUME + 1)
-		write_varint(w, 0)
+		game.write_u8(w, 1)
+		game.write_varint(w, 1)
+		game.write_u16(w, 1)
+		game.write_varint(w, game.CHUNK_VOLUME + 1)
+		game.write_varint(w, 0)
 	})
-	bad_server(t, scratch, "runs short of the chunk", proc(w: ^Writer) {
+	bad_server(t, scratch, "runs short of the chunk", proc(w: ^game.Writer) {
 		chunk_header(w)
-		write_u8(w, 1)
-		write_varint(w, 1)
-		write_u16(w, 1)
-		write_varint(w, CHUNK_VOLUME - 1)
-		write_varint(w, 0)
+		game.write_u8(w, 1)
+		game.write_varint(w, 1)
+		game.write_u16(w, 1)
+		game.write_varint(w, game.CHUNK_VOLUME - 1)
+		game.write_varint(w, 0)
 	})
-	bad_server(t, scratch, "zero-length run", proc(w: ^Writer) {
+	bad_server(t, scratch, "zero-length run", proc(w: ^game.Writer) {
 		chunk_header(w)
-		write_u8(w, 1)
-		write_varint(w, 1)
-		write_u16(w, 1)
-		write_varint(w, 0)
-		write_varint(w, 0)
-		write_varint(w, CHUNK_VOLUME)
-		write_varint(w, 0)
+		game.write_u8(w, 1)
+		game.write_varint(w, 1)
+		game.write_u16(w, 1)
+		game.write_varint(w, 0)
+		game.write_varint(w, 0)
+		game.write_varint(w, game.CHUNK_VOLUME)
+		game.write_varint(w, 0)
 	})
-	bad_server(t, scratch, "palette index out of range", proc(w: ^Writer) {
+	bad_server(t, scratch, "palette index out of range", proc(w: ^game.Writer) {
 		chunk_header(w)
-		write_u8(w, 1)
-		write_varint(w, 1)
-		write_u16(w, 1)
-		write_varint(w, CHUNK_VOLUME)
-		write_varint(w, 1)
+		game.write_u8(w, 1)
+		game.write_varint(w, 1)
+		game.write_u16(w, 1)
+		game.write_varint(w, game.CHUNK_VOLUME)
+		game.write_varint(w, 1)
 	})
 
-	bad_client(t, "name too long", proc(w: ^Writer) {
-		write_u8(w, 1)
-		write_u32(w, PROTOCOL_VERSION)
-		write_string(w, "a name that is far too long for anyone to need")
+	bad_client(t, "name too long", proc(w: ^game.Writer) {
+		game.write_u8(w, 1)
+		game.write_u32(w, PROTOCOL_VERSION)
+		game.write_string(w, "a name that is far too long for anyone to need")
 	})
-	bad_client(t, "name not UTF-8", proc(w: ^Writer) {
-		write_u8(w, 1)
-		write_u32(w, PROTOCOL_VERSION)
-		write_string(w, "\xff\xfe")
+	bad_client(t, "name not UTF-8", proc(w: ^game.Writer) {
+		game.write_u8(w, 1)
+		game.write_u32(w, PROTOCOL_VERSION)
+		game.write_string(w, "\xff\xfe")
 	})
-	bad_client(t, "string length past the message", proc(w: ^Writer) {
-		write_u8(w, 1)
-		write_u32(w, PROTOCOL_VERSION)
-		write_varint(w, 1 << 31)
+	bad_client(t, "string length past the message", proc(w: ^game.Writer) {
+		game.write_u8(w, 1)
+		game.write_u32(w, PROTOCOL_VERSION)
+		game.write_varint(w, 1 << 31)
 	})
 	bad_client(
 		t,
 		"unknown input button",
-		proc(w: ^Writer) {
-			write_u8(w, 2) // Input
-			write_u32(w, 1)
-			write_u8(w, 0)
-			write_u8(w, 0)
-			write_f32(w, 0)
-			write_f32(w, 0)
-			write_u8(w, 0x80)
+		proc(w: ^game.Writer) {
+			game.write_u8(w, 2) // Input
+			game.write_u32(w, 1)
+			game.write_u8(w, 0)
+			game.write_u8(w, 0)
+			game.write_f32(w, 0)
+			game.write_f32(w, 0)
+			game.write_u8(w, 0x80)
 		},
 	)
-	bad_client(t, "input looking past straight up", proc(w: ^Writer) {
-		write_u8(w, 2)
-		write_u32(w, 1)
-		write_u8(w, 0)
-		write_u8(w, 0)
-		write_f32(w, 0)
-		write_f32(w, 2)
-		write_u8(w, 0)
+	bad_client(t, "input looking past straight up", proc(w: ^game.Writer) {
+		game.write_u8(w, 2)
+		game.write_u32(w, 1)
+		game.write_u8(w, 0)
+		game.write_u8(w, 0)
+		game.write_f32(w, 0)
+		game.write_f32(w, 2)
+		game.write_u8(w, 0)
 	})
-	bad_client(t, "input with NaN yaw", proc(w: ^Writer) {
-		write_u8(w, 2)
-		write_u32(w, 1)
-		write_u8(w, 0)
-		write_u8(w, 0)
-		write_f32(w, math.nan_f32())
-		write_f32(w, 0)
-		write_u8(w, 0)
+	bad_client(t, "input with NaN yaw", proc(w: ^game.Writer) {
+		game.write_u8(w, 2)
+		game.write_u32(w, 1)
+		game.write_u8(w, 0)
+		game.write_u8(w, 0)
+		game.write_f32(w, math.nan_f32())
+		game.write_f32(w, 0)
+		game.write_u8(w, 0)
 	})
 	bad_client(
 		t,
 		"edit above the world",
-		proc(w: ^Writer) {
-			write_u8(w, 6) // Edit
-			write_u32(w, 1)
-			write_i32(w, 0)
-			write_i32(w, WORLD_MAX_Y)
-			write_i32(w, 0)
-			write_u16(w, u16(Block.Stone))
+		proc(w: ^game.Writer) {
+			game.write_u8(w, 6) // Edit
+			game.write_u32(w, 1)
+			game.write_i32(w, 0)
+			game.write_i32(w, game.WORLD_MAX_Y)
+			game.write_i32(w, 0)
+			game.write_u16(w, u16(game.Block.Stone))
 		},
 	)
-	bad_client(t, "edit with an unknown block", proc(w: ^Writer) {
-		write_u8(w, 6)
-		write_u32(w, 1)
-		write_u32(w, 0)
-		write_i32(w, 0)
-		write_i32(w, 0)
-		write_i32(w, 0)
-		write_u16(w, 999)
+	bad_client(t, "edit with an unknown block", proc(w: ^game.Writer) {
+		game.write_u8(w, 6)
+		game.write_u32(w, 1)
+		game.write_u32(w, 0)
+		game.write_i32(w, 0)
+		game.write_i32(w, 0)
+		game.write_i32(w, 0)
+		game.write_u16(w, 999)
 	})
 	bad_client(
 		t,
 		"NaN position",
-		proc(w: ^Writer) {
-			write_u8(w, 4) // Teleport
-			write_f64(w, math.nan_f64())
-			write_f64(w, 0)
-			write_f64(w, 0)
-			write_f32(w, 0)
-			write_f32(w, 0)
+		proc(w: ^game.Writer) {
+			game.write_u8(w, 4) // Teleport
+			game.write_f64(w, math.nan_f64())
+			game.write_f64(w, 0)
+			game.write_f64(w, 0)
+			game.write_f32(w, 0)
+			game.write_f32(w, 0)
 		},
 	)
 	bad_client(
 		t,
 		"infinite position",
-		proc(w: ^Writer) {
-			write_u8(w, 4) // Teleport
-			write_f64(w, 0)
-			write_f64(w, math.inf_f64(-1))
-			write_f64(w, 0)
-			write_f32(w, 0)
-			write_f32(w, 0)
+		proc(w: ^game.Writer) {
+			game.write_u8(w, 4) // Teleport
+			game.write_f64(w, 0)
+			game.write_f64(w, math.inf_f64(-1))
+			game.write_f64(w, 0)
+			game.write_f32(w, 0)
+			game.write_f32(w, 0)
 		},
 	)
 	bad_client(
 		t,
 		"position past the world limit",
-		proc(w: ^Writer) {
-			write_u8(w, 4) // Teleport
-			write_f64(w, WORLD_LIMIT)
-			write_f64(w, 0)
-			write_f64(w, 0)
-			write_f32(w, 0)
-			write_f32(w, 0)
+		proc(w: ^game.Writer) {
+			game.write_u8(w, 4) // Teleport
+			game.write_f64(w, game.WORLD_LIMIT)
+			game.write_f64(w, 0)
+			game.write_f64(w, 0)
+			game.write_f32(w, 0)
+			game.write_f32(w, 0)
 		},
 	)
 }
@@ -678,12 +678,12 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 @(test)
 test_varint :: proc(t: ^testing.T) {
 	for v in ([]u32{0, 1, 127, 128, 300, 1 << 21, max(u32)}) {
-		w: Writer
-		writer_init(&w, context.temp_allocator)
-		write_varint(&w, v)
-		r := reader_make(w.buf[:])
-		testing.expect_value(t, read_varint(&r), v)
-		testing.expect(t, reader_finish(&r))
+		w: game.Writer
+		game.writer_init(&w, context.temp_allocator)
+		game.write_varint(&w, v)
+		r := game.reader_make(w.buf[:])
+		testing.expect_value(t, game.read_varint(&r), v)
+		testing.expect(t, game.reader_finish(&r))
 	}
 	bad := [][]u8 {
 		{0x80, 0x00}, // overlong zero
@@ -693,8 +693,8 @@ test_varint :: proc(t: ^testing.T) {
 		{0x80}, // truncated
 	}
 	for b in bad {
-		r := reader_make(b)
-		read_varint(&r)
+		r := game.reader_make(b)
+		game.read_varint(&r)
 		testing.expectf(t, !r.ok, "accepted varint %v", b)
 	}
 }
@@ -761,21 +761,21 @@ test_dissector_knows_every_kind :: proc(t: ^testing.T) {
 test_varint64_edges :: proc(t: ^testing.T) {
 	unsigned := [?]u64{0, 1, 127, 128, 1 << 32, 1 << 63, max(u64)}
 	for v in unsigned {
-		w: Writer
-		writer_init(&w, context.temp_allocator)
-		write_varint64(&w, v)
-		r := reader_make(w.buf[:])
-		testing.expect_value(t, read_varint64(&r), v)
-		testing.expect(t, reader_finish(&r))
+		w: game.Writer
+		game.writer_init(&w, context.temp_allocator)
+		game.write_varint64(&w, v)
+		r := game.reader_make(w.buf[:])
+		testing.expect_value(t, game.read_varint64(&r), v)
+		testing.expect(t, game.reader_finish(&r))
 	}
 	signed := [?]i64{0, -1, 1, min(i64), max(i64), -(1 << 40)}
 	for v in signed {
-		w: Writer
-		writer_init(&w, context.temp_allocator)
-		write_svarint64(&w, v)
-		r := reader_make(w.buf[:])
-		testing.expect_value(t, read_svarint64(&r), v)
-		testing.expect(t, reader_finish(&r))
+		w: game.Writer
+		game.writer_init(&w, context.temp_allocator)
+		game.write_svarint64(&w, v)
+		r := game.reader_make(w.buf[:])
+		testing.expect_value(t, game.read_svarint64(&r), v)
+		testing.expect(t, game.reader_finish(&r))
 	}
 	bad := [][]u8 {
 		{0x80, 0x00}, // overlong zero
@@ -785,8 +785,8 @@ test_varint64_edges :: proc(t: ^testing.T) {
 		{0x80}, // ends inside
 	}
 	for b, i in bad {
-		r := reader_make(b)
-		read_varint64(&r)
+		r := game.reader_make(b)
+		game.read_varint64(&r)
 		testing.expectf(t, !r.ok, "bad encoding %d was accepted", i)
 	}
 }
@@ -796,23 +796,31 @@ test_varint64_edges :: proc(t: ^testing.T) {
 // does not know panics, and a panic inside a test thread hangs the runner.
 @(test)
 test_rules_vars_round_trip :: proc(t: ^testing.T) {
-	rules := RULES_DEFAULTS
+	rules := game.RULES_DEFAULTS
 	rules.gravity = 12.5
 	rules.pvp = false
 	rules.random_tick_speed = 9
 	testing.expect(t, base.var_text_set(&rules.default_game_mode, "adventure"))
 
-	w: Writer
-	writer_init(&w, context.temp_allocator)
-	write_vars(&w, rules_table(), &rules)
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	write_vars(&w, game.rules_table(), &rules)
 
-	r := reader_make(w.buf[:])
-	got: Rules
-	read_vars(&r, rules_table(), &got)
+	r := game.reader_make(w.buf[:])
+	got: game.Rules
+	read_vars(&r, game.rules_table(), &got)
 	testing.expect(t, r.ok)
 	testing.expect_value(t, got.gravity, rules.gravity)
 	testing.expect_value(t, got.pvp, false)
 	testing.expect_value(t, got.random_tick_speed, i32(9))
 	testing.expect_value(t, base.var_text(&got.default_game_mode), "adventure")
-	testing.expect(t, rules_valid(&got))
+	testing.expect(t, game.rules_valid(&got))
+}
+
+decode_client_t :: proc(data: []u8) -> (Client_Message, bool) {
+	return decode_client(data, game.test_reg())
+}
+
+decode_server_t :: proc(data: []u8, blocks: ^game.Block_Array) -> (Server_Message, bool) {
+	return decode_server(data, blocks, game.test_reg())
 }

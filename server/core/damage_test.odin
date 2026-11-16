@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // The damage pipeline: abilities and the pvp rule decide, regeneration waits
 // its delay, a death is counted and told from its source, the Respawn button
@@ -236,7 +237,7 @@ test_the_damage_pipeline :: proc(t: ^testing.T) {
 	testing.expect(t, alice.health.dead && alice.hits > 0, "alice was told: dead, and hit")
 
 	// Respawn: refused alive, the button when dead, the kit once.
-	net_send(bob, game.Respawn{})
+	net_send(bob, protocol.Respawn{})
 	call(srv, respawn_scenario, nil)
 	testing.expect(t, res.respawn_refused_alive, "respawn was accepted while alive")
 	testing.expect_value(t, res.after_respawn_health, f32(20))
@@ -379,11 +380,11 @@ test_respawn_rules :: proc(t: ^testing.T) {
 	// The delay: Respawn does nothing before it, and works after it.
 	testing.expect_value(t, damage(s, c, 100, {kind = .Command}), Damage_Result.Killed)
 	harness_step(&sess.h, 2 * game.TICK_RATE - 2)
-	mirror_send(&sess.mirror, game.Respawn{})
+	mirror_send(&sess.mirror, protocol.Respawn{})
 	harness_step(&sess.h, 1)
 	testing.expect(t, c.dead, "came back before the delay")
 	harness_step(&sess.h, 2)
-	mirror_send(&sess.mirror, game.Respawn{})
+	mirror_send(&sess.mirror, protocol.Respawn{})
 	harness_step(&sess.h, 1)
 	testing.expect(t, !c.dead, "Respawn after the delay did nothing")
 

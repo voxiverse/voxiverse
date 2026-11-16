@@ -5,7 +5,8 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "common:game"
+import "common:protocol"
+import "common:starmap"
 
 // The universes screen's creation (client/screen/creation.odin) starts a
 // universe with the typed seed and a game mode; the files say what the
@@ -19,7 +20,7 @@ test_universe_made_with_a_seed_and_a_mode :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "universe_mode"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	typed, _ := game.seed_of_text("andromeda")
+	typed, _ := starmap.seed_of_text("andromeda")
 	config := Config {
 		seed        = i64(typed),
 		mode        = "survival",
@@ -32,7 +33,7 @@ test_universe_made_with_a_seed_and_a_mode :: proc(t: ^testing.T) {
 	defer free(h)
 	srv := &h.srv
 	if !testing.expect(t, harness_start(h, config)) {return}
-	testing.expect_value(t, srv.home.address, game.seed_glyphs(typed))
+	testing.expect_value(t, srv.home.address, starmap.seed_glyphs(typed))
 	harness_stop(h)
 	text := read_universe(dir)
 	testing.expect(
@@ -40,7 +41,7 @@ test_universe_made_with_a_seed_and_a_mode :: proc(t: ^testing.T) {
 		strings.contains(
 			text,
 			strings.concatenate(
-				{"home = ", game.address_dir(game.seed_glyphs(typed))},
+				{"home = ", starmap.address_dir(starmap.seed_glyphs(typed))},
 				context.temp_allocator,
 			),
 		),
@@ -97,8 +98,8 @@ test_rejoin_in_the_last_world :: proc(t: ^testing.T) {
 		generator   = .Classic,
 		world_idle  = 0.5,
 	}
-	away := game.address_derive(999)
-	@(static) want: game.Address
+	away := starmap.address_derive(999)
+	@(static) want: starmap.Address
 	want = away
 	for round in 0 ..< 2 {
 		h := new(Harness)
@@ -117,9 +118,9 @@ test_rejoin_in_the_last_world :: proc(t: ^testing.T) {
 			testing.expect(t, alice.address == srv.home.address, "the first time, at home")
 			net_send(
 				alice,
-				game.Command {
+				protocol.Command {
 					strings.concatenate(
-						{"travel ", game.address_dir(away)},
+						{"travel ", starmap.address_dir(away)},
 						context.temp_allocator,
 					),
 				},

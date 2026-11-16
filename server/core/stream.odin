@@ -5,9 +5,11 @@ import "core:mem"
 import "core:slice"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // Clients, and interest management for each (the area is defined in
 // common/game/interest.odin): which chunks a client has, which to send next and
@@ -34,12 +36,12 @@ Local :: struct {}
 Client :: struct {
 	state:           Client_State,
 	link:            Client_Link,
-	grants:          [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
+	grants:          [dynamic]access.Grant, // what they may do, resolved (heap; permissions.odin)
 	world:           ^World, // where they are (Playing)
 	entity_world:    ^World, // the world whose entity world holds their player entity (entities.odin)
 	entity_id:       game.Entity_Id, // their player entity there (0: none)
-	account:         game.Account, // (proved once Playing)
-	nonce:           game.Nonce, // the Challenge sent
+	account:         access.Account, // (proved once Playing)
+	nonce:           access.Nonce, // the Challenge sent
 	steam_id:        u64, // the SteamID its Hello proved with a ticket (0: none); linked once the account is proved
 	wanted:          [game.MAX_NAME_LENGTH]u8, // the character asked for in Hello ("": choose)
 	wanted_len:      int,
@@ -62,7 +64,7 @@ Client :: struct {
 	columns:         map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
 	cursor:          int, // offsets before this are all sent
 	player:          game.Player_State,
-	inputs:          game.Input_Queue,
+	inputs:          protocol.Input_Queue,
 	stall_logged:    time.Tick, // when an input stall was last logged (one line every 10 s)
 	stall_discarded: int, // inputs discarded since then
 	teleported:      bool, // since the last Own_Player record
@@ -113,14 +115,14 @@ Client :: struct {
 	report_window:   u64, // the tick the current window of telemetry reports began
 	report_count:    int,
 	inv_acked:       u32, // its newest Inventory_Request applied
-	tx:              game.Sender, // what it has been told (replica.odin; made when it joins)
+	tx:              protocol.Sender, // what it has been told (replica.odin; made when it joins)
 	island_put:      u64, // the tick the Island record is next worked out
-	island:          game.Island, // what it said
+	island:          protocol.Island, // what it said
 	clock_pending:   bool, // the Clock record is due (join, travel)
 	inv_changed:     bool, // since the end of the last tick
 	open_chest:      Maybe(game.Block_Pos), // the chest it is looking into (containers.odin)
 	disturbed:       u64, // the last tick something besides its own inputs could have changed its movement (desync.odin)
-	check:           Maybe(game.Prediction_Check), // its newest, until that input is applied
+	check:           Maybe(protocol.Prediction_Check), // its newest, until that input is applied
 	selection:       [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 	command:         string, // the text of the command admin is running ("" otherwise; journal actions record it)
 	game_state:      []byte, // the game's state for this seat (game_client_state; kept, zeroed, by client_reset)
@@ -165,7 +167,7 @@ client_reset :: proc(c: ^Client) {
 	delete(c.grants)
 	delete(c.address)
 	counters_free(&c.stats)
-	game.sender_destroy(&c.tx)
+	protocol.sender_destroy(&c.tx)
 	has, columns, game_state, generation := c.has, c.columns, c.game_state, c.generation
 	clear(&has)
 	clear(&columns)
@@ -326,7 +328,7 @@ drop_far :: proc(s: ^Server, c: ^Client) {
 	}
 	for pos in drop {
 		delete_key(&c.has, pos)
-		send_message(s, c, game.Unload_Chunk{pos})
+		send_message(s, c, protocol.Unload_Chunk{pos})
 		column := [2]i32{pos.x, pos.z}
 		c.columns[column] -= 1
 		if c.columns[column] == 0 {delete_key(&c.columns, column)}

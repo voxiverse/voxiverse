@@ -11,6 +11,7 @@ import "core:testing"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // The crash harness. Faults injected into the disk layer (not real kills),
 // so every point is reproducible: a save is run with the "process" dying at one
@@ -109,7 +110,7 @@ crash_setup :: proc(t: ^testing.T, tag: string) -> (cs: Crash_Setup, ok: bool) {
 	far_edit(g, 0, 600)
 	chest := at(g, -3, 0, 2)
 	m := &g.sess.mirror
-	mirror_send(m, game.Use_Block{chest, m.prediction.next_sequence - 1})
+	mirror_send(m, protocol.Use_Block{chest, m.prediction.next_sequence - 1})
 	run(g, 3)
 	inventory(m, .Click, game.CHEST_BASE)
 	inventory(m, .Click, 20)

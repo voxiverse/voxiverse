@@ -1,4 +1,4 @@
-package game
+package starmap
 
 import "core:fmt"
 import "core:strings"

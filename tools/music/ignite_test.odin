@@ -1,6 +1,6 @@
 package music_tool
 
-import "common:game"
+import "common:starmap"
 import "core:slice"
 import "core:testing"
 
@@ -59,8 +59,8 @@ test_ignite_opens_with_the_hook :: proc(t: ^testing.T) {
 		if int(n.part) == mp {append(&m, n)}
 	}
 	slice.sort_by(m[:], proc(a, b: Note) -> bool {return a.start < b.start})
-	if !testing.expect(t, len(m) >= game.MOTIF_NOTES) {return}
-	hook := game.motif_of(game.earth_address())
+	if !testing.expect(t, len(m) >= starmap.MOTIF_NOTES) {return}
+	hook := starmap.motif_of(starmap.earth_address())
 	for h, i in hook {
 		testing.expectf(
 			t,

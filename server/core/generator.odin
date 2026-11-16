@@ -8,6 +8,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "common:worldgen"
 
 // The world's generator, as players can change it: its parameters
@@ -16,7 +17,7 @@ import "common:worldgen"
 
 // worldgen_variables: the generator's parameters for players (nothing for
 // a generator without any).
-worldgen_variables :: proc(w: ^World) -> (game.Variables, bool) {
+worldgen_variables :: proc(w: ^World) -> (protocol.Variables, bool) {
 	if w.chunks.gen.kind != .Earth {return {}, false}
 	b := strings.builder_make(context.temp_allocator)
 	for &v in worldgen.params_table().vars {
@@ -73,7 +74,7 @@ regen :: proc(w: ^World, c: ^Client, radius: i32) -> (count: int) {
 		for pos in drop {
 			if pos not_in other.has {continue}
 			delete_key(&other.has, pos)
-			send_message(s, &other, game.Unload_Chunk{pos})
+			send_message(s, &other, protocol.Unload_Chunk{pos})
 			column := [2]i32{pos.x, pos.z}
 			other.columns[column] -= 1
 			if other.columns[column] == 0 {delete_key(&other.columns, column)}

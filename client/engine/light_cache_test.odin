@@ -8,6 +8,7 @@ import "client:mesh"
 import "client:testkit"
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "common:worldgen"
 
 // The light cache. Terrain from the generator (5x5 chunk columns, five
@@ -42,7 +43,7 @@ fixture_make :: proc(t: ^testing.T, f: ^Cache_Fixture) {
 			world_set_column(&f.w, {pos = {cx, cz}, heights = tops})
 			for cy in f.surface - 2 ..= f.surface + 2 {
 				u, uniform := worldgen.generate(&gen, {cx, cy, cz}, scratch, cache)
-				m := game.Chunk_Message {
+				m := protocol.Chunk_Message {
 					pos        = {cx, cy, cz},
 					uniform    = u,
 					is_uniform = uniform,

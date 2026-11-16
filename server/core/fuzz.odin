@@ -7,6 +7,7 @@ import "core:hash"
 import "core:os"
 import "core:sync"
 
+import "common:access"
 import "common:base"
 import "common:base/fuzz"
 import "common:game"
@@ -280,12 +281,12 @@ fuzz_save_config :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 		defer permissions_destroy(&p)
 		return fuzz.sig_mix(1, fuzz.sig_bucket(len(p.roles)), fuzz.sig_bucket(len(p.players)))
 	case 1:
-		grants := make([dynamic]game.Grant, allocator)
+		grants := make([dynamic]access.Grant, allocator)
 		defer {
 			for g in grants {delete(g.pattern, allocator)}
 			delete(grants)
 		}
-		ok := game.grants_parse(text, &grants, allocator)
+		ok := access.grants_parse(text, &grants, allocator)
 		return fuzz.sig_mix(2, u64(ok), fuzz.sig_bucket(len(grants)))
 	case 2:
 		names := packs_parse(text, allocator)
@@ -315,8 +316,8 @@ fuzz_generate_config :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 			),
 		)
 	case 1:
-		grants := []game.Grant{{"chat.*", true, 1}, {"teleport.tp", false, 2}, {"*", true, 3}}
-		append(out, ..transmute([]u8)game.grants_text(grants))
+		grants := []access.Grant{{"chat.*", true, 1}, {"teleport.tp", false, 2}, {"*", true, 3}}
+		append(out, ..transmute([]u8)access.grants_text(grants))
 	case 2:
 		append(out, ..transmute([]u8)string("alpha, beta,  gamma"))
 	case 3:

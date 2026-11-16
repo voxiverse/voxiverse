@@ -10,12 +10,13 @@ import "client:overlay"
 import "client:testkit"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 
 // A session in the inventory overlay, for driving it with the mouse.
 Overlay_Fixture :: struct {
 	app:  ^engine.App,
 	s:    ^engine.Session,
-	pipe: game.Pipe,
+	pipe: protocol.Pipe,
 }
 
 SCREEN :: ui.Vec2{1280, 720}
@@ -30,7 +31,7 @@ overlay_fixture :: proc(t: ^testing.T, f: ^Overlay_Fixture, catalog: bool) {
 	testing.expect(t, ui.init(&f.app.ui, &f.app.font))
 	testing.expect(t, engine.item_icons_init(testkit.test_reg(), &f.app.item_icons, &f.app.ui))
 	f.s = new(engine.Session)
-	game.pipe_init(&f.pipe)
+	protocol.pipe_init(&f.pipe)
 	f.s.endpoint = {&f.pipe, .Client}
 	game.writer_init(&f.s.writer)
 	f.s.state = .Playing
@@ -51,7 +52,7 @@ overlay_fixture_destroy :: proc(f: ^Overlay_Fixture) {
 	delete(f.s.inv_pending)
 	delete(f.s.grants)
 	game.writer_destroy(&f.s.writer)
-	game.pipe_destroy(&f.pipe)
+	protocol.pipe_destroy(&f.pipe)
 	free(f.s)
 	delete(f.app.item_icons)
 	delete(f.app.inventory_search)
@@ -228,7 +229,7 @@ test_pick_block :: proc(t: ^testing.T) {
 		nil,
 	)
 	defer engine.world_destroy(&f.s.world)
-	column := game.Column {
+	column := protocol.Column {
 		pos = {0, 0},
 	}
 	engine.world_set_column(&f.s.world, column)

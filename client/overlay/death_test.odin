@@ -7,6 +7,7 @@ import "client:font"
 import "client:testkit"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 
 // The death screen: it opens when the server says the player is dead, says how
 // (the death line), cannot be escaped, and its one button sends Respawn; it
@@ -25,9 +26,9 @@ test_death_screen :: proc(t: ^testing.T) {
 	defer ui.destroy(&app.ui)
 	s := new(engine.Session)
 	defer free(s)
-	pipe: game.Pipe
-	game.pipe_init(&pipe)
-	defer game.pipe_destroy(&pipe)
+	pipe: protocol.Pipe
+	protocol.pipe_init(&pipe)
+	defer protocol.pipe_destroy(&pipe)
 	s.endpoint = {&pipe, .Client}
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
@@ -66,8 +67,8 @@ test_death_screen :: proc(t: ^testing.T) {
 	frame(app, {mouse = at})
 	frame(app, {mouse = at, mouse_pressed = {.Left}, mouse_down = {.Left}})
 	frame(app, {mouse = at, mouse_released = {.Left}})
-	m, decoded := game.decode_client(s.writer.buf[:], testkit.test_reg())
-	_, respawn := m.(game.Respawn)
+	m, decoded := protocol.decode_client(s.writer.buf[:], testkit.test_reg())
+	_, respawn := m.(protocol.Respawn)
 	testing.expect(t, decoded && respawn, "no Respawn sent")
 
 	// Alive again: the screen goes.
@@ -92,9 +93,9 @@ test_death_screen_waits_the_delay :: proc(t: ^testing.T) {
 	defer ui.destroy(&app.ui)
 	s := new(engine.Session)
 	defer free(s)
-	pipe: game.Pipe
-	game.pipe_init(&pipe)
-	defer game.pipe_destroy(&pipe)
+	pipe: protocol.Pipe
+	protocol.pipe_init(&pipe)
+	defer protocol.pipe_destroy(&pipe)
 	s.endpoint = {&pipe, .Client}
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
@@ -131,8 +132,8 @@ test_death_screen_waits_the_delay :: proc(t: ^testing.T) {
 	s.rules.respawn_auto = false
 	s.death_age = 3.01
 	testing.expect(t, click(app, at, "Respawn"), "the button did not come back")
-	m, decoded := game.decode_client(s.writer.buf[:], testkit.test_reg())
-	_, respawn := m.(game.Respawn)
+	m, decoded := protocol.decode_client(s.writer.buf[:], testkit.test_reg())
+	_, respawn := m.(protocol.Respawn)
 	testing.expect(t, decoded && respawn, "no Respawn sent once the delay was over")
 	free_all(context.temp_allocator)
 }

@@ -4,6 +4,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
+import "common:access"
 import "common:game"
 
 // The worlds the tests start give their players the blocks the old default
@@ -87,7 +88,7 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 			return
 		}
 		launcher := game.item_of_tool(.Launcher)
-		if game.allowed(a.grants[:], "world.fire") {
+		if access.allowed(a.grants[:], "world.fire") {
 			testing.expect_value(t, a.inventory.slots[0], game.Stack{launcher, 1, 0, 0})
 		} else {
 			testing.expect(
@@ -99,7 +100,7 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 		for s in a.inventory.slots[1:] {testing.expect(t, game.stack_empty(s))}
 		testing.expectf(
 			t,
-			game.allowed(a.grants[:], "world.fire") == cheats || !cheats,
+			access.allowed(a.grants[:], "world.fire") == cheats || !cheats,
 			"cheats %v",
 			cheats,
 		)

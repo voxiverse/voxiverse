@@ -8,7 +8,7 @@ import "core:time"
 import "client:engine"
 import "client:screen"
 import "common:base"
-import "common:game"
+import "common:protocol"
 import "common:worldgen"
 import "server:core"
 
@@ -108,7 +108,10 @@ PLANET_ONLY :: bit_set[worldgen.Biome] {
 
 @(private = "file")
 tour_locate :: proc(app: ^engine.App, t: ^engine.Tour_Test, s: ^engine.Session) {
-	engine.send_message(s, game.Command{fmt.tprintf("locate %s", worldgen.BIOME_NAMES[t.biome])})
+	engine.send_message(
+		s,
+		protocol.Command{fmt.tprintf("locate %s", worldgen.BIOME_NAMES[t.biome])},
+	)
 	t.phase, t.started = .Locating, engine.app_tick(app)
 }
 

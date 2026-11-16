@@ -1,5 +1,6 @@
-package game
+package protocol
 
+import "common:game"
 import "core:mem"
 import "core:slice"
 
@@ -49,13 +50,13 @@ Replica :: struct {
 	allocator: mem.Allocator,
 }
 
-key_block :: proc(k: Key) -> Block_Pos {return {k.a, k.b, k.c}}
+key_block :: proc(k: Key) -> game.Block_Pos {return {k.a, k.b, k.c}}
 
-key_of_block :: proc(p: Block_Pos) -> Key {return {p.x, p.y, p.z, 0}}
+key_of_block :: proc(p: game.Block_Pos) -> Key {return {p.x, p.y, p.z, 0}}
 
-key_of_cell :: proc(p: Block_Pos, channel: int) -> Key {return {p.x, p.y, p.z, i32(channel)}}
+key_of_cell :: proc(p: game.Block_Pos, channel: int) -> Key {return {p.x, p.y, p.z, i32(channel)}}
 
-chunk_less_xyz :: proc(a, b: Chunk_Pos) -> bool {
+chunk_less_xyz :: proc(a, b: game.Chunk_Pos) -> bool {
 	if a.x != b.x {return a.x < b.x}
 	if a.y != b.y {return a.y < b.y}
 	return a.z < b.z
@@ -66,9 +67,9 @@ chunk_less_xyz :: proc(a, b: Chunk_Pos) -> bool {
 key_less :: proc(t: Key_Type, a, b: Key) -> bool {
 	if t == .Block || t == .Cell {
 		pa, pb := key_block(a), key_block(b)
-		ca, cb := chunk_of(pa), chunk_of(pb)
+		ca, cb := game.chunk_of(pa), game.chunk_of(pb)
 		if ca != cb {return chunk_less_xyz(ca, cb)}
-		ia, ib := local_index(local_of(pa)), local_index(local_of(pb))
+		ia, ib := game.local_index(game.local_of(pa)), game.local_index(game.local_of(pb))
 		if ia != ib {return ia < ib}
 		return a.d < b.d
 	}
@@ -206,69 +207,71 @@ ring_put :: proc(ring: ^Snapshot_Ring, tick: u32, data: Replica) {
 // ---- the wire ----
 
 @(private)
-write_key :: proc(w: ^Writer, t: Key_Type, key: Key, has_prev: bool, prev: Key) {
+write_key :: proc(w: ^game.Writer, t: Key_Type, key: Key, has_prev: bool, prev: Key) {
 	switch t {
 	case .None:
 	case .Player, .Entity:
 		base := u64(u32(prev.a)) if has_prev else 0
-		write_varint64(w, u64(u32(key.a)) - base)
+		game.write_varint64(w, u64(u32(key.a)) - base)
 	case .Block, .Cell:
 		p := key_block(key)
-		c := chunk_of(p)
-		index := local_index(local_of(p))
-		if has_prev && chunk_of(key_block(prev)) == c {
-			write_varint(w, u32(index + 1))
+		c := game.chunk_of(p)
+		index := game.local_index(game.local_of(p))
+		if has_prev && game.chunk_of(key_block(prev)) == c {
+			game.write_varint(w, u32(index + 1))
 		} else {
-			write_varint(w, 0)
-			write_svarint(w, c.x)
-			write_svarint(w, c.y)
-			write_svarint(w, c.z)
-			write_varint(w, u32(index))
+			game.write_varint(w, 0)
+			game.write_svarint(w, c.x)
+			game.write_svarint(w, c.y)
+			game.write_svarint(w, c.z)
+			game.write_varint(w, u32(index))
 		}
-		if t == .Cell {write_varint(w, u32(key.d))}
+		if t == .Cell {game.write_varint(w, u32(key.d))}
 	}
 }
 
 @(private)
-read_key :: proc(r: ^Reader, t: Key_Type, has_prev: bool, prev: Key) -> (key: Key) {
+read_key :: proc(r: ^game.Reader, t: Key_Type, has_prev: bool, prev: Key) -> (key: Key) {
 	switch t {
 	case .None:
 	case .Player, .Entity:
-		d := read_varint64(r)
+		d := game.read_varint64(r)
 		base := u64(u32(prev.a)) if has_prev else 0
 		if has_prev && d == 0 {r.ok = false}
 		v := base + d
-		limit := u64(MAX_PLAYERS) if t == .Player else u64(max(u32)) + 1
+		limit := u64(game.MAX_PLAYERS) if t == .Player else u64(max(u32)) + 1
 		if v >= limit {r.ok = false}
 		key.a = i32(u32(v))
 	case .Block, .Cell:
-		head := read_varint(r)
-		c: Chunk_Pos
+		head := game.read_varint(r)
+		c: game.Chunk_Pos
 		index: u32
 		if head != 0 {
 			if !has_prev {r.ok = false; return}
-			c = chunk_of(key_block(prev))
+			c = game.chunk_of(key_block(prev))
 			index = head - 1
 			// (a Cell may repeat its position's index with a later channel: checked below)
-			if t == .Block && index <= u32(local_index(local_of(key_block(prev)))) {r.ok = false}
-			if t == .Cell && index < u32(local_index(local_of(key_block(prev)))) {r.ok = false}
+			if t == .Block &&
+			   index <= u32(game.local_index(game.local_of(key_block(prev)))) {r.ok = false}
+			if t == .Cell &&
+			   index < u32(game.local_index(game.local_of(key_block(prev)))) {r.ok = false}
 		} else {
-			c = {read_svarint(r), read_svarint(r), read_svarint(r)}
-			index = read_varint(r)
+			c = {game.read_svarint(r), game.read_svarint(r), game.read_svarint(r)}
+			index = game.read_varint(r)
 			if has_prev {
-				pc := chunk_of(key_block(prev))
+				pc := game.chunk_of(key_block(prev))
 				if c == pc || !chunk_less_xyz(pc, c) {r.ok = false}
 			}
-			if !in_world(c) {r.ok = false}
+			if !game.in_world(c) {r.ok = false}
 		}
-		if index >= CHUNK_VOLUME {r.ok = false}
+		if index >= game.CHUNK_VOLUME {r.ok = false}
 		if r.ok {
-			p := chunk_origin(c) + local_from_index(int(index))
+			p := game.chunk_origin(c) + game.local_from_index(int(index))
 			key = key_of_block(p)
 		}
 		if t == .Cell {
-			ch := read_varint(r)
-			if ch == 0 || ch >= MAX_CHANNELS {r.ok = false}
+			ch := game.read_varint(r)
+			if ch == 0 || ch >= game.MAX_CHANNELS {r.ok = false}
 			key.d = i32(ch)
 			if r.ok &&
 			   has_prev &&
@@ -284,7 +287,7 @@ read_key :: proc(r: ^Reader, t: Key_Type, has_prev: bool, prev: Key) -> (key: Ke
 
 @(private)
 write_entry :: proc(
-	w: ^Writer,
+	w: ^game.Writer,
 	k: ^Schema_Kind,
 	op: Op,
 	mask: u64,
@@ -299,7 +302,7 @@ write_entry :: proc(
 	}
 	head := u64(op)
 	if op == .Change {head |= mask << 2}
-	write_varint64(w, head)
+	game.write_varint64(w, head)
 	write_key(w, k.key, key, has_prev, prev)
 	switch op {
 	case .Create:
@@ -320,8 +323,8 @@ Group_Writer :: struct {
 	schema:    ^Schema,
 	limit:     int,
 	bodies:    [dynamic][]u8,
-	cur:       Writer,
-	group:     Writer,
+	cur:       game.Writer,
+	group:     game.Writer,
 	id:        int, // the open group's kind (-1: none)
 	section:   int,
 	count:     int,
@@ -339,15 +342,15 @@ gw_init :: proc(gw: ^Group_Writer, schema: ^Schema, limit: int, allocator: mem.A
 		id        = -1,
 		allocator = allocator,
 	}
-	writer_init(&gw.cur, allocator, limit)
-	writer_init(&gw.group, allocator, 256)
+	game.writer_init(&gw.cur, allocator, limit)
+	game.writer_init(&gw.group, allocator, 256)
 }
 
 @(private)
 gw_close_group :: proc(gw: ^Group_Writer) {
 	if gw.id >= 0 && gw.count > 0 {
-		write_varint(&gw.cur, u32(gw.id))
-		write_varint(&gw.cur, u32(gw.count))
+		game.write_varint(&gw.cur, u32(gw.id))
+		game.write_varint(&gw.cur, u32(gw.count))
 		append(&gw.cur.buf, ..gw.group.buf[:])
 	}
 	clear(&gw.group.buf)
@@ -380,8 +383,8 @@ gw_entry :: proc(
 		gw_close_group(gw)
 		gw.id, gw.section = id, section
 	}
-	ent: Writer
-	writer_init(&ent, context.temp_allocator, 64)
+	ent: game.Writer
+	game.writer_init(&ent, context.temp_allocator, 64)
 	for attempt in 0 ..< 2 {
 		clear(&ent.buf)
 		write_entry(&ent, k, op, mask, key, value, base, gw.has_prev, gw.prev)
@@ -632,10 +635,10 @@ flush_reliable :: proc(s: ^Sender, tick: u32, out: ^[dynamic]Outgoing, allocator
 	// removes aimed at the snapshot lane are handled there
 	bodies := gw_finish(&gw)
 	for body in bodies {
-		w: Writer
-		writer_init(&w, allocator, len(body) + 8)
-		write_u8(&w, STATE_MESSAGE)
-		write_varint(&w, tick)
+		w: game.Writer
+		game.writer_init(&w, allocator, len(body) + 8)
+		game.write_u8(&w, STATE_MESSAGE)
+		game.write_varint(&w, tick)
 		append(&w.buf, ..body)
 		append(out, Outgoing{w.buf[:], false})
 	}
@@ -821,13 +824,13 @@ flush_snapshot :: proc(
 	}
 	ring_put(&s.ring, tick, fresh)
 	for body, i in bodies {
-		w: Writer
-		writer_init(&w, allocator, len(body) + 16)
-		write_u8(&w, SNAPSHOT_MESSAGE)
-		write_varint(&w, tick)
-		write_varint(&w, back)
-		write_u8(&w, u8(i))
-		write_u8(&w, u8(len(bodies)))
+		w: game.Writer
+		game.writer_init(&w, allocator, len(body) + 16)
+		game.write_u8(&w, SNAPSHOT_MESSAGE)
+		game.write_varint(&w, tick)
+		game.write_varint(&w, back)
+		game.write_u8(&w, u8(i))
+		game.write_u8(&w, u8(len(bodies)))
 		append(&w.buf, ..body)
 		append(out, Outgoing{w.buf[:], true})
 	}
@@ -856,8 +859,8 @@ sort_by_priority :: proc(schema: ^Schema, cs: []Candidate, order: []int) {
 // estimate_entry: an upper bound of an entry's size.
 @(private)
 estimate_entry :: proc(k: ^Schema_Kind, op: Op, mask: u64, value: rawptr) -> int {
-	w: Writer
-	writer_init(&w, context.temp_allocator, 64)
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator, 64)
 	write_entry(&w, k, op, mask, {max(i32), max(i32), max(i32), 0}, value, value, false, {})
 	return len(w.buf) + 5
 }
@@ -892,13 +895,13 @@ Receiver :: struct {
 	dropped: int, // snapshots whose baseline we lacked
 	gather:  Gather,
 	blobs:   [dynamic]rawptr,
-	reg:     ^Registry, // what ids in values must be known to (blocks, items)
+	reg:     ^game.Registry, // what ids in values must be known to (blocks, items)
 }
 
 receiver_init :: proc(
 	rx: ^Receiver,
 	schema: ^Schema,
-	reg: ^Registry,
+	reg: ^game.Registry,
 	allocator := context.allocator,
 ) {
 	rx^ = {
@@ -945,7 +948,7 @@ blob_make :: proc(rx: ^Receiver, k: ^Schema_Kind) -> rawptr {
 }
 
 @(private)
-read_fields :: proc(r: ^Reader, k: ^Schema_Kind, value: rawptr, own: bool) -> bool {
+read_fields :: proc(r: ^game.Reader, k: ^Schema_Kind, value: rawptr, own: bool) -> bool {
 	for &f in k.fields {
 		if !leaf_read(r, &f, leaf_at(&f, value), own) {return false}
 	}
@@ -953,7 +956,13 @@ read_fields :: proc(r: ^Reader, k: ^Schema_Kind, value: rawptr, own: bool) -> bo
 }
 
 @(private)
-read_changes :: proc(r: ^Reader, k: ^Schema_Kind, mask: u64, value: rawptr, own: bool) -> bool {
+read_changes :: proc(
+	r: ^game.Reader,
+	k: ^Schema_Kind,
+	mask: u64,
+	value: rawptr,
+	own: bool,
+) -> bool {
 	for &f, i in k.fields {
 		if mask & (1 << uint(i)) == 0 {continue}
 		if !leaf_read_delta(r, &f, leaf_at(&f, value), own) {return false}
@@ -962,14 +971,14 @@ read_changes :: proc(r: ^Reader, k: ^Schema_Kind, mask: u64, value: rawptr, own:
 }
 
 @(private)
-valid_value :: proc(reg: ^Registry, k: ^Schema_Kind, value: rawptr) -> bool {
+valid_value :: proc(reg: ^game.Registry, k: ^Schema_Kind, value: rawptr) -> bool {
 	return k.check == nil || k.check(reg, value)
 }
 
 // read_head: the op and mask of a record entry.
 @(private)
-read_head :: proc(r: ^Reader, k: ^Schema_Kind) -> (op: Op, mask: u64) {
-	head := read_varint64(r)
+read_head :: proc(r: ^game.Reader, k: ^Schema_Kind) -> (op: Op, mask: u64) {
+	head := game.read_varint64(r)
 	if !r.ok {return}
 	switch head & 3 {
 	case 0:
@@ -996,12 +1005,12 @@ read_head :: proc(r: ^Reader, k: ^Schema_Kind) -> (op: Op, mask: u64) {
 // connection).
 receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> bool {
 	blobs_free(rx)
-	r := reader_make(data, rx.reg)
-	if read_u8(&r) != STATE_MESSAGE {return false}
-	rx.tick = read_varint(&r)
+	r := game.reader_make(data, rx.reg)
+	if game.read_u8(&r) != STATE_MESSAGE {return false}
+	rx.tick = game.read_varint(&r)
 	for r.ok && r.pos < len(data) {
-		id := int(read_varint(&r))
-		count := int(read_varint(&r))
+		id := int(game.read_varint(&r))
+		count := int(game.read_varint(&r))
 		if !r.ok ||
 		   id >= len(rx.schema.kinds) ||
 		   count < 1 ||
@@ -1093,12 +1102,12 @@ within_caps :: proc(schema: ^Schema, r: ^Replica) -> bool {
 // gone (counted in rx.dropped), yields nothing and is not an error.
 receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> bool {
 	blobs_free(rx)
-	r := reader_make(data, rx.reg)
-	if read_u8(&r) != SNAPSHOT_MESSAGE {return false}
-	tick := read_varint(&r)
-	back := read_varint(&r)
-	part := read_u8(&r)
-	parts := read_u8(&r)
+	r := game.reader_make(data, rx.reg)
+	if game.read_u8(&r) != SNAPSHOT_MESSAGE {return false}
+	tick := game.read_varint(&r)
+	back := game.read_varint(&r)
+	part := game.read_u8(&r)
+	parts := game.read_u8(&r)
 	if !r.ok || parts < 1 || parts > SNAPSHOT_PARTS || part >= parts || back > tick || tick == 0 {
 		return false
 	}
@@ -1129,8 +1138,8 @@ receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> 
 	if g.seen & (1 << part) != 0 {return true}
 	rx.newest = tick
 	for r.ok && r.pos < len(data) {
-		id := int(read_varint(&r))
-		count := int(read_varint(&r))
+		id := int(game.read_varint(&r))
+		count := int(game.read_varint(&r))
 		if !r.ok ||
 		   id >= len(rx.schema.kinds) ||
 		   count < 1 ||
@@ -1216,19 +1225,19 @@ receiver_snapshot_get :: proc(rx: ^Receiver, kind: int, key: Key) -> rawptr {
 // replica: masks say which fields are present, so no baseline is needed to
 // skip them. bytes and entries are per schema kind id.
 scan_state :: proc(schema: ^Schema, data: []u8, bytes, entries: []int) -> bool {
-	r := reader_make(data)
-	kind := read_u8(&r)
+	r := game.reader_make(data)
+	kind := game.read_u8(&r)
 	if kind != STATE_MESSAGE && kind != SNAPSHOT_MESSAGE {return false}
-	read_varint(&r)
+	game.read_varint(&r)
 	if kind == SNAPSHOT_MESSAGE {
-		read_varint(&r)
-		read_u8(&r)
-		read_u8(&r)
+		game.read_varint(&r)
+		game.read_u8(&r)
+		game.read_u8(&r)
 	}
 	for r.ok && r.pos < len(data) {
 		start := r.pos
-		id := int(read_varint(&r))
-		count := int(read_varint(&r))
+		id := int(game.read_varint(&r))
+		count := int(game.read_varint(&r))
 		if !r.ok ||
 		   id >= len(schema.kinds) ||
 		   count < 1 ||
@@ -1287,7 +1296,7 @@ request_kind :: proc(s: ^Schema, value: typeid) -> (kind: int, found: bool) {
 }
 
 // request_encode: value (of the request kind's type) as a Game_Request's data, in w.
-request_encode :: proc(w: ^Writer, s: ^Schema, kind: int, value: rawptr) {
+request_encode :: proc(w: ^game.Writer, s: ^Schema, kind: int, value: rawptr) {
 	k := &s.kinds[kind]
 	assert(k.is_request, "not a request kind")
 	for &f in k.fields {leaf_write(w, &f, leaf_at(&f, value))}
@@ -1298,7 +1307,7 @@ request_encode :: proc(w: ^Writer, s: ^Schema, kind: int, value: rawptr) {
 // check refuses. Its strings are views into data.
 request_decode :: proc(
 	s: ^Schema,
-	reg: ^Registry,
+	reg: ^game.Registry,
 	r: Game_Request,
 	allocator := context.temp_allocator,
 ) -> (
@@ -1309,8 +1318,10 @@ request_decode :: proc(
 	k := &s.kinds[r.kind]
 	data, err := mem.alloc(max(k.size, 1), max(k.align, 1), allocator)
 	if err != nil {return nil, false}
-	rd := reader_make(r.data, reg)
-	if !read_fields(&rd, k, data, false) || !reader_finish(&rd) || !valid_value(reg, k, data) {
+	rd := game.reader_make(r.data, reg)
+	if !read_fields(&rd, k, data, false) ||
+	   !game.reader_finish(&rd) ||
+	   !valid_value(reg, k, data) {
 		return nil, false
 	}
 	return data, true

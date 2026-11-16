@@ -3,6 +3,7 @@ package core
 import "core:testing"
 
 import "common:game"
+import "common:starmap"
 
 @(private = "file")
 test_registry :: proc() -> ^game.Registry {
@@ -198,7 +199,7 @@ test_tag_near :: proc(t: ^testing.T) {
 @(private = "file")
 Player_Probe :: struct {
 	name:      string,
-	travel_to: Maybe(game.Address),
+	travel_to: Maybe(starmap.Address),
 	players:   int, // player entities in the client's world (by the spatial service)
 	stored:    int, // the store's count
 	same:      bool, // its Transform equals the client's position
@@ -268,7 +269,7 @@ test_players_are_entities :: proc(t: ^testing.T) {
 		testing.expect(t, d.in_world)
 	}
 	// travelling: it moves to the new world's store, and the old one is empty
-	d.travel_to = game.address_derive(31)
+	d.travel_to = starmap.address_derive(31)
 	call(&h.srv, player_probe, &d)
 	for _ in 0 ..< 3 {
 		harness_step(h)

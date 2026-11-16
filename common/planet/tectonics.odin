@@ -1,7 +1,7 @@
 package planet
 
 import "common:base"
-import "common:game"
+import "common:starmap"
 import "core:math"
 
 // Other worlds' relief by plate tectonics, on Earth's 2048 x 1024 grid so `planet_build`
@@ -27,8 +27,8 @@ Character :: struct {
 }
 
 // relief_character: the kind of relief an address has, from the address alone.
-relief_character :: proc(a: game.Address) -> Character {
-	r := base.rng_make(game.address_hash(a) ~ 0x7ec7_0a1c_5eed_0001)
+relief_character :: proc(a: starmap.Address) -> Character {
+	r := base.rng_make(starmap.address_hash(a) ~ 0x7ec7_0a1c_5eed_0001)
 	return Character {
 		land_fraction = base.rng_f64_range(&r, 0.15, 0.55),
 		plates = base.rng_int_range(&r, 8, 21),
@@ -37,15 +37,15 @@ relief_character :: proc(a: game.Address) -> Character {
 }
 
 // relief_is_home: whether the address is the universe's home world, Earth.
-relief_is_home :: proc(a: game.Address, seed: u64) -> bool {
-	return a == game.address_derive(seed)
+relief_is_home :: proc(a: starmap.Address, seed: u64) -> bool {
+	return a == starmap.address_derive(seed)
 }
 
 // relief_for_world is the relief of the world at an address: Earth's own (decoded from the
 // committed file `earth_file`) for the home world, a generated one for any other. A home
 // world whose file does not load is generated like the others.
 relief_for_world :: proc(
-	a: game.Address,
+	a: starmap.Address,
 	seed: u64,
 	earth_file: []u8,
 	allocator := context.allocator,
@@ -176,7 +176,7 @@ unit3 :: proc(a: [3]f64) -> [3]f64 {
 // `convergent`, when given, gets a point (a unit vector) for each convergent boundary cell
 // edge: the places the ranges stand on, for the tests.
 relief_generate :: proc(
-	a: game.Address,
+	a: starmap.Address,
 	seed: u64,
 	allocator := context.allocator,
 	convergent: ^[dynamic][3]f64 = nil,
@@ -185,7 +185,7 @@ relief_generate :: proc(
 	n := w * h
 	ch := relief_character(a)
 	rng := base.rng_make(
-		game.address_hash(a) ~ seed * 0x9e37_79b9_7f4a_7c15 ~ 0x7ec7_0a1c_0000_0002,
+		starmap.address_hash(a) ~ seed * 0x9e37_79b9_7f4a_7c15 ~ 0x7ec7_0a1c_0000_0002,
 	)
 	salt := base.rng_u64(&rng)
 

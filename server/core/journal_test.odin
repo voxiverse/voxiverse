@@ -9,6 +9,8 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 
 // The edit journal. test_grief_rolled_back is the exit check: a player
 // builds a house, a pool, a chest and a field; a grief of every kind of change
@@ -122,7 +124,7 @@ box :: proc(g: ^Grief, a, b: [3]i32) -> string {
 // hand: an edit the way a client makes it (reach and place rules checked).
 hand :: proc(g: ^Grief, pos: game.Block_Pos, b: game.Block) -> bool {
 	g.edit += 1
-	r := apply_edit(grief_srv(g), grief_client(g), game.edit_plain(g.edit, 0, pos, b))
+	r := apply_edit(grief_srv(g), grief_client(g), protocol.edit_plain(g.edit, 0, pos, b))
 	run(g, 1)
 	return r.accepted
 }
@@ -160,7 +162,7 @@ grief_build :: proc(g: ^Grief) {
 	// Planks into the chest, the way a player does it.
 	m := &g.sess.mirror
 	sequence := m.prediction.next_sequence - 1
-	mirror_send(m, game.Use_Block{chest, sequence})
+	mirror_send(m, protocol.Use_Block{chest, sequence})
 	run(g, 3)
 	inventory(m, .Click, slot_of(g, game.item_of_block(test_reg(), .Planks)))
 	inventory(m, .Click, game.CHEST_BASE)
@@ -197,7 +199,7 @@ grief_do :: proc(g: ^Grief, bob: Action_Id = 0) {
 	)
 	m := &g.sess.mirror
 	for _ in 0 ..< 3 {
-		mirror_send(m, game.Fire{m.prediction.next_sequence - 1, -math.PI / 2, 0})
+		mirror_send(m, protocol.Fire{m.prediction.next_sequence - 1, -math.PI / 2, 0})
 		run(g, 40)
 	}
 	testing.expect(t, hand(g, at(g, -3, 0, 2), .Air), "the chest could not be broken")
@@ -428,7 +430,7 @@ test_undo_redo :: proc(t: ^testing.T) {
 // saved world's directory, as a snapshot is: its worlds/<address>/regions).
 copy_regions :: proc(s: ^Server, w: ^World, snapshot: string) {
 	from := fmt.tprintf("%s/regions", w.dir)
-	to := fmt.tprintf("%s/%s/%s/regions", snapshot, WORLDS_DIR, game.address_dir(w.address))
+	to := fmt.tprintf("%s/%s/%s/regions", snapshot, WORLDS_DIR, starmap.address_dir(w.address))
 	os.make_directory_all(to)
 	entries, err := os.read_all_directory_by_path(from, context.temp_allocator)
 	if err != nil {return}
@@ -587,7 +589,7 @@ test_journal_matches_disk :: proc(t: ^testing.T) {
 		}
 	}
 	last := segments[len(segments) - 1]
-	address := strings.clone(game.address_dir(w.address))
+	address := strings.clone(starmap.address_dir(w.address))
 	defer delete(address)
 	grief_close(g)
 	// A segment written after the last save is not described by the save:

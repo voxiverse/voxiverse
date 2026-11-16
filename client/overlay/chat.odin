@@ -7,7 +7,7 @@ import "core:unicode/utf8"
 import "client:engine"
 import "client:formatted"
 import "client:ui"
-import "common:game"
+import "common:protocol"
 
 // Chat: `t` opens it, `/` opens it with a command started; Enter says the
 // line (or runs the command on the server), Escape closes it. The lines
@@ -53,13 +53,13 @@ chat_send :: proc(app: ^engine.App, line: string) {
 	text := strings.trim_space(line)
 	if text == "" || s == nil || s.state != .Playing {return}
 	if strings.has_prefix(text, "/") {
-		if len(text) > 1 {engine.send_message(s, game.Command{text[1:]})}
+		if len(text) > 1 {engine.send_message(s, protocol.Command{text[1:]})}
 		return
 	}
 	// At most what a message holds (whole letters).
-	cut := min(len(text), game.MAX_CHAT_TEXT)
+	cut := min(len(text), protocol.MAX_CHAT_TEXT)
 	for cut < len(text) && cut > 0 && !utf8.rune_start(text[cut]) {cut -= 1}
-	engine.send_message(s, game.Chat{text[:cut]})
+	engine.send_message(s, protocol.Chat{text[:cut]})
 }
 
 // chat_ui: the open chat (an overlay): the line, and every line kept above.

@@ -1,6 +1,6 @@
 package worldgen
 
-import "common:game"
+import "common:starmap"
 
 // What lives on a world, from its address alone (level L0 of the peoples
 // plan): instant, deterministic, no simulation. The home world is Earth and
@@ -36,8 +36,8 @@ World_Life :: struct {
 
 // world_life: what lives at address. home: the address is the universe's
 // home world (Earth), which has no peoples.
-world_life :: proc(a: game.Address, home := false) -> (l: World_Life) {
-	state := game.address_hash(a) ~ 0x5bd1_e995_a3c9_f0d1
+world_life :: proc(a: starmap.Address, home := false) -> (l: World_Life) {
+	state := starmap.address_hash(a) ~ 0x5bd1_e995_a3c9_f0d1
 	next :: proc(state: ^u64) -> u64 {
 		state^ += 0x9e37_79b9_7f4a_7c15
 		z := state^

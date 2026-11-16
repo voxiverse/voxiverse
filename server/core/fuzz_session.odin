@@ -4,9 +4,10 @@ import "base:runtime"
 import "core:strings"
 import "core:unicode/utf8"
 
+import "common:access"
 import "common:base"
 import "common:base/fuzz"
-import "common:game"
+import "common:protocol"
 
 // The stateful fuzz targets (docs/fuzzing.md): what happens after a message decodes.
 // A stepped server (the harness's flat world) has one seat, the session's mirror on the
@@ -118,7 +119,7 @@ fuzz_server_session :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 		msg := rest[1:][:n]
 		rest = rest[1 + n:]
 		if n > 0 {
-			game.send(sess.mirror.endpoint, msg)
+			protocol.send(sess.mirror.endpoint, msg)
 			sent += 1
 		}
 		harness_step(h)
@@ -211,17 +212,17 @@ fuzz_commands_player :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 	// What `decode_client` lets through as a Command: valid UTF-8, at most MAX_ADMIN_TEXT bytes
 	// (the edge validates text; a notice that echoes it is then text the client accepts).
 	line, _ := strings.to_valid_utf8(
-		string(data[1:min(len(data), game.MAX_ADMIN_TEXT + 1)]),
+		string(data[1:min(len(data), protocol.MAX_ADMIN_TEXT + 1)]),
 		"?",
 		context.temp_allocator,
 	)
-	line = line[:min(len(line), game.MAX_ADMIN_TEXT)]
+	line = line[:min(len(line), protocol.MAX_ADMIN_TEXT)]
 	for len(line) > 0 && !utf8.valid_string(line) {line = line[:len(line) - 1]}
 	rest := line
 	name, _ := strings.split_iterator(&rest, " ") // (the first word)
 
 	owned := c.grants
-	guest: [dynamic]game.Grant
+	guest: [dynamic]access.Grant
 	if !operator {
 		resolve(&s.perms, "fuzz-guest", nil, false, &guest)
 		c.grants = guest

@@ -7,6 +7,8 @@ import "client:font"
 import "client:testkit"
 import "client:ui"
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import "common:worldgen"
 
 // The dial overlay with the mouse: a symbol a click, none twice, Backspace
@@ -26,14 +28,14 @@ test_dial_overlay :: proc(t: ^testing.T) {
 	defer ui.destroy(&app.ui)
 	s := new(engine.Session)
 	defer free(s)
-	pipe: game.Pipe
-	game.pipe_init(&pipe)
-	defer game.pipe_destroy(&pipe)
+	pipe: protocol.Pipe
+	protocol.pipe_init(&pipe)
+	defer protocol.pipe_destroy(&pipe)
 	s.endpoint = {&pipe, .Client}
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
 	s.state = .Playing
-	s.welcome.address = game.address_derive(3)
+	s.welcome.address = starmap.address_derive(3)
 	s.reg = testkit.test_reg()
 	app.session = s
 	defer app.session = nil
@@ -79,23 +81,23 @@ test_dial_overlay :: proc(t: ^testing.T) {
 	click(app, l.erase)
 	testing.expect_value(t, d.count, 0)
 	// Seven: Dial is sent, the overlay closes.
-	picks := [game.WORLD_LENGTH]u8{39, 0, 7, 21, 5, 33, 18}
-	for p in picks[:game.WORLD_LENGTH - 1] {click(app, l.symbols[p])}
+	picks := [starmap.WORLD_LENGTH]u8{39, 0, 7, 21, 5, 33, 18}
+	for p in picks[:starmap.WORLD_LENGTH - 1] {click(app, l.symbols[p])}
 	// Six in, the pointer on a symbol: the line says what lives on that world.
 	at := ui.Vec2{l.symbols[picks[6]].x + 2, l.symbols[picks[6]].y + 2}
 	frame(app, {mouse = at})
-	want_addr := game.Address{s.welcome.address.galaxy, picks}
+	want_addr := starmap.Address{s.welcome.address.galaxy, picks}
 	want := engine.life_line(worldgen.world_life(want_addr))
 	shown := false
 	for text in app.ui.texts {shown ||= text == want}
 	testing.expectf(t, shown, "the dial does not say %q", want)
 	click(app, l.symbols[picks[6]])
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Dial))
-	m, decoded := game.decode_client(s.writer.buf[:], testkit.test_reg())
-	sent, is_dial := m.(game.Dial)
+	m, decoded := protocol.decode_client(s.writer.buf[:], testkit.test_reg())
+	sent, is_dial := m.(protocol.Dial)
 	testing.expect(t, decoded && is_dial, "no Dial sent")
 	testing.expect_value(t, sent.gate, gate)
-	testing.expect_value(t, sent.address, game.Address{s.welcome.address.galaxy, picks})
+	testing.expect_value(t, sent.address, starmap.Address{s.welcome.address.galaxy, picks})
 	// Escape closes it.
 	dial_open(app, gate)
 	escape(app)

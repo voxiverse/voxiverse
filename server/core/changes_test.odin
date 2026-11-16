@@ -3,6 +3,7 @@ package core
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // A game's block hooks: editing may refuse a player's edit before it happens (the
 // player is told why, the block stays), and block_changed hears of every change once a
@@ -58,7 +59,7 @@ test_a_game_hears_of_block_changes_and_may_refuse_an_edit :: proc(t: ^testing.T)
 	heard(s).count = 0
 
 	// Stone is refused, with the game's reason; the block stays air, nothing is heard.
-	r := apply_edit(s, host, game.edit_plain(1, 0, at, .Stone))
+	r := apply_edit(s, host, protocol.edit_plain(1, 0, at, .Stone))
 	testing.expect(t, !r.accepted, "the game's refusal was not kept")
 	b, _ := block_at(w, at)
 	testing.expect_value(t, b, game.Block.Air)
@@ -67,7 +68,7 @@ test_a_game_hears_of_block_changes_and_may_refuse_an_edit :: proc(t: ^testing.T)
 	testing.expect_value(t, heard(s).count, 0)
 
 	// Planks are let be: heard once, before the game's tick, by the host.
-	r = apply_edit(s, host, game.edit_plain(2, 0, at, .Planks))
+	r = apply_edit(s, host, protocol.edit_plain(2, 0, at, .Planks))
 	testing.expect(t, r.accepted, "an edit the game allows was refused")
 	testing.expect_value(t, heard(s).count, 0)
 	harness_step(&sess.h)

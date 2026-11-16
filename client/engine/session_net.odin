@@ -9,9 +9,12 @@ import "core:strings"
 import "core:time"
 
 import "client:steam"
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
+import "common:starmap"
 import "server:core"
 
 // A session's messages: what the server sends (receive), what we send
@@ -49,8 +52,8 @@ receive :: proc(s: ^Session) {
 			steam_id, ticket := session_steam_ticket(s)
 			send_message(
 				s,
-				game.Hello {
-					game.PROTOCOL_VERSION,
+				protocol.Hello {
+					protocol.PROTOCOL_VERSION,
 					s.config.key.account,
 					s.config.name,
 					s.schema.engine_hash,
@@ -65,11 +68,11 @@ receive :: proc(s: ^Session) {
 			s.traffic[.Server].bytes[p[0]] += len(p)
 		}
 	} else {
-		game.receive(s.endpoint, &s.received)
+		protocol.receive(s.endpoint, &s.received)
 	}
 	defer {
 		for p in s.received {
-			if s.remote {netcode.link_free(&s.link, p)} else {game.packet_free(s.endpoint, p)}
+			if s.remote {netcode.link_free(&s.link, p)} else {protocol.packet_free(s.endpoint, p)}
 		}
 		clear(&s.received)
 	}
@@ -79,52 +82,52 @@ receive :: proc(s: ^Session) {
 // handle_packets decodes what the server sent and acts on it, in order, until the session
 // fails (the fuzz target feeds it packets of its own).
 @(private)
-handle_packets :: proc(s: ^Session, packets: []game.Packet) {
+handle_packets :: proc(s: ^Session, packets: []protocol.Packet) {
 	for p in packets {
 		if s.state == .Failed {return}
 		s.stats.bytes_received += len(p)
-		m, ok := game.decode_server(p, s.scratch, s.reg)
+		m, ok := protocol.decode_server(p, s.scratch, s.reg)
 		if !ok {
 			fail(s, "the server sent an invalid message")
 			return
 		}
 		if s.state != .Playing {
 			#partial switch _ in m {
-			case game.Welcome,
-			     game.Reject,
-			     game.Pong,
-			     game.Challenge,
-			     game.Characters,
-			     game.Packs,
-			     game.Pack_Part,
-			     game.Packs_Changed:
-			case game.Snapshot_Message:
+			case protocol.Welcome,
+			     protocol.Reject,
+			     protocol.Pong,
+			     protocol.Challenge,
+			     protocol.Characters,
+			     protocol.Packs,
+			     protocol.Pack_Part,
+			     protocol.Packs_Changed:
+			case protocol.Snapshot_Message:
 				continue // unreliable: it overtook the welcome (newer ones follow)
 			case:
-				kind := game.message_kind_name(.Server, p[0])
+				kind := protocol.message_kind_name(.Server, p[0])
 				fail(s, fmt.tprintf("the server sent %s before welcoming us", kind))
 				return
 			}
 		}
 		switch v in m {
-		case game.Challenge:
-			send_message(s, game.Proof{game.account_sign(&s.config.key, v.nonce)})
-		case game.Packs:
+		case protocol.Challenge:
+			send_message(s, protocol.Proof{access.account_sign(&s.config.key, v.nonce)})
+		case protocol.Packs:
 			packs_begin(s, v)
-		case game.Pack_Part:
+		case protocol.Pack_Part:
 			packs_part(s, v)
-		case game.Packs_Changed:
+		case protocol.Packs_Changed:
 			packs_changed(s, v)
-		case game.Characters:
+		case protocol.Characters:
 			for c in s.characters {delete(c)}
 			clear(&s.characters)
 			for name in strings.fields(v.names, context.temp_allocator) {
 				append(&s.characters, strings.clone(name))
 			}
 			s.state = .Choosing
-		case game.Welcome:
+		case protocol.Welcome:
 			welcome(s, v)
-		case game.World_Changed:
+		case protocol.World_Changed:
 			// Travelled: nothing of the last world stays; the arrival (a
 			// teleport), the new world's chunks and entities follow.
 			world_clear(&s.world)
@@ -134,27 +137,27 @@ handle_packets :: proc(s: ^Session, packets: []game.Packet) {
 			clear(&s.puffs)
 			s.welcome.address = v.address
 			s.place = {
-				biome = game.NO_BIOME,
+				biome = protocol.NO_BIOME,
 			}
 			s.arrivals += 1
 			s.rules = v.rules
-			game.receiver_reset(&s.rx)
+			protocol.receiver_reset(&s.rx)
 			rules := v.rules
-			game.receiver_seed(&s.rx, int(game.State_Kind.Rules), &rules)
+			protocol.receiver_seed(&s.rx, int(protocol.State_Kind.Rules), &rules)
 			inventory_predict(s) // (no placing waits now)
-			log.infof("session travelled to=%s", game.address_dir(v.address))
-		case game.Reject:
+			log.infof("session travelled to=%s", starmap.address_dir(v.address))
+		case protocol.Reject:
 			fail(
 				s,
 				strings.concatenate({"the server refused: ", v.reason}, context.temp_allocator),
 			)
-		case game.Chunk_Message:
+		case protocol.Chunk_Message:
 			if !world_set_chunk(&s.world, v, s.scratch) {
 				fail(s, "the server sent more of the world than was asked for")
 				return
 			}
 			s.stats.chunks_received += 1
-		case game.Pong:
+		case protocol.Pong:
 			if s.net.ping_pending && v.id == s.net.ping_id {
 				s.net.rtt_ms = f32(
 					time.duration_milliseconds(
@@ -163,19 +166,19 @@ handle_packets :: proc(s: ^Session, packets: []game.Packet) {
 				)
 				s.net.ping_pending = false
 			}
-		case game.Unload_Chunk:
+		case protocol.Unload_Chunk:
 			world_remove_chunk(&s.world, v.pos)
 			s.stats.unloads += 1
-		case game.State_Message:
-			got := make([dynamic]game.Received, context.temp_allocator)
-			if !game.receive_state(&s.rx, v.data, &got) {
+		case protocol.State_Message:
+			got := make([dynamic]protocol.Received, context.temp_allocator)
+			if !protocol.receive_state(&s.rx, v.data, &got) {
 				fail(s, "the server sent an invalid State message")
 				return
 			}
 			apply_received(s, got[:])
-		case game.Snapshot_Message:
-			got := make([dynamic]game.Received, context.temp_allocator)
-			if !game.receive_snapshot(&s.rx, v.data, &got) {
+		case protocol.Snapshot_Message:
+			got := make([dynamic]protocol.Received, context.temp_allocator)
+			if !protocol.receive_snapshot(&s.rx, v.data, &got) {
 				fail(s, "the server sent an invalid Snapshot message")
 				return
 			}
@@ -184,14 +187,14 @@ handle_packets :: proc(s: ^Session, packets: []game.Packet) {
 			// Everything still present and not in the delta is unchanged now.
 			for _, &o in s.others {track_hold(&o.track, s.rx.tick)}
 			for _, &e in s.entities {track_hold(&e.track, s.rx.tick)}
-		case game.Telemetry_Ack, game.Dev_Ack, game.Dev_Replies:
-		case game.Market_View:
+		case protocol.Telemetry_Ack, protocol.Dev_Ack, protocol.Dev_Replies:
+		case protocol.Market_View:
 			market_take(&s.market, v)
-		case game.Stats_Page:
+		case protocol.Stats_Page:
 			stats_data_take(&s.player_stats, v)
-		case game.Bulk_Begin:
+		case protocol.Bulk_Begin:
 			world_bulk_begin(&s.world, int(v.count))
-		case game.Edit_Result:
+		case protocol.Edit_Result:
 			// The server's word, accepted or not: set it (undoing a rejected
 			// prediction) and stop waiting.
 			world_set_block(&s.world, v.pos, v.block)
@@ -205,18 +208,18 @@ handle_packets :: proc(s: ^Session, packets: []game.Packet) {
 				}
 			}
 			inventory_predict(s) // (a refused block is ours again)
-		case game.Column:
+		case protocol.Column:
 			world_set_column(&s.world, v)
 		}
 	}
 }
 
-welcome :: proc(s: ^Session, w: game.Welcome) {
+welcome :: proc(s: ^Session, w: protocol.Welcome) {
 	if s.state != .Connecting {
 		fail(s, "the server welcomed us twice")
 		return
 	}
-	if w.protocol != game.PROTOCOL_VERSION || w.tick_rate != game.TICK_RATE {
+	if w.protocol != protocol.PROTOCOL_VERSION || w.tick_rate != game.TICK_RATE {
 		fail(s, "the server runs a different version")
 		return
 	}
@@ -236,7 +239,7 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	s.welcome.game = s.game.id // (w.game is a view into the message)
 	s.home = w.address
 	s.place = {
-		biome = game.NO_BIOME,
+		biome = protocol.NO_BIOME,
 	}
 	// Everything the server can send us at once: the interest area plus the
 	// margin within which we keep chunks.
@@ -258,8 +261,8 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	s.world_init = true
 	s.rules = w.rules
 	rules := w.rules
-	game.receiver_seed(&s.rx, int(game.State_Kind.Rules), &rules)
-	game.prediction_init(&s.prediction, {position = w.spawn})
+	protocol.receiver_seed(&s.rx, int(protocol.State_Kind.Rules), &rules)
+	protocol.prediction_init(&s.prediction, {position = w.spawn})
 	s.camera = {
 		position = w.spawn + {0, game.PLAYER_EYE, 0},
 	}
@@ -297,14 +300,14 @@ session_trace :: proc(s: ^Session) -> bool {
 		return false
 	}
 	path := path_next_to_exe("net.trace")
-	header := game.Trace_Header {
-		protocol     = game.PROTOCOL_VERSION,
+	header := protocol.Trace_Header {
+		protocol     = protocol.PROTOCOL_VERSION,
 		seed         = s.config.seed,
 		view_radius  = u32(s.config.view_radius),
 		view_height  = u32(s.config.view_height),
 		allow_cheats = true, // as session_start configures it
 	}
-	if !game.pipe_trace_start(&s.pipe, path, header) {
+	if !protocol.pipe_trace_start(&s.pipe, path, header) {
 		log.errorf("net trace cannot write path=%s", path)
 		return false
 	}
@@ -328,12 +331,12 @@ net_update :: proc(s: ^Session, dt: f32) {
 		n.ping_id += 1
 		n.ping_sent = netcode.link_now(&s.link)
 		n.ping_pending = true
-		send_message(s, game.Ping{n.ping_id})
+		send_message(s, protocol.Ping{n.ping_id})
 	}
 	n.rate_timer += dt
 	if n.rate_timer >= 1 {
-		now := s.traffic if s.remote else game.pipe_traffic(&s.pipe)
-		for side in game.Side {
+		now := s.traffic if s.remote else protocol.pipe_traffic(&s.pipe)
+		for side in protocol.Side {
 			for k in 0 ..< 256 {
 				n.rates[side].messages[k] = int(
 					math.round(
@@ -355,32 +358,32 @@ fail :: proc(s: ^Session, reason: string) {
 	log.errorf("session %s", reason)
 	s.state = .Failed
 	s.failure = strings.clone(reason, virtual.arena_allocator(&s.arena))
-	if !s.remote && s.pipe.allocator.procedure != nil {game.close(s.endpoint)}
+	if !s.remote && s.pipe.allocator.procedure != nil {protocol.close(s.endpoint)}
 }
 
-send_message :: proc(s: ^Session, m: game.Client_Message) {
+send_message :: proc(s: ^Session, m: protocol.Client_Message) {
 	// Text the server would refuse to decode (ending the connection).
 	#partial switch v in m {
-	case game.Command:
-		if len(v.command) > game.MAX_ADMIN_TEXT {
+	case protocol.Command:
+		if len(v.command) > protocol.MAX_ADMIN_TEXT {
 			append(&s.notices, strings.clone("Command too long"))
 			return
 		}
-	case game.Set_Rule:
-		if len(v.name) > game.MAX_RULE_TEXT || len(v.value) > game.MAX_RULE_TEXT {
+	case protocol.Set_Rule:
+		if len(v.name) > protocol.MAX_RULE_TEXT || len(v.value) > protocol.MAX_RULE_TEXT {
 			append(&s.notices, strings.clone("Rule text too long"))
 			return
 		}
 	}
 	clear(&s.writer.buf)
-	game.encode_client(&s.writer, m)
+	protocol.encode_client(&s.writer, m)
 	data := s.writer.buf[:]
 	if s.remote {
 		s.traffic[.Client].messages[data[0]] += 1
 		s.traffic[.Client].bytes[data[0]] += len(data)
-		netcode.link_send(&s.link, data, game.message_reliable(.Client, data[0]))
+		netcode.link_send(&s.link, data, protocol.message_reliable(.Client, data[0]))
 	} else {
-		game.send(s.endpoint, data)
+		protocol.send(s.endpoint, data)
 	}
 }
 
@@ -389,7 +392,7 @@ send_message :: proc(s: ^Session, m: game.Client_Message) {
 // (docs/determinism.md). Nothing while a chunk around the player is missing:
 // the prediction is then not on the world the server has.
 send_prediction_check :: proc(s: ^Session, sequence: u32) {
-	if sequence % game.DESYNC_CHECK_INPUTS != 0 {return}
+	if sequence % protocol.DESYNC_CHECK_INPUTS != 0 {return}
 	p := s.prediction.state.position
 	centre := game.chunk_of({i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))})
 	for dy in i32(-1) ..= 1 {
@@ -399,7 +402,10 @@ send_prediction_check :: proc(s: ^Session, sequence: u32) {
 			}
 		}
 	}
-	send_message(s, game.Prediction_Check{sequence, game.player_fields(s.prediction.state)})
+	send_message(
+		s,
+		protocol.Prediction_Check{sequence, protocol.player_fields(s.prediction.state)},
+	)
 }
 
 // packs_changed: the server reloaded its packs (development builds). A player
@@ -407,7 +413,7 @@ send_prediction_check :: proc(s: ^Session, sequence: u32) {
 // checks its hash; the App swaps it in once the mesh jobs are done. Anyone
 // else was sent away by the server (they get the packs when they join again).
 @(private = "file")
-packs_changed :: proc(s: ^Session, v: game.Packs_Changed) {
+packs_changed :: proc(s: ^Session, v: protocol.Packs_Changed) {
 	if s.remote {
 		fail(s, "the server reloaded its packs; join again")
 		return
@@ -441,7 +447,7 @@ packs_changed :: proc(s: ^Session, v: game.Packs_Changed) {
 // content_mismatch: why a server whose registry is not ours (Welcome.content
 // differs) cannot be played here: the packs it uses that this game lacks.
 @(private = "file")
-content_mismatch :: proc(reg: ^game.Registry, w: game.Welcome) -> string {
+content_mismatch :: proc(reg: ^game.Registry, w: protocol.Welcome) -> string {
 	missing := make([dynamic]string, context.temp_allocator)
 	rest := w.packs
 	for entry in strings.split_iterator(&rest, ",") {
@@ -475,13 +481,13 @@ packs_cache_dir :: proc() -> string {
 // packs_begin: the server's packs (a remote server only: our own universe's
 // are read here): ask for those the cache lacks.
 @(private = "file")
-packs_begin :: proc(s: ^Session, p: game.Packs) {
+packs_begin :: proc(s: ^Session, p: protocol.Packs) {
 	if !s.remote || s.fetching {
 		fail(s, "the server sent its packs when it should not")
 		return
 	}
-	s.fetch = new(game.Pack_Fetch)
-	want, err := game.pack_fetch_begin(s.fetch, p, packs_cache_dir())
+	s.fetch = new(protocol.Pack_Fetch)
+	want, err := protocol.pack_fetch_begin(s.fetch, p, packs_cache_dir())
 	s.fetching = true
 	if err != "" {
 		fail(s, err)
@@ -493,12 +499,12 @@ packs_begin :: proc(s: ^Session, p: game.Packs) {
 }
 
 @(private = "file")
-packs_part :: proc(s: ^Session, part: game.Pack_Part) {
+packs_part :: proc(s: ^Session, part: protocol.Pack_Part) {
 	if !s.fetching || s.fetched {
 		fail(s, "the server sent a pack part we did not ask for")
 		return
 	}
-	if err := game.pack_fetch_part(s.fetch, part); err != "" {
+	if err := protocol.pack_fetch_part(s.fetch, part); err != "" {
 		fail(s, err)
 		return
 	}
@@ -509,8 +515,8 @@ packs_part :: proc(s: ^Session, part: game.Pack_Part) {
 // make, and the word that we have it.
 @(private = "file")
 packs_built :: proc(s: ^Session) {
-	if s.state == .Failed || s.fetched || !game.pack_fetch_complete(s.fetch) {return}
-	sources, errs := game.pack_fetch_sources(s.fetch)
+	if s.state == .Failed || s.fetched || !protocol.pack_fetch_complete(s.fetch) {return}
+	sources, errs := protocol.pack_fetch_sources(s.fetch)
 	all := make([dynamic]game.Pack_Source, context.temp_allocator)
 	append(&all, game.pack_source_sent(game.base_pack_source(context.temp_allocator)))
 	append(&all, ..sources)
@@ -546,7 +552,7 @@ packs_built :: proc(s: ^Session) {
 	if s.reg_owned {game.registry_destroy(s.reg)}
 	s.reg, s.reg_owned, s.reg_swapped, s.fetched = reg, true, true, true
 	session_texels(s)
-	game.receiver_destroy(&s.rx)
-	game.receiver_init(&s.rx, &s.schema, s.reg)
-	send_message(s, game.Packs_Ready{reg.hash})
+	protocol.receiver_destroy(&s.rx)
+	protocol.receiver_init(&s.rx, &s.schema, s.reg)
+	send_message(s, protocol.Packs_Ready{reg.hash})
 }

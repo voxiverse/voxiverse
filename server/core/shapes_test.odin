@@ -4,6 +4,7 @@ import "core:math"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // Stairs, slabs and ladders on a built course, walked by a mirror client
 // against a stepped server: they collide, step up and climb the same on both
@@ -93,7 +94,7 @@ test_shapes_agree :: proc(t: ^testing.T) {
 		if st.position.x > start_x + 16 &&
 		   st.position.x < start_x + 20 &&
 		   i % 12 == 0 {in_.buttons += {.Jump}}
-		msg := game.prediction_tick(&m.prediction, in_, &m.rules, mirror_query(m))
+		msg := protocol.prediction_tick(&m.prediction, in_, &m.rules, mirror_query(m))
 		msg.snapshot = m.rx.ack
 		mirror_send(m, msg)
 		harness_step(&sess.h)
@@ -148,7 +149,7 @@ block_named :: proc(name: string) -> game.Block {
 tick_once :: proc(sess: ^Session, in_: game.Player_Input) -> u32 {
 	m := &sess.mirror
 	mirror_receive(sess)
-	msg := game.prediction_tick(&m.prediction, in_, &m.rules, mirror_query(m))
+	msg := protocol.prediction_tick(&m.prediction, in_, &m.rules, mirror_query(m))
 	msg.snapshot = m.rx.ack
 	mirror_send(m, msg)
 	harness_step(&sess.h)
@@ -210,7 +211,7 @@ test_doors_and_fences_agree :: proc(t: ^testing.T) {
 	break_at := feet + {3, 0, 0}
 	seq := tick_once(sess, {})
 	m.edit_id += 1
-	mirror_send(m, game.edit_plain(m.edit_id, seq, break_at, .Air))
+	mirror_send(m, protocol.edit_plain(m.edit_id, seq, break_at, .Air))
 	for _ in 0 ..< 20 {tick_once(sess, {})}
 	tb := &test_reg().blocks
 	testing.expect_value(t, server_block(sess, break_at), game.Block.Air)
@@ -250,7 +251,7 @@ test_doors_and_fences_agree :: proc(t: ^testing.T) {
 	testing.expect_value(t, at, feet + {6, 0, 0})
 	seq = tick_once(sess, east)
 	m.edit_id += 1
-	mirror_send(m, game.Edit{m.edit_id, seq, at, lower, ctx.target, u8(ctx.face), ctx.hit})
+	mirror_send(m, protocol.Edit{m.edit_id, seq, at, lower, ctx.target, u8(ctx.face), ctx.hit})
 	for _ in 0 ..< 10 {tick_once(sess, east)}
 	testing.expect_value(t, server_block(sess, at), lower)
 	cell, upper, _ := game.companion(test_reg(), lower, at)
@@ -268,7 +269,7 @@ test_doors_and_fences_agree :: proc(t: ^testing.T) {
 	seq = tick_once(sess, east)
 	opened, _ := game.state_set(tb, lower, "open", "true")
 	m.edit_id += 1
-	mirror_send(m, game.edit_plain(m.edit_id, seq, at, opened))
+	mirror_send(m, protocol.edit_plain(m.edit_id, seq, at, opened))
 	for _ in 0 ..< 10 {tick_once(sess, east)}
 	testing.expect_value(t, server_block(sess, at), opened)
 	_, opened_upper, _ := game.companion(test_reg(), opened, at)
@@ -285,7 +286,7 @@ test_doors_and_fences_agree :: proc(t: ^testing.T) {
 	seq = tick_once(sess, east)
 	m.edit_id += 1
 	closed_upper, _ := game.state_set(tb, opened_upper, "open", "false")
-	mirror_send(m, game.edit_plain(m.edit_id, seq, cell, closed_upper))
+	mirror_send(m, protocol.edit_plain(m.edit_id, seq, cell, closed_upper))
 	for _ in 0 ..< 10 {tick_once(sess, east)}
 	testing.expectf(
 		t,

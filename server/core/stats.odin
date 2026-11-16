@@ -11,6 +11,8 @@ import "core:strconv"
 import "core:strings"
 
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import "common:telemetry"
 
 // Statistics and events: everything the server counts or measures goes
@@ -185,7 +187,7 @@ event_for :: proc(
 		text  = telemetry.short(text),
 		n     = n,
 	}
-	if w != nil {e.world = telemetry.short(game.address_dir(w.address))}
+	if w != nil {e.world = telemetry.short(starmap.address_dir(w.address))}
 	return e
 }
 
@@ -365,17 +367,17 @@ stats_target :: proc(s: ^Server, c: ^Client, of: string) -> ^Client {
 
 // stats_request answers a Stats_Request with a page of the counters.
 @(private)
-stats_request :: proc(s: ^Server, c: ^Client, q: game.Stats_Request) {
+stats_request :: proc(s: ^Server, c: ^Client, q: protocol.Stats_Request) {
 	text, pages := "", 1
 	if target := stats_target(s, c, q.of); target != nil {
 		lines := stats_lines(target.stats, q.filter)
-		pages = max(1, (len(lines) + game.STATS_PAGE_LINES - 1) / game.STATS_PAGE_LINES)
-		first := min(int(q.page) * game.STATS_PAGE_LINES, len(lines))
-		last := min(first + game.STATS_PAGE_LINES, len(lines))
+		pages = max(1, (len(lines) + protocol.STATS_PAGE_LINES - 1) / protocol.STATS_PAGE_LINES)
+		first := min(int(q.page) * protocol.STATS_PAGE_LINES, len(lines))
+		last := min(first + protocol.STATS_PAGE_LINES, len(lines))
 		text = strings.join(lines[first:last], "\n", context.temp_allocator)
 	}
-	if len(text) > game.MAX_STATS_TEXT {text = text[:game.MAX_STATS_TEXT]}
-	send_message(s, c, game.Stats_Page{q.page, u16(pages), text})
+	if len(text) > protocol.MAX_STATS_TEXT {text = text[:protocol.MAX_STATS_TEXT]}
+	send_message(s, c, protocol.Stats_Page{q.page, u16(pages), text})
 }
 
 // admin_stats: stats [player] [filter]: counters in chat (the first 30 lines).
@@ -419,7 +421,7 @@ MAX_REPORT_NUMBER :: 1 << 30
 // report, with printable text and sane numbers; anything else is refused and
 // counted (telemetry.refused, in the world's totals).
 @(private)
-telemetry_report :: proc(s: ^Server, c: ^Client, report: game.Telemetry_Report) {
+telemetry_report :: proc(s: ^Server, c: ^Client, report: protocol.Telemetry_Report) {
 	r := report
 	if s.tick - c.report_window >=
 	   REPORT_WINDOW_TICKS {c.report_window, c.report_count = s.tick, 0}

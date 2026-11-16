@@ -6,6 +6,8 @@ import "core:unicode/utf8"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import "common:worldgen"
 
 // The dial overlay: right-click a gate's ring and pick a world of this
@@ -47,19 +49,19 @@ dial_add :: proc(app: ^engine.App, symbol: u8) -> bool {
 	for k in d.symbols[:d.count] {if k == symbol {return false}}
 	d.symbols[d.count] = symbol
 	d.count += 1
-	if d.count < game.WORLD_LENGTH {return true}
+	if d.count < starmap.WORLD_LENGTH {return true}
 	engine.overlay_close(&app.overlays, .Dial)
 	if s := app.session; s != nil {
 		engine.send_message(
 			s,
-			game.Dial{d.gate, {galaxy = s.welcome.address.galaxy, world = d.symbols}},
+			protocol.Dial{d.gate, {galaxy = s.welcome.address.galaxy, world = d.symbols}},
 		)
 	}
 	return true
 }
 
 symbol_text :: proc(symbol: u8) -> string {
-	bytes, n := utf8.encode_rune(game.SYMBOL_RUNES[symbol])
+	bytes, n := utf8.encode_rune(starmap.SYMBOL_RUNES[symbol])
 	return strings.clone(string(bytes[:n]), context.temp_allocator)
 }
 
@@ -69,7 +71,7 @@ Dial_Layout :: struct {
 	panel:   ui.Rect,
 	dialed:  ui.Rect, // the chevrons so far
 	life:    ui.Rect, // what lives on the world the seventh symbol under the pointer would dial
-	symbols: [game.SYMBOLS]ui.Rect,
+	symbols: [starmap.SYMBOLS]ui.Rect,
 	erase:   ui.Rect,
 	cancel:  ui.Rect,
 }
@@ -78,7 +80,7 @@ Dial_Layout :: struct {
 dial_layout :: proc(ctx: ^ui.Context) -> (l: Dial_Layout) {
 	t := &ctx.theme
 	gap := t.spacing
-	rows := (game.SYMBOLS + DIAL_COLUMNS - 1) / DIAL_COLUMNS
+	rows := (starmap.SYMBOLS + DIAL_COLUMNS - 1) / DIAL_COLUMNS
 	grid_w := DIAL_COLUMNS * (DIAL_BUTTON.x + gap) - gap
 	grid_h := f32(rows) * (DIAL_BUTTON.y + gap) - gap
 	w := grid_w + 2 * t.padding
@@ -89,7 +91,7 @@ dial_layout :: proc(ctx: ^ui.Context) -> (l: Dial_Layout) {
 	l.life = ui.cut_top(&inner, t.row_height)
 	l.dialed = ui.cut_top(&inner, DIAL_BUTTON.y)
 	ui.cut_top(&inner, 2 * gap)
-	for i in 0 ..< game.SYMBOLS {
+	for i in 0 ..< starmap.SYMBOLS {
 		row, col := i / DIAL_COLUMNS, i % DIAL_COLUMNS
 		l.symbols[i] = {
 			inner.x + f32(col) * (DIAL_BUTTON.x + gap),
@@ -129,7 +131,7 @@ dial_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	here := s.welcome.address
 	galaxy := strings.builder_make(context.temp_allocator)
 	strings.write_string(&galaxy, "in galaxy ")
-	for g in here.galaxy {strings.write_rune(&galaxy, game.SYMBOL_RUNES[g])}
+	for g in here.galaxy {strings.write_rune(&galaxy, starmap.SYMBOL_RUNES[g])}
 	ui.label(
 		ctx,
 		strings.to_string(galaxy),
@@ -138,22 +140,22 @@ dial_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		t.text_muted,
 	)
 	// With six dialed, the world a symbol under the pointer would complete.
-	if d.count == game.WORLD_LENGTH - 1 {
-		for i in 0 ..< game.SYMBOLS {
+	if d.count == starmap.WORLD_LENGTH - 1 {
+		for i in 0 ..< starmap.SYMBOLS {
 			if taken(d, i) || !ui.rect_contains(l.symbols[i], ctx.input.mouse) {continue}
-			a := game.Address {
+			a := starmap.Address {
 				galaxy = here.galaxy,
 			}
 			copy(a.world[:], d.symbols[:d.count])
-			a.world[game.WORLD_LENGTH - 1] = u8(i)
+			a.world[starmap.WORLD_LENGTH - 1] = u8(i)
 			ui.label(ctx, engine.life_line(worldgen.world_life(a)), l.life, .Center, t.text_muted)
 			break
 		}
 	}
 	// The seven chevrons: what is dialed so far.
 	slots := l.dialed
-	slot_w := (slots.w - f32(game.WORLD_LENGTH - 1) * t.spacing) / game.WORLD_LENGTH
-	for k in 0 ..< game.WORLD_LENGTH {
+	slot_w := (slots.w - f32(starmap.WORLD_LENGTH - 1) * t.spacing) / starmap.WORLD_LENGTH
+	for k in 0 ..< starmap.WORLD_LENGTH {
 		r := ui.Rect{slots.x + f32(k) * (slot_w + t.spacing), slots.y, slot_w, slots.h}
 		lit := k < d.count
 		ui.fill_rect(ctx, r, t.slot_fill)
@@ -162,13 +164,13 @@ dial_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	}
 	// A pad's focus starts on, and after a symbol is taken goes to, the next free one.
 	start := 0
-	for k in 0 ..< game.SYMBOLS {
-		if !taken(d, (d.last + k) % game.SYMBOLS) {
-			start = (d.last + k) % game.SYMBOLS
+	for k in 0 ..< starmap.SYMBOLS {
+		if !taken(d, (d.last + k) % starmap.SYMBOLS) {
+			start = (d.last + k) % starmap.SYMBOLS
 			break
 		}
 	}
-	for i in 0 ..< game.SYMBOLS {
+	for i in 0 ..< starmap.SYMBOLS {
 		used := taken(d, i)
 		ui.push_id_int(ctx, i)
 		if i == start {ui.default_focus(ctx)}

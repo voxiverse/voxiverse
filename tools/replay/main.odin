@@ -5,9 +5,11 @@ import "core:log"
 import "core:os"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import platform "common:platform"
+import "common:protocol"
 import games "generated:games"
 import "server:core"
 
@@ -57,22 +59,22 @@ run :: proc(opts: Options) -> bool {
 		return false
 	}
 	defer delete(data)
-	header, records, complete := game.trace_read(data)
+	header, records, complete := protocol.trace_read(data)
 	defer delete(records)
 	if !complete {log.warnf("replay trace damaged or cut short; replaying what precedes it path=%s", opts.file)}
-	if header.protocol != game.PROTOCOL_VERSION {
+	if header.protocol != protocol.PROTOCOL_VERSION {
 		log.errorf(
 			"replay trace protocol=%d, this build speaks %d",
 			header.protocol,
-			game.PROTOCOL_VERSION,
+			protocol.PROTOCOL_VERSION,
 		)
 		return false
 	}
 
-	pipe: game.Pipe
-	game.pipe_init(&pipe)
-	defer game.pipe_destroy(&pipe)
-	if !game.pipe_trace_start(
+	pipe: protocol.Pipe
+	protocol.pipe_init(&pipe)
+	defer protocol.pipe_destroy(&pipe)
+	if !protocol.pipe_trace_start(
 		&pipe,
 		opts.out,
 		header,
@@ -87,29 +89,29 @@ run :: proc(opts: Options) -> bool {
 		game         = trace_game(records[:]),
 	}
 	if !core.start(&srv, config, {&pipe, .Server}) {return false}
-	client := game.Endpoint{&pipe, .Client}
+	client := protocol.Endpoint{&pipe, .Client}
 
-	key := game.account_key_make()
-	challenge: Maybe(game.Nonce)
+	key := access.account_key_make()
+	challenge: Maybe(access.Nonce)
 	scratch := new(game.Block_Array)
 	defer free(scratch)
 	sent, received := 0, 0
 	start := time.tick_now()
 	end: time.Duration
-	incoming := make([dynamic]game.Packet)
+	incoming := make([dynamic]protocol.Packet)
 	defer delete(incoming)
 	drain :: proc(
-		client: game.Endpoint,
-		incoming: ^[dynamic]game.Packet,
-		challenge: ^Maybe(game.Nonce),
+		client: protocol.Endpoint,
+		incoming: ^[dynamic]protocol.Packet,
+		challenge: ^Maybe(access.Nonce),
 		scratch: ^game.Block_Array,
 	) -> int {
-		n := game.receive(client, incoming)
+		n := protocol.receive(client, incoming)
 		for p in incoming {
-			if m, ok := game.decode_server(p, scratch, base_registry); ok {
-				if c, is := m.(game.Challenge); is {challenge^ = c.nonce}
+			if m, ok := protocol.decode_server(p, scratch, base_registry); ok {
+				if c, is := m.(protocol.Challenge); is {challenge^ = c.nonce}
 			}
-			game.packet_free(client, p)
+			protocol.packet_free(client, p)
 		}
 		clear(incoming)
 		return n
@@ -125,15 +127,15 @@ run :: proc(opts: Options) -> bool {
 			time.sleep(time.Millisecond)
 		}
 		message := r.data
-		if m, ok := game.decode_client(r.data, base_registry); ok {
+		if m, ok := protocol.decode_client(r.data, base_registry); ok {
 			#partial switch v in m {
-			case game.Hello:
+			case protocol.Hello:
 				h := v
 				h.account = key.account
 				clear(&w.buf)
-				game.encode_client(&w, h)
+				protocol.encode_client(&w, h)
 				message = w.buf[:]
-			case game.Proof:
+			case protocol.Proof:
 				// This server's challenge, signed (it may take a moment).
 				deadline := time.tick_add(time.tick_now(), 5 * time.Second)
 				for challenge == nil && time.tick_diff(time.tick_now(), deadline) > 0 {
@@ -146,11 +148,11 @@ run :: proc(opts: Options) -> bool {
 					break
 				}
 				clear(&w.buf)
-				game.encode_client(&w, game.Proof{game.account_sign(&key, nonce)})
+				protocol.encode_client(&w, protocol.Proof{access.account_sign(&key, nonce)})
 				message = w.buf[:]
 			}
 		}
-		game.send(client, message)
+		protocol.send(client, message)
 		sent += 1
 		end = at
 	}
@@ -159,7 +161,7 @@ run :: proc(opts: Options) -> bool {
 		received += drain(client, &incoming, &challenge, scratch)
 		time.sleep(time.Millisecond)
 	}
-	disconnected := game.is_closed(client)
+	disconnected := protocol.is_closed(client)
 	server_ok := core.stop(&srv)
 	received += drain(client, &incoming, &challenge, scratch)
 	log.infof(
@@ -176,10 +178,10 @@ run :: proc(opts: Options) -> bool {
 
 // trace_game: the game the traced session played (its Welcome's), with its rules, so the
 // replay runs them again; a game this build lacks replays as the default one.
-trace_game :: proc(records: []game.Trace_Record) -> core.Game {
+trace_game :: proc(records: []protocol.Trace_Record) -> core.Game {
 	scratch := new(game.Block_Array)
 	defer free(scratch)
-	played := game.trace_game(records, scratch, base_registry)
+	played := protocol.trace_game(records, scratch, base_registry)
 	fallback := core.Game{}
 	for g in games.SERVER {
 		if g.id == played {return g}

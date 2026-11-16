@@ -5,6 +5,7 @@ import "core:math"
 import "client:render"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 
 // Hitscan weapons on the client (server/core/weapons.odin decides everything). The
 // client sends "I pulled the trigger" (Shoot) and predicts only effects: the
@@ -81,7 +82,7 @@ session_reload :: proc(s: ^Session) -> bool {
 	if !ok || s.dead || s.state != .Playing || weapon_reloading(s) {return false}
 	if weapon_ammo(s, stack) >= w.magazine {return false}
 	if w.ammo != game.NO_ITEM && game.inventory_count(&s.inventory, w.ammo) == 0 {return false}
-	send_message(s, game.Reload{})
+	send_message(s, protocol.Reload{})
 	s.reload_end = s.weapon_clock + f64(w.reload_time)
 	s.reload_slot = s.inventory.selected
 	vm_event(&s.vm, .Reload, w.reload_time)
@@ -101,7 +102,7 @@ session_shoot :: proc(s: ^Session, stack: game.Stack, w: game.Weapon_Info, press
 		if press {session_reload(s)}
 		return false
 	}
-	shoot := game.Shoot {
+	shoot := protocol.Shoot {
 		after = s.prediction.next_sequence - 1,
 		slot  = u8(s.inventory.selected),
 		press = press,
@@ -180,7 +181,7 @@ muzzle_flash :: proc(s: ^Session, at: [3]f64) {
 }
 
 // shot_seen: another player's shot: the tracer and the sound where it began.
-shot_seen :: proc(s: ^Session, v: ^game.Shot) {
+shot_seen :: proc(s: ^Session, v: ^protocol.Shot) {
 	tracer(s, v.origin - {0, 0.16, 0}, v.end)
 	if s.shot_seen_time == s.weapon_clock &&
 	   s.shot_seen_by == v.shooter &&
@@ -196,7 +197,7 @@ shot_seen :: proc(s: ^Session, v: ^game.Shot) {
 
 // hit_confirmed: the server says our shot hit: the marker (red on a kill) and
 // its sound (another for a headshot).
-hit_confirmed :: proc(s: ^Session, v: ^game.Hit_Confirm) {
+hit_confirmed :: proc(s: ^Session, v: ^protocol.Hit_Confirm) {
 	s.marker, s.marker_kill, s.marker_head = MARKER_SECONDS, v.kill, v.headshot
 	s.confirms += 1
 	kind: Sound_Kind = .Hit_Head if v.headshot else .Hit

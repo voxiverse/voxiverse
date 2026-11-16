@@ -5,6 +5,7 @@ import "core:math"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // The exit check: a plant breaks, and drops its item, when the block
 // under it goes or stops holding it; one rule for a single block, a chain
@@ -114,17 +115,17 @@ test_plants_need_support :: proc(t: ^testing.T) {
 	for f in data.failures {testing.expect(t, false, f)}
 
 	// A bulk edit: a row of grass with flowers, the row replaced by air.
-	net_send(a, game.Command{"fill 0 0 0 0 0 0 air"}) // (a command that does nothing: the permission check)
+	net_send(a, protocol.Command{"fill 0 0 0 0 0 0 air"}) // (a command that does nothing: the permission check)
 	for dx in i32(0) ..< 6 {
-		net_send(a, game.Command{bulk_at("fill", x + 10 + dx, y, z, "grass")})
-		net_send(a, game.Command{bulk_at("fill", x + 10 + dx, y + 1, z, "poppy")})
+		net_send(a, protocol.Command{bulk_at("fill", x + 10 + dx, y, z, "grass")})
+		net_send(a, protocol.Command{bulk_at("fill", x + 10 + dx, y + 1, z, "poppy")})
 	}
 	net_for(t, {a}, 1)
 	for dx in i32(0) ..< 6 {
 		b, _ := net_block(a, {x + 10 + dx, y + 1, z})
 		testing.expect_value(t, b, game.Block.Poppy)
 	}
-	net_send(a, game.Command{bulk_row("fill", x + 10, x + 15, y, z, "air")})
+	net_send(a, protocol.Command{bulk_row("fill", x + 10, x + 15, y, z, "air")})
 	net_for(t, {a}, 1)
 	for dx in i32(0) ..< 6 {
 		b, _ := net_block(a, {x + 10 + dx, y + 1, z})

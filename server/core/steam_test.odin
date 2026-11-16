@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "common:game"
+import "common:access"
 import steam_common "common:steam"
 import steam_server "server:steam"
 
@@ -111,7 +111,7 @@ test_steam_join_links_the_account :: proc(t: ^testing.T) {
 			"steam ",
 			steam_common_text(steam_common.fake_id(9)),
 			" ",
-			game.account_text(test_key("alice").account),
+			access.account_text(test_key("alice").account),
 		},
 		context.temp_allocator,
 	)

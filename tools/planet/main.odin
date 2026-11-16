@@ -7,8 +7,8 @@ import "core:os"
 import "core:strconv"
 
 import "common:base"
-import "common:game"
 import "common:planet"
+import "common:starmap"
 
 // The home world's relief: reads NOAA ETOPO5 and writes the committed relief file.
 //
@@ -26,7 +26,7 @@ main :: proc() {
 	args := os.args[1:]
 	if len(args) >= 1 && args[0] == "maps" {
 		dir := "build/planet"
-		address: Maybe(game.Address)
+		address: Maybe(starmap.Address)
 		seed := u64(0)
 		rest := args[1:]
 		for len(rest) > 0 {
@@ -37,7 +37,7 @@ main :: proc() {
 					os.exit(2)
 				}
 				if rest[0] == "--address" {
-					a, ok := game.address_parse(rest[1], game.address_derive(seed).galaxy)
+					a, ok := starmap.address_parse(rest[1], starmap.address_derive(seed).galaxy)
 					if !ok {
 						fmt.eprintln("planet: not an address:", rest[1])
 						os.exit(2)

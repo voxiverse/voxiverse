@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "common:worldgen"
 
 // Nobody arrives inside blocks: spawn lands on the top of what stands at
@@ -49,22 +50,22 @@ test_spawn_and_landings :: proc(t: ^testing.T) {
 		testing.expect_value(t, top, worldgen.column_top(&srv.home.chunks.gen, 0, 0))
 
 		// A pillar where the spawn is: spawn lands on it.
-		fake_send(&c, game.Command{fmt.tprintf("fill 0 %d 0 0 %d 0 stone", top + 1, top + 6)})
-		fake_send(&c, game.Command{"spawn"})
+		fake_send(&c, protocol.Command{fmt.tprintf("fill 0 %d 0 0 %d 0 stone", top + 1, top + 6)})
+		fake_send(&c, protocol.Command{"spawn"})
 		want = f64(top + 7)
 		testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {
 				return c.player.state.position.y == want
 			}), "spawn did not land on the pillar")
 
 		// Into the pillar: out on top of it.
-		fake_send(&c, game.Teleport{{0.5, f64(top + 3), 0.5}, 0, 0})
+		fake_send(&c, protocol.Teleport{{0.5, f64(top + 3), 0.5}, 0, 0})
 		want = f64(top + 3)
 		testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {
 				return c.player.state.position.y != want
 			}))
 		testing.expect_value(t, c.player.state.position.y, f64(top + 7))
 
-		fake_send(&c, game.Command{fmt.tprintf("setworldspawn 5.5 %d 5.5", top + 20)})
+		fake_send(&c, protocol.Command{fmt.tprintf("setworldspawn 5.5 %d 5.5", top + 20)})
 		testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {
 				for n in c.notices {if strings.has_prefix(n, "World spawn set") {return true}}
 				return false

@@ -300,7 +300,7 @@ at their day and place and change nothing before it.
   what the town knows of other towns is told them but not kept. Not yet: the market screen and
   the `Traded` intervention for a large trade.
 - **The market on the wire** (`server/core/player_data.odin`, `market_update`, `market_trade`;
-  `Market_View` and `Market_Trade` in `common/game/protocol.odin`). A player within
+  `Market_View` and `Market_Trade` in `common/protocol/protocol.odin`). A player within
   `TRADE_RADIUS_KM` of a town is sent a `Market_View`: the town's name (a placeholder,
   "Town <climate cell>": the peoples' names are not kept with the economy), per good whether
   the town deals in it, its price (silver per unit), its stock in units, the player's cargo, and

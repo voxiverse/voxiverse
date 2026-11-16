@@ -11,6 +11,7 @@ import "core:strings"
 import "core:sync"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
@@ -258,14 +259,14 @@ run_collector :: proc(opts: Options) -> bool {
 }
 
 // server_key: this server's account, kept in its universe (made the first time).
-server_key :: proc(dir: string) -> (key: game.Account_Key) {
+server_key :: proc(dir: string) -> (key: access.Account_Key) {
 	path := filepath.join({dir, "server.key"}, context.temp_allocator) or_else "server.key"
 	if data, err := os.read_entire_file_from_path(path, context.temp_allocator);
 	   err == nil && len(data) == 32 {
-		if game.account_key_set(&key, data) {return}
+		if access.account_key_set(&key, data) {return}
 	}
-	key = game.account_key_make()
-	seed := game.account_key_seed(&key)
+	key = access.account_key_make()
+	seed := access.account_key_seed(&key)
 	os.make_directory_all(dir)
 	_ = os.write_entire_file(path, seed[:])
 	return

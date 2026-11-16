@@ -5,8 +5,10 @@ import "core:log"
 import "core:slice"
 import "core:strings"
 
+import "common:access"
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Server commands about people (after EssentialsX's): whispering, actions,
 // broadcasts, nicknames, the message of the day; kicking and banning (by
@@ -218,10 +220,10 @@ admin_motd :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 @(private)
 exempt :: proc(s: ^Server, name: string) -> bool {
 	if c := client_by_name(s, name); c != nil {return allowed(s, c, "moderation.exempt")}
-	grants := make([dynamic]game.Grant, context.temp_allocator)
+	grants := make([dynamic]access.Grant, context.temp_allocator)
 	account, known := s.store.characters[name]
 	resolve(&s.perms, name, account if known else nil, false, &grants, context.temp_allocator)
-	return game.allowed(grants[:], "moderation.exempt")
+	return access.allowed(grants[:], "moderation.exempt")
 }
 
 // kick sends a player away with a reason (not the local player: the
@@ -290,7 +292,7 @@ ban :: proc(s: ^Server, c: ^Client, args: []string, seconds: i64) -> bool {
 		// Their account: every character of it, and any made after.
 		ban_set(
 			&s.community.account_bans,
-			game.account_text(account),
+			access.account_text(account),
 			until,
 			client_name(c),
 			reason,
@@ -307,7 +309,7 @@ ban :: proc(s: ^Server, c: ^Client, args: []string, seconds: i64) -> bool {
 admin_unban :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	ok := ban_delete(&s.community.bans, args[0])
 	if account, known := s.store.characters[args[0]]; known {
-		ban_delete(&s.community.account_bans, game.account_text(account))
+		ban_delete(&s.community.account_bans, access.account_text(account))
 	}
 	notice(
 		s,
@@ -359,15 +361,15 @@ admin_unban_ip :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // banned: why a character called name, of account, from address, may not
 // join.
 @(private)
-banned :: proc(s: ^Server, name, address: string, account: game.Account) -> (string, bool) {
+banned :: proc(s: ^Server, name, address: string, account: access.Account) -> (string, bool) {
 	b, is := ban_active(&s.community.bans, name)
-	if !is {b, is = ban_active(&s.community.account_bans, game.account_text(account))}
+	if !is {b, is = ban_active(&s.community.account_bans, access.account_text(account))}
 	if !is && address != "" {b, is = ban_active(&s.community.ip_bans, address)}
 	if !is {return "", false}
 	how :=
 		fmt.tprintf("for %s more", duration_text(b.until - now_unix())) if b.until != 0 else "for good"
 	why := fmt.tprintf("Banned %s: %s", how, b.reason)
-	return why[:min(len(why), game.MAX_REASON_LENGTH)], true
+	return why[:min(len(why), protocol.MAX_REASON_LENGTH)], true
 }
 
 // --- Who and status ---
@@ -424,7 +426,7 @@ admin_whois :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	   m.ip != "" &&
 	   allowed(s, c, "moderation.address") {append(&lines, fmt.tprintf("from %s", m.ip))}
 	if account, has := s.store.characters[name]; has && allowed(s, c, "moderation.address") {
-		append(&lines, fmt.tprintf("account %s", game.account_text(account)))
+		append(&lines, fmt.tprintf("account %s", access.account_text(account)))
 	}
 	notice(s, c, fmt.tprintf("%s: %s", name, strings.join(lines[:], "; ", context.temp_allocator)))
 	return true

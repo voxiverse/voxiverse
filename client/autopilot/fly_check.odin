@@ -9,6 +9,7 @@ import "client:platform"
 import "client:screen"
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "server:core"
 
 // The exit check (`--check fly`, exit_check.odin's CHECKS): it waits
@@ -116,7 +117,7 @@ fly_test_update :: proc(app: ^engine.App) {
 			}
 			pr := &s.prediction
 			if t.pad_ticks >= 10 && pr.count > 0 {
-				newest := pr.pending[(pr.head + pr.count - 1) % game.PREDICTION_PENDING].input
+				newest := pr.pending[(pr.head + pr.count - 1) % protocol.PREDICTION_PENDING].input
 				if newest.move != {0, 1} || .Sprint not_in newest.buttons {
 					fly_test_finish(app, "the pad's input did not reach the player")
 					return

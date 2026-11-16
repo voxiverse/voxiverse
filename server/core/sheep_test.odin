@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // wool_dropped: the wool lying about in client name's world.
 @(private = "file")
@@ -71,8 +72,8 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(a, game.Command{"time midnight"}) // (no sheep of their own)
-	net_send(a, game.Command{"summon sheep"})
+	net_send(a, protocol.Command{"time midnight"}) // (no sheep of their own)
+	net_send(a, protocol.Command{"summon sheep"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return len(cs[0].entities) == 1 && len(cs[1].entities) == 1
 	})
@@ -82,7 +83,7 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 	testing.expect(t, !a.shorn[id] && !b.shorn[id], "it starts shorn")
 
 	// Used: shorn, and 1 to 3 wool.
-	net_send(a, game.Use_Entity{id, a.seq})
+	net_send(a, protocol.Use_Entity{id, a.seq})
 	// (Both must have been told: the server sends to each client on its own,
 	// so b hearing first does not mean a has.)
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
@@ -101,20 +102,20 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 	wool := wool_dropped(srv, "a")
 	testing.expectf(t, wool >= 1 && wool <= 3, "%d wool dropped", wool)
 	// Used again: nothing more.
-	net_send(a, game.Use_Entity{id, a.seq})
+	net_send(a, protocol.Use_Entity{id, a.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
 	testing.expect_value(t, wool_dropped(srv, "a"), wool)
 
 	// Too far to use: another sheep, and a player far from it.
 	// (Reach is judged by the server.)
-	net_send(b, game.Teleport{position = {400.5, 120, 0.5}})
+	net_send(b, protocol.Teleport{position = {400.5, 120, 0.5}})
 	ok = net_wait(
 		t,
 		both,
 		proc(cs: []^Net_Client) -> bool {return cs[1].update.state.position.x > 300},
 	)
 	testing.expect(t, ok)
-	net_send(b, game.Use_Entity{id, b.seq})
+	net_send(b, protocol.Use_Entity{id, b.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 
 	// Kept: stop, read the file, start again.

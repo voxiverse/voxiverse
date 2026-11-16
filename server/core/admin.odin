@@ -7,6 +7,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
@@ -706,7 +707,7 @@ admin_role :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		}
 	case "grant", "revoke":
 		if len(args) != 3 {return false}
-		game.grant_parse(args[2], 0) or_return
+		access.grant_parse(args[2], 0) or_return
 		r := role_get(p, args[1])
 		list_set(&r.grants, args[2], args[0] == "grant")
 	case "inherit", "uninherit":
@@ -744,7 +745,7 @@ admin_user :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		list_set(&player_perms(p, args[2]).roles, args[3], args[1] == "add")
 	case "grant", "revoke":
 		if len(args) != 3 || !game.name_valid(args[1]) {return false}
-		game.grant_parse(args[2], 0) or_return
+		access.grant_parse(args[2], 0) or_return
 		list_set(&player_perms(p, args[1]).grants, args[2], args[0] == "grant")
 	case "meta":
 		if len(args) < 3 || !game.name_valid(args[1]) {return false}

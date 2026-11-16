@@ -1,4 +1,4 @@
-package game
+package protocol
 
 import "base:runtime"
 import "core:mem"
@@ -6,8 +6,11 @@ import "core:reflect"
 import "core:slice"
 import "core:sync"
 
+import "common:access"
 import "common:base"
 import "common:base/fuzz"
+import "common:game"
+import "common:starmap"
 
 // The fuzz targets of the protocol's decoders (docs/fuzzing.md): every message a client
 // sends, every message a server sends, and the state records under them. tools/fuzz lists
@@ -18,7 +21,7 @@ net_fuzz_targets :: proc() -> []fuzz.Target {
 		{
 			name = "net.client_decode",
 			run = fuzz_net_client_decode,
-			seeds = SEEDS + "net.client_decode",
+			seeds = game.SEEDS + "net.client_decode",
 			dictionary = {"\x00\x00", "\xff\xff", "\xff\xff\xff\xff", "\x7f\xff\xff\xff"},
 			max_len = MAX_MESSAGE_SIZE,
 			generate = fuzz_net_generate_client,
@@ -27,7 +30,7 @@ net_fuzz_targets :: proc() -> []fuzz.Target {
 		{
 			name = "net.server_decode",
 			run = fuzz_net_server_decode,
-			seeds = SEEDS + "net.server_decode",
+			seeds = game.SEEDS + "net.server_decode",
 			dictionary = {"\x00\x00", "\xff\xff", "\xff\xff\xff\xff", "\x7f\xff\xff\xff"},
 			max_len = MAX_MESSAGE_SIZE,
 			generate = fuzz_net_generate_server,
@@ -36,7 +39,7 @@ net_fuzz_targets :: proc() -> []fuzz.Target {
 		{
 			name = "net.state",
 			run = fuzz_net_state,
-			seeds = SEEDS + "net.state",
+			seeds = game.SEEDS + "net.state",
 			dictionary = {"\x00\x00", "\xff\xff", "\xff\xff\xff\xff", "\x01\x01", "\x02\x01"},
 			max_len = 8 << 10,
 			generate = fuzz_net_generate_state,
@@ -50,7 +53,7 @@ net_fuzz_targets :: proc() -> []fuzz.Target {
 
 fuzz_net_client_decode :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 	context.allocator = allocator
-	m, ok := decode_client(data, fuzz_registry())
+	m, ok := decode_client(data, game.fuzz_registry())
 	if !ok {return 1}
 	return fuzz.sig_mix(2, u64(reflect.get_union_variant_raw_tag(m)), fuzz.sig_bucket(len(data)))
 }
@@ -86,8 +89,16 @@ edge_f32 :: proc(rng: ^base.Rng) -> f32 {
 }
 
 @(private = "file")
-edge_pos :: proc(rng: ^base.Rng) -> Block_Pos {
-	edges := [?]i32{0, -1, 1, WORLD_MIN_Y, WORLD_MAX_Y - 1, WORLD_LIMIT - 1, -WORLD_LIMIT}
+edge_pos :: proc(rng: ^base.Rng) -> game.Block_Pos {
+	edges := [?]i32 {
+		0,
+		-1,
+		1,
+		game.WORLD_MIN_Y,
+		game.WORLD_MAX_Y - 1,
+		game.WORLD_LIMIT - 1,
+		-game.WORLD_LIMIT,
+	}
 	return {
 		edges[base.rng_int_max(rng, len(edges))],
 		edges[base.rng_int_max(rng, len(edges))],
@@ -108,7 +119,7 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	m: Client_Message
 	switch which {
 	case 0:
-		account: Account
+		account: access.Account
 		for &b in account {b = u8(base.rng_u32(rng))}
 		h := Hello{PROTOCOL_VERSION, account, "Steve_1", base.rng_u64(rng), 0, nil}
 		if base.rng_int_max(rng, 2) == 0 { 	// (joining with Steam: an id and a ticket of any length up to the limit)
@@ -128,7 +139,7 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 				move = {edge_f32(rng), edge_f32(rng)},
 				yaw = edge_f32(rng),
 				pitch = edge_f32(rng),
-				buttons = transmute(bit_set[Button;u8])u8(base.rng_u32(rng)),
+				buttons = transmute(bit_set[game.Button;u8])u8(base.rng_u32(rng)),
 			},
 			snapshot = edge_u32(rng),
 		}
@@ -147,7 +158,7 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 			id     = edge_u32(rng),
 			after  = edge_u32(rng),
 			pos    = edge_pos(rng),
-			block  = Block(base.rng_int_max(rng, 70)),
+			block  = game.Block(base.rng_int_max(rng, 70)),
 			target = edge_pos(rng),
 			face   = u8(base.rng_int_max(rng, 9)),
 			hit    = {u8(base.rng_int_max(rng, 18)), u8(base.rng_int_max(rng, 18)), 0},
@@ -164,13 +175,13 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		m = Inventory_Request {
 			edge_u32(rng),
 			{
-				kind = Inventory_Action_Kind(base.rng_int_max(rng, 8)),
+				kind = game.Inventory_Action_Kind(base.rng_int_max(rng, 8)),
 				slot = base.rng_int_range(rng, -2, 50),
 				arg = base.rng_int_max(rng, 70000),
 			},
 		}
 	case 11:
-		sig: Signature
+		sig: access.Signature
 		for &b in sig {b = u8(base.rng_u32(rng))}
 		m = Proof{sig}
 	case 12:
@@ -178,8 +189,8 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	case 13:
 		g: Dial
 		g.gate = edge_pos(rng)
-		for &b in g.address.galaxy {b = u8(base.rng_int_max(rng, SYMBOLS))}
-		for &b in g.address.world {b = u8(base.rng_int_max(rng, SYMBOLS))}
+		for &b in g.address.galaxy {b = u8(base.rng_int_max(rng, starmap.SYMBOLS))}
+		for &b in g.address.world {b = u8(base.rng_int_max(rng, starmap.SYMBOLS))}
 		m = g
 	case 14:
 		m = Use_Entity{edge_u32(rng), edge_u32(rng)}
@@ -211,9 +222,9 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		m = p
 	case 20:
 		w := Pack_Want {
-			count = u8(base.rng_int_max(rng, MAX_PACKS + 1)),
+			count = u8(base.rng_int_max(rng, game.MAX_PACKS + 1)),
 		}
-		for &i in w.indices {i = u8(base.rng_int_max(rng, MAX_PACKS + 1))}
+		for &i in w.indices {i = u8(base.rng_int_max(rng, game.MAX_PACKS + 1))}
 		m = w
 	case 21:
 		m = Packs_Ready{base.rng_u64(rng)}
@@ -256,8 +267,8 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	case:
 		m = Reload{}
 	}
-	w: Writer
-	writer_init(&w, context.temp_allocator)
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
 	encode_client(&w, m)
 	append(out, ..w.buf[:])
 }
@@ -266,9 +277,9 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 
 fuzz_net_server_decode :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 	context.allocator = allocator
-	scratch := new(Block_Array, allocator)
+	scratch := new(game.Block_Array, allocator)
 	defer free(scratch, allocator)
-	m, ok := decode_server(data, scratch, fuzz_registry())
+	m, ok := decode_server(data, scratch, game.fuzz_registry())
 	if !ok {return 1}
 	return fuzz.sig_mix(2, u64(reflect.get_union_variant_raw_tag(m)), fuzz.sig_bucket(len(data)))
 }
@@ -276,30 +287,30 @@ fuzz_net_server_decode :: proc(data: []u8, allocator: runtime.Allocator) -> u64 
 fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	which := base.rng_int_max(rng, 21)
 	m: Server_Message
-	blocks: Chunk_Blocks
+	blocks: game.Chunk_Blocks
 	switch which {
 	case 0:
 		m = Welcome {
 			protocol    = PROTOCOL_VERSION,
-			tick_rate   = TICK_RATE,
+			tick_rate   = game.TICK_RATE,
 			player      = u16(base.rng_int_max(rng, 40)),
 			spawn       = {f64(edge_f32(rng)), 64, 0},
 			view_radius = u32(base.rng_int_max(rng, 40)),
 			view_height = u32(base.rng_int_max(rng, 20)),
 			content     = base.rng_u64(rng),
 			packs       = word(rng, 40),
-			game        = word(rng, MAX_GAME_ID),
+			game        = word(rng, game.MAX_GAME_ID),
 			schema      = base.rng_u64(rng),
 		}
 	case 1:
 		m = Reject{word(rng, MAX_REASON_LENGTH)}
 	case 2:
 		// a chunk: uniform, or an array with a palette of every size up to 300 blocks
-		arr := new(Block_Array, context.temp_allocator)
+		arr := new(game.Block_Array, context.temp_allocator)
 		palette := 1 + base.rng_int_max(rng, 300)
-		for &b, i in arr {b = Block(i % palette if i % 3 != 0 else 0)}
+		for &b, i in arr {b = game.Block(i % palette if i % 3 != 0 else 0)}
 		if base.rng_int_max(rng, 4) == 0 {
-			blocks.uniform = Block(base.rng_int_max(rng, 70))
+			blocks.uniform = game.Block(base.rng_int_max(rng, 70))
 			m = Chunk_Message {
 				pos        = {1, 2, 3},
 				uniform    = blocks.uniform,
@@ -320,7 +331,7 @@ fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 			edge_u32(rng),
 			base.rng_int_max(rng, 2) == 0,
 			edge_pos(rng),
-			Block(base.rng_int_max(rng, 70)),
+			game.Block(base.rng_int_max(rng, 70)),
 			nil,
 		}
 		if base.rng_int_max(rng, 2) == 0 {
@@ -332,12 +343,12 @@ fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		c := Column {
 			pos = {i32(base.rng_int_range(rng, -30, 30)), i32(base.rng_int_range(rng, -30, 30))},
 		}
-		for &h in c.heights {h = i32(base.rng_int_range(rng, WORLD_MIN_Y, WORLD_MAX_Y))}
+		for &h in c.heights {h = i32(base.rng_int_range(rng, game.WORLD_MIN_Y, game.WORLD_MAX_Y))}
 		m = c
 	case 7:
 		m = Bulk_Begin{u16(base.rng_u32(rng))}
 	case 8:
-		n: Nonce
+		n: access.Nonce
 		for &b in n {b = u8(base.rng_u32(rng))}
 		m = Challenge{n}
 	case 9:
@@ -394,8 +405,8 @@ fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	case:
 		m = Packs_Changed{base.rng_u64(rng)}
 	}
-	w: Writer
-	writer_init(&w, context.temp_allocator, MAX_MESSAGE_SIZE)
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator, MAX_MESSAGE_SIZE)
 	encode_server(&w, m, &blocks)
 	append(out, ..w.buf[:])
 }
@@ -433,9 +444,9 @@ fuzz_net_put :: proc(tx: ^Sender, rng: ^base.Rng) {
 					}
 				}
 			}
-			if k.check != nil && !k.check(fuzz_registry(), raw_data(v)) {
+			if k.check != nil && !k.check(game.fuzz_registry(), raw_data(v)) {
 				fuzz_net_fix(k, raw_data(v))
-				if !k.check(fuzz_registry(), raw_data(v)) {continue}
+				if !k.check(game.fuzz_registry(), raw_data(v)) {continue}
 			}
 			key := Key{}
 			if k.key != .None {key = {
@@ -458,14 +469,14 @@ fuzz_net_put :: proc(tx: ^Sender, rng: ^base.Rng) {
 @(private = "file")
 fuzz_net_fix :: proc(k: ^Schema_Kind, v: rawptr) {
 	switch k.value {
-	case Rules:
-		(^Rules)(v)^ = RULES_DEFAULTS
+	case game.Rules:
+		(^game.Rules)(v)^ = game.RULES_DEFAULTS
 	case Health:
 		(^Health)(v)^ = {20, 20, false}
 	case Player_Record:
 		(^Player_Record)(v).name = "Steve_1"
-		(^Player_Record)(v).held = NO_ITEM
-		for &w in (^Player_Record)(v).worn {w = NO_ITEM}
+		(^Player_Record)(v).held = game.NO_ITEM
+		for &w in (^Player_Record)(v).worn {w = game.NO_ITEM}
 	}
 }
 
@@ -509,7 +520,7 @@ fuzz_net_generate_state :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 fuzz_net_state :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 	context.allocator = allocator
 	rx: Receiver
-	receiver_init(&rx, fuzz_net_schema(), fuzz_registry(), allocator)
+	receiver_init(&rx, fuzz_net_schema(), game.fuzz_registry(), allocator)
 	defer receiver_destroy(&rx)
 	// the replica holds a value of every kind, and tick 1's snapshot
 	{

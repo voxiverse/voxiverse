@@ -1,9 +1,10 @@
-package game
+package protocol
 
 import "core:slice"
 import "core:testing"
 
 import "common:base"
+import "common:game"
 
 // The state model, end to end through test kinds of the tests' own: the
 // sender's encoder and the receiver's decoder, with no game type involved.
@@ -25,7 +26,7 @@ Dt_Single :: struct {
 }
 
 Dt_Block :: struct {
-	block: Block,
+	block: game.Block,
 	heard: bool,
 }
 
@@ -36,7 +37,7 @@ Dt_Ping :: struct {
 
 Dt_Inv :: struct {
 	acked:     u32 `net:"acked"`,
-	inventory: Inventory,
+	inventory: game.Inventory,
 }
 
 // the kinds' ids
@@ -102,7 +103,7 @@ Link :: struct {
 link_init :: proc(l: ^Link, schema: ^Schema, loss := 0, seed := u64(7)) {
 	l.schema = schema
 	sender_init(&l.tx, schema)
-	receiver_init(&l.rx, schema, test_reg())
+	receiver_init(&l.rx, schema, game.test_reg())
 	replica_init(&l.view, schema)
 	l.rng = base.rng_make(seed)
 	l.loss = loss
@@ -315,14 +316,14 @@ random_all :: proc(rng: ^base.Rng, v: ^Sch_All, names: []string) {
 		v.pos[base.rng_int_max(rng, 3)] = base.rng_f64_range(rng, -100, 100)
 	case 12:
 		v.stack[base.rng_int_max(rng, 4)] = {
-			Item(base.rng_int_max(rng, 300)),
+			game.Item(base.rng_int_max(rng, 300)),
 			base.rng_int_range(rng, 0, 99),
 			0,
 			0,
 		}
 	case 13:
-		v.worn[Equip_Slot(base.rng_int_max(rng, len(Equip_Slot)))] = {
-			Item(base.rng_int_max(rng, 300)),
+		v.worn[game.Equip_Slot(base.rng_int_max(rng, len(game.Equip_Slot)))] = {
+			game.Item(base.rng_int_max(rng, 300)),
 			base.rng_int_range(rng, 0, 99),
 			0,
 			0,
@@ -333,7 +334,7 @@ random_all :: proc(rng: ^base.Rng, v: ^Sch_All, names: []string) {
 		v.name = names[base.rng_int_max(rng, len(names))]
 	case 16:
 		v.spot =
-			nil if base.rng_int_max(rng, 3) == 0 else Block_Pos{i32(base.rng_int_range(rng, -50, 50)), 3, 4}
+			nil if base.rng_int_max(rng, 3) == 0 else game.Block_Pos{i32(base.rng_int_range(rng, -50, 50)), 3, 4}
 	}
 }
 
@@ -381,7 +382,7 @@ test_events_carry_every_field :: proc(t: ^testing.T) {
 		mode  = .C,
 		flags = {.A, .C},
 		name  = "boom",
-		spot  = Block_Pos{1, -2, 3},
+		spot  = game.Block_Pos{1, -2, 3},
 	}
 	ev.worn[.Head] = {4, 1, 0, 0}
 	ping := Dt_Ping{"hello", 77}
@@ -613,10 +614,10 @@ test_snapshot_baseline_gone :: proc(t: ^testing.T) {
 	out := make([dynamic]Outgoing, allocator = context.temp_allocator)
 	sender_flush(&l.tx, l.tick, {}, &out)
 	if !testing.expect(t, len(out) == 1) {return}
-	r := reader_make(out[0].data)
-	read_u8(&r)
-	read_varint(&r)
-	testing.expect_value(t, read_varint(&r), u32(0)) // back: none
+	r := game.reader_make(out[0].data)
+	game.read_u8(&r)
+	game.read_varint(&r)
+	testing.expect_value(t, game.read_varint(&r), u32(0)) // back: none
 }
 
 @(test)
@@ -664,7 +665,7 @@ valid_messages :: proc(l: ^Link) -> (state, snapshot: []u8) {
 	a := Sch_All {
 		a    = 9,
 		name = "abc",
-		spot = Block_Pos{1, 2, 3},
+		spot = game.Block_Pos{1, 2, 3},
 	}
 	link_put(l, DT_ALL, 3, &a)
 	link_put(l, DT_ALL, 4, &a)
@@ -689,7 +690,7 @@ valid_messages :: proc(l: ^Link) -> (state, snapshot: []u8) {
 @(private = "file")
 fresh_rx :: proc(s: ^Schema) -> Receiver {
 	rx: Receiver
-	receiver_init(&rx, s, test_reg())
+	receiver_init(&rx, s, game.test_reg())
 	return rx
 }
 
@@ -797,20 +798,20 @@ test_state_malformed_cases :: proc(t: ^testing.T) {
 		rx := fresh_rx(&s)
 		defer receiver_destroy(&rx)
 		got := make([dynamic]Received, allocator = context.temp_allocator)
-		w: Writer
-		writer_init(&w, allocator = context.temp_allocator)
-		write_u8(&w, STATE_MESSAGE)
-		write_varint(&w, 1)
-		write_varint(&w, DT_BLOCK)
-		write_varint(&w, 1)
-		write_varint64(&w, 1) // create
-		write_varint(&w, 0) // a new chunk
-		write_svarint(&w, 1 << 25)
-		write_svarint(&w, 0)
-		write_svarint(&w, 0)
-		write_varint(&w, 0)
-		write_varint(&w, 1) // stone
-		write_u8(&w, 0)
+		w: game.Writer
+		game.writer_init(&w, allocator = context.temp_allocator)
+		game.write_u8(&w, STATE_MESSAGE)
+		game.write_varint(&w, 1)
+		game.write_varint(&w, DT_BLOCK)
+		game.write_varint(&w, 1)
+		game.write_varint64(&w, 1) // create
+		game.write_varint(&w, 0) // a new chunk
+		game.write_svarint(&w, 1 << 25)
+		game.write_svarint(&w, 0)
+		game.write_svarint(&w, 0)
+		game.write_varint(&w, 0)
+		game.write_varint(&w, 1) // stone
+		game.write_u8(&w, 0)
 		testing.expect(
 			t,
 			!receive_state(&rx, w.buf[:], &got),
@@ -823,13 +824,13 @@ test_state_malformed_cases :: proc(t: ^testing.T) {
 test_snapshot_malformed_cases :: proc(t: ^testing.T) {
 	s := dt_schema()
 	snap :: proc(tick, back: u32, part, parts: u8, body: ..u8) -> []u8 {
-		w: Writer
-		writer_init(&w, allocator = context.temp_allocator)
-		write_u8(&w, SNAPSHOT_MESSAGE)
-		write_varint(&w, tick)
-		write_varint(&w, back)
-		write_u8(&w, part)
-		write_u8(&w, parts)
+		w: game.Writer
+		game.writer_init(&w, allocator = context.temp_allocator)
+		game.write_u8(&w, SNAPSHOT_MESSAGE)
+		game.write_varint(&w, tick)
+		game.write_varint(&w, back)
+		game.write_u8(&w, part)
+		game.write_u8(&w, parts)
 		append(&w.buf, ..body)
 		return w.buf[:]
 	}

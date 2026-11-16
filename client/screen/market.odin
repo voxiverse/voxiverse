@@ -4,8 +4,8 @@ import "core:fmt"
 
 import "client:engine"
 import "client:ui"
-import "common:game"
 import "common:planet"
+import "common:protocol"
 
 // The market screen: the market of the town the player stands in, as the server last sent it
 // (engine.Market_State; the server is the authority, this only shows and asks). Each good has its
@@ -67,7 +67,7 @@ good_name :: proc(i: int) -> string {
 }
 
 // market_refusal: the line that says why the last trade was refused ("" when it was not).
-market_refusal :: proc(r: game.Market_Reason) -> string {
+market_refusal :: proc(r: protocol.Market_Reason) -> string {
 	#partial switch r {
 	case .Bad_Quantity:
 		return engine.tr(.Market_Refused_Bad_Quantity)
@@ -101,7 +101,7 @@ market_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	rows := f32(game.MARKET_GOODS)
+	rows := f32(protocol.MARKET_GOODS)
 	height := (rows + 6) * (t.row_height + t.spacing) + 80
 	box := ui.rect_center(ctx.screen, MARKET_WIDTH, height)
 	ui.panel(ctx, box)
@@ -118,8 +118,8 @@ market_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		cell := ui.cut_left(&head, col[i] * area.w)
 		ui.label(ctx, engine.tr(h), cell, .Left if i == 0 else .Right, t.text_muted)
 	}
-	if m.good < 0 || m.good >= game.MARKET_GOODS {m.good = 0}
-	for i in 0 ..< game.MARKET_GOODS {
+	if m.good < 0 || m.good >= protocol.MARKET_GOODS {m.good = 0}
+	for i in 0 ..< protocol.MARKET_GOODS {
 		g := m.goods[i]
 		row := ui.cut_top(&area, t.row_height)
 		ui.cut_top(&area, t.spacing)

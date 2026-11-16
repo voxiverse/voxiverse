@@ -16,6 +16,7 @@ import "client:screen"
 import "client:ui"
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "core:log"
 import "core:os"
 import "core:strings"
@@ -255,7 +256,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		// (A top-down camera leaves the pointer free: it aims.)
 		controls := engine.game_controls(app) && (w.focused || app.fly_test.pad)
 		platform.set_mouse_captured(w, controls && !engine.camera_pointer(app.session))
-		conditions := game.Conditions {
+		conditions := protocol.Conditions {
 			latency_ms     = app.debug.net_latency_ms,
 			jitter_ms      = app.debug.net_jitter_ms,
 			bandwidth_kbps = app.debug.net_bandwidth_kbps,

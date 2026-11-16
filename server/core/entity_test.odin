@@ -8,6 +8,7 @@ import "core:testing"
 
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // The exit check: an entity simulated on the server, seen by the players
 // near it and only them, hit to death, and kept by the save. Over real
@@ -47,8 +48,8 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	)
 	if !testing.expect(t, ok, "never landed") {return}
 	// Night: no sheep of their own accord, only ours. Far goes away.
-	net_send(near, game.Command{"time midnight"})
-	net_send(far, game.Teleport{position = {600.5, 120, 0.5}})
+	net_send(near, protocol.Command{"time midnight"})
+	net_send(far, protocol.Teleport{position = {600.5, 120, 0.5}})
 	ok = net_wait(
 		t,
 		{near, far},
@@ -56,7 +57,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, ok, "far never moved away")
 
-	net_send(near, game.Command{"summon sheep"})
+	net_send(near, protocol.Command{"summon sheep"})
 	ok = net_wait(
 		t,
 		{near, far},
@@ -84,14 +85,14 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 
 	// Far comes over: now it is told; goes again: told it is gone.
 	at := near.entities[id]
-	net_send(far, game.Teleport{position = at + {3, 2, 0}})
+	net_send(far, protocol.Teleport{position = at + {3, 2, 0}})
 	ok = net_wait(
 		t,
 		{near, far},
 		proc(cs: []^Net_Client) -> bool {return len(cs[1].entities) == 1},
 	)
 	testing.expect(t, ok, "far never saw the sheep it walked up to")
-	net_send(far, game.Teleport{position = {600.5, 120, 0.5}})
+	net_send(far, protocol.Teleport{position = {600.5, 120, 0.5}})
 	ok = net_wait(
 		t,
 		{near, far},
@@ -100,7 +101,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "far was not told the sheep left its area")
 
 	// Out of reach: nothing happens.
-	net_send(far, game.Attack{id, far.seq})
+	net_send(far, protocol.Attack{id, far.seq})
 	net_for(t, {near, far}, 0.2)
 	testing.expect_value(t, near.hurt, 0)
 
@@ -111,8 +112,8 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		if !testing.expectf(t, known, "lost sight of the sheep before hit %d", hit + 1) {break}
 		// Next to it (it runs once hit); the server takes the teleport
 		// first: the same ordered stream.
-		net_send(near, game.Teleport{position = p + {1.2, 0, 0}})
-		net_send(near, game.Attack{id, near.seq})
+		net_send(near, protocol.Teleport{position = p + {1.2, 0, 0}})
+		net_send(near, protocol.Attack{id, near.seq})
 		@(static) want: int
 		want = hit + 1
 		ok = net_wait(
@@ -126,11 +127,11 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	testing.expect_value(t, near.died, 1)
 
 	// Saved: another one, then quit and load.
-	net_send(near, game.Command{"summon sheep"})
+	net_send(near, protocol.Command{"summon sheep"})
 	ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	testing.expect(t, ok)
 	// A rocket straight up, still flying when the server stops: not saved.
-	net_send(near, game.Fire{near.seq, 0, 1.5})
+	net_send(near, protocol.Fire{near.seq, 0, 1.5})
 	ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 2})
 	testing.expect(t, ok, "the rocket never showed up")
 	netcode.link_close(&near.link, "bye")
@@ -182,7 +183,7 @@ test_sheep_spawn_and_despawn :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && len(cs[0].chunks) > 200},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(c, game.Command{"time noon"})
+	net_send(c, protocol.Command{"time noon"})
 	most := 0
 	for _ in 0 ..< 40 * game.TICK_RATE {
 		if len(c.entities) >= 3 {break}
@@ -205,8 +206,8 @@ test_sheep_spawn_and_despawn :: proc(t: ^testing.T) {
 	)
 
 	// Night, and away: they go, and the watcher is told.
-	net_send(c, game.Command{"time midnight"})
-	net_send(c, game.Teleport{position = {0.5, 140, 400.5}})
+	net_send(c, protocol.Command{"time midnight"})
+	net_send(c, protocol.Teleport{position = {0.5, 140, 400.5}})
 	ok = net_wait(t, {c}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 0}, 20)
 	testing.expect(t, ok, "sheep stayed known after the watcher left")
 }
@@ -345,14 +346,14 @@ test_swung_reaches_others :: proc(t: ^testing.T) {
 		net_wait(t, both, proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])}),
 		"never landed",
 	) {return}
-	net_send(alice, game.Command{"summon sheep"})
+	net_send(alice, protocol.Command{"summon sheep"})
 	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	if !testing.expect(t, ok, "no sheep") {return}
 	id: u32 = 0
 	for k in alice.entities {id = k}
 	p := alice.entities[id]
-	net_send(alice, game.Teleport{position = p + {1.2, 0, 0}})
-	net_send(alice, game.Attack{id, alice.seq})
+	net_send(alice, protocol.Teleport{position = p + {1.2, 0, 0}})
+	net_send(alice, protocol.Attack{id, alice.seq})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[1].swung >= 1})
 	testing.expect(t, ok, "bob never saw alice swing")
 	testing.expect_value(t, alice.swung, 0) // (the attacker predicts its own)

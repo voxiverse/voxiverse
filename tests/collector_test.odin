@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
+import "common:access"
 import "common:game"
 import "common:telemetry"
 import "server:collector"
@@ -84,7 +85,7 @@ test_an_uploader_thread_reaches_a_collector_thread :: proc(t: ^testing.T) {
 		&u,
 		logs,
 		loopback(c.port),
-		game.account_key_make(),
+		access.account_key_make(),
 		100 * time.Millisecond,
 	)
 	ok := wait_for(10, proc(data: rawptr) -> bool {
@@ -145,7 +146,11 @@ test_a_server_uploads_its_log_only_when_told_to :: proc(t: ^testing.T) {
 	testing.expect_value(t, files, 0)
 	// Told to: it goes (singleplayer's own key, here a made one).
 	config.save_dir = saves
-	config.upload = core.Upload{loopback(c.port), game.account_key_make(), 200 * time.Millisecond}
+	config.upload = core.Upload {
+		loopback(c.port),
+		access.account_key_make(),
+		200 * time.Millisecond,
+	}
 	if !play_a_little(t, config) {return}
 	time.sleep(300 * time.Millisecond)
 	text, files2 := lake_text(lake)

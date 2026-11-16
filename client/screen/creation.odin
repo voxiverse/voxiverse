@@ -9,7 +9,7 @@ MODE_SURVIVAL :: "survival"
 import "client:engine"
 import planet "client:planet"
 import "client:ui"
-import "common:game"
+import "common:starmap"
 import "common:worldgen"
 
 // Universe creation: the name, the
@@ -30,7 +30,7 @@ creation_destroy :: proc(c: ^engine.Creation_Screen) {
 // creation_open: the creation screen with a name and a seed ready.
 creation_open :: proc(app: ^engine.App) {
 	c := &app.creation
-	if c.stars == nil {c.stars = make([]game.Star, CREATION_STARS)}
+	if c.stars == nil {c.stars = make([]starmap.Star, CREATION_STARS)}
 	clear(&c.name)
 	text := engine.tr(.Creation_Default_Name, len(app.universes.entries) + 1)
 	append(&c.name, text)
@@ -54,13 +54,13 @@ creation_set_seed :: proc(c: ^engine.Creation_Screen, seed: u64, animate: bool) 
 
 // creation_home: the address of the home world the screen shows: Earth's, or
 // the alien one the seed makes.
-creation_home :: proc(c: ^engine.Creation_Screen) -> game.Address {
-	return game.seed_glyphs(c.seed) if c.alien else game.earth_address()
+creation_home :: proc(c: ^engine.Creation_Screen) -> starmap.Address {
+	return starmap.seed_glyphs(c.seed) if c.alien else starmap.earth_address()
 }
 
 // creation_show_galaxy redraws the galaxy around the home world shown.
 creation_show_galaxy :: proc(c: ^engine.Creation_Screen, animate: bool) {
-	game.galaxy_stars(creation_home(c), c.stars)
+	starmap.galaxy_stars(creation_home(c), c.stars)
 	c.settle = 0 if animate else 1
 }
 
@@ -82,7 +82,7 @@ creation_roll :: proc(c: ^engine.Creation_Screen, entropy: u64) {
 // creation_sync_seed follows the seed field after typing: text means its
 // seed; emptied after typing, a fresh roll.
 creation_sync_seed :: proc(c: ^engine.Creation_Screen, entropy: u64) {
-	seed, typed := game.seed_of_text(string(c.seed_text[:]))
+	seed, typed := starmap.seed_of_text(string(c.seed_text[:]))
 	switch {
 	case typed:
 		if !c.typed || seed != c.seed {creation_set_seed(c, seed, true)}
@@ -95,14 +95,14 @@ creation_sync_seed :: proc(c: ^engine.Creation_Screen, entropy: u64) {
 // draw_galaxy draws stars as dots in r over a dark ground; settle (0 ..= 1)
 // fades them in (and brings them in from a little way out); the home star
 // is ringed.
-draw_galaxy :: proc(ctx: ^ui.Context, r: ui.Rect, stars: []game.Star, settle: f32) {
+draw_galaxy :: proc(ctx: ^ui.Context, r: ui.Rect, stars: []starmap.Star, settle: f32) {
 	ui.fill_rect(ctx, r, ctx.theme.preview_fill)
 	ease := 1 - (1 - settle) * (1 - settle)
 	for s in stars {
 		centre := ui.Vec2{0.5, 0.5}
 		p := centre + (s.position - centre) * (0.85 + 0.15 * ease)
 		size := (1 + 1.5 * s.size) * max(r.w / 400, 1)
-		color := ui.Color(game.star_color(s))
+		color := ui.Color(starmap.star_color(s))
 		color.a = u8(f32(color.a) * (0.25 + 0.75 * ease))
 		ui.fill_rect(
 			ctx,
@@ -198,7 +198,7 @@ creation_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.text_input(ctx, "name", &c.name, l.name, engine.tr(.Creation_Name))
 	ui.text_input(ctx, "seed", &c.seed_text, l.seed, engine.tr(.Creation_Seed))
 	creation_sync_seed(c, u64(time.now()._nsec))
-	ui.label(ctx, game.address_text(creation_home(c)), l.glyphs, .Center)
+	ui.label(ctx, starmap.address_text(creation_home(c)), l.glyphs, .Center)
 	if ui.button(ctx, engine.tr(.Creation_Roll), l.roll) {
 		creation_roll(c, u64(time.now()._nsec))
 	}

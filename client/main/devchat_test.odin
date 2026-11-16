@@ -12,7 +12,7 @@ import "client:overlay"
 import "client:screen"
 import "client:testkit"
 import "client:ui"
-import "common:game"
+import "common:access"
 import "common:netcode"
 import "server:collector"
 
@@ -71,7 +71,7 @@ test_devchat_screen :: proc(t: ^testing.T) {
 	testing.expect(t, !found, "the chat's button shows with the setting empty")
 
 	// On (no thread here: nothing is sent; the conversation is the file's).
-	collector.chat_open(&app.devchat.chat, file, {}, game.account_key_make())
+	collector.chat_open(&app.devchat.chat, file, {}, access.account_key_make())
 	app.devchat.running = true
 	defer collector.chat_close(&app.devchat.chat)
 	frame(app)
@@ -186,11 +186,11 @@ test_devchat_from_the_pause_menu :: proc(t: ^testing.T) {
 	os.remove(file)
 	defer os.remove_all(lake)
 	defer os.remove(file)
-	admin := game.account_key_make()
+	admin := access.account_key_make()
 	os.make_directory_all(lake)
 	_ = os.write_entire_file(
 		fmt.tprintf("%s/admins.cfg", lake),
-		transmute([]u8)game.account_text(admin.account),
+		transmute([]u8)access.account_text(admin.account),
 	)
 	PORT :: 40_001
 	sim: netcode.Simnet
@@ -240,7 +240,7 @@ test_devchat_from_the_pause_menu :: proc(t: ^testing.T) {
 		contains_part(app.ui.texts[:], "down"),
 		"the message is not in the conversation",
 	)
-	inbox := fmt.tprintf("%s/devchat/%s/in", lake, game.account_text(admin.account))
+	inbox := fmt.tprintf("%s/devchat/%s/in", lake, access.account_text(admin.account))
 	files, _ := os.read_all_directory_by_path(inbox, context.temp_allocator)
 	testing.expect_value(t, len(files), 1)
 
@@ -248,7 +248,7 @@ test_devchat_from_the_pause_menu :: proc(t: ^testing.T) {
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Devchat), "Close did not close it")
 
 	// A reply arrives while it is closed: a toast.
-	out := fmt.tprintf("%s/devchat/%s/out", lake, game.account_text(admin.account))
+	out := fmt.tprintf("%s/devchat/%s/out", lake, access.account_text(admin.account))
 	os.make_directory_all(out)
 	_ = os.write_entire_file(
 		fmt.tprintf("%s/0001.json", out),

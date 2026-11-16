@@ -6,6 +6,8 @@ import "core:path/filepath"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import "common:telemetry"
 
 // The item ledger and its audit.
@@ -48,7 +50,7 @@ Report :: struct {
 	rows:   [4][game.Reason]i64, // entries for the first four of `items`
 	items:  [4]game.Item,
 	flag:   bool,
-	addr:   game.Address,
+	addr:   starmap.Address,
 	detail: int,
 }
 
@@ -261,7 +263,7 @@ Scenario :: struct {
 	name:  string,
 	step:  int,
 	count: int,
-	addr:  game.Address,
+	addr:  starmap.Address,
 	slot:  int,
 	pos:   game.Block_Pos,
 	ok:    bool,
@@ -302,7 +304,7 @@ scenario :: proc(
 	srv: ^Server,
 	name: string,
 	n: int,
-	addr := game.Address{},
+	addr := starmap.Address{},
 	pos := game.Block_Pos{},
 ) -> Scenario {
 	d := Scenario {
@@ -345,7 +347,7 @@ test_ledger_scenarios :: proc(t: ^testing.T) {
 	n: u32
 	for slot in 0 ..< 3 {
 		n += 1
-		net_send(a, game.Inventory_Request{n, {.Quick_Move, slot, 0}})
+		net_send(a, protocol.Inventory_Request{n, {.Quick_Move, slot, 0}})
 	}
 	settle(t, a, 0.4)
 	expect_balanced(t, audit_now(srv), "stacks in a chest")
@@ -355,7 +357,7 @@ test_ledger_scenarios :: proc(t: ^testing.T) {
 	expect_balanced(t, audit_now(srv), "a chest broken")
 
 	// Travel away and back.
-	away := game.address_derive(31)
+	away := starmap.address_derive(31)
 	d = scenario(srv, "a", 0, away)
 	testing.expect(t, d.ok, "no travel")
 	testing.expect_value(t, d.count, 0)
@@ -559,11 +561,11 @@ test_ledger_fuzz_over_udp :: proc(t: ^testing.T) {
 			c.seq += 1
 			switch rand.int_max(60, r) {
 			case 0:
-				net_send(c, game.Use_Block{pos, 0})
+				net_send(c, protocol.Use_Block{pos, 0})
 			case 1:
-				net_send(c, game.Command{"kill all"})
+				net_send(c, protocol.Command{"kill all"})
 			case:
-				request := game.Inventory_Request {
+				request := protocol.Inventory_Request {
 					sequence = c.seq,
 					action   = {
 						rand.choice_enum(game.Inventory_Action_Kind, r),

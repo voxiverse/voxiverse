@@ -5,6 +5,7 @@ import "core:testing"
 import "client:render"
 import "client:testkit"
 import "client:ui"
+import "common:access"
 import "common:game"
 import "server:core"
 
@@ -33,8 +34,8 @@ test_marks_show_health_and_points :: proc(t: ^testing.T) {
 	config.listen = true
 	if !testing.expect(t, core.harness_start(&rig.h, config)) {return}
 	defer core.harness_stop(&rig.h)
-	key: game.Account_Key
-	game.account_key_set(&key, {0 ..< 32 = 7})
+	key: access.Account_Key
+	access.account_key_set(&key, {0 ..< 32 = 7})
 	rig.s = new(Session)
 	defer free(rig.s)
 	defer session_end(rig.s, nil, nil)

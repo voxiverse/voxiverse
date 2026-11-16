@@ -17,7 +17,7 @@ import "client:platform"
 import "client:screen"
 import "client:ui"
 import "common:base"
-import "common:game"
+import "common:protocol"
 import "server:collector"
 
 // The developer console: the log as scrollback, plus a command line. Toggle
@@ -76,7 +76,7 @@ console_execute :: proc(app: ^engine.App, line: string) {
 		if session == nil || session.state != .Playing {
 			engine.console_print(c, "server commands need a world (join or start one)", .Warning)
 		} else if len(text) > 1 {
-			engine.send_message(session, game.Command{text[1:]})
+			engine.send_message(session, protocol.Command{text[1:]})
 		}
 		return
 	}

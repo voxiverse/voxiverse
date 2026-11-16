@@ -28,6 +28,11 @@ shared package, but for the client part's tests, which play the game against its
 part. A game imports no other game: what two share belongs in the engine. A proc of the
 game's must not take the name of a package it imports (`play`, `hud`, `engine`).
 
+From `common:` a game takes the rules both sides share from `common:game` (blocks, items,
+templates, `Game_Info`, a name's longest) and what it replicates from `common:protocol`
+(`Game_Kinds`, `Received`, `Key`, `key_player`, `key_entity`): the protocol sits above the
+rules, so the records and requests a game declares are the protocol's types.
+
 What names a game is declared once, in its shared package, and both parts take it: a
 `game.Game_Info` holding its id (the folder's name), the name players read and a line saying
 what it is. The launcher lists the games by them; the description is one line in the
@@ -65,10 +70,10 @@ ROUND :: 120.0
 // games/tag/records.odin
 package tag
 
-import "common:game"
+import "common:protocol"
 
 Round :: struct {phase: Phase, left: u16, it: string `net:"max=16"`}
-KINDS :: game.Game_Kinds{states = {{name = "tag.round", value = Round}}}
+KINDS :: protocol.Game_Kinds{states = {{name = "tag.round", value = Round}}}
 ```
 
 ```odin
@@ -126,7 +131,7 @@ import "core:fmt"
 
 import "client:engine"
 import "client:ui"
-import "common:game"
+import "common:protocol"
 import "games:tag"
 
 GAME :: engine.Game {
@@ -136,7 +141,7 @@ GAME :: engine.Game {
 View :: struct {round: tag.Round}
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	if round, ok := engine.game_value(s, r, tag.Round); ok && round != nil {view(s).round = round^}
 }
 
@@ -201,7 +206,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `request_value(s, r, T)` | One of its requests, in its `request` hook, as its type ([below](#requests)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
-| `client_name(c)`, `allowed(s, c, node)`, `player_id(s, c)` | A player's name; whether it holds a permission; its id (its seat): the key of a record about it (`game.key_player`), the same on every side |
+| `client_name(c)`, `allowed(s, c, node)`, `player_id(s, c)` | A player's name; whether it holds a permission; its id (its seat): the key of a record about it (`protocol.key_player`), the same on every side |
 | `player_ref(s, c)`, `player_of(s, ref)`, `Player_Ref` | A player held past the moment (who built a tower, whose kill a shot is): `player_of` gives the player still playing in that seat, or nil once it left |
 | `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |
 | `game_mode(s, c, id)`, `kit_give(s, c)` | Put a player in a mode by id (a pack's too: `flood:out`), journalled as the game's; give it what its mode's kit has that it lacks, weapons full |
@@ -216,7 +221,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `entity_spawn(w, kind, position, natural)`, `entity_gone(w, h)` | An entity of a kind (the game's pack's, `<game>:<name>`) at a place, its handle (0: the world is full); gone again, with no death to show |
 | `entity_find(w, id)`, `entities_of(w, kind, center, radius)`, `entities_each(w)`, `entities_next(&it)` | An entity by its id; the entities of a kind near a point, nearest first; every entity, lowest id first |
 | `entity_id(w, h)`, `entity_kind(w, h)`, `entity_pos(w, h)`, `entity_health_of(w, h)`, `entity_max_health(w, h)`, `entity_set_max_health(w, h, health)` | What an entity is, where it stands, its health; its most health set (and its health with it) |
-| `entity_known(c, id)` | Whether a player has been told of an entity (it is near it): a record of the game's keyed by the entity (`game.key_entity(id)`) goes to the players who know it |
+| `entity_known(c, id)` | Whether a player has been told of an entity (it is near it): a record of the game's keyed by the entity (`protocol.key_entity(id)`) goes to the players who know it |
 | `entity_harm(w, h, harm)` | Hurt an entity (a tower's shot: `kind = .Game`, `by` the player it is credited to), told to the hooks as any harm is; true: it died |
 | `entity_go(w, h, target)`, `entity_follow(w, h, route)`, `entity_stand(w, h)`, `entity_arrived(w, h)`, `entity_set_speed(w, h, speed)` | Steer a walker whose kind is `"brain": "steered"`: to a point by its own path, along a route, or still; whether it is there ([walkers](#walkers)) |
 | `entity_keep(w, h, target, near, far)`, `entity_sees(w, h, p)` | Keep a walker within a band of distances from a point, facing it (chase: `0, reach`; keep distance; flee); whether nothing solid lies between its eyes and a point |
@@ -422,11 +427,11 @@ saves nothing.
 What a game tells its players beyond the engine's records (a score, a round, a timer) it
 replicates as the engine does ([design.md](design.md), State replication): **records** of
 typed state kinds and one-off **events**, by the same codec. It declares its kinds as data in
-its shared package, a `game.Game_Kinds`, and puts it in `core.Game.kinds` and
+its shared package, a `protocol.Game_Kinds`, and puts it in `core.Game.kinds` and
 `engine.Game.kinds`:
 
 ```odin
-// games/stopwatch/records.odin (package stopwatch)
+// games/stopwatch/records.odin (package stopwatch, importing common:protocol)
 Times :: struct {
 	time:   u32,
 	record: u32,
@@ -437,7 +442,7 @@ Record_Broken :: struct {
 	seconds: u32,
 }
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states = {{name = "stopwatch.times", value = Times}},
 	events = {{name = "stopwatch.record_broken", value = Record_Broken}},
 }
@@ -449,7 +454,7 @@ KINDS :: game.Game_Kinds {
   tick, what the server does not put is removed. A singleton persists. Puts coalesce: put
   every tick, and only changes are sent.
 - The server puts a record with `core.game_put(s, c, &value)` (a keyed kind: `key =
-  game.key_player(id)` or `game.key_entity(id)`) and sends an event with
+  protocol.key_player(id)` or `protocol.key_entity(id)`) and sends an event with
   `core.game_event(s, c, &value)`.
 - The schema (the engine's kinds, then the game's) is checked when a client joins: a client
   and server with different records of a game refuse each other.
@@ -466,7 +471,7 @@ game's pack content in a trace reads as numbers.
 
 What a game's client part asks of its server part beyond its actions (build this here, lay
 a road along that) it sends as **requests**: values of types of its own with a small payload
-(at most `game.MAX_GAME_REQUEST` bytes), declared beside its records
+(at most `protocol.MAX_GAME_REQUEST` bytes), declared beside its records
 (`Game_Kinds.requests`, named `<id>.<name>`). The client part sends one with
 `engine.game_request(s, &value)`; the server decodes it only into a kind that is a request,
 checks it (every enum in range, every string within its limit; one that does not decode gets

@@ -4,6 +4,7 @@ import "core:testing"
 
 import "client:testkit"
 import "common:game"
+import "common:protocol"
 
 // The inventory as we predict it: our requests replayed over the server's
 // word until it answers them; a refused one rolled back; blocks placed
@@ -51,7 +52,7 @@ test_inventory_prediction :: proc(t: ^testing.T) {
 
 	// A block placed and not yet confirmed is used up; with items.infinite not.
 	inventory_reconcile(s, {2, server})
-	append(&s.edits, game.Edit{id = 1, block = .Stone})
+	append(&s.edits, protocol.Edit{id = 1, block = .Stone})
 	inventory_predict(s)
 	testing.expect_value(t, s.inventory.slots[0].count, 63)
 	testing.expect(t, !can_place_from_hand(s, .Dirt) && can_place_from_hand(s, .Stone))
@@ -103,23 +104,23 @@ test_right_click_uses_the_aimed_entity :: proc(t: ^testing.T) {
 	s := new(Session)
 	defer free(s)
 	s.reg = testkit.test_reg()
-	pipe: game.Pipe
-	game.pipe_init(&pipe)
-	defer game.pipe_destroy(&pipe)
+	pipe: protocol.Pipe
+	protocol.pipe_init(&pipe)
+	defer protocol.pipe_destroy(&pipe)
 	s.endpoint = {&pipe, .Client}
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
 	s.state = .Playing
 	stone := game.Stack{game.item_of_block(testkit.test_reg(), .Stone), 5, 0, 0}
-	sent :: proc(pipe: ^game.Pipe) -> (uses: int, others: int) {
-		packets := make([dynamic]game.Packet, context.temp_allocator)
-		server := game.Endpoint{pipe, .Server}
-		game.receive(server, &packets)
+	sent :: proc(pipe: ^protocol.Pipe) -> (uses: int, others: int) {
+		packets := make([dynamic]protocol.Packet, context.temp_allocator)
+		server := protocol.Endpoint{pipe, .Server}
+		protocol.receive(server, &packets)
 		for p in packets {
-			defer game.packet_free(server, p)
-			m, ok := game.decode_client(p, testkit.test_reg())
+			defer protocol.packet_free(server, p)
+			m, ok := protocol.decode_client(p, testkit.test_reg())
 			if !ok {continue}
-			if u, is_use := m.(game.Use_Entity);
+			if u, is_use := m.(protocol.Use_Entity);
 			   is_use && u.entity == 7 {uses += 1} else {others += 1}
 		}
 		return

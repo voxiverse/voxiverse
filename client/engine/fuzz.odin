@@ -5,9 +5,11 @@ import "core:mem/virtual"
 import "core:strings"
 import "core:sync"
 
+import "common:access"
 import "common:base"
 import "common:base/fuzz"
 import "common:game"
+import "common:protocol"
 import "server:core"
 
 // net.client_session (docs/fuzzing.md): a headless session (no window, no GPU, no server)
@@ -49,23 +51,23 @@ fuzz_session_start :: proc(s: ^Session) {
 		remote    = true,
 	}
 	seed: [32]u8
-	game.account_key_set(&s.config.key, seed[:])
+	access.account_key_set(&s.config.key, seed[:])
 	s.config.name = "fuzz"
 	s.config.games = HARNESS_GAMES // (the heard packets' Welcome names the harness's game)
 	loading_begin(s, false)
 	_ = virtual.arena_init_growing(&s.arena)
 	arena := virtual.arena_allocator(&s.arena)
 	s.scratch = new(game.Block_Array, arena)
-	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE)
-	s.schema = game.game_schema()
+	game.writer_init(&s.writer, arena, protocol.MAX_MESSAGE_SIZE)
+	s.schema = protocol.game_schema()
 	s.reg = fuzz_registry()
-	game.receiver_init(&s.rx, &s.schema, s.reg)
-	s.received = make([dynamic]game.Packet, 0, 256)
-	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
+	protocol.receiver_init(&s.rx, &s.schema, s.reg)
+	s.received = make([dynamic]protocol.Packet, 0, 256)
+	s.edits = make([dynamic]protocol.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
 	s.notices = make([dynamic]string, 0, 16)
 	s.others = make(map[u16]Other_Player)
-	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, 2 * game.MAX_KNOWN_ENTITIES) // (a message may create before it removes)
+	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, 2 * protocol.MAX_KNOWN_ENTITIES) // (a message may create before it removes)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena)
 }
 
@@ -177,7 +179,7 @@ fuzz_pack_phase :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	case 1:
 		announced += 1
 	}
-	packs := game.Packs {
+	packs := protocol.Packs {
 		content = base.rng_u64(rng),
 		count   = 1,
 	}
@@ -189,9 +191,9 @@ fuzz_pack_phase :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	}
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	put :: proc(out: ^[dynamic]u8, w: ^game.Writer, m: game.Server_Message) {
+	put :: proc(out: ^[dynamic]u8, w: ^game.Writer, m: protocol.Server_Message) {
 		clear(&w.buf)
-		game.encode_server(w, m)
+		protocol.encode_server(w, m)
 		n := len(w.buf)
 		append(out, u8(n), u8(n >> 8))
 		append(out, ..w.buf[:])
@@ -199,10 +201,10 @@ fuzz_pack_phase :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	put(out, &w, packs)
 	offset := 0
 	for offset < len(archive) {
-		n := min(game.MAX_PACK_PART, len(archive) - offset)
+		n := min(protocol.MAX_PACK_PART, len(archive) - offset)
 		at := u32(offset)
 		if base.rng_int_max(rng, 16) == 0 {at = u32(base.rng_u32(rng))} 	// (out of order)
-		put(out, &w, game.Pack_Part{0, at, archive[offset:][:n]})
+		put(out, &w, protocol.Pack_Part{0, at, archive[offset:][:n]})
 		offset += n
 	}
 }

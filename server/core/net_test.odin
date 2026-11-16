@@ -7,8 +7,11 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
+import "common:access"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
+import "common:starmap"
 
 // Players over the network: remote clients (netcode links on loopback) on a
 // server without a local player, as a dedicated server runs.
@@ -24,12 +27,12 @@ Net_Client :: struct {
 	layers:                      map[game.Chunk_Pos]game.Chunk_Layers, // the replicated channels
 	pools:                       game.Layer_Pools,
 	chunks:                      map[game.Chunk_Pos]game.Chunk_Blocks,
-	welcome:                     game.Welcome,
+	welcome:                     protocol.Welcome,
 	welcomed:                    bool,
 	rejected:                    string,
-	update:                      game.Own_Player,
-	schema:                      game.Schema,
-	rx:                          game.Receiver,
+	update:                      protocol.Own_Player,
+	schema:                      protocol.Schema,
+	rx:                          protocol.Receiver,
 	teleports:                   int, // Own_Player.teleports changes seen
 	others:                      map[u16]string, // joined, by player id
 	seen:                        map[u16][3]f64, // last Players position, by player id
@@ -40,31 +43,31 @@ Net_Client :: struct {
 	shorn:                       map[u32]bool, // sheep as last told shorn or not
 	sheep:                       map[u32]game.Entity_Looks, // and what else about their looks
 	stats_text:                  string, // the last Stats_Page's lines (heap)
-	market:                      game.Market_View, // the last Market_View (its town is market_town)
+	market:                      protocol.Market_View, // the last Market_View (its town is market_town)
 	market_town:                 string, // (heap)
 	market_views:                int, // Market_View messages received
 	stats_pages:                 int,
-	health:                      game.Health, // the last Health message
-	island:                      game.Island, // the last Island record
+	health:                      protocol.Health, // the last Health message
+	island:                      protocol.Island, // the last Island record
 	mode:                        string, // the last Mode record's id (heap)
 	hurt:                        int, // Entity_Hurt messages
 	bulk_begins:                 int,
 	explosions:                  int,
-	place:                       game.Place, // the last Place record
-	tally:                       game.Tally, // the last Tally record
+	place:                       protocol.Place, // the last Place record
+	tally:                       protocol.Tally, // the last Tally record
 	places:                      int, // Place records received
 	deaths:                      int, // Player_Died events
 	died:                        int, // Entity_Despawn with died
 	hits:                        int, // Damage_Hit events
 	shots_seen:                  int, // Shot events (another player's)
 	swung:                       int, // Swung events (another player's)
-	confirms:                    [dynamic]game.Hit_Confirm, // Hit_Confirm events (heap)
+	confirms:                    [dynamic]protocol.Hit_Confirm, // Hit_Confirm events (heap)
 	death_cause, death_attacker: string, // the last Player_Died
-	results:                     map[u32]game.Edit_Result,
+	results:                     map[u32]protocol.Edit_Result,
 	seq:                         u32,
 	messages:                    [dynamic][]u8,
 	notices:                     [dynamic]string, // (heap)
-	grants:                      [dynamic]game.Grant, // (heap)
+	grants:                      [dynamic]access.Grant, // (heap)
 	chat:                        [dynamic]Net_Chat, // lines heard (heap)
 	deleted:                     [dynamic]u32, // lines taken back
 	inventory:                   game.Inventory, // the server's last word
@@ -80,11 +83,11 @@ Net_Client :: struct {
 	ticket:                      []u8,
 	ask:                         bool, // Hello without a character: Characters, then Choose name
 	characters:                  string, // the last Characters (temp: compared at once)
-	address:                     game.Address, // the world it is in (Welcome, World_Changed)
+	address:                     starmap.Address, // the world it is in (Welcome, World_Changed)
 	travels:                     int, // World_Changed messages
 	capture:                     netcode.Capture, // (net_capture: every packet it sends and receives)
 	pack_cache:                  string, // where it keeps the packs it was sent ("": nowhere)
-	fetch:                       ^game.Pack_Fetch, // the Packs it was told of
+	fetch:                       ^protocol.Pack_Fetch, // the Packs it was told of
 	reg:                         ^game.Registry, // built from them (client side: no server/ files); nil: the base pack's
 	pack_parts:                  int, // Pack_Part messages received
 	received:                    int, // bytes of server messages taken (party_test's bandwidth)
@@ -126,8 +129,8 @@ net_connect :: proc(
 	c.scratch = new(game.Block_Array)
 	game.block_arrays_init(&c.arrays, 4096)
 	game.layer_pools_init(&c.pools, 4096 * 4)
-	c.schema = game.game_schema()
-	game.receiver_init(&c.rx, &c.schema, test_reg())
+	c.schema = protocol.game_schema()
+	protocol.receiver_init(&c.rx, &c.schema, test_reg())
 	netcode.link_connect(&c.link, {net.IP4_Loopback, port}, password, now, sim = sim)
 	if capture != "" {net_capture(c, capture)}
 }
@@ -143,8 +146,8 @@ net_close :: proc(c: ^Net_Client) {
 	netcode.link_close(&c.link, "test over")
 	netcode.capture_close(&c.capture)
 	free(c.scratch)
-	game.receiver_destroy(&c.rx)
-	game.schema_destroy(&c.schema)
+	protocol.receiver_destroy(&c.rx)
+	protocol.schema_destroy(&c.schema)
 	for _, &b in c.chunks {game.chunk_release(&b, &c.arrays)}
 	for _, &l in c.layers {game.layers_release(&l, &c.pools)}
 	delete(c.layers)
@@ -177,7 +180,7 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.messages)
 	delete(c.rejected)
 	if c.fetch != nil {
-		game.pack_fetch_destroy(c.fetch)
+		protocol.pack_fetch_destroy(c.fetch)
 		free(c.fetch)
 	}
 	if c.reg != nil {game.registry_destroy(c.reg)}
@@ -186,8 +189,8 @@ net_close :: proc(c: ^Net_Client) {
 // net_packs_built: with every pack held, the registry they make, and Packs_Ready.
 @(private)
 net_packs_built :: proc(c: ^Net_Client) {
-	if c.reg != nil || c.packs_error != "" || !game.pack_fetch_complete(c.fetch) {return}
-	sources, _ := game.pack_fetch_sources(c.fetch)
+	if c.reg != nil || c.packs_error != "" || !protocol.pack_fetch_complete(c.fetch) {return}
+	sources, _ := protocol.pack_fetch_sources(c.fetch)
 	all := make([dynamic]game.Pack_Source, context.temp_allocator)
 	append(&all, game.pack_source_sent(game.base_pack_source(context.temp_allocator)))
 	append(&all, ..sources)
@@ -198,58 +201,58 @@ net_packs_built :: proc(c: ^Net_Client) {
 		return
 	}
 	c.reg = reg
-	game.receiver_destroy(&c.rx)
-	game.receiver_init(&c.rx, &c.schema, reg)
-	net_send(c, game.Packs_Ready{reg.hash})
+	protocol.receiver_destroy(&c.rx)
+	protocol.receiver_init(&c.rx, &c.schema, reg)
+	net_send(c, protocol.Packs_Ready{reg.hash})
 }
 
 @(private)
-net_send :: proc(c: ^Net_Client, m: game.Client_Message) {
+net_send :: proc(c: ^Net_Client, m: protocol.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.encode_client(&w, m)
-	netcode.link_send(&c.link, w.buf[:], game.message_reliable(.Client, w.buf[0]))
+	protocol.encode_client(&w, m)
+	netcode.link_send(&c.link, w.buf[:], protocol.message_reliable(.Client, w.buf[0]))
 }
 
 // net_apply keeps what the receiver yielded as the client's fields.
 @(private)
-net_apply :: proc(c: ^Net_Client, got: []game.Received) {
+net_apply :: proc(c: ^Net_Client, got: []protocol.Received) {
 	for g in got {
-		switch game.State_Kind(g.kind) {
+		switch protocol.State_Kind(g.kind) {
 		case .Channel:
-			p := game.key_block(g.key)
+			p := protocol.key_block(g.key)
 			if l, have := &c.layers[game.chunk_of(p)]; have && g.op != .Remove {
-				v := (^game.Channel_Record)(g.value).value
+				v := (^protocol.Channel_Record)(g.value).value
 				i := game.local_index(game.local_of(p))
 				game.layers_set(l, &c.pools, int(g.key.d), i, v)
 			}
 		case .Own_Player:
-			if v := (^game.Own_Player)(g.value)^; v.teleports != u8(c.teleports) {
+			if v := (^protocol.Own_Player)(g.value)^; v.teleports != u8(c.teleports) {
 				c.teleports = int(v.teleports)
 			}
-			c.update = (^game.Own_Player)(g.value)^
+			c.update = (^protocol.Own_Player)(g.value)^
 		case .Health:
-			c.health = (^game.Health)(g.value)^
+			c.health = (^protocol.Health)(g.value)^
 		case .Inventory:
-			v := (^game.Inventory_State)(g.value)
+			v := (^protocol.Inventory_State)(g.value)
 			c.inventory, c.inv_acked = v.inventory, v.acked
 			c.inv_updates += 1
 		case .Mode:
 			delete(c.mode)
-			c.mode = strings.clone((^game.Mode_Record)(g.value).mode)
+			c.mode = strings.clone((^protocol.Mode_Record)(g.value).mode)
 		case .Rules, .Clock, .Variables, .Selection:
 		case .Island:
-			c.island = (^game.Island)(g.value)^
+			c.island = (^protocol.Island)(g.value)^
 		case .Tally:
-			c.tally = (^game.Tally)(g.value)^
+			c.tally = (^protocol.Tally)(g.value)^
 		case .Place:
-			c.place = (^game.Place)(g.value)^
+			c.place = (^protocol.Place)(g.value)^
 			c.places += 1
 		case .Grants:
-			v := (^game.Grants)(g.value)
+			v := (^protocol.Grants)(g.value)
 			for gr in c.grants {delete(gr.pattern)}
 			clear(&c.grants)
-			game.grants_parse(v.text, &c.grants)
+			access.grants_parse(v.text, &c.grants)
 		case .Player:
 			id := u16(g.key.a)
 			if g.op == .Remove {
@@ -257,7 +260,7 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 				delete_key(&c.others, id)
 				delete_key(&c.worn, id)
 			} else {
-				v := (^game.Player_Record)(g.value)
+				v := (^protocol.Player_Record)(g.value)
 				if n, had := c.others[id]; had {delete(n)}
 				c.others[id] = strings.clone(v.name)
 				c.worn[id] = v.worn
@@ -268,7 +271,7 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			if g.op == .Remove {
 				delete_key(&c.seen, id)
 			} else {
-				c.seen[id] = (^game.Player_Motion)(g.value).position
+				c.seen[id] = (^protocol.Player_Motion)(g.value).position
 			}
 		case .Entity:
 			// (an entity is known once it has a place too: Entity_Motion)
@@ -281,13 +284,13 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 		case .Entity_Motion:
 			id := u32(g.key.a)
 			if g.op == .Remove {continue}
-			v := (^game.Entity_Motion)(g.value)
-			if game.replica_get(&c.rx.live, int(game.State_Kind.Entity), g.key) != nil {
+			v := (^protocol.Entity_Motion)(g.value)
+			if protocol.replica_get(&c.rx.live, int(protocol.State_Kind.Entity), g.key) != nil {
 				c.entities[id] = v.position
 				looks := game.kind_looks(
 					game.kind_info(
 						test_reg(),
-						(^game.Entity_Record)(game.replica_get(&c.rx.live, int(game.State_Kind.Entity), g.key)).kind,
+						(^protocol.Entity_Record)(protocol.replica_get(&c.rx.live, int(protocol.State_Kind.Entity), g.key)).kind,
 					),
 					v.looks,
 				)
@@ -295,22 +298,22 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 				c.sheep[id] = looks
 			}
 		case .Block:
-			v := (^game.Block_Record)(g.value)
-			p := game.key_block(g.key)
+			v := (^protocol.Block_Record)(g.value)
+			p := protocol.key_block(g.key)
 			append(&c.changed, Net_Block{p, game.Block(v.block), v.heard})
 			if blocks, have := &c.chunks[game.chunk_of(p)]; have {
 				game.chunk_set(blocks, &c.arrays, game.local_of(p), game.Block(v.block))
 			}
 		}
 		if g.op != .Event {continue}
-		switch game.Event_Kind(g.kind - len(game.State_Kind)) {
+		switch protocol.Event_Kind(g.kind - len(protocol.State_Kind)) {
 		case .Notice:
-			append(&c.notices, strings.clone((^game.Notice)(g.value).text))
+			append(&c.notices, strings.clone((^protocol.Notice)(g.value).text))
 		case .Chat_Line:
-			v := (^game.Chat_Line)(g.value)
+			v := (^protocol.Chat_Line)(g.value)
 			append(&c.chat, Net_Chat{v.id, v.sender, strings.clone(v.text)})
 		case .Chat_Delete:
-			append(&c.deleted, (^game.Chat_Delete)(g.value).id)
+			append(&c.deleted, (^protocol.Chat_Delete)(g.value).id)
 		case .Entity_Hurt:
 			c.hurt += 1
 		case .Entity_Died:
@@ -319,7 +322,7 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			c.explosions += 1
 		case .Player_Died:
 			c.deaths += 1
-			v := (^game.Player_Died)(g.value)
+			v := (^protocol.Player_Died)(g.value)
 			delete(c.death_cause)
 			delete(c.death_attacker)
 			c.death_cause, c.death_attacker = strings.clone(v.cause), strings.clone(v.attacker)
@@ -328,7 +331,7 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 		case .Shot:
 			c.shots_seen += 1
 		case .Hit_Confirm:
-			append(&c.confirms, (^game.Hit_Confirm)(g.value)^)
+			append(&c.confirms, (^protocol.Hit_Confirm)(g.value)^)
 		case .Swung:
 			c.swung += 1
 		}
@@ -353,8 +356,8 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 		k := test_key(c.key_name if c.key_name != "" else c.name)
 		net_send(
 			c,
-			game.Hello {
-				game.PROTOCOL_VERSION,
+			protocol.Hello {
+				protocol.PROTOCOL_VERSION,
 				k.account,
 				"" if c.ask else c.name,
 				c.schema.engine_hash,
@@ -367,46 +370,46 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	for p in c.messages {
 		defer netcode.link_free(&c.link, p)
 		c.received += len(p)
-		m, ok := game.decode_server(p, c.scratch, c.reg if c.reg != nil else test_reg())
+		m, ok := protocol.decode_server(p, c.scratch, c.reg if c.reg != nil else test_reg())
 		if !testing.expect(t, ok, "invalid message from the server") {continue}
 		#partial switch v in m {
-		case game.Packs:
-			c.fetch = new(game.Pack_Fetch)
-			want, err := game.pack_fetch_begin(c.fetch, v, c.pack_cache)
+		case protocol.Packs:
+			c.fetch = new(protocol.Pack_Fetch)
+			want, err := protocol.pack_fetch_begin(c.fetch, v, c.pack_cache)
 			c.packs_error = err
 			net_send(c, want)
 			net_packs_built(c)
-		case game.Pack_Part:
+		case protocol.Pack_Part:
 			c.pack_parts += 1
-			c.packs_error = game.pack_fetch_part(c.fetch, v)
+			c.packs_error = protocol.pack_fetch_part(c.fetch, v)
 			net_packs_built(c)
-		case game.Challenge:
+		case protocol.Challenge:
 			signer := c.sign_name
 			if signer == "" {signer = c.key_name if c.key_name != "" else c.name}
 			k := test_key(signer)
-			net_send(c, game.Proof{game.account_sign(&k, v.nonce)})
-		case game.Characters:
+			net_send(c, protocol.Proof{access.account_sign(&k, v.nonce)})
+		case protocol.Characters:
 			c.characters = strings.clone(v.names, context.temp_allocator)
-			net_send(c, game.Choose{c.name})
-		case game.Welcome:
+			net_send(c, protocol.Choose{c.name})
+		case protocol.Welcome:
 			c.welcome, c.welcomed = v, true
 			c.address = v.address
 			rules := v.rules
-			game.receiver_seed(&c.rx, int(game.State_Kind.Rules), &rules)
-		case game.World_Changed:
+			protocol.receiver_seed(&c.rx, int(protocol.State_Kind.Rules), &rules)
+		case protocol.World_Changed:
 			// Nothing of the last world stays.
 			c.address = v.address
-			game.receiver_reset(&c.rx)
+			protocol.receiver_reset(&c.rx)
 			c.travels += 1
 			for _, &b in c.chunks {game.chunk_release(&b, &c.arrays)}
 			for _, &l in c.layers {game.layers_release(&l, &c.pools)}
 			clear(&c.layers)
 			clear(&c.chunks)
 			clear(&c.entities)
-		case game.Reject:
+		case protocol.Reject:
 			delete(c.rejected)
 			c.rejected = strings.clone(v.reason)
-		case game.Chunk_Message:
+		case protocol.Chunk_Message:
 			b := game.Chunk_Blocks {
 				uniform = v.uniform,
 			}
@@ -421,7 +424,7 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 				l := &c.layers[v.pos]
 				game.layers_from_wire(l, &c.pools, c.reg.channels, v.channels)
 			}
-		case game.Unload_Chunk:
+		case protocol.Unload_Chunk:
 			if l, had := &c.layers[v.pos]; had {
 				game.layers_release(l, &c.pools)
 				delete_key(&c.layers, v.pos)
@@ -430,33 +433,33 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 				game.chunk_release(old, &c.arrays)
 				delete_key(&c.chunks, v.pos)
 			}
-		case game.State_Message:
-			got := make([dynamic]game.Received, context.temp_allocator)
-			testing.expect(t, game.receive_state(&c.rx, v.data, &got), "invalid State message")
+		case protocol.State_Message:
+			got := make([dynamic]protocol.Received, context.temp_allocator)
+			testing.expect(t, protocol.receive_state(&c.rx, v.data, &got), "invalid State message")
 			net_apply(c, got[:])
-		case game.Snapshot_Message:
-			got := make([dynamic]game.Received, context.temp_allocator)
+		case protocol.Snapshot_Message:
+			got := make([dynamic]protocol.Received, context.temp_allocator)
 			testing.expect(
 				t,
-				game.receive_snapshot(&c.rx, v.data, &got),
+				protocol.receive_snapshot(&c.rx, v.data, &got),
 				"invalid Snapshot message",
 			)
 			net_apply(c, got[:])
-		case game.Market_View:
+		case protocol.Market_View:
 			delete(c.market_town)
 			c.market, c.market_town = v, strings.clone(v.town)
 			c.market.town = c.market_town
 			c.market_views += 1
-		case game.Stats_Page:
+		case protocol.Stats_Page:
 			delete(c.stats_text)
 			c.stats_text = strings.clone(v.text)
 			c.stats_pages = int(v.pages)
-		case game.Edit_Result:
+		case protocol.Edit_Result:
 			c.results[v.id] = v
 			// (as a client does: the result is what the server holds, for the sender alone)
 			net_set_block(c, v.pos, v.block)
 			if two, has := v.companion.?; has {net_set_block(c, two.pos, two.block)}
-		case game.Bulk_Begin:
+		case protocol.Bulk_Begin:
 			c.bulk_begins += 1
 		}
 	}
@@ -465,7 +468,7 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 		c.seq += 1
 		net_send(
 			c,
-			game.Input {
+			protocol.Input {
 				c.seq,
 				{move = c.move, yaw = c.look[0], pitch = c.look[1], buttons = c.buttons},
 				c.rx.ack,
@@ -564,10 +567,10 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return len(cs[0].grants) > 0},
 	)
 	testing.expect(t, ok, "no grants")
-	testing.expect(t, game.allowed(alice.grants[:], "world.edit"), "a player may not build")
+	testing.expect(t, access.allowed(alice.grants[:], "world.edit"), "a player may not build")
 	testing.expect(
 		t,
-		!game.allowed(alice.grants[:], "world.edit.bulk"),
+		!access.allowed(alice.grants[:], "world.edit.bulk"),
 		"a remote player may bulk edit",
 	)
 
@@ -594,7 +597,7 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)) - 1,
 		i32(math.floor(feet.z)),
 	}
-	net_send(&alice, game.edit_plain(1, alice.seq, below, .Air))
+	net_send(&alice, protocol.edit_plain(1, alice.seq, below, .Air))
 	@(static) target: game.Block_Pos
 	target = below
 	ok = net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {
@@ -707,7 +710,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	feet := a.update.state.position
 	@(static) below: game.Block_Pos
 	below = {i32(math.floor(feet.x)), i32(math.floor(feet.y)) - 1, i32(math.floor(feet.z))}
-	net_send(&a, game.edit_plain(1, a.seq, below, .Air))
+	net_send(&a, protocol.edit_plain(1, a.seq, below, .Air))
 	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
 			for ch in cs[1].changed {
 				if ch.pos == below && ch.block == .Air && 1 in cs[0].results {return true}
@@ -721,7 +724,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	// each client holds exactly the server's values of the other player and of
 	// a summoned sheep (snapshots that were lost are sent again against the
 	// newest the client acknowledged).
-	net_send(&a, game.Command{"summon sheep"})
+	net_send(&a, protocol.Command{"summon sheep"})
 	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
 			return len(cs[0].entities) == 1 && len(cs[1].entities) == 1
 		}, 30)
@@ -756,8 +759,8 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 				for c, i in look.cs {
 					look.recent[i], look.same[i], look.shown[i] = false, false, false
 					ack := c.rx.ack
-					sent := game.ring_find(&s.clients[look.ids[i]].tx.ring, ack)
-					held := game.ring_find(&c.rx.ring, ack)
+					sent := protocol.ring_find(&s.clients[look.ids[i]].tx.ring, ack)
+					held := protocol.ring_find(&c.rx.ring, ack)
 					if ack == 0 || sent == nil || held == nil {continue}
 					look.recent[i] = s.tick - u64(ack) <= 10
 					look.same[i] = replicas_match(&c.schema, &sent.data, &held.data)
@@ -766,16 +769,16 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 						continue
 					}
 					other := look.ids[1 - i]
-					motion := (^game.Player_Motion)(
-						game.replica_get(
+					motion := (^protocol.Player_Motion)(
+						protocol.replica_get(
 							&sent.data,
-							int(game.State_Kind.Player_Motion),
+							int(protocol.State_Kind.Player_Motion),
 							{a = i32(other)},
 						),
 					)
-					sheep: ^game.Entity_Motion
-					for rec in sent.data.tables[game.State_Kind.Entity_Motion].records {
-						sheep = (^game.Entity_Motion)(rec.value)
+					sheep: ^protocol.Entity_Motion
+					for rec in sent.data.tables[protocol.State_Kind.Entity_Motion].records {
+						sheep = (^protocol.Entity_Motion)(rec.value)
 					}
 					look.shown[i] =
 						motion != nil &&
@@ -805,7 +808,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 
 // replicas_match: two replicas hold the same records of every snapshot-lane kind.
 @(private = "file")
-replicas_match :: proc(schema: ^game.Schema, x, y: ^game.Replica) -> bool {
+replicas_match :: proc(schema: ^protocol.Schema, x, y: ^protocol.Replica) -> bool {
 	for kind in 0 ..< len(schema.kinds) {
 		k := &schema.kinds[kind]
 		if k.lane != .Snapshot {continue}
@@ -813,7 +816,7 @@ replicas_match :: proc(schema: ^game.Schema, x, y: ^game.Replica) -> bool {
 		if len(xs) != len(ys) {return false}
 		for rec, i in xs {
 			if rec.key != ys[i].key ||
-			   game.value_diff(k, rec.value, ys[i].value) != 0 {return false}
+			   protocol.value_diff(k, rec.value, ys[i].value) != 0 {return false}
 		}
 	}
 	return true

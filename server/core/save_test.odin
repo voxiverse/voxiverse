@@ -9,8 +9,11 @@ import "core:strconv"
 import "core:strings"
 import "core:testing"
 
+import "common:access"
 import "common:game"
 import "common:planet"
+import "common:protocol"
+import "common:starmap"
 import "common:worldgen"
 
 // The exit check: save -> quit -> load gives back exactly the world that
@@ -19,19 +22,19 @@ import "common:worldgen"
 
 @(private = "file")
 Save_Client :: struct {
-	key:       game.Account_Key,
-	endpoint:  game.Endpoint,
+	key:       access.Account_Key,
+	endpoint:  protocol.Endpoint,
 	h:         ^Harness, // the ticks it waits on
 	scratch:   ^game.Block_Array,
 	arrays:    game.Block_Arrays,
 	chunks:    map[game.Chunk_Pos]game.Chunk_Blocks,
-	welcome:   game.Welcome,
+	welcome:   protocol.Welcome,
 	welcomed:  bool,
-	player:    game.Own_Player,
+	player:    protocol.Own_Player,
 	rx:        State_Rx,
 	teleports: u8,
 	turned:    Maybe([2]f32), // yaw, pitch of the first teleported record
-	results:   map[u32]game.Edit_Result,
+	results:   map[u32]protocol.Edit_Result,
 	seq:       u32,
 	time:      Maybe(f64), // the last Clock received
 	look:      [2]f32, // yaw, pitch of the last input sent (idle ones keep it)
@@ -59,20 +62,20 @@ client_close :: proc(c: ^Save_Client) {
 
 @(private = "file")
 pump :: proc(t: ^testing.T, c: ^Save_Client) {
-	packets := make([dynamic]game.Packet, context.temp_allocator)
-	game.receive(c.endpoint, &packets)
+	packets := make([dynamic]protocol.Packet, context.temp_allocator)
+	protocol.receive(c.endpoint, &packets)
 	for p in packets {
-		defer game.packet_free(c.endpoint, p)
-		m, ok := game.decode_server(p, c.scratch, test_reg())
+		defer protocol.packet_free(c.endpoint, p)
+		m, ok := protocol.decode_server(p, c.scratch, test_reg())
 		if !testing.expect(t, ok) {continue}
 		#partial switch v in m {
-		case game.Challenge:
-			send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
-		case game.Welcome:
+		case protocol.Challenge:
+			send(c, protocol.Proof{access.account_sign(&c.key, v.nonce)})
+		case protocol.Welcome:
 			c.welcome, c.welcomed = v, true
 			rules := v.rules
-			game.receiver_seed(&c.rx.rx, int(game.State_Kind.Rules), &rules)
-		case game.Chunk_Message:
+			protocol.receiver_seed(&c.rx.rx, int(protocol.State_Kind.Rules), &rules)
+		case protocol.Chunk_Message:
 			b := game.Chunk_Blocks {
 				uniform = v.uniform,
 			}
@@ -82,25 +85,25 @@ pump :: proc(t: ^testing.T, c: ^Save_Client) {
 			}
 			if old, had := &c.chunks[v.pos]; had {game.chunk_release(old, &c.arrays)}
 			c.chunks[v.pos] = b
-		case game.Unload_Chunk:
+		case protocol.Unload_Chunk:
 			if old, had := &c.chunks[v.pos]; had {
 				game.chunk_release(old, &c.arrays)
 				delete_key(&c.chunks, v.pos)
 			}
-		case game.State_Message, game.Snapshot_Message:
+		case protocol.State_Message, protocol.Snapshot_Message:
 			for g in state_rx_take(t, &c.rx, m) {
-				#partial switch game.State_Kind(g.kind) {
+				#partial switch protocol.State_Kind(g.kind) {
 				case .Own_Player:
-					c.player = (^game.Own_Player)(g.value)^
+					c.player = (^protocol.Own_Player)(g.value)^
 					if c.player.teleports != c.teleports && c.turned == nil {
 						c.turned = [2]f32{c.player.yaw, c.player.pitch}
 					}
 					c.teleports = c.player.teleports
 				case .Clock:
-					c.time = (^game.Clock)(g.value).time
+					c.time = (^protocol.Clock)(g.value).time
 				}
 			}
-		case game.Edit_Result:
+		case protocol.Edit_Result:
 			c.results[v.id] = v
 			if b, had := &c.chunks[game.chunk_of(v.pos)];
 			   had {game.chunk_set(b, &c.arrays, game.local_of(v.pos), v.block)}
@@ -109,11 +112,11 @@ pump :: proc(t: ^testing.T, c: ^Save_Client) {
 }
 
 @(private = "file")
-send :: proc(c: ^Save_Client, m: game.Client_Message) {
+send :: proc(c: ^Save_Client, m: protocol.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.encode_client(&w, m)
-	game.send(c.endpoint, w.buf[:])
+	protocol.encode_client(&w, m)
+	protocol.send(c.endpoint, w.buf[:])
 }
 
 @(private = "file")
@@ -129,7 +132,7 @@ tick :: proc(t: ^testing.T, c: ^Save_Client, input: game.Player_Input = {}) {
 	if c.welcomed { 	// (nothing before: the handshake)
 		c.seq += 1
 		c.look = {input.yaw, input.pitch}
-		send(c, game.Input{c.seq, input, c.rx.rx.ack})
+		send(c, protocol.Input{c.seq, input, c.rx.rx.ack})
 	}
 	harness_step(c.h)
 	pump(t, c)
@@ -208,7 +211,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			{below + {-2, 1, 0}, .Gravel},
 		}
 		for e, i in wanted {
-			send(&c, game.edit_plain(u32(i + 1), c.seq, e.pos, e.block))
+			send(&c, protocol.edit_plain(u32(i + 1), c.seq, e.pos, e.block))
 		}
 		@(static) count: int
 		count = len(wanted)
@@ -242,7 +245,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			) -> bool {
 				send(
 					c,
-					game.Command {
+					protocol.Command {
 						fmt.tprintf(
 							"fill %d %d %d %d %d %d %s",
 							where_.x,
@@ -279,7 +282,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 				}
 			}
 		}
-		send(&c, game.Command{"time 0.9"}) // late evening
+		send(&c, protocol.Command{"time 0.9"}) // late evening
 		c.time = nil
 		for _ in 0 ..< 20 {tick(t, &c, {move = {0, 1}, yaw = 0.7, pitch = -0.3})} 	// walk a bit, looking that way
 		testing.expect(
@@ -410,12 +413,12 @@ test_edits_survive_unloading :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)) + 1,
 		i32(math.floor(feet.z)),
 	}
-	send(&c, game.edit_plain(1, c.seq, target, .Lamp))
+	send(&c, protocol.edit_plain(1, c.seq, target, .Lamp))
 	testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return len(c.results) == 1}))
 	testing.expect(t, c.results[1].accepted)
 
 	// Far away (the chunk is unloaded on both sides), then back.
-	send(&c, game.Teleport{feet + {3000, 0, 0}, 0, 0})
+	send(&c, protocol.Teleport{feet + {3000, 0, 0}, 0, 0})
 	@(static) far: game.Block_Pos
 	far = target
 	testing.expect(
@@ -429,7 +432,7 @@ test_edits_survive_unloading :: proc(t: ^testing.T) {
 				)},
 		),
 	)
-	send(&c, game.Teleport{feet, 0, 0})
+	send(&c, protocol.Teleport{feet, 0, 0})
 	testing.expect(
 		t,
 		until(t, &c, proc(c: ^Save_Client) -> bool {return game.chunk_of(far) in c.chunks}),
@@ -464,7 +467,7 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 		feet := c.player.state.position
 		send(
 			&c,
-			game.edit_plain(
+			protocol.edit_plain(
 				1,
 				c.seq,
 				{i32(math.floor(feet.x)) + 1, i32(math.floor(feet.y)), i32(math.floor(feet.z))},
@@ -560,7 +563,7 @@ test_world_generator_kept :: proc(t: ^testing.T) {
 home_dir :: proc(dir: string, seed: i64) -> string {
 	return(
 		filepath.join(
-			{dir, WORLDS_DIR, game.address_dir(game.address_derive(u64(seed)))},
+			{dir, WORLDS_DIR, starmap.address_dir(starmap.address_derive(u64(seed)))},
 			context.temp_allocator,
 		) or_else dir \
 	)
@@ -987,7 +990,7 @@ test_market_view_and_trade_over_the_net :: proc(t: ^testing.T) {
 	ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return cs[0].market_views > 0}, 20)
 	if !testing.expect(t, ok, "no market view near a town") {return}
 	v := near.market
-	testing.expect_value(t, v.reason, game.Market_Reason.None)
+	testing.expect_value(t, v.reason, protocol.Market_Reason.None)
 	testing.expect(t, strings.has_prefix(v.town, "Town "), "the town has no name")
 	g := v.goods[int(planet.Good.Grain)]
 	testing.expect(t, g.deals && g.price > 0 && g.stock > 0, "grain is not on sale")
@@ -997,13 +1000,13 @@ test_market_view_and_trade_over_the_net :: proc(t: ^testing.T) {
 	// Trading: the answer is the new view.
 	views := near.market_views
 	units := 0.01 * tw.size
-	net_send(near, game.Market_Trade{u8(planet.Good.Grain), false, units})
+	net_send(near, protocol.Market_Trade{u8(planet.Good.Grain), false, units})
 	ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return cs[0].market_views > 0}, 10)
 	for near.market_views == views && ok {
 		ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)
 	}
 	bought := near.market
-	testing.expect_value(t, bought.reason, game.Market_Reason.None)
+	testing.expect_value(t, bought.reason, protocol.Market_Reason.None)
 	testing.expect(t, bought.goods[int(planet.Good.Grain)].cargo > 0, "nothing bought")
 	testing.expect(t, bought.cash < 1e7, "the grain was free")
 	testing.expect(
@@ -1016,14 +1019,18 @@ test_market_view_and_trade_over_the_net :: proc(t: ^testing.T) {
 	views = near.market_views
 	net_send(
 		near,
-		game.Market_Trade{u8(planet.Good.Grain), true, bought.goods[int(planet.Good.Grain)].cargo},
+		protocol.Market_Trade {
+			u8(planet.Good.Grain),
+			true,
+			bought.goods[int(planet.Good.Grain)].cargo,
+		},
 	)
 	for _ in 0 ..< 100 {
 		if near.market_views != views {break}
 		net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)
 	}
 	sold := near.market
-	testing.expect_value(t, sold.reason, game.Market_Reason.None)
+	testing.expect_value(t, sold.reason, protocol.Market_Reason.None)
 	testing.expect_value(t, sold.goods[int(planet.Good.Grain)].cargo, 0)
 	testing.expect(t, sold.cash > bought.cash, "no silver for the sale")
 
@@ -1035,20 +1042,20 @@ test_market_view_and_trade_over_the_net :: proc(t: ^testing.T) {
 		net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)
 	}
 	testing.expect_value(t, near.market_views, views + 1)
-	testing.expect_value(t, near.market.reason, game.Market_Reason.Away)
+	testing.expect_value(t, near.market.reason, protocol.Market_Reason.Away)
 	for _ in 0 ..< 30 {net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)}
 	testing.expect_value(t, near.market_views, views + 1)
 
 	// Away from every town: no view, and a forged trade is refused.
 	for _ in 0 ..< 50 {net_wait(t, {far}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)}
 	testing.expect_value(t, far.market_views, 0)
-	net_send(far, game.Market_Trade{u8(planet.Good.Grain), false, 1})
+	net_send(far, protocol.Market_Trade{u8(planet.Good.Grain), false, 1})
 	for _ in 0 ..< 100 {
 		if far.market_views > 0 {break}
 		net_wait(t, {far}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)
 	}
 	testing.expect_value(t, far.market_views, 1)
-	testing.expect_value(t, far.market.reason, game.Market_Reason.Away)
+	testing.expect_value(t, far.market.reason, protocol.Market_Reason.Away)
 	testing.expect_value(t, cf.trader.cash, STARTING_PURSE)
 	testing.expect_value(t, cf.trader.cargo[.Grain], 0)
 }

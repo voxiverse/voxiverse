@@ -1,5 +1,7 @@
-package game
+package protocol
 
+import "common:game"
+import "common:starmap"
 import "core:os"
 import "core:testing"
 import "core:time"
@@ -103,20 +105,20 @@ test_trace_round_trip :: proc(t: ^testing.T) {
 // A trace says which game its session played: its Welcome's (none: "").
 @(test)
 test_trace_game :: proc(t: ^testing.T) {
-	reg := registry_base(context.temp_allocator)
-	w: Writer
-	writer_init(&w, context.temp_allocator)
+	reg := game.registry_base(context.temp_allocator)
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
 	welcome := Welcome {
 		protocol    = PROTOCOL_VERSION,
-		tick_rate   = TICK_RATE,
+		tick_rate   = game.TICK_RATE,
 		view_radius = 4,
 		view_height = 2,
-		rules       = RULES_DEFAULTS,
-		address     = {EARTH_GALAXY, EARTH_WORLD},
+		rules       = game.RULES_DEFAULTS,
+		address     = {starmap.EARTH_GALAXY, starmap.EARTH_WORLD},
 		game        = "flood",
 	}
 	encode_server(&w, welcome)
-	scratch := new(Block_Array)
+	scratch := new(game.Block_Array)
 	defer free(scratch)
 	records := []Trace_Record{{0, .Client, []u8{1, 2, 3}}, {1, .Server, w.buf[:]}}
 	testing.expect_value(t, trace_game(records, scratch, reg), "flood")

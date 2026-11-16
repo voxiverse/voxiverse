@@ -8,7 +8,7 @@ import "core:strings"
 
 import "client:engine"
 import "client:gpu"
-import "common:game"
+import "common:access"
 import "server:collector"
 
 // Visual baselines (docs/debugging.md, "Visual baselines"): `voxiverse --scene
@@ -169,7 +169,7 @@ scene_devchat :: proc(app: ^engine.App) {
 	file := fmt.tprintf("%s/devchat.fixture.jsonl", dir)
 	os.make_directory_all(dir)
 	_ = os.write_entire_file(file, transmute([]u8)string(DEVCHAT_FIXTURE))
-	collector.chat_open(&app.devchat.chat, file, {}, game.account_key_make())
+	collector.chat_open(&app.devchat.chat, file, {}, access.account_key_make())
 	app.devchat.running = true
 	engine.devchat_open(app)
 }

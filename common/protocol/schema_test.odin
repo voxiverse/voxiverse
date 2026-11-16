@@ -1,5 +1,6 @@
-package game
+package protocol
 
+import "common:game"
 import "core:strings"
 import "core:testing"
 
@@ -29,11 +30,11 @@ Sch_All :: struct {
 	mode:  Sch_Mode,
 	flags: Sch_Flags,
 	pos:   [3]f64,
-	stack: [4]Stack,
-	worn:  [Equip_Slot]Stack,
+	stack: [4]game.Stack,
+	worn:  [game.Equip_Slot]game.Stack,
 	inner: Sch_Inner,
 	name:  string `net:"max=8"`,
-	spot:  Maybe(Block_Pos),
+	spot:  Maybe(game.Block_Pos),
 }
 
 @(private = "file")

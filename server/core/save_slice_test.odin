@@ -6,6 +6,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:starmap"
 
 // A save describes the tick it began on, however many ticks it takes to
 // encode (save_slice.odin).
@@ -207,7 +208,7 @@ test_world_stays_while_its_save_runs :: proc(t: ^testing.T) {
 	defer grief_close(g)
 	if !ok {return}
 	s := grief_srv(g)
-	other := world_load(s, game.address_derive(4242))
+	other := world_load(s, starmap.address_derive(4242))
 	if !testing.expect(t, other != nil, "no second world") {return}
 	set_block(other, {0, 100, 0}, .Stone, {})
 	s.store.slice_hold = true

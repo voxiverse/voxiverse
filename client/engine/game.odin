@@ -7,6 +7,7 @@ import "core:mem/virtual"
 
 import "client:ui"
 import "common:game"
+import "common:protocol"
 import "server:core"
 
 // Game: a game's client part (docs/games.md): what the client does for the game its
@@ -16,11 +17,11 @@ import "server:core"
 // Any hook may be nil; all run on the main thread, in the frame.
 Game :: struct {
 	using info: game.Game_Info, // its id (its folder's name in games/: what the server's Welcome names), name and description (its shared package's, as the server part's)
-	kinds:      game.Game_Kinds, // what its server part replicates (its shared package's)
+	kinds:      protocol.Game_Kinds, // what its server part replicates (its shared package's)
 	state:      typeid, // its state for the session (game_state): zero when the game begins; nil: none
 	started:    proc(s: ^Session), // the session plays the game: welcomed, its state zero
 	ended:      proc(s: ^Session), // the session ends (its state still there)
-	received:   proc(s: ^Session, r: game.Received), // a record of the game's kinds came, changed or went, or an event (game_value)
+	received:   proc(s: ^Session, r: protocol.Received), // a record of the game's kinds came, changed or went, or an event (game_value)
 	hud:        proc(s: ^Session, ctx: ^ui.Context), // draw its HUD, after the engine's (F1 hides both)
 	debug:      proc(s: ^Session) -> string, // its line of the F3 overlay ("": none; temporary memory)
 	scoreboard: proc(s: ^Session, board: ^Scoreboard), // fill board: what the player list shows while its key is held, in place of the engine's
@@ -35,7 +36,7 @@ game_actions :: proc(s: ^Session, a: ^Actions) {
 	for action, i in GAME_ACTIONS {
 		if i >= len(s.game.actions) {break}
 		if action_pressed(a, action) {
-			send_message(s, game.Game_Action{u8(i), s.prediction.next_sequence - 1})
+			send_message(s, protocol.Game_Action{u8(i), s.prediction.next_sequence - 1})
 		}
 	}
 }
@@ -44,22 +45,22 @@ game_actions :: proc(s: ^Session, a: ^Actions) {
 // value of the request kind's type), after the last input sent; the server checks it
 // and its request hook judges it. The type names the kind: no kind number.
 game_request :: proc(s: ^Session, value: ^$T) {
-	kind, found := game.request_kind(&s.schema, T)
+	kind, found := protocol.request_kind(&s.schema, T)
 	assert(found, "not a request kind of the game's")
 	if s.state != .Playing {return}
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.request_encode(&w, &s.schema, kind, value)
-	if len(w.buf) > game.MAX_GAME_REQUEST {
+	protocol.request_encode(&w, &s.schema, kind, value)
+	if len(w.buf) > protocol.MAX_GAME_REQUEST {
 		log.errorf(
 			"game request %s: %d bytes, more than %d",
 			s.schema.kinds[kind].name,
 			len(w.buf),
-			game.MAX_GAME_REQUEST,
+			protocol.MAX_GAME_REQUEST,
 		)
 		return
 	}
-	send_message(s, game.Game_Request{u16(kind), s.prediction.next_sequence - 1, w.buf[:]})
+	send_message(s, protocol.Game_Request{u16(kind), s.prediction.next_sequence - 1, w.buf[:]})
 }
 
 // SCOREBOARD_COLUMNS: the most columns a game's scoreboard has besides the name.
@@ -139,8 +140,8 @@ game_state :: proc(s: ^Session, $T: typeid) -> ^T {
 // game_value: r's value as T, when r is of the game's kind whose value type is T
 // (ok); nil for a removal (r.op == .Remove, r.key says which). The type names the
 // kind, so the game's code holds no kind number and no cast.
-game_value :: proc(s: ^Session, r: game.Received, $T: typeid) -> (value: ^T, ok: bool) {
-	kind := game.game_kind(&s.schema, T) or_return
+game_value :: proc(s: ^Session, r: protocol.Received, $T: typeid) -> (value: ^T, ok: bool) {
+	kind := protocol.game_kind(&s.schema, T) or_return
 	if r.kind != kind {return nil, false}
 	return (^T)(r.value), true
 }
@@ -155,10 +156,10 @@ session_game_begin :: proc(s: ^Session, id: string) -> (ok: bool, why: string) {
 		return false, fmt.tprintf("the server plays %s, a game this version does not have", id)
 	}
 	s.game = g^
-	game.receiver_destroy(&s.rx) // (nothing came yet: the receiver is made over the new schema)
-	game.schema_destroy(&s.schema)
-	s.schema = game.game_schema(g.id, g.kinds)
-	game.receiver_init(&s.rx, &s.schema, s.reg)
+	protocol.receiver_destroy(&s.rx) // (nothing came yet: the receiver is made over the new schema)
+	protocol.schema_destroy(&s.schema)
+	s.schema = protocol.game_schema(g.id, g.kinds)
+	protocol.receiver_init(&s.rx, &s.schema, s.reg)
 	if g.state != nil {
 		info := type_info_of(g.state)
 		err: mem.Allocator_Error

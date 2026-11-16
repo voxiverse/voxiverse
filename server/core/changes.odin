@@ -4,6 +4,7 @@ import "core:log"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Block changes: every block the world changes in a tick (a player's edit,
 // a bulk edit, an explosion; flowing water next) goes through set_block or
@@ -25,7 +26,7 @@ Changes :: struct {
 
 // A chunk with more single changes than this in a tick is sent whole.
 @(private = "file")
-MAX_BLOCK_MESSAGES :: game.MAX_BLOCKS_CHANGED
+MAX_BLOCK_MESSAGES :: protocol.MAX_BLOCKS_CHANGED
 
 changes_begin :: proc(w: ^World) -> ^Changes {
 	ch := &w.changes
@@ -129,7 +130,7 @@ changes_flush :: proc(w: ^World) {
 		whole := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 		for pos in bulk {if pos in c.has {append(&whole, pos)}}
 		if len(whole) >
-		   0 {send_message(s, &c, game.Bulk_Begin{u16(min(len(whole), int(max(u16))))})}
+		   0 {send_message(s, &c, protocol.Bulk_Begin{u16(min(len(whole), int(max(u16))))})}
 		for pos in busy {if pos in c.has {append(&whole, pos)}} 	// after the group
 		for column in columns {
 			if c.columns[column] > 0 {send_message(s, &c, column_message(w, column))}
@@ -144,8 +145,8 @@ changes_flush :: proc(w: ^World) {
 			chunk := game.chunk_of(p)
 			if who == i || chunk in ch.chunks || chunk in busy_set || chunk not_in c.has {continue}
 			b, _ := chunks_block(&w.chunks, p)
-			record := game.Block_Record{u16(b), who >= 0}
-			state_put(s, &c, .Block, &record, game.key_of_block(p))
+			record := protocol.Block_Record{u16(b), who >= 0}
+			state_put(s, &c, .Block, &record, protocol.key_of_block(p))
 		}
 		// A replicated channel's changed cells, after the blocks (a block change reset
 		// its channels: the reset is among them).
@@ -154,8 +155,8 @@ changes_flush :: proc(w: ^World) {
 			if chunk in ch.chunks || chunk in busy_set || chunk not_in c.has {continue}
 			if int(k.channel) >= len(infos) || !infos[k.channel].replicated {continue}
 			v, _ := chunks_channel(w, k.pos, int(k.channel))
-			record := game.Channel_Record{v}
-			state_put(s, &c, .Channel, &record, game.key_of_cell(k.pos, int(k.channel)))
+			record := protocol.Channel_Record{v}
+			state_put(s, &c, .Channel, &record, protocol.key_of_cell(k.pos, int(k.channel)))
 		}
 	}
 }

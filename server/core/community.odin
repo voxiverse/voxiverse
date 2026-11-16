@@ -9,7 +9,10 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
+import "common:access"
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import steam_common "common:steam"
 import steam_server "server:steam"
 
@@ -32,7 +35,7 @@ import steam_server "server:steam"
 COMMUNITY_FILE :: "community.cfg"
 
 Place :: struct {
-	world:    game.Address,
+	world:    starmap.Address,
 	position: [3]f64,
 	look:     [2]f32, // yaw, pitch
 }
@@ -60,7 +63,7 @@ Community :: struct {
 	bans:         map[string]Ban, // by character name
 	account_bans: map[string]Ban, // by account (hex)
 	ip_bans:      map[string]Ban,
-	steam_links:  map[u64]game.Account, // a SteamID's account key (steam.odin's join; docs/server.md)
+	steam_links:  map[u64]access.Account, // a SteamID's account key (steam.odin's join; docs/server.md)
 }
 
 FOREVER :: max(i64)
@@ -174,10 +177,10 @@ community_destroy :: proc(m: ^Community) {
 // place_parse: "x y z yaw pitch [world]" (no world: the home world's,
 // from before worlds).
 @(private = "file")
-place_parse :: proc(f: []string, home: game.Address) -> (p: Place, ok: bool) {
+place_parse :: proc(f: []string, home: starmap.Address) -> (p: Place, ok: bool) {
 	if len(f) != 5 && len(f) != 6 {return}
 	p.world = home
-	if len(f) == 6 {p.world = game.address_parse(f[5], {}) or_return}
+	if len(f) == 6 {p.world = starmap.address_parse(f[5], {}) or_return}
 	for i in 0 ..< 3 {
 		p.position[i] = strconv.parse_f64(f[i]) or_return
 		if abs(p.position[i]) >= game.WORLD_LIMIT {return}
@@ -189,7 +192,7 @@ place_parse :: proc(f: []string, home: game.Address) -> (p: Place, ok: bool) {
 
 // community_parse reads community.cfg's text; problems are logged and the
 // line skipped.
-community_parse :: proc(m: ^Community, text: string, home: game.Address) {
+community_parse :: proc(m: ^Community, text: string, home: starmap.Address) {
 	rest := text
 	member: ^Member
 	line_number := 0
@@ -228,7 +231,7 @@ community_parse :: proc(m: ^Community, text: string, home: game.Address) {
 			ok = len(f) == 3
 			if !ok {break}
 			id, is_id := strconv.parse_u64(f[1])
-			account, is_account := game.account_parse(f[2])
+			account, is_account := access.account_parse(f[2])
 			ok = is_id && id != 0 && is_account
 			if ok {m.steam_links[id] = account}
 		case "nick":
@@ -272,7 +275,7 @@ community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> st
 			p.position.z,
 			p.look[0],
 			p.look[1],
-			game.address_dir(p.world),
+			starmap.address_dir(p.world),
 		)
 	}
 	for name in sorted_keys(m.warps) {
@@ -296,7 +299,7 @@ community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> st
 	for id in m.steam_links {append(&ids, id)}
 	slice.sort(ids[:])
 	for id in ids {
-		fmt.sbprintfln(&b, "steam %d %s", id, game.account_text(m.steam_links[id]))
+		fmt.sbprintfln(&b, "steam %d %s", id, access.account_text(m.steam_links[id]))
 	}
 	for name in sorted_keys(m.members) {
 		e := &m.members[name]
@@ -385,7 +388,7 @@ steam_on :: proc(s: ^Server) -> bool {
 // check (no ticket, or this server has no Steam: it ignores them) or Steam accepts it and
 // the SteamID is free or already linked to this account; else the reason to refuse with.
 // The auth session lasts only for the check: the link, not the session, is what is kept.
-steam_hello :: proc(s: ^Server, h: game.Hello) -> string {
+steam_hello :: proc(s: ^Server, h: protocol.Hello) -> string {
 	if len(h.ticket) == 0 || !steam_on(s) {return ""}
 	id := steam_common.Steam_ID(h.steam_id)
 	switch steam_server.begin_auth(s.config.steam, id, h.ticket) {
@@ -424,7 +427,7 @@ steam_link :: proc(s: ^Server, c: ^Client) -> string {
 	log.infof(
 		"server steam linked steam_id=%d account=%s",
 		c.steam_id,
-		game.account_text(c.account),
+		access.account_text(c.account),
 	)
 	return ""
 }

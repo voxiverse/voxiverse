@@ -3,6 +3,7 @@ package core
 import "core:mem"
 
 import "common:game"
+import "common:protocol"
 
 // Channels: named values a cell carries beside its block, declared by packs
 // (data/channels). The server keeps each chunk's stored channels in game.Chunk_Layers
@@ -56,8 +57,8 @@ chunk_saved_layers :: proc(
 
 // chunk_message: the message that sends chunk whole: its blocks go beside it (send_message),
 // and the replicated channels not uniform at their defaults are in it.
-chunk_message :: proc(w: ^World, chunk: ^Chunk) -> game.Chunk_Message {
-	m := game.Chunk_Message {
+chunk_message :: proc(w: ^World, chunk: ^Chunk) -> protocol.Chunk_Message {
+	m := protocol.Chunk_Message {
 		pos = chunk.pos,
 	}
 	if reg := w.server.registry; reg != nil && len(reg.channels) > 1 {

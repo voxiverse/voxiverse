@@ -13,7 +13,9 @@ import "client:font"
 import "client:hud"
 import "client:testkit"
 import "client:ui"
+import "common:access"
 import "common:game"
+import "common:protocol"
 import "generated:games"
 import games_client "generated:games/client"
 import "server:core"
@@ -27,7 +29,7 @@ Count :: struct {
 	ticks: u32,
 }
 
-COUNTER_KINDS :: game.Game_Kinds {
+COUNTER_KINDS :: protocol.Game_Kinds {
 	states = {{name = "counter.count", value = Count}},
 }
 
@@ -82,7 +84,7 @@ COUNTER_CLIENT :: engine.Game {
 	commands = {{"count", "count: say the count", counter_command}},
 }
 
-counter_received :: proc(s: ^engine.Session, r: game.Received) {
+counter_received :: proc(s: ^engine.Session, r: protocol.Received) {
 	view := engine.game_state(s, Counter_View)
 	if count, ok := engine.game_value(s, r, Count); ok && count != nil {
 		view.count = count^
@@ -115,8 +117,8 @@ game_join :: proc(
 		game              = server_game,
 	}
 	if !testing.expect(t, core.harness_start(&rig.h, config)) {return false}
-	key: game.Account_Key
-	game.account_key_set(&key, {0 ..< 32 = 5})
+	key: access.Account_Key
+	access.account_key_set(&key, {0 ..< 32 = 5})
 	engine.session_start(
 		s,
 		{

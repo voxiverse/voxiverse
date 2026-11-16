@@ -1,7 +1,7 @@
 package engine
 
 import "client:testkit"
-import "common:game"
+import "common:starmap"
 import "core:testing"
 
 // An arrival into an address seen before this run is quiet (the app decides).
@@ -15,8 +15,8 @@ test_arrival_into_a_seen_address :: proc(t: ^testing.T) {
 	app.session = s
 	defer app.session = nil
 	s.state = .Playing
-	home := game.address_derive(1)
-	there := game.address_derive(2)
+	home := starmap.address_derive(1)
+	there := starmap.address_derive(2)
 	s.home, s.welcome.address = home, home
 	in_ := music_input(app)
 	testing.expect(t, in_.world_home && in_.playing && !in_.arrived)

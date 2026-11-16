@@ -5,6 +5,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
+import "common:access"
 import "common:game"
 import "common:netcode"
 
@@ -13,17 +14,17 @@ import "common:netcode"
 test_account_proofs :: proc(t: ^testing.T) {
 	alice, bob := test_key("alice"), test_key("bob")
 	testing.expect(t, alice.account != bob.account)
-	n := game.nonce_make()
-	sig := game.account_sign(&alice, n)
-	testing.expect(t, game.account_verify(alice.account, n, sig))
-	testing.expect(t, !game.account_verify(bob.account, n, sig), "a proof for another account")
+	n := access.nonce_make()
+	sig := access.account_sign(&alice, n)
+	testing.expect(t, access.account_verify(alice.account, n, sig))
+	testing.expect(t, !access.account_verify(bob.account, n, sig), "a proof for another account")
 	testing.expect(
 		t,
-		!game.account_verify(alice.account, game.nonce_make(), sig),
+		!access.account_verify(alice.account, access.nonce_make(), sig),
 		"a replayed proof",
 	)
-	text := game.account_text(alice.account)
-	back, ok := game.account_parse(text)
+	text := access.account_text(alice.account)
+	back, ok := access.account_parse(text)
 	testing.expect(t, ok && back == alice.account && len(text) == 64)
 }
 
@@ -117,7 +118,7 @@ test_accounts_over_the_network :: proc(t: ^testing.T) {
 	stopped = true
 	moved :=
 		filepath.join(
-			{dir, CHARACTERS_DIR, game.account_text(test_key("beatrice").account), "bea.json"},
+			{dir, CHARACTERS_DIR, access.account_text(test_key("beatrice").account), "bea.json"},
 			context.temp_allocator,
 		) or_else ""
 	testing.expect(t, os.exists(moved), "bea's file did not move to her account")
@@ -126,7 +127,7 @@ test_accounts_over_the_network :: proc(t: ^testing.T) {
 	ban := strings.concatenate(
 		{
 			"ban alice 0 test griefing\nban_account ",
-			game.account_text(test_key("alice").account),
+			access.account_text(test_key("alice").account),
 			" 0 test griefing\n",
 		},
 		context.temp_allocator,

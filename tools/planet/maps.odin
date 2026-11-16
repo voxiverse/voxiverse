@@ -5,8 +5,8 @@ import "core:os"
 import "core:path/filepath"
 
 import "common:base"
-import "common:game"
 import "common:planet"
+import "common:starmap"
 
 // The maps for the owner to look at: `build planet maps [dir]` builds the planet from the
 // committed relief and writes PNGs of it (shaded relief, temperature and precipitation in
@@ -104,11 +104,18 @@ draw_line :: proc(im: Image, x0, y0, x1, y1: f64, c: [3]u8) {
 	}
 }
 
-maps_main :: proc(dir: string, address: Maybe(game.Address), seed: u64) -> bool {
+maps_main :: proc(dir: string, address: Maybe(starmap.Address), seed: u64) -> bool {
 	relief: planet.Relief
 	if a, has := address.?; has {
 		relief = planet.relief_for_world(a, seed, #load("../../assets/planet/earth_relief.bin"))
-		fmt.println("world", game.address_dir(a), "seed", seed, "hash", planet.relief_hash(relief))
+		fmt.println(
+			"world",
+			starmap.address_dir(a),
+			"seed",
+			seed,
+			"hash",
+			planet.relief_hash(relief),
+		)
 	} else {
 		ok: bool
 		relief, ok = planet.relief_decode(#load("../../assets/planet/earth_relief.bin"))

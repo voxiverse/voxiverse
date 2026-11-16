@@ -1,4 +1,4 @@
-package game
+package starmap
 
 import "core:slice"
 import "core:testing"

@@ -3,7 +3,7 @@ package engine
 import "core:math"
 
 import "client:platform"
-import "common:game"
+import "common:starmap"
 import "common:worldgen"
 
 // Sharing a place ("Copy place"): a code a friend pastes to land in the same
@@ -16,12 +16,12 @@ share_code :: proc(app: ^App) -> string {
 	if s == nil || s.state != .Playing {return ""}
 	pos := s.prediction.state.position
 	a := s.welcome.address
-	if a == game.earth_address() {
+	if a == starmap.earth_address() {
 		x, z := i32(math.floor(pos.x)), i32(math.floor(pos.z))
 		lat, lon := worldgen.planet_latlon_of(x, z)
-		return game.share_earth_code(lat, lon, context.temp_allocator)
+		return starmap.share_earth_code(lat, lon, context.temp_allocator)
 	}
-	return game.share_world_code(a, pos.x, pos.y, pos.z, context.temp_allocator)
+	return starmap.share_world_code(a, pos.x, pos.y, pos.z, context.temp_allocator)
 }
 
 // share_place: the code on the clipboard and in a toast; false outside a

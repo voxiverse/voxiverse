@@ -14,6 +14,7 @@ import "client:render"
 import "client:screen"
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "server:core"
 
 // Benchmarks: `voxiverse --benchmark <scenario>` runs a
@@ -255,7 +256,7 @@ bench_update :: proc(app: ^engine.App) {
 		}
 		// The conditions: the time of day stopped where it is set.
 		engine.session_set_rule(s, "rules.daylight_cycle", "0")
-		engine.send_message(s, game.Command{"time " + BENCH_TIME_OF_DAY})
+		engine.send_message(s, protocol.Command{"time " + BENCH_TIME_OF_DAY})
 		b.phase, b.frames, b.started = .Warming, 0, time.tick_now()
 	case .Warming:
 		if b.frames < (BENCH_SMOKE_WARMUP if b.smoke else BENCH_WARMUP_FRAMES) {return}

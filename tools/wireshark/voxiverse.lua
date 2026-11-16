@@ -6,7 +6,7 @@
 --
 -- Decodes the netcode layer (common/netcode/conn.odin, host.odin, link.odin):
 -- handshake packets and data packets with their records; and the game
--- messages inside them (common/game/protocol.odin), by kind, with the main fields
+-- messages inside them (common/protocol/protocol.odin), by kind, with the main fields
 -- of each. A message split into fragments is labelled, not reassembled.
 -- Packets are recognised by their magic ("VXV1"), on any UDP port; the
 -- side that sent them is told by the port (servers use 27315..27324).
@@ -17,7 +17,7 @@ local MAGIC = 0x31565856
 local SERVER_PORT_FIRST, SERVER_PORT_LAST = 27315, 27324
 
 -- Keep in step with netcode.Packet_Kind and game's Client_Kind /
--- Server_Kind (common/game/protocol_test.odin checks these tables).
+-- Server_Kind (common/protocol/protocol_test.odin checks these tables).
 local PACKET_KINDS = {
 	[1] = "data", [2] = "connect", [3] = "challenge", [4] = "response",
 	[5] = "accept", [6] = "deny", [7] = "disconnect", [8] = "discover",
@@ -36,7 +36,7 @@ local SERVER_KINDS = {
 }
 local STATE, SNAPSHOT = 36, 37
 
--- The state model's kinds (common/game/state_kinds.odin), generated from the game's
+-- The state model's kinds (common/protocol/state_kinds.odin), generated from the game's
 -- types: `./build.sh schema` rewrites this block; game's
 -- test_dissector_schema_current fails when it is stale.
 -- schema begin (generated: ./build.sh schema)
@@ -271,7 +271,7 @@ local function i32(tvb, off) return tvb(off, 4):le_int() end
 local function f32(tvb, off) return tvb(off, 4):le_float() end
 local function f64(tvb, off) return tvb(off, 8):le_float() end
 
--- The state model's wire (common/game/replica.odin), decoded from SCHEMA. Numbers
+-- The state model's wire (common/protocol/replica.odin), decoded from SCHEMA. Numbers
 -- are Lua doubles: exact to 2^53, which no field reaches. A change carries
 -- only the fields its mask names, as deltas: shown as "+n" (the dissector has
 -- no baseline).

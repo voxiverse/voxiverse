@@ -2,6 +2,7 @@ package core
 
 
 import "common:game"
+import "common:protocol"
 import "common:telemetry"
 
 // Health, damage, death and what a character grows by. A player has health
@@ -31,7 +32,7 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 	if c.dead && c.world.rules.respawn_auto && s.tick >= respawn_due(c) {respawn(s, c)}
 	if c.dead {
 		c.airborne = false
-		health := game.Health{c.health, c.max_health, true}
+		health := protocol.Health{c.health, c.max_health, true}
 		state_put(s, c, .Health, &health)
 		return
 	}
@@ -58,7 +59,7 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 	} else {
 		c.fall_peak = max(c.fall_peak, p.position.y)
 	}
-	health := game.Health{c.health, c.max_health, false}
+	health := protocol.Health{c.health, c.max_health, false}
 	state_put(s, c, .Health, &health) // (nothing is sent while it is unchanged)
 }
 

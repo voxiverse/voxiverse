@@ -9,6 +9,7 @@ import "client:engine"
 import "client:ui"
 import "common:base"
 import "common:game"
+import "common:starmap"
 
 // SPLASHES: the splash texts (assets/splashes.txt, one per line; blank lines
 // and # lines ignored).
@@ -62,7 +63,7 @@ splash_reveal :: proc(
 		if i < resolved || r == ' ' {
 			strings.write_rune(&b, r)
 		} else {
-			strings.write_rune(&b, game.SYMBOL_RUNES[int(r) % game.SYMBOLS])
+			strings.write_rune(&b, starmap.SYMBOL_RUNES[int(r) % starmap.SYMBOLS])
 		}
 		i += 1
 	}

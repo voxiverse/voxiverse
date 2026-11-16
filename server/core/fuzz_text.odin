@@ -3,9 +3,11 @@ package core
 import "base:runtime"
 import "core:strings"
 
+import "common:access"
 import "common:base"
 import "common:base/fuzz"
 import "common:game"
+import "common:starmap"
 
 // text.parsers (docs/fuzzing.md): the parsers chat and commands hand players' text to.
 // The first byte picks the parser; the rest is its text.
@@ -32,8 +34,8 @@ fuzz_text_parsers :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 		if total > len(text) {fuzz.fail("%d bytes of spans in %d bytes of text", total, len(text))}
 		result = u64(len(spans))
 	case 1:
-		a, ok := game.address_parse(text, {})
-		if ok && !game.address_valid(a) {fuzz.fail("an invalid address was accepted")}
+		a, ok := starmap.address_parse(text, {})
+		if ok && !starmap.address_valid(a) {fuzz.fail("an invalid address was accepted")}
 		result = u64(ok)
 	case 2:
 		id, ok := game.id_parse(text)
@@ -46,8 +48,8 @@ fuzz_text_parsers :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 		if ok && int(b) >= reg.blocks.count {fuzz.fail("block %d is not in the registry", int(b))}
 		result = u64(ok)
 	case 4:
-		a, ok := game.account_parse(text)
-		if ok && !strings.equal_fold(game.account_text(a), text) {
+		a, ok := access.account_parse(text)
+		if ok && !strings.equal_fold(access.account_text(a), text) {
 			fuzz.fail("an account did not read back as written")
 		}
 		result = u64(ok)
@@ -91,8 +93,8 @@ fuzz_text_generate :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 			},
 		)
 	case 1:
-		a := game.address_derive(base.rng_u64(rng))
-		text = game.address_text(a) if base.rng_int_max(rng, 2) == 0 else game.address_dir(a)
+		a := starmap.address_derive(base.rng_u64(rng))
+		text = starmap.address_text(a) if base.rng_int_max(rng, 2) == 0 else starmap.address_dir(a)
 	case 2:
 		text = pick(
 			rng,
@@ -111,9 +113,9 @@ fuzz_text_generate :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 			},
 		)
 	case 4:
-		a: game.Account
+		a: access.Account
 		for &x in a {x = u8(base.rng_u32(rng))}
-		text = game.account_text(a)
+		text = access.account_text(a)
 	case 5:
 		text = pick(rng, {"fly", "invulnerable", "instant_break", "health", "Fly", "", "fly "})
 	case 6:

@@ -7,6 +7,7 @@ import "core:testing"
 
 import "client:engine"
 import "client:testkit"
+import "common:access"
 import "common:game"
 import "server:core"
 
@@ -45,8 +46,8 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	defer core.harness_stop(&rig.h)
 	s := new(engine.Session)
 	defer free(s)
-	key: game.Account_Key
-	game.account_key_set(&key, {0 ..< 32 = 7})
+	key: access.Account_Key
+	access.account_key_set(&key, {0 ..< 32 = 7})
 	engine.session_start(
 		s,
 		{

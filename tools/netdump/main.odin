@@ -7,7 +7,10 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
+import "common:access"
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import games "generated:games"
 
 // netdump prints a network trace (build/net.trace, recorded with
@@ -41,10 +44,10 @@ main :: proc() {
 	flags.parse_or_exit(&opts, os.args, .Odin)
 	if opts.kind != "" && !kind_known(opts.kind) {
 		if opts.kind != "list" {fmt.eprintfln("netdump: no message kind %q", opts.kind)}
-		for sender in game.Side {
+		for sender in protocol.Side {
 			fmt.printf("%v:", sender)
 			for k in 0 ..< 256 {
-				if name := game.message_kind_name(sender, u8(k));
+				if name := protocol.message_kind_name(sender, u8(k));
 				   name != "" {fmt.printf(" %s", name)}
 			}
 			fmt.println()
@@ -56,7 +59,7 @@ main :: proc() {
 		fmt.eprintfln("netdump: cannot read %s: %v", opts.file, err)
 		os.exit(1)
 	}
-	header, records, ok := game.trace_read(data)
+	header, records, ok := protocol.trace_read(data)
 	fmt.printfln(
 		"trace %s: protocol %d, seed %d, view %dx%d, %d messages",
 		opts.file,
@@ -66,11 +69,11 @@ main :: proc() {
 		header.view_height,
 		len(records),
 	)
-	if header.protocol != game.PROTOCOL_VERSION {
+	if header.protocol != protocol.PROTOCOL_VERSION {
 		fmt.eprintfln(
 			"netdump: recorded with protocol %d, this build speaks %d; decoding may fail",
 			header.protocol,
-			game.PROTOCOL_VERSION,
+			protocol.PROTOCOL_VERSION,
 		)
 	}
 	if !ok {fmt.eprintln("netdump: the trace is damaged or cut short; showing what precedes it")}
@@ -83,7 +86,7 @@ main :: proc() {
 			if secs < opts.from || (opts.to > 0 && secs > opts.to) {continue}
 			if opts.sender != "" &&
 			   opts.sender != (r.sender == .Client ? "client" : "server") {continue}
-			kind := game.message_kind_name(r.sender, r.data[0])
+			kind := protocol.message_kind_name(r.sender, r.data[0])
 			if opts.kind != "" && kind != opts.kind {continue}
 			dir := r.sender == .Client ? "client" : "server"
 			fmt.printfln("%.4f,%s,%s,%d", secs, dir, kind if kind != "" else "?", len(r.data))
@@ -123,7 +126,7 @@ main :: proc() {
 			if secs < opts.from || (opts.to > 0 && secs > opts.to) {continue}
 			if opts.sender != "" &&
 			   opts.sender != (r.sender == .Client ? "client" : "server") {continue}
-			kind := game.message_kind_name(r.sender, r.data[0])
+			kind := protocol.message_kind_name(r.sender, r.data[0])
 			if opts.kind != "" && kind != opts.kind {continue}
 
 			sz := len(r.data)
@@ -266,7 +269,7 @@ main :: proc() {
 		if secs < opts.from || (opts.to > 0 && secs > opts.to) {continue}
 		if opts.sender != "" &&
 		   opts.sender != (r.sender == .Client ? "client" : "server") {continue}
-		kind := game.message_kind_name(r.sender, r.data[0])
+		kind := protocol.message_kind_name(r.sender, r.data[0])
 		if opts.kind != "" && kind != opts.kind {continue}
 		last = r.time
 		if opts.summary {
@@ -281,7 +284,7 @@ main :: proc() {
 				// State and Snapshot split by the kinds they carry
 				bytes := make([]int, len(schema.kinds), context.temp_allocator)
 				entries := make([]int, len(schema.kinds), context.temp_allocator)
-				if game.scan_state(&schema, r.data, bytes, entries) {
+				if protocol.scan_state(&schema, r.data, bytes, entries) {
 					for k in schema.kinds {
 						if entries[k.id] == 0 {continue}
 						sub := fmt.aprintf("server->client   %s: %s", kind, k.name)
@@ -322,10 +325,10 @@ main :: proc() {
 
 // describe_state names the kinds a State or Snapshot message carries and
 // their sizes (game.scan_state: no baseline is needed).
-describe_state :: proc(schema: ^game.Schema, name: string, data: []u8) -> string {
+describe_state :: proc(schema: ^protocol.Schema, name: string, data: []u8) -> string {
 	bytes := make([]int, len(schema.kinds), context.temp_allocator)
 	entries := make([]int, len(schema.kinds), context.temp_allocator)
-	if !game.scan_state(schema, data, bytes, entries) {return fmt.tprintf("INVALID %s", name)}
+	if !protocol.scan_state(schema, data, bytes, entries) {return fmt.tprintf("INVALID %s", name)}
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprint(&b, name)
 	for k in schema.kinds {
@@ -335,46 +338,46 @@ describe_state :: proc(schema: ^game.Schema, name: string, data: []u8) -> string
 }
 
 kind_known :: proc(name: string) -> bool {
-	for sender in game.Side {
-		for k in 0 ..< 256 {if game.message_kind_name(sender, u8(k)) == name {return true}}
+	for sender in protocol.Side {
+		for k in 0 ..< 256 {if protocol.message_kind_name(sender, u8(k)) == name {return true}}
 	}
 	return false
 }
 
 // describe decodes one message into "kind field=value ...".
 describe :: proc(
-	r: game.Trace_Record,
+	r: protocol.Trace_Record,
 	scratch: ^game.Block_Array,
-	schema: ^game.Schema,
+	schema: ^protocol.Schema,
 ) -> (
 	string,
 	bool,
 ) {
 	if r.sender == .Client {
-		m, ok := game.decode_client(r.data, base_registry)
+		m, ok := protocol.decode_client(r.data, base_registry)
 		if !ok {return "INVALID client message", false}
 		switch v in m {
-		case game.Hello:
+		case protocol.Hello:
 			return fmt.tprintf(
 					"hello protocol=%d account=%s character=%q schema=%016x",
 					v.protocol,
-					game.account_text(v.account)[:16],
+					access.account_text(v.account)[:16],
 					v.character,
 					v.schema,
 				),
 				true
-		case game.Proof:
+		case protocol.Proof:
 			return "proof", true
-		case game.Pack_Want:
+		case protocol.Pack_Want:
 			return fmt.tprintf("pack_want count=%d", v.count), true
-		case game.Packs_Ready:
+		case protocol.Packs_Ready:
 			return fmt.tprintf("packs_ready content=%016x", v.content), true
-		case game.Dial:
-			return fmt.tprintf("dial gate=%v address=%s", v.gate, game.address_dir(v.address)),
+		case protocol.Dial:
+			return fmt.tprintf("dial gate=%v address=%s", v.gate, starmap.address_dir(v.address)),
 				true
-		case game.Choose:
+		case protocol.Choose:
 			return fmt.tprintf("choose character=%q", v.character), true
-		case game.Input:
+		case protocol.Input:
 			text := fmt.tprintf(
 				"input seq=%d snapshot=%d move=[%.2f, %.2f] yaw=%.3f pitch=%.3f buttons=%v",
 				v.sequence,
@@ -386,7 +389,7 @@ describe :: proc(
 				v.input.buttons,
 			)
 			return text, true
-		case game.Teleport:
+		case protocol.Teleport:
 			text := fmt.tprintf(
 				"teleport position=[%.2f, %.2f, %.2f]",
 				v.position.x,
@@ -394,9 +397,9 @@ describe :: proc(
 				v.position.z,
 			)
 			return text, true
-		case game.Set_Rule:
+		case protocol.Set_Rule:
 			return fmt.tprintf("set_rule name=%s value=%s", v.name, v.value), true
-		case game.Edit:
+		case protocol.Edit:
 			return fmt.tprintf(
 					"edit id=%d after=%d pos=%v block=%v",
 					v.id,
@@ -405,21 +408,21 @@ describe :: proc(
 					v.block,
 				),
 				true
-		case game.Command:
+		case protocol.Command:
 			return fmt.tprintf("command command=%q", v.command), true
-		case game.Chat:
+		case protocol.Chat:
 			return fmt.tprintf("chat text=%q", v.text), true
-		case game.Inventory_Request:
+		case protocol.Inventory_Request:
 			return fmt.tprintf("inventory_request seq=%d action=%v", v.sequence, v.action), true
-		case game.Attack:
+		case protocol.Attack:
 			return fmt.tprintf("attack entity=%d after=%d", v.entity, v.after), true
-		case game.Respawn:
+		case protocol.Respawn:
 			return "respawn", true
-		case game.Reload:
+		case protocol.Reload:
 			return "reload", true
-		case game.Game_Action:
+		case protocol.Game_Action:
 			return fmt.tprintf("game_action index=%d after=%d", v.index, v.after), true
-		case game.Game_Request:
+		case protocol.Game_Request:
 			return fmt.tprintf(
 					"game_request kind=%d after=%d bytes=%d",
 					v.kind,
@@ -427,7 +430,7 @@ describe :: proc(
 					len(v.data),
 				),
 				true
-		case game.Market_Trade:
+		case protocol.Market_Trade:
 			return fmt.tprintf(
 					"market_trade good=%d sell=%v quantity=%.2f",
 					v.good,
@@ -435,7 +438,7 @@ describe :: proc(
 					v.quantity,
 				),
 				true
-		case game.Shoot:
+		case protocol.Shoot:
 			return fmt.tprintf(
 					"shoot after=%d slot=%d press=%v yaw=%.2f pitch=%.2f",
 					v.after,
@@ -445,10 +448,10 @@ describe :: proc(
 					v.pitch,
 				),
 				true
-		case game.Stats_Request:
+		case protocol.Stats_Request:
 			return fmt.tprintf("stats_request filter=%q page=%d of=%q", v.filter, v.page, v.of),
 				true
-		case game.Dev_Message:
+		case protocol.Dev_Message:
 			return fmt.tprintf(
 					"dev_message id=%d bytes=%d version=%q",
 					v.id,
@@ -456,9 +459,9 @@ describe :: proc(
 					v.version,
 				),
 				true
-		case game.Dev_Fetch:
+		case protocol.Dev_Fetch:
 			return fmt.tprintf("dev_fetch after=%q", v.after_id), true
-		case game.Telemetry_Batch:
+		case protocol.Telemetry_Batch:
 			return fmt.tprintf(
 					"telemetry_batch %v day=%q offset=%d bytes=%d",
 					v.kind,
@@ -467,25 +470,25 @@ describe :: proc(
 					len(v.text),
 				),
 				true
-		case game.Telemetry_Report:
+		case protocol.Telemetry_Report:
 			return fmt.tprintf("telemetry entries=%d", v.count), true
-		case game.Use_Entity:
+		case protocol.Use_Entity:
 			return fmt.tprintf("use_entity entity=%d after=%d", v.entity, v.after), true
-		case game.Use_Block:
+		case protocol.Use_Block:
 			return fmt.tprintf("use_block pos=%v after=%d", v.pos, v.after), true
-		case game.Prediction_Check:
+		case protocol.Prediction_Check:
 			return fmt.tprintf("prediction_check sequence=%d fields=%v", v.sequence, v.fields),
 				true
-		case game.Fire:
+		case protocol.Fire:
 			return fmt.tprintf("fire after=%d yaw=%.2f pitch=%.2f", v.after, v.yaw, v.pitch), true
-		case game.Ping:
+		case protocol.Ping:
 			return fmt.tprintf("ping id=%d", v.id), true
 		}
 	} else {
-		m, ok := game.decode_server(r.data, scratch, base_registry)
+		m, ok := protocol.decode_server(r.data, scratch, base_registry)
 		if !ok {return "INVALID server message", false}
 		switch v in m {
-		case game.Welcome:
+		case protocol.Welcome:
 			return fmt.tprintf(
 					"welcome protocol=%d tick_rate=%d spawn=[%.2f, %.2f, %.2f] view=%dx%d",
 					v.protocol,
@@ -497,9 +500,9 @@ describe :: proc(
 					v.view_height,
 				),
 				true
-		case game.Reject:
+		case protocol.Reject:
 			return fmt.tprintf("reject reason=%q", v.reason), true
-		case game.Chunk_Message:
+		case protocol.Chunk_Message:
 			if v.is_uniform {return fmt.tprintf("chunk pos=%v uniform=%v", v.pos, v.uniform), true}
 			counts: [game.Block]int
 			for b in scratch {counts[b] += 1}
@@ -508,11 +511,11 @@ describe :: proc(
 				if n > 0 {fmt.sbprintf(&b, " %v=%d", block, n)}
 			}
 			return fmt.tprintf("chunk pos=%v blocks:%s", v.pos, strings.to_string(b)), true
-		case game.Unload_Chunk:
+		case protocol.Unload_Chunk:
 			return fmt.tprintf("unload pos=%v", v.pos), true
-		case game.Pong:
+		case protocol.Pong:
 			return fmt.tprintf("pong id=%d", v.id), true
-		case game.Edit_Result:
+		case protocol.Edit_Result:
 			return fmt.tprintf(
 					"edit_result id=%d accepted=%v pos=%v block=%v",
 					v.id,
@@ -521,33 +524,33 @@ describe :: proc(
 					v.block,
 				),
 				true
-		case game.Column:
+		case protocol.Column:
 			lo, hi := max(i32), min(i32)
 			for h in v.heights {lo, hi = min(lo, h), max(hi, h)}
 			return fmt.tprintf("column pos=%v heights=%d..%d", v.pos, lo, hi), true
-		case game.Dev_Ack:
+		case protocol.Dev_Ack:
 			return fmt.tprintf("dev_ack id=%d ok=%v reason=%q", v.id, v.ok, v.reason), true
-		case game.Dev_Replies:
+		case protocol.Dev_Replies:
 			return fmt.tprintf("dev_replies count=%d", v.count), true
-		case game.Telemetry_Ack:
+		case protocol.Telemetry_Ack:
 			return fmt.tprintf("telemetry_ack day=%q end=%d", v.day, v.end), true
-		case game.Stats_Page:
+		case protocol.Stats_Page:
 			return fmt.tprintf("stats_page %d of %d bytes=%d", v.page, v.pages, len(v.text)), true
-		case game.Bulk_Begin:
+		case protocol.Bulk_Begin:
 			return fmt.tprintf("bulk count=%d", v.count), true
-		case game.Challenge:
+		case protocol.Challenge:
 			return "challenge", true
-		case game.World_Changed:
-			return fmt.tprintf("world_changed address=%s", game.address_dir(v.address)), true
-		case game.State_Message:
+		case protocol.World_Changed:
+			return fmt.tprintf("world_changed address=%s", starmap.address_dir(v.address)), true
+		case protocol.State_Message:
 			return describe_state(schema, "state", v.data), true
-		case game.Snapshot_Message:
+		case protocol.Snapshot_Message:
 			return describe_state(schema, "snapshot", v.data), true
-		case game.Characters:
+		case protocol.Characters:
 			return fmt.tprintf("characters names=%q", v.names), true
-		case game.Packs:
+		case protocol.Packs:
 			return fmt.tprintf("packs content=%016x count=%d", v.content, v.count), true
-		case game.Market_View:
+		case protocol.Market_View:
 			return fmt.tprintf(
 					"market_view reason=%v town=%q cash=%.2f",
 					v.reason,
@@ -555,9 +558,9 @@ describe :: proc(
 					v.cash,
 				),
 				true
-		case game.Packs_Changed:
+		case protocol.Packs_Changed:
 			return fmt.tprintf("packs_changed content=%016x", v.content), true
-		case game.Pack_Part:
+		case protocol.Pack_Part:
 			return fmt.tprintf(
 					"pack_part index=%d offset=%d bytes=%d",
 					v.index,
@@ -573,10 +576,13 @@ describe :: proc(
 // trace_schema: the state kinds of the traced session: the engine's and its game's (the
 // game its Welcome named, found among the games this build has: a State message of a game
 // the build lacks counts as one that does not decode).
-trace_schema :: proc(records: []game.Trace_Record, scratch: ^game.Block_Array) -> game.Schema {
-	played := game.trace_game(records, scratch, base_registry)
+trace_schema :: proc(
+	records: []protocol.Trace_Record,
+	scratch: ^game.Block_Array,
+) -> protocol.Schema {
+	played := protocol.trace_game(records, scratch, base_registry)
 	for g in games.SERVER {
-		if g.id == played {return game.game_schema(g.id, g.kinds)}
+		if g.id == played {return protocol.game_schema(g.id, g.kinds)}
 	}
-	return game.game_schema()
+	return protocol.game_schema()
 }

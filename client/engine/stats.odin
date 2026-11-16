@@ -1,6 +1,6 @@
 package engine
 
-import "common:game"
+import "common:protocol"
 import "core:strings"
 import "core:time"
 
@@ -17,7 +17,7 @@ stats_data_clear :: proc(d: ^Stats_Data) {
 }
 
 // stats_data_take keeps a Stats_Page.
-stats_data_take :: proc(d: ^Stats_Data, p: game.Stats_Page) {
+stats_data_take :: proc(d: ^Stats_Data, p: protocol.Stats_Page) {
 	stats_data_clear(d)
 	d.page, d.pages = int(p.page), int(p.pages)
 	rest := p.text

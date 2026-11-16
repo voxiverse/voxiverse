@@ -61,7 +61,7 @@ Cap: `70` files per package.
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
 read from the line above. The largest packages are `server/core` (70 files),
-`common/game` (70), `client/engine` (69) and `common/base` (34); every other package has 31
+`client/engine` (69), `common/game` (56) and `common/base` (34); every other package has 31
 or fewer (the `layout` lint holds these counts to the tree, so they are never stale). The
 cap leaves the largest no room beyond it, so a package that keeps growing splits into
 feature packages rather than get a bigger number. There is no per-folder allowance (that would
@@ -142,12 +142,14 @@ package** is enforced by the `layout` lint (see above).
 | `client/testkit` | Helpers the packages' tests share (the base registry, a mode by name); only tests import it | `*.odin` |
 | `client/playtest` | A game's client tests' rig: its server part on a stepped server, a session playing it over the harness's network and an App drawing its HUD; only tests import it | `*.odin` |
 | `client/ui` | The UI toolkit | `*.odin` |
+| `common/access` | Who a player is and what it may do: accounts (key pairs, proofs of a nonce), the admins' list, permission nodes and grants | `*.odin` |
+| `common/starmap` | A world's gate address: its glyphs, its derivation from a seed, its character and motif; a universe's seed as the player sees it | `*.odin` |
 | `common/base` | Logging, clocks, jobs, pools, numbers, crash bundles | `*.odin` |
 | `common/base/fuzz` | The fuzz harness | `*.odin` |
-| `common/game` | The shared game rules, formats and protocol | `*.odin` |
+| `common/game` | The shared game rules and formats: blocks, items, entities, physics, packs and the registry, chunks, saves' encodings | `*.odin` |
 | `common/game/testdata` | Game test input | `*.ogg` |
 | `common/game/testdata/fuzz/pack.png/regress` | PNG textures a fuzzer failed on, replayed by the suite | `*.bin` |
-| `common/protocol` | How client and server talk, above the rules they share: for now the names a game replicates with (its kinds, their keys, what it receives) | `*.odin` |
+| `common/protocol` | How client and server talk, above the rules they share: the messages and their codec, records and events (replication, the schema, the engine's state kinds), the transport and traces, client prediction, fetching packs | `*.odin` |
 | `common/limited` | Child processes under a time limit, shared by the driver and the tests | `*.odin` |
 | `common/netcode` | UDP connections | `*.odin` |
 | `common/ogg` | Ogg and Vorbis | `*.odin` |

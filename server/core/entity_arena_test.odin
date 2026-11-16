@@ -6,6 +6,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // arena_entity_count: the entities awake in client name's world.
 @(private = "file")
@@ -75,9 +76,9 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 	defer net_close(a)
 	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(a, game.Command{"time midnight"})
+	net_send(a, protocol.Command{"time midnight"})
 	for _ in 0 ..< MAX_ENTITIES / 20 + 10 {
-		net_send(a, game.Command{"summon sheep 20"})
+		net_send(a, protocol.Command{"summon sheep 20"})
 		net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.05)
 	}
 	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)

@@ -4,6 +4,7 @@ import "core:math"
 import "core:time"
 
 import "common:game"
+import "common:protocol"
 
 // Items as the player uses them: the stack in hand (the selected hotbar
 // slot of the inventory, common/game/inventory.odin) and the mouse buttons. A
@@ -107,15 +108,15 @@ session_inventory_do :: proc(s: ^Session, a: game.Inventory_Action) -> bool {
 	if !ok {return false}
 	s.inv_sequence += 1
 	append(&s.inv_pending, Pending_Inventory{s.inv_sequence, a})
-	send_message(s, game.Inventory_Request{s.inv_sequence, a})
+	send_message(s, protocol.Inventory_Request{s.inv_sequence, a})
 	return true
 }
 
 // inventory_reconcile: the server's inventory, then what it has not
 // answered yet over it (requests, and blocks placed and not yet confirmed).
-inventory_reconcile :: proc(s: ^Session, u: game.Inventory_State) {
+inventory_reconcile :: proc(s: ^Session, u: protocol.Inventory_State) {
 	s.server_inventory = u.inventory
-	for len(s.inv_pending) > 0 && !game.sequence_before(u.acked, s.inv_pending[0].sequence) {
+	for len(s.inv_pending) > 0 && !protocol.sequence_before(u.acked, s.inv_pending[0].sequence) {
 		ordered_remove(&s.inv_pending, 0)
 	}
 	inventory_predict(s)

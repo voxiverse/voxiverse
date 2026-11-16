@@ -26,9 +26,9 @@ threads, so chunks can arrive in a slightly different order.
 
 What the server reports about the world besides chunks (the player, other players, entities,
 the inventory, rules, health, the clock, chat, notices, blocks that changed) is the **state
-model** (`common/game/state_kinds.odin`). It consists of *records* of typed kinds under a
+model** (`common/protocol/state_kinds.odin`). It consists of *records* of typed kinds under a
 key, and one-off *events*, encoded by a single codec derived from the value types
-(`common/game/schema.odin`).
+(`common/protocol/schema.odin`).
 
 Records are deltas against one of two baselines:
 

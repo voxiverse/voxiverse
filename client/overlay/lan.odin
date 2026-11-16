@@ -5,6 +5,7 @@ import "core:fmt"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 import "server:core"
 
 // The Open to LAN dialog: the guests' game mode, whether
@@ -53,7 +54,7 @@ lan_dialog_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		ui.checkbox(ctx, engine.tr(.Lan_Allow_Commands), &d.commands, ui.next(ctx))
 		if ui.button(ctx, engine.tr(.Lan_Open), ui.next(ctx), disabled = d.started) {
 			d.started = true
-			for command in lan_commands(s, d^) {engine.send_message(s, game.Command{command})}
+			for command in lan_commands(s, d^) {engine.send_message(s, protocol.Command{command})}
 		}
 		if d.started {ui.label(ctx, engine.tr(.Lan_Opening), ui.next(ctx), .Center, t.text_muted)}
 		if ui.button(

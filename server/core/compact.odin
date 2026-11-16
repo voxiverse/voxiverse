@@ -4,6 +4,7 @@ import "base:runtime"
 import "core:slice"
 
 import "common:game"
+import "common:starmap"
 import "common:worldgen"
 
 // Region compaction. A region's file holds the chunks edits left
@@ -31,7 +32,7 @@ Job_Chunk :: struct {
 // Region_Job: a region as captured, for the worker (heap).
 Region_Job :: struct {
 	reg:          ^game.Registry,
-	world:        game.Address,
+	world:        starmap.Address,
 	region:       game.Region_Pos,
 	path:         string, // relative to the universe
 	generation:   u64,

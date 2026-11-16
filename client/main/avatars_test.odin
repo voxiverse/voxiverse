@@ -6,6 +6,7 @@ import "core:testing"
 import "client:engine"
 import "client:testkit"
 import "common:game"
+import "common:protocol"
 
 // The avatars' poses: derived from the speed and the sneak flag; the limbs'
 // phase follows the ground covered, so it is continuous across a change of
@@ -118,7 +119,11 @@ test_snapshot_speed_from_the_track :: proc(t: ^testing.T) {
 	// Replicated positions give the speed: 0.2 blocks a tick is 4 blocks/s.
 	o: engine.Other_Player
 	for i in 0 ..< 5 {
-		engine.other_snapshot(&o, u32(10 + i), game.Player_Motion{position = {f64(i) * 0.2, 0, 0}})
+		engine.other_snapshot(
+			&o,
+			u32(10 + i),
+			protocol.Player_Motion{position = {f64(i) * 0.2, 0, 0}},
+		)
 	}
 	v, ok := engine.other_view(&o, 12.5)
 	testing.expect(t, ok)
@@ -132,8 +137,8 @@ test_snapshot_speed_from_the_track :: proc(t: ^testing.T) {
 	testing.expect_value(t, v.speed, 0)
 	// Vertical motion alone is not walking.
 	o = {}
-	engine.other_snapshot(&o, 1, game.Player_Motion{position = {0, 0, 0}})
-	engine.other_snapshot(&o, 2, game.Player_Motion{position = {0, 5, 0}})
+	engine.other_snapshot(&o, 1, protocol.Player_Motion{position = {0, 0, 0}})
+	engine.other_snapshot(&o, 2, protocol.Player_Motion{position = {0, 5, 0}})
 	v, _ = engine.other_view(&o, 99)
 	testing.expect_value(t, v.speed, 0)
 }

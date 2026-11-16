@@ -18,6 +18,7 @@ import "client:render"
 import "client:starfield"
 import "client:steam"
 import "client:ui"
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
@@ -121,7 +122,7 @@ App :: struct {
 	overlays:            Overlays, // what is open over the screen (overlay.odin)
 	crash_offer:         Crash_Offer, // the dialog about earlier crashes (crash_offer.odin)
 	crash_track:         Crash_Track, // what the crash bundle was told (crash_track.odin)
-	account:             game.Account_Key, // who we are to servers (account.odin)
+	account:             access.Account_Key, // who we are to servers (account.odin)
 	new_character:       [dynamic]u8, // the name typed on the characters screen
 	chat:                Line_Editor, // the chat's line (overlay_chat.odin)
 	chat_scroll:         f32, // lines scrolled up in the open chat

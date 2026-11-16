@@ -7,8 +7,10 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
+import "common:access"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 import steam_common "common:steam"
 import "common:telemetry"
 import steam_server "server:steam"
@@ -114,7 +116,7 @@ rig_run :: proc(r: ^Rig, seconds: f64) {
 }
 
 @(private = "file")
-rig_uploader :: proc(r: ^Rig, u: ^Uploader, logs: string, key: game.Account_Key) {
+rig_uploader :: proc(r: ^Rig, u: ^Uploader, logs: string, key: access.Account_Key) {
 	uploader_open(u, logs, loopback(COLLECTOR_PORT), key, 100 * time.Millisecond, &r.net)
 	u.idle, u.idle_data = rig_idle, r
 }
@@ -148,7 +150,7 @@ test_a_log_reaches_the_lake_once :: proc(t: ^testing.T) {
 	r: Rig
 	if !testing.expect(t, rig_open(&r, lake)) {return}
 	defer rig_close(&r)
-	key := game.account_key_make()
+	key := access.account_key_make()
 	u: Uploader
 	rig_uploader(&r, &u, logs, key)
 	upload_pass(&u)
@@ -164,7 +166,7 @@ test_a_log_reaches_the_lake_once :: proc(t: ^testing.T) {
 	testing.expect(t, pid_end == 8 + 16, "the pid is 16 hex digits")
 	testing.expect(
 		t,
-		!strings.contains(got, game.account_text(key.account)),
+		!strings.contains(got, access.account_text(key.account)),
 		"the account itself is in the lake",
 	)
 	testing.expect(
@@ -216,7 +218,7 @@ test_the_spool_survives_a_collector_that_is_down :: proc(t: ^testing.T) {
 	r: Rig
 	netcode.simnet_init(&r.net)
 	defer rig_close(&r)
-	key := game.account_key_make()
+	key := access.account_key_make()
 	u: Uploader
 	rig_uploader(&r, &u, logs, key)
 	defer uploader_close(&u)
@@ -270,9 +272,9 @@ raw_connect :: proc(r: ^Raw, rig: ^Rig) -> bool {
 }
 
 @(private = "file")
-raw_send :: proc(r: ^Raw, m: game.Client_Message) {
+raw_send :: proc(r: ^Raw, m: protocol.Client_Message) {
 	clear(&r.writer.buf)
-	game.encode_client(&r.writer, m)
+	protocol.encode_client(&r.writer, m)
 	netcode.link_send(&r.link, r.writer.buf[:], true)
 	netcode.link_flush(&r.link, r.rig.net.now)
 }
@@ -281,14 +283,14 @@ raw_send :: proc(r: ^Raw, m: game.Client_Message) {
 @(private = "file")
 raw_challenge :: proc(
 	r: ^Raw,
-	account: game.Account,
+	account: access.Account,
 	steam_id: u64 = 0,
 	ticket: []u8 = nil,
 ) -> (
-	nonce: game.Nonce,
+	nonce: access.Nonce,
 	ok: bool,
 ) {
-	raw_send(r, game.Hello{game.PROTOCOL_VERSION, account, "", 0, steam_id, ticket})
+	raw_send(r, protocol.Hello{protocol.PROTOCOL_VERSION, account, "", 0, steam_id, ticket})
 	scratch := new(game.Block_Array)
 	defer free(scratch)
 	got := make([dynamic][]u8, context.temp_allocator)
@@ -298,8 +300,8 @@ raw_challenge :: proc(
 		netcode.link_receive(&r.link, &got)
 		for data in got {
 			defer netcode.link_free(&r.link, data)
-			if m, decoded := game.decode_server(data, scratch); decoded {
-				if c, is_c := m.(game.Challenge); is_c {return c.nonce, true}
+			if m, decoded := protocol.decode_server(data, scratch); decoded {
+				if c, is_c := m.(protocol.Challenge); is_c {return c.nonce, true}
 			}
 		}
 		netcode.link_flush(&r.link, r.rig.net.now)
@@ -330,11 +332,11 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 	{
 		r: Raw
 		testing.expect(t, raw_connect(&r, &rig))
-		mine, other := game.account_key_make(), game.account_key_make()
+		mine, other := access.account_key_make(), access.account_key_make()
 		nonce, ok := raw_challenge(&r, mine.account)
 		testing.expect(t, ok)
-		raw_send(&r, game.Proof{game.account_sign(&other, nonce)})
-		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, good})
+		raw_send(&r, protocol.Proof{access.account_sign(&other, nonce)})
+		raw_send(&r, protocol.Telemetry_Batch{.Events, "2023-11-14", 0, good})
 		rig_run(&rig, 0.3)
 		testing.expect_value(t, rig_stats(&rig).forged, 1)
 		testing.expect_value(t, rig_stats(&rig).accepted_lines, 0)
@@ -344,7 +346,7 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 	{
 		r: Raw
 		testing.expect(t, raw_connect(&r, &rig))
-		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, good})
+		raw_send(&r, protocol.Telemetry_Batch{.Events, "2023-11-14", 0, good})
 		rig_run(&rig, 0.2)
 		testing.expect_value(t, rig_stats(&rig).accepted_lines, 0)
 		raw_close(&r)
@@ -353,12 +355,12 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 	{
 		r: Raw
 		testing.expect(t, raw_connect(&r, &rig))
-		key := game.account_key_make()
+		key := access.account_key_make()
 		nonce, ok := raw_challenge(&r, key.account)
 		testing.expect(t, ok)
-		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
+		raw_send(&r, protocol.Proof{access.account_sign(&key, nonce)})
 		before := rig_stats(&rig).refused
-		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, "this is not an event\n"})
+		raw_send(&r, protocol.Telemetry_Batch{.Events, "2023-11-14", 0, "this is not an event\n"})
 		testing.expect(t, wait_refused(&rig, before, 1))
 		testing.expect_value(t, rig_stats(&rig).refused, before + 1) // (and the peer is dropped)
 		raw_close(&r)
@@ -366,11 +368,11 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 	for bad in ([]string{"{\"t\":1,\"k\":\"made_up_kind\"}\n", "{\"t\":1,\"tick\":0,\"k\":\"block_mined\",\"block\":\"x\x01y\"}\n", "{\"k\":\"block_mined\"}\n"}) {
 		r: Raw
 		testing.expect(t, raw_connect(&r, &rig))
-		key := game.account_key_make()
+		key := access.account_key_make()
 		nonce, _ := raw_challenge(&r, key.account)
-		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
+		raw_send(&r, protocol.Proof{access.account_sign(&key, nonce)})
 		before := rig_stats(&rig).refused
-		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, bad})
+		raw_send(&r, protocol.Telemetry_Batch{.Events, "2023-11-14", 0, bad})
 		testing.expect(t, wait_refused(&rig, before, 1))
 		testing.expectf(t, rig_stats(&rig).refused == before + 1, "%q was not refused", bad)
 		raw_close(&r)
@@ -378,11 +380,11 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 	{
 		r: Raw
 		testing.expect(t, raw_connect(&r, &rig))
-		key := game.account_key_make()
+		key := access.account_key_make()
 		nonce, _ := raw_challenge(&r, key.account)
-		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
+		raw_send(&r, protocol.Proof{access.account_sign(&key, nonce)})
 		before := rig_stats(&rig).refused
-		raw_send(&r, game.Telemetry_Batch{.Events, "yesterday", 0, good})
+		raw_send(&r, protocol.Telemetry_Batch{.Events, "yesterday", 0, good})
 		testing.expect(t, wait_refused(&rig, before, 1))
 		testing.expect_value(t, rig_stats(&rig).refused, before + 1)
 		raw_close(&r)
@@ -391,11 +393,11 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 	{
 		r: Raw
 		testing.expect(t, raw_connect(&r, &rig))
-		key := game.account_key_make()
+		key := access.account_key_make()
 		nonce, _ := raw_challenge(&r, key.account)
-		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
+		raw_send(&r, protocol.Proof{access.account_sign(&key, nonce)})
 		before := rig_stats(&rig)
-		for i in 0 ..< 30 {raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", u64(i * len(good)), good})}
+		for i in 0 ..< 30 {raw_send(&r, protocol.Telemetry_Batch{.Events, "2023-11-14", u64(i * len(good)), good})}
 		testing.expect(t, wait_refused(&rig, before.refused, 1))
 		after := rig_stats(&rig)
 		testing.expect_value(
@@ -420,7 +422,7 @@ test_a_report_round_trips :: proc(t: ^testing.T) {
 	defer rig_close(&r)
 	testing.expect(t, report_write(logs, "the sheep ate my homework\nversion 0.26"))
 	u: Uploader
-	rig_uploader(&r, &u, logs, game.account_key_make())
+	rig_uploader(&r, &u, logs, access.account_key_make())
 	upload_pass(&u)
 	testing.expect_value(t, rig_stats(&r).reports, 1)
 	uploader_close(&u)
@@ -449,10 +451,10 @@ test_a_report_round_trips :: proc(t: ^testing.T) {
 
 // raw_prove: connects and proves `key`.
 @(private = "file")
-raw_prove :: proc(r: ^Raw, rig: ^Rig, key: ^game.Account_Key) -> bool {
+raw_prove :: proc(r: ^Raw, rig: ^Rig, key: ^access.Account_Key) -> bool {
 	raw_connect(r, rig) or_return
 	nonce := raw_challenge(r, key.account) or_return
-	raw_send(r, game.Proof{game.account_sign(key, nonce)})
+	raw_send(r, protocol.Proof{access.account_sign(key, nonce)})
 	return true
 }
 
@@ -469,13 +471,13 @@ raw_answer :: proc(r: ^Raw, $T: typeid) -> (v: T, ok: bool) {
 		netcode.link_receive(&r.link, &got)
 		for data in got {
 			defer netcode.link_free(&r.link, data)
-			m, decoded := game.decode_server(data, scratch)
+			m, decoded := protocol.decode_server(data, scratch)
 			if !decoded {continue}
 			if x, is_t := m.(T); is_t {
 				v, ok = x, true
-				when T == game.Dev_Ack {
+				when T == protocol.Dev_Ack {
 					v.reason = strings.clone(x.reason, context.temp_allocator)
-				} else when T == game.Dev_Replies {
+				} else when T == protocol.Dev_Replies {
 					for &e in v.entries[:v.count] {
 						e.id = strings.clone(e.id, context.temp_allocator)
 						e.text = strings.clone(e.text, context.temp_allocator)
@@ -512,22 +514,22 @@ test_devchat_messages :: proc(t: ^testing.T) {
 	defer os.remove_all(logs)
 	rig: Rig
 	// The admins file exists before the collector starts, and changes later.
-	admin, other := game.account_key_make(), game.account_key_make()
+	admin, other := access.account_key_make(), access.account_key_make()
 	os.make_directory_all(lake)
 	_ = os.write_entire_file(
 		fmt.tprintf("%s/admins.cfg", lake),
 		transmute([]u8)fmt.tprintf(
 			"# the owner\n%s  # me\nnot a key\n",
-			game.account_text(admin.account),
+			access.account_text(admin.account),
 		),
 	)
 	if !testing.expect(t, rig_open(&rig, lake)) {return}
 	defer rig_close(&rig)
-	inbox := fmt.tprintf("%s/devchat/%s/in", lake, game.account_text(admin.account))
+	inbox := fmt.tprintf("%s/devchat/%s/in", lake, access.account_text(admin.account))
 
 	r: Raw
 	if !testing.expect(t, raw_prove(&r, &rig, &admin)) {return}
-	msg := game.Dev_Message {
+	msg := protocol.Dev_Message {
 		id       = 0xabcd1234,
 		text     = "the sky is square \"here\"\nüber",
 		version  = "0.26",
@@ -539,10 +541,10 @@ test_devchat_messages :: proc(t: ^testing.T) {
 		tick     = 99,
 	}
 	raw_send(&r, msg)
-	ack, ok := raw_answer(&r, game.Dev_Ack)
+	ack, ok := raw_answer(&r, protocol.Dev_Ack)
 	testing.expect(t, ok && ack.ok && ack.id == msg.id, "the message was not acknowledged")
 	raw_send(&r, msg) // the ack was "lost": sent again
-	ack, ok = raw_answer(&r, game.Dev_Ack)
+	ack, ok = raw_answer(&r, protocol.Dev_Ack)
 	testing.expect(t, ok && ack.ok, "the resend was not acknowledged")
 	testing.expect_value(t, count_files(inbox), 1)
 	testing.expect_value(t, rig_stats(&rig).dev_stored, 1)
@@ -564,7 +566,7 @@ test_devchat_messages :: proc(t: ^testing.T) {
 	// A second message is a second file.
 	msg.id = 7
 	raw_send(&r, msg)
-	_, ok = raw_answer(&r, game.Dev_Ack)
+	_, ok = raw_answer(&r, protocol.Dev_Ack)
 	testing.expect(t, ok)
 	testing.expect_value(t, count_files(inbox), 2)
 	raw_close(&r)
@@ -573,7 +575,7 @@ test_devchat_messages :: proc(t: ^testing.T) {
 	r2: Raw
 	if !testing.expect(t, raw_prove(&r2, &rig, &other)) {return}
 	raw_send(&r2, msg)
-	ack, ok = raw_answer(&r2, game.Dev_Ack)
+	ack, ok = raw_answer(&r2, protocol.Dev_Ack)
 	testing.expect(
 		t,
 		ok && !ack.ok && ack.reason != "",
@@ -583,11 +585,11 @@ test_devchat_messages :: proc(t: ^testing.T) {
 	testing.expect_value(t, rig_stats(&rig).dev_refused, 1)
 	// ... until the file names it.
 	f, _ := os.open(fmt.tprintf("%s/admins.cfg", lake), {.Write, .Append})
-	os.write_string(f, fmt.tprintf("%s\n", game.account_text(other.account)))
+	os.write_string(f, fmt.tprintf("%s\n", access.account_text(other.account)))
 	os.close(f)
 	rig_run(&rig, 1.5)
 	raw_send(&r2, msg)
-	ack, ok = raw_answer(&r2, game.Dev_Ack)
+	ack, ok = raw_answer(&r2, protocol.Dev_Ack)
 	testing.expect(t, ok && ack.ok, "a newly listed admin was not heard")
 	raw_close(&r2)
 
@@ -595,13 +597,13 @@ test_devchat_messages :: proc(t: ^testing.T) {
 	r3: Raw
 	if !testing.expect(t, raw_prove(&r3, &rig, &admin)) {return}
 	before := rig_stats(&rig).refused
-	big := game.Dev_Message {
+	big := protocol.Dev_Message {
 		id   = 1,
-		text = strings.repeat("x", game.MAX_DEV_TEXT + 1, context.temp_allocator),
+		text = strings.repeat("x", protocol.MAX_DEV_TEXT + 1, context.temp_allocator),
 	}
 	clear(&r3.writer.buf)
 	// (encoded by hand: the encoder does not stop an oversized text)
-	game.encode_client(&r3.writer, big)
+	protocol.encode_client(&r3.writer, big)
 	netcode.link_send(&r3.link, r3.writer.buf[:], true)
 	netcode.link_flush(&r3.link, rig.net.now)
 	testing.expect(t, wait_refused(&rig, before, 1), "an oversized message was not refused")
@@ -612,12 +614,12 @@ test_devchat_messages :: proc(t: ^testing.T) {
 	if !testing.expect(t, raw_prove(&r4, &rig, &admin)) {return}
 	raw_send(
 		&r4,
-		game.Dev_Message {
+		protocol.Dev_Message {
 			id = 2,
-			text = strings.repeat("y", game.MAX_DEV_TEXT, context.temp_allocator),
+			text = strings.repeat("y", protocol.MAX_DEV_TEXT, context.temp_allocator),
 		},
 	)
-	ack, ok = raw_answer(&r4, game.Dev_Ack)
+	ack, ok = raw_answer(&r4, protocol.Dev_Ack)
 	testing.expect(t, ok && ack.ok, "a message of the limit's size was refused")
 	raw_close(&r4)
 	free_all(context.temp_allocator)
@@ -630,15 +632,15 @@ test_devchat_replies :: proc(t: ^testing.T) {
 	defer os.remove_all(lake)
 	defer os.remove_all(logs)
 	rig: Rig
-	admin, other := game.account_key_make(), game.account_key_make()
+	admin, other := access.account_key_make(), access.account_key_make()
 	os.make_directory_all(lake)
 	_ = os.write_entire_file(
 		fmt.tprintf("%s/admins.cfg", lake),
-		transmute([]u8)game.account_text(admin.account),
+		transmute([]u8)access.account_text(admin.account),
 	)
 	if !testing.expect(t, rig_open(&rig, lake)) {return}
 	defer rig_close(&rig)
-	out := fmt.tprintf("%s/devchat/%s/out", lake, game.account_text(admin.account))
+	out := fmt.tprintf("%s/devchat/%s/out", lake, access.account_text(admin.account))
 	write_reply(out, "0003.json", `{"id":"0003","time":3000,"text":"third"}`)
 	write_reply(
 		out,
@@ -653,8 +655,8 @@ test_devchat_replies :: proc(t: ^testing.T) {
 
 	r: Raw
 	if !testing.expect(t, raw_prove(&r, &rig, &admin)) {return}
-	raw_send(&r, game.Dev_Fetch{""})
-	all, ok := raw_answer(&r, game.Dev_Replies)
+	raw_send(&r, protocol.Dev_Fetch{""})
+	all, ok := raw_answer(&r, protocol.Dev_Replies)
 	if testing.expect(t, ok) && testing.expect_value(t, all.count, 3) {
 		testing.expect_value(t, all.entries[0].id, "0001")
 		testing.expect_value(t, all.entries[0].link, "https://example.org/a")
@@ -662,22 +664,22 @@ test_devchat_replies :: proc(t: ^testing.T) {
 		testing.expect_value(t, all.entries[1].text, "second ü")
 		testing.expect_value(t, all.entries[2].id, "0003")
 	}
-	raw_send(&r, game.Dev_Fetch{"0001"})
-	rest, ok2 := raw_answer(&r, game.Dev_Replies)
+	raw_send(&r, protocol.Dev_Fetch{"0001"})
+	rest, ok2 := raw_answer(&r, protocol.Dev_Replies)
 	if testing.expect(t, ok2) && testing.expect_value(t, rest.count, 2) {
 		testing.expect_value(t, rest.entries[0].id, "0002")
 		testing.expect_value(t, rest.entries[1].id, "0003")
 	}
-	raw_send(&r, game.Dev_Fetch{"0003"})
-	none, ok3 := raw_answer(&r, game.Dev_Replies)
+	raw_send(&r, protocol.Dev_Fetch{"0003"})
+	none, ok3 := raw_answer(&r, protocol.Dev_Replies)
 	testing.expect(t, ok3 && none.count == 0, "replies came after the last one")
 	raw_close(&r)
 
 	// Another account sees none of them.
 	r2: Raw
 	if !testing.expect(t, raw_prove(&r2, &rig, &other)) {return}
-	raw_send(&r2, game.Dev_Fetch{""})
-	nobody, ok4 := raw_answer(&r2, game.Dev_Replies)
+	raw_send(&r2, protocol.Dev_Fetch{""})
+	nobody, ok4 := raw_answer(&r2, protocol.Dev_Replies)
 	testing.expect(t, ok4 && nobody.count == 0, "a non-admin was sent replies")
 	raw_close(&r2)
 	free_all(context.temp_allocator)
@@ -687,21 +689,21 @@ test_devchat_replies :: proc(t: ^testing.T) {
 // player writes is delivered once, also when it was written offline; replies
 // arrive and are kept in the file across a restart.
 @(private = "file")
-rig_chat :: proc(r: ^Rig, c: ^Chat, path: string, key: game.Account_Key) {
+rig_chat :: proc(r: ^Rig, c: ^Chat, path: string, key: access.Account_Key) {
 	chat_open(c, path, loopback(COLLECTOR_PORT), key, &r.net)
 	c.idle, c.idle_data = rig_idle, r
 }
 
 @(private = "file")
-chat_admin_lake :: proc(name: string) -> (lake, file: string, admin: game.Account_Key) {
+chat_admin_lake :: proc(name: string) -> (lake, file: string, admin: access.Account_Key) {
 	lake, _ = fresh(name)
 	file = fmt.tprintf("build/test/%s_devchat.jsonl", name)
 	os.remove(file)
-	admin = game.account_key_make()
+	admin = access.account_key_make()
 	os.make_directory_all(lake)
 	_ = os.write_entire_file(
 		fmt.tprintf("%s/admins.cfg", lake),
-		transmute([]u8)game.account_text(admin.account),
+		transmute([]u8)access.account_text(admin.account),
 	)
 	return
 }
@@ -717,7 +719,7 @@ test_chat_delivers_once :: proc(t: ^testing.T) {
 	c: Chat
 	rig_chat(&rig, &c, file, admin)
 	defer chat_close(&c)
-	inbox := fmt.tprintf("%s/devchat/%s/in", lake, game.account_text(admin.account))
+	inbox := fmt.tprintf("%s/devchat/%s/in", lake, access.account_text(admin.account))
 
 	testing.expect(t, !chat_send(&c, "   ", {}), "an empty message was taken")
 	testing.expect(
@@ -769,7 +771,7 @@ test_chat_waits_while_offline :: proc(t: ^testing.T) {
 	testing.expect(t, len(entries) == 1 && entries[0].text == "written offline")
 	testing.expect_value(
 		t,
-		count_files(fmt.tprintf("%s/devchat/%s/in", lake, game.account_text(admin.account))),
+		count_files(fmt.tprintf("%s/devchat/%s/in", lake, access.account_text(admin.account))),
 		1,
 	)
 	free_all(context.temp_allocator)
@@ -783,9 +785,9 @@ test_chat_replies_survive_a_restart :: proc(t: ^testing.T) {
 	rig: Rig
 	if !testing.expect(t, rig_open(&rig, lake)) {return}
 	defer rig_close(&rig)
-	out := fmt.tprintf("%s/devchat/%s/out", lake, game.account_text(admin.account))
+	out := fmt.tprintf("%s/devchat/%s/out", lake, access.account_text(admin.account))
 	// More than one page (MAX_DEV_REPLIES), to see the fetch go on.
-	for i in 0 ..< game.MAX_DEV_REPLIES + 2 {
+	for i in 0 ..< protocol.MAX_DEV_REPLIES + 2 {
 		write_reply(
 			out,
 			fmt.tprintf("%04d.json", i),
@@ -802,8 +804,8 @@ test_chat_replies_survive_a_restart :: proc(t: ^testing.T) {
 	rig_chat(&rig, &c, file, admin)
 	chat_pass(&c)
 	entries, _, _, _ := chat_view(&c)
-	testing.expect_value(t, len(entries), game.MAX_DEV_REPLIES + 2)
-	testing.expect_value(t, chat_replies(&c), u64(game.MAX_DEV_REPLIES + 2))
+	testing.expect_value(t, len(entries), protocol.MAX_DEV_REPLIES + 2)
+	testing.expect_value(t, chat_replies(&c), u64(protocol.MAX_DEV_REPLIES + 2))
 	if len(entries) > 0 {
 		testing.expect_value(t, entries[0].text, "reply 0")
 		testing.expect_value(t, entries[0].link, "https://example.org/0")
@@ -814,11 +816,11 @@ test_chat_replies_survive_a_restart :: proc(t: ^testing.T) {
 	rig_chat(&rig, &c, file, admin) // a restart: read back from the file
 	defer chat_close(&c)
 	entries, _, _, _ = chat_view(&c)
-	testing.expect_value(t, len(entries), game.MAX_DEV_REPLIES + 2)
+	testing.expect_value(t, len(entries), protocol.MAX_DEV_REPLIES + 2)
 	write_reply(out, "9999.json", `{"id":"9999","time":5000,"text":"newest"}`)
 	chat_pass(&c) // only what came after
 	entries, _, _, _ = chat_view(&c)
-	testing.expect_value(t, len(entries), game.MAX_DEV_REPLIES + 3)
+	testing.expect_value(t, len(entries), protocol.MAX_DEV_REPLIES + 3)
 	if len(entries) > 0 {testing.expect_value(t, entries[len(entries) - 1].text, "newest")}
 	free_all(context.temp_allocator)
 }
@@ -848,15 +850,15 @@ test_devchat_admin_by_steam :: proc(t: ^testing.T) {
 		return b
 	}
 	try :: proc(rig: ^Rig, claim: steam_common.Steam_ID, ticket: []u8) -> (heard: bool) {
-		key := game.account_key_make()
+		key := access.account_key_make()
 		r: Raw
 		if !raw_connect(&r, rig) {return}
 		defer raw_close(&r)
 		nonce, ok := raw_challenge(&r, key.account, u64(claim), ticket)
 		if !ok {return}
-		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
-		raw_send(&r, game.Dev_Message{id = 1, text = "hello", version = "0.26"})
-		ack, got := raw_answer(&r, game.Dev_Ack)
+		raw_send(&r, protocol.Proof{access.account_sign(&key, nonce)})
+		raw_send(&r, protocol.Dev_Message{id = 1, text = "hello", version = "0.26"})
+		ack, got := raw_answer(&r, protocol.Dev_Ack)
 		return got && ack.ok
 	}
 	testing.expect(t, try(&rig, id, ticket_for(id)), "the validated SteamID was not heard")

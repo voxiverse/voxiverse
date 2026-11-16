@@ -1,5 +1,6 @@
-package game
+package protocol
 
+import "common:game"
 import "core:fmt"
 import "core:mem"
 import "core:os"
@@ -32,7 +33,7 @@ Pack_Fetch :: struct {
 	cache_dir: string, // "": no cache
 	content:   u64, // the server's
 	count:     int,
-	entries:   [MAX_PACKS]Fetch_Entry,
+	entries:   [game.MAX_PACKS]Fetch_Entry,
 }
 
 // pack_fetch_begin: takes the cache's packs and says which are still wanted.
@@ -57,9 +58,9 @@ pack_fetch_begin :: proc(
 		e := p.entries[i]
 		total += int(e.size)
 		if e.size < 9 ||
-		   int(e.size) > MAX_PACK_BYTES + 64 * 1024 ||
-		   total > MAX_PACKS * MAX_PACK_BYTES {
-			return {}, fmt.aprintf("pack %s is announced at %d bytes; the limit is %d", e.namespace, e.size, MAX_PACK_BYTES, allocator = context.temp_allocator)
+		   int(e.size) > game.MAX_PACK_BYTES + 64 * 1024 ||
+		   total > game.MAX_PACKS * game.MAX_PACK_BYTES {
+			return {}, fmt.aprintf("pack %s is announced at %d bytes; the limit is %d", e.namespace, e.size, game.MAX_PACK_BYTES, allocator = context.temp_allocator)
 		}
 		f.entries[i] = {
 			namespace = strings.clone(e.namespace, allocator),
@@ -104,13 +105,13 @@ pack_fetch_part :: proc(f: ^Pack_Fetch, part: Pack_Part) -> (err: string) {
 	copy(e.data[part.offset:], part.data)
 	e.received += u32(len(part.data))
 	if e.received == e.size {
-		got := pack_hash(e.data)
+		got := game.pack_hash(e.data)
 		if got != e.sha256 {
 			return fmt.tprintf(
 				"pack %s arrived damaged (hash %s vs %s)",
 				e.namespace,
-				pack_hash_text(got),
-				pack_hash_text(e.sha256),
+				game.pack_hash_text(got),
+				game.pack_hash_text(e.sha256),
 			)
 		}
 		e.wanted = false
@@ -133,13 +134,13 @@ pack_fetch_sources :: proc(
 	f: ^Pack_Fetch,
 	allocator := context.temp_allocator,
 ) -> (
-	sources: []Pack_Source,
-	errs: []Pack_Error,
+	sources: []game.Pack_Source,
+	errs: []game.Pack_Error,
 ) {
-	list := make([dynamic]Pack_Source, allocator)
-	problems := make([dynamic]Pack_Error, allocator)
+	list := make([dynamic]game.Pack_Source, allocator)
+	problems := make([dynamic]game.Pack_Error, allocator)
 	for i in 0 ..< f.count {
-		src, e := pack_archive_read(f.entries[i].namespace, f.entries[i].data, allocator)
+		src, e := game.pack_archive_read(f.entries[i].namespace, f.entries[i].data, allocator)
 		if len(e) > 0 {append(&problems, ..e)} else {append(&list, src)}
 	}
 	return list[:], problems[:]
@@ -147,7 +148,7 @@ pack_fetch_sources :: proc(
 
 @(private = "file")
 pack_cache_path :: proc(dir: string, sha: [32]u8) -> string {
-	return fmt.tprintf("%s/%s.vxpack", dir, pack_hash_hex(sha))
+	return fmt.tprintf("%s/%s.vxpack", dir, game.pack_hash_hex(sha))
 }
 
 // pack_cache_take: a cached pack whose size and hash are right (it is
@@ -165,7 +166,7 @@ pack_cache_take :: proc(
 	path := pack_cache_path(dir, sha)
 	bytes, err := os.read_entire_file_from_path(path, allocator)
 	if err != nil {return}
-	if u32(len(bytes)) != size || pack_hash(bytes) != sha {
+	if u32(len(bytes)) != size || game.pack_hash(bytes) != sha {
 		delete(bytes, allocator)
 		return
 	}

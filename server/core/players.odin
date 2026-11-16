@@ -7,6 +7,7 @@ import "core:time"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // Players: joining (welcomed where they left off), simulating their inputs
 // each tick, telling them about each other, and leaving or being sent away.
@@ -18,7 +19,7 @@ import "common:netcode"
 join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
 	c.generation += 1 // (a Player_Ref to the seat's last player names nobody now)
-	game.sender_init(&c.tx, &s.schema)
+	protocol.sender_init(&c.tx, &s.schema)
 	c.name_len = copy(c.name_buf[:], name)
 	saved, has_saved := player_record(s, name)
 	c.joined_tick = s.tick
@@ -61,8 +62,8 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	send_message(
 		s,
 		c,
-		game.Welcome {
-			protocol = game.PROTOCOL_VERSION,
+		protocol.Welcome {
+			protocol = protocol.PROTOCOL_VERSION,
 			tick_rate = game.TICK_RATE,
 			player = player_id(s, c),
 			spawn = c.player.position,
@@ -135,12 +136,12 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 @(private)
 simulate_player :: proc(s: ^Server, c: ^Client) {
 	w := c.world
-	buf: [game.INPUT_BUDGET_MAX]game.Input
+	buf: [protocol.INPUT_BUDGET_MAX]protocol.Input
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	run_due_actions(s, c) // after inputs applied in earlier ticks
 	if c.inv_changed {disturb(s, c)} 	// (the mods its gear gives)
 	waiting := landing_tick(s, c)
-	for msg in game.input_queue_tick(&c.inputs, &buf) {
+	for msg in protocol.input_queue_tick(&c.inputs, &buf) {
 		held := c.player
 		input := msg.input
 		if c.dead { 	// (at the death screen: standing still, as the client's prediction does)
@@ -195,7 +196,7 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 	}
 	set_position(c, c.player.position)
 	if c.teleported {c.teleports += 1}
-	own := game.Own_Player {
+	own := protocol.Own_Player {
 		acked     = c.inputs.last,
 		state     = c.player,
 		teleports = c.teleports,
@@ -218,7 +219,7 @@ held_item :: proc(c: ^Client) -> game.Item {
 // exact keys: stats_total("deaths") also adds the "deaths.<cause>" counters the
 // Death event makes, and counted every death twice).
 @(private)
-tally_of :: proc(c: ^Client) -> game.Tally {
+tally_of :: proc(c: ^Client) -> protocol.Tally {
 	return {u32(c.stats["kills"] or_else 0), u32(c.stats["deaths"] or_else 0)}
 }
 
@@ -232,24 +233,24 @@ players_put :: proc(s: ^Server, c: ^Client) {
 	for &other in s.clients {
 		if &other == c || other.state != .Playing || other.world != c.world {continue}
 		id := player_id(s, &other)
-		record := game.Player_Record {
+		record := protocol.Player_Record {
 			name   = client_name(&other),
 			worn   = game.worn_of(&other.inventory),
 			held   = held_item(&other),
 			kills  = u32(other.stats["kills"] or_else 0),
 			deaths = u32(other.stats["deaths"] or_else 0),
 		}
-		state_put(s, c, .Player, &record, game.key_player(id))
+		state_put(s, c, .Player, &record, protocol.key_player(id))
 		d := other.player.position - c.player.position
 		if d.x * d.x + d.z * d.z > near * near || bodiless(s, &other) {continue}
-		motion := game.Player_Motion {
+		motion := protocol.Player_Motion {
 			position = other.player.position,
 			yaw      = other.look[0],
 			pitch    = other.look[1],
 			flying   = other.player.flying,
 			crouched = other.player.crouched,
 		}
-		state_put(s, c, .Player_Motion, &motion, game.key_player(id))
+		state_put(s, c, .Player_Motion, &motion, protocol.key_player(id))
 	}
 }
 
@@ -259,10 +260,10 @@ players_put :: proc(s: ^Server, c: ^Client) {
 disconnect :: proc(s: ^Server, c: ^Client, reason: string) {
 	log.warnf("server disconnecting client player=%d reason=%q", player_id(s, c), reason)
 	replica_flush(s, c) // (what was said before, a notice of why, still arrives)
-	send_message(s, c, game.Reject{reason})
+	send_message(s, c, protocol.Reject{reason})
 	switch l in c.link {
 	case Local:
-		game.close(s.local)
+		protocol.close(s.local)
 		leave(s, c, reason)
 		c.state = .Gone // the pipe is closed: this seat stays shut
 	case netcode.Peer_Id:

@@ -5,6 +5,7 @@ import "core:testing"
 
 import "client:testkit"
 import "common:game"
+import "common:protocol"
 
 @(test)
 test_sound_occlusion_clear :: proc(t: ^testing.T) {
@@ -19,7 +20,7 @@ test_sound_occlusion_clear :: proc(t: ^testing.T) {
 
 	scratch := new(game.Block_Array, context.temp_allocator)
 	world_set_column(&w, {pos = {0, 0}})
-	m := game.Chunk_Message {
+	m := protocol.Chunk_Message {
 		pos        = {0, 0, 0},
 		uniform    = .Air,
 		is_uniform = true,
@@ -58,7 +59,7 @@ test_sound_occlusion_obstruction :: proc(t: ^testing.T) {
 
 	scratch := new(game.Block_Array, context.temp_allocator)
 	world_set_column(&w, {pos = {0, 0}})
-	m := game.Chunk_Message {
+	m := protocol.Chunk_Message {
 		pos        = {0, 0, 0},
 		uniform    = .Air,
 		is_uniform = true,

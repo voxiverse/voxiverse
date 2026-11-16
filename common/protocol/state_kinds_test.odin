@@ -1,5 +1,6 @@
-package game
+package protocol
 
+import "common:game"
 import "core:testing"
 
 // The game's own kinds: the 22 messages that moved onto the state model, with
@@ -71,7 +72,7 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	}
 	round_trip(t, &l, .Own_Player, {}, &own)
 	// Rules_Changed (the receiver holds the world's rules from its Welcome)
-	rules := RULES_DEFAULTS
+	rules := game.RULES_DEFAULTS
 	sender_seed(&l.tx, int(State_Kind.Rules), &rules)
 	receiver_seed(&l.rx, int(State_Kind.Rules), &rules)
 	rules.gravity, rules.allow_flying = 12.5, false
@@ -82,8 +83,8 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	// Player_Joined, Player_Worn, Players
 	record := Player_Record {
 		"bob_the-builder",
-		{item_of_armor(.Cap), NO_ITEM, NO_ITEM, item_of_armor(.Boots)},
-		NO_ITEM,
+		{game.item_of_armor(.Cap), game.NO_ITEM, game.NO_ITEM, game.item_of_armor(.Boots)},
+		game.NO_ITEM,
 		7,
 		3,
 	}
@@ -93,11 +94,11 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	motion := Player_Motion{{1.5, -60, 2e6}, 1, -0.5, true, true}
 	round_trip(t, &l, .Player_Motion, key_player(4), &motion)
 	// Entity_Spawn, Entities
-	sheep := Entity_Record{test_reg().engine.sheep, {}, 3, 4}
+	sheep := Entity_Record{game.test_reg().engine.sheep, {}, 3, 4}
 	round_trip(t, &l, .Entity, key_entity(77), &sheep)
 	dropped := Entity_Record {
-		test_reg().engine.item,
-		{item_of_block(test_reg(), .Sand), 12, 0, 0},
+		game.test_reg().engine.item,
+		{game.item_of_block(game.test_reg(), .Sand), 12, 0, 0},
 		1,
 		1,
 	}
@@ -105,16 +106,20 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	moving := Entity_Motion{{1, 2, 3}, 0.5, -0.2, 0b0110}
 	round_trip(t, &l, .Entity_Motion, key_entity(77), &moving)
 	// Inventory_Update, with a chest
-	inv: Inventory
-	inventory_add(test_reg(), &inv, {item_of_block(test_reg(), .Stone), 100, 0, 0})
-	inv.cursor = {item_of_tool(.Launcher), 1, 0, 0}
+	inv: game.Inventory
+	game.inventory_add(
+		game.test_reg(),
+		&inv,
+		{game.item_of_block(game.test_reg(), .Stone), 100, 0, 0},
+	)
+	inv.cursor = {game.item_of_tool(.Launcher), 1, 0, 0}
 	inv.selected = 3
-	inv.equipment[.Head] = {item_of_armor(.Cap), 1, 0, 0}
-	inv.equipment[.Offhand] = {item_of_block(test_reg(), .Dirt), 12, 0, 0}
+	inv.equipment[.Head] = {game.item_of_armor(.Cap), 1, 0, 0}
+	inv.equipment[.Offhand] = {game.item_of_block(game.test_reg(), .Dirt), 12, 0, 0}
 	inv.chest_open = true
-	inv.chest[0] = {item_of_block(test_reg(), .Stone), 7, 0, 0}
-	inv.chest[24] = {item_of_block(test_reg(), .Dirt), 64, 0, 0}
-	pistol, _ := registry_item(test_reg(), "pistol")
+	inv.chest[0] = {game.item_of_block(game.test_reg(), .Stone), 7, 0, 0}
+	inv.chest[24] = {game.item_of_block(game.test_reg(), .Dirt), 64, 0, 0}
+	pistol, _ := game.registry_item(game.test_reg(), "pistol")
 	inv.slots[4] = {pistol, 1, 7, 0} // (a weapon's magazine goes with its stack)
 	state := Inventory_State{5, inv}
 	round_trip(t, &l, .Inventory, {}, &state)
@@ -126,16 +131,16 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	round_trip(t, &l, .Grants, {}, &grants)
 	variables := Variables{"worldgen.sea_level = 4\n"}
 	round_trip(t, &l, .Variables, {}, &variables)
-	selection := Selection{{Block_Pos{1, 2, 3}, nil}}
+	selection := Selection{{game.Block_Pos{1, 2, 3}, nil}}
 	round_trip(t, &l, .Selection, {}, &selection)
 	island := Island{3, 441}
 	round_trip(t, &l, .Island, {}, &island)
 	place := Place{8, -20, 100}
 	round_trip(t, &l, .Place, {}, &place)
 	// Block_Changed (heard), Blocks_Changed (quiet)
-	heard := Block_Record{u16(Block.Gravel), true}
+	heard := Block_Record{u16(game.Block.Gravel), true}
 	round_trip(t, &l, .Block, key_of_block({1, 2, 3}), &heard)
-	quiet := Block_Record{u16(Block.Water_3), false}
+	quiet := Block_Record{u16(game.Block.Water_3), false}
 	round_trip(t, &l, .Block, key_of_block({-2 * 16 + 7, 3 * 16, 4 * 16 + 5}), &quiet)
 
 	// Entity_Despawn: the removal of its records (the death is an event, below)
@@ -193,26 +198,26 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 		pitch = 2,
 	}
 	refuse(t, &s, .Own_Player, {}, &steep, "looking past straight up")
-	rules := RULES_DEFAULTS
+	rules := game.RULES_DEFAULTS
 	rules.gravity = 1e6
 	refuse(t, &s, .Rules, {}, &rules, "rules out of range")
 	early := Clock{-1, 0}
 	refuse(t, &s, .Clock, {}, &early, "negative time")
 	nan := Clock{transmute(f64)u64(0x7ff8000000000001), 0}
 	refuse(t, &s, .Clock, {}, &nan, "time NaN")
-	bad_name := Player_Record{"bad name", {}, NO_ITEM, 0, 0}
+	bad_name := Player_Record{"bad name", {}, game.NO_ITEM, 0, 0}
 	refuse(t, &s, .Player, key_player(1), &bad_name, "a name with a space")
-	not_item := Player_Record{"ok", {Item(0x7fff), 0, 0, 0}, NO_ITEM, 0, 0}
+	not_item := Player_Record{"ok", {game.Item(0x7fff), 0, 0, 0}, game.NO_ITEM, 0, 0}
 	refuse(t, &s, .Player, key_player(1), &not_item, "an item that does not exist")
 	health := Health{30, 24, false}
 	refuse(t, &s, .Health, {}, &health, "health above the maximum")
 	bad := Inventory_State{5, {}}
-	bad.inventory.slots[0] = {item_of_block(test_reg(), .Stone), 65, 0, 0} // more than a stack
+	bad.inventory.slots[0] = {game.item_of_block(game.test_reg(), .Stone), 65, 0, 0} // more than a stack
 	refuse(t, &s, .Inventory, {}, &bad, "more than a stack")
 	feet := Inventory_State{5, {}}
-	feet.inventory.equipment[.Feet] = {item_of_armor(.Cap), 1, 0, 0} // a cap on the feet
+	feet.inventory.equipment[.Feet] = {game.item_of_armor(.Cap), 1, 0, 0} // a cap on the feet
 	refuse(t, &s, .Inventory, {}, &feet, "a cap on the feet")
-	far := Selection{{Block_Pos{1 << 28, 0, 0}, nil}}
+	far := Selection{{game.Block_Pos{1 << 28, 0, 0}, nil}}
 	refuse(t, &s, .Selection, {}, &far, "a corner outside the world")
 	far_biome := Place{254, 0, 0}
 	refuse(t, &s, .Place, {}, &far_biome, "a biome that does not exist")
@@ -220,7 +225,7 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 	refuse(t, &s, .Place, {}, &hot, "warmth 101")
 	boom := Explosion{{1, 2, 3}, 1000}
 	refuse_event(t, &s, .Explosion, &boom, "an explosion of radius 1000")
-	kind_gap := Entity_Record{Kind_Id(200), {}, 0, 0}
+	kind_gap := Entity_Record{game.Kind_Id(200), {}, 0, 0}
 	refuse(t, &s, .Entity, key_entity(1), &kind_gap, "an entity kind that does not exist")
 	// (Entity_Motion.looks holds 16 bits and a record cannot know its kind: every value is
 	// well formed, and the client drops a bit past its kind's looks.)
@@ -248,7 +253,7 @@ test_game_kinds :: proc(t: ^testing.T) {
 	KINDS :: Game_Kinds {
 		states = {
 			{name = "tag.score", value = Score},
-			{name = "tag.lap", value = Lap, key = .Player, max_records = MAX_PLAYERS},
+			{name = "tag.lap", value = Lap, key = .Player, max_records = game.MAX_PLAYERS},
 		},
 		events = {{name = "tag.tagged", value = Tagged}},
 	}
@@ -313,7 +318,7 @@ test_game_kinds :: proc(t: ^testing.T) {
 
 	// A receiver without the game knows none of its kinds: such a message is malformed.
 	bare: Receiver
-	receiver_init(&bare, &engine, test_reg())
+	receiver_init(&bare, &engine, game.test_reg())
 	defer receiver_destroy(&bare)
 	sender_put(&l.tx, score, {}, &Score{13, 2})
 	clear(&l.messages)
@@ -339,7 +344,7 @@ test_game_requests :: proc(t: ^testing.T) {
 	Score :: struct {
 		points: u32,
 	}
-	check_build :: proc(reg: ^Registry, v: rawptr) -> bool {return (^Build)(v).rotation < 4}
+	check_build :: proc(reg: ^game.Registry, v: rawptr) -> bool {return (^Build)(v).rotation < 4}
 	KINDS :: Game_Kinds {
 		states   = {{name = "town.score", value = Score}},
 		requests = {
@@ -355,41 +360,41 @@ test_game_requests :: proc(t: ^testing.T) {
 	_, found = request_kind(&s, Score)
 	testing.expect(t, !found, "a record found as a request")
 
-	w: Writer
-	writer_init(&w, context.temp_allocator)
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
 	b := Build{3, {-40, 95}, 2}
 	request_encode(&w, &s, build, &b)
-	got, ok := request_decode(&s, test_reg(), {u16(build), 0, w.buf[:]})
+	got, ok := request_decode(&s, game.test_reg(), {u16(build), 0, w.buf[:]})
 	if testing.expect(t, ok) {testing.expect_value(t, (^Build)(got)^, b)}
 	// Refused: a byte short, a byte over, the check's, a kind that is no request.
-	_, ok = request_decode(&s, test_reg(), {u16(build), 0, w.buf[:len(w.buf) - 1]})
+	_, ok = request_decode(&s, game.test_reg(), {u16(build), 0, w.buf[:len(w.buf) - 1]})
 	testing.expect(t, !ok)
 	long := make([]u8, len(w.buf) + 1, context.temp_allocator)
 	copy(long, w.buf[:])
-	_, ok = request_decode(&s, test_reg(), {u16(build), 0, long})
+	_, ok = request_decode(&s, game.test_reg(), {u16(build), 0, long})
 	testing.expect(t, !ok)
 	clear(&w.buf)
 	bad := Build{3, {0, 0}, 9}
 	request_encode(&w, &s, build, &bad)
-	_, ok = request_decode(&s, test_reg(), {u16(build), 0, w.buf[:]})
+	_, ok = request_decode(&s, game.test_reg(), {u16(build), 0, w.buf[:]})
 	testing.expect(t, !ok, "the kind's check let it through")
 	score, _ := game_kind(&s, Score)
-	_, ok = request_decode(&s, test_reg(), {u16(score), 0, w.buf[:]})
+	_, ok = request_decode(&s, game.test_reg(), {u16(score), 0, w.buf[:]})
 	testing.expect(t, !ok, "a record's kind decoded as a request")
-	_, ok = request_decode(&s, test_reg(), {u16(len(s.kinds)), 0, w.buf[:]})
+	_, ok = request_decode(&s, game.test_reg(), {u16(len(s.kinds)), 0, w.buf[:]})
 	testing.expect(t, !ok)
 	shout, _ := request_kind(&s, Shout)
 	clear(&w.buf)
-	write_string(&w, "far too long a shout")
-	_, ok = request_decode(&s, test_reg(), {u16(shout), 0, w.buf[:]})
+	game.write_string(&w, "far too long a shout")
+	_, ok = request_decode(&s, game.test_reg(), {u16(shout), 0, w.buf[:]})
 	testing.expect(t, !ok, "a string past its limit")
 
 	// On the wire, as a message, within MAX_GAME_REQUEST.
 	clear(&w.buf)
 	request_encode(&w, &s, build, &b)
 	m := Game_Request{u16(build), 77, w.buf[:]}
-	enc: Writer
-	writer_init(&enc, context.temp_allocator)
+	enc: game.Writer
+	game.writer_init(&enc, context.temp_allocator)
 	encode_client(&enc, m)
 	back, decoded := decode_client(enc.buf[:])
 	if testing.expect(t, decoded) {
@@ -401,11 +406,11 @@ test_game_requests :: proc(t: ^testing.T) {
 	// (the same message with its length past MAX_GAME_REQUEST: the kind's byte, the kind,
 	// after, then the length)
 	head := enc.buf[:1 + 2 + 4]
-	over: Writer
-	writer_init(&over, context.temp_allocator)
+	over: game.Writer
+	game.writer_init(&over, context.temp_allocator)
 	append(&over.buf, ..head)
-	write_varint(&over, MAX_GAME_REQUEST + 1)
-	for _ in 0 ..= MAX_GAME_REQUEST {write_u8(&over, 0)}
+	game.write_varint(&over, MAX_GAME_REQUEST + 1)
+	for _ in 0 ..= MAX_GAME_REQUEST {game.write_u8(&over, 0)}
 	_, decoded = decode_client(over.buf[:])
 	testing.expect(t, !decoded, "a request past MAX_GAME_REQUEST")
 }

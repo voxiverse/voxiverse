@@ -418,11 +418,3 @@ test_reg :: proc() -> ^Registry {
 test_blocks :: proc() -> ^Block_Table {
 	return &test_reg().blocks
 }
-
-decode_client_t :: proc(data: []u8) -> (Client_Message, bool) {
-	return decode_client(data, test_reg())
-}
-
-decode_server_t :: proc(data: []u8, blocks: ^Block_Array) -> (Server_Message, bool) {
-	return decode_server(data, blocks, test_reg())
-}

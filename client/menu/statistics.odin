@@ -8,7 +8,7 @@ import "core:time"
 
 import "client:engine"
 import "client:ui"
-import "common:game"
+import "common:protocol"
 
 // The statistics overlay: the counters the server keeps for the character
 // (server/core/stats.odin) as a tree by their dotted names, a parent being the
@@ -43,7 +43,7 @@ stats_ask :: proc(app: ^engine.App) {
 	delete(v.asked)
 	v.asked = strings.clone(string(v.filter[:]))
 	v.asked_at = engine.app_tick(app)
-	engine.send_message(app.session, game.Stats_Request{filter = v.asked, page = u16(v.page)})
+	engine.send_message(app.session, protocol.Stats_Request{filter = v.asked, page = u16(v.page)})
 }
 
 // Stats_Row: a line of the tree.

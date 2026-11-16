@@ -1,5 +1,6 @@
-package game
+package protocol
 
+import "common:game"
 import "core:math"
 import "core:slice"
 
@@ -57,7 +58,7 @@ Event_Kind :: enum u8 {
 // when it changes the state did not come from inputs and the client snaps.
 Own_Player :: struct {
 	acked:     u32 `net:"acked"`,
-	state:     Player_State,
+	state:     game.Player_State,
 	teleports: u8,
 	yaw:       f32, // after a teleport: where to look
 	pitch:     f32,
@@ -73,7 +74,7 @@ Mode_Record :: struct {
 // their Inventory_Requests up to `acked` (and whatever else changed it).
 Inventory_State :: struct {
 	acked:     u32 `net:"acked"`,
-	inventory: Inventory,
+	inventory: game.Inventory,
 }
 
 // Clock: the world time at server tick `tick`. An anchor, not the time: the
@@ -86,8 +87,8 @@ Clock :: struct {
 // Player_Record: someone is in the world (the key is their player id).
 Player_Record :: struct {
 	name:   string `net:"max=16"`,
-	worn:   [WORN_SLOTS]Item, // head to feet; NO_ITEM: nothing
-	held:   Item, // the hotbar item in hand (NO_ITEM: none), for the avatar's raised arm
+	worn:   [game.WORN_SLOTS]game.Item, // head to feet; NO_ITEM: nothing
+	held:   game.Item, // the hotbar item in hand (NO_ITEM: none), for the avatar's raised arm
 	kills:  u32, // the counters `kills` and `deaths`, for the player list
 	deaths: u32,
 }
@@ -113,8 +114,8 @@ Player_Motion :: struct {
 }
 
 Entity_Record :: struct {
-	kind:       Kind_Id, // the registry's (a pack hash match makes it the same on both sides)
-	stack:      Stack, // a dropped item's (else empty)
+	kind:       game.Kind_Id, // the registry's (a pack hash match makes it the same on both sides)
+	stack:      game.Stack, // a dropped item's (else empty)
 	health:     u16, // what it has left (a game draws it as a bar: engine.entity_bars)
 	max_health: u16, // its most (0: it has no health)
 }
@@ -172,7 +173,7 @@ Damage_Hit :: struct {
 // its own and is not sent it.
 Shot :: struct {
 	shooter: u16,
-	weapon:  Item,
+	weapon:  game.Item,
 	origin:  [3]f64,
 	end:     [3]f64,
 }
@@ -213,7 +214,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		predicted = .Requests,
 		check = check_inventory,
 	},
-	.Rules = {name = "rules", value = Rules, check = check_rules},
+	.Rules = {name = "rules", value = game.Rules, check = check_rules},
 	.Clock = {name = "clock", value = Clock, check = check_clock},
 	.Grants = {name = "grants", value = Grants},
 	.Variables = {name = "variables", value = Variables},
@@ -222,7 +223,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		name = "player",
 		value = Player_Record,
 		key = .Player,
-		max_records = MAX_PLAYERS,
+		max_records = game.MAX_PLAYERS,
 		check = check_player_record,
 	},
 	.Player_Motion = {
@@ -231,7 +232,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		key = .Player,
 		lane = .Snapshot,
 		priority = 1,
-		max_records = MAX_PLAYERS,
+		max_records = game.MAX_PLAYERS,
 		locate = locate_player_motion,
 		check = check_player_motion,
 	},
@@ -312,17 +313,17 @@ key_entity :: #force_inline proc(entity: u32) -> Key {return {a = i32(entity)}}
 
 @(private = "file")
 position_ok :: proc(p: [3]f64) -> bool {
-	for v in p {if !(abs(v) < WORLD_LIMIT) {return false}}
+	for v in p {if !(abs(v) < game.WORLD_LIMIT) {return false}}
 	return true
 }
 
 @(private = "file")
 look_ok :: proc(yaw, pitch: f32) -> bool {
-	return abs(pitch) <= PITCH_LIMIT && abs(yaw) <= 1e6
+	return abs(pitch) <= game.PITCH_LIMIT && abs(yaw) <= 1e6
 }
 
 @(private = "file")
-check_own_player :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_own_player :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	o := (^Own_Player)(v)
 	s := o.state
 	for x in s.velocity {if !(abs(x) <= MAX_SPEED) {return false}}
@@ -335,90 +336,90 @@ check_own_player :: proc(reg: ^Registry, v: rawptr) -> bool {
 }
 
 @(private = "file")
-check_health :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_health :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	h := (^Health)(v)
 	return h.max >= 1 && h.max <= 1000 && h.health >= 0 && h.health <= h.max
 }
 
 @(private = "file")
-check_mode :: proc(reg: ^Registry, v: rawptr) -> bool {
-	_, ok := mode_find(reg, (^Mode_Record)(v).mode)
+check_mode :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	_, ok := game.mode_find(reg, (^Mode_Record)(v).mode)
 	return ok
 }
 
 @(private = "file")
-check_inventory :: proc(reg: ^Registry, v: rawptr) -> bool {
-	return inventory_valid(reg, &(^Inventory_State)(v).inventory)
+check_inventory :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	return game.inventory_valid(reg, &(^Inventory_State)(v).inventory)
 }
 
 @(private = "file")
-check_shot :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_shot :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	s := (^Shot)(v)
-	return position_ok(s.origin) && position_ok(s.end) && item_valid(reg, s.weapon)
+	return position_ok(s.origin) && position_ok(s.end) && game.item_valid(reg, s.weapon)
 }
 
 @(private = "file")
-check_rules :: proc(reg: ^Registry, v: rawptr) -> bool {
-	return rules_valid((^Rules)(v))
+check_rules :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	return game.rules_valid((^game.Rules)(v))
 }
 
 @(private = "file")
-check_clock :: proc(reg: ^Registry, v: rawptr) -> bool {
-	return time_valid((^Clock)(v).time)
+check_clock :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	return game.time_valid((^Clock)(v).time)
 }
 
 @(private = "file")
-check_selection :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_selection :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	for corner in (^Selection)(v).corners {
-		if p, set := corner.?; set && !in_world(chunk_of(p)) {return false}
+		if p, set := corner.?; set && !game.in_world(game.chunk_of(p)) {return false}
 	}
 	return true
 }
 
 @(private = "file")
-check_player_record :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_player_record :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	p := (^Player_Record)(v)
-	if !name_valid(p.name) {return false}
-	for item in p.worn {if item != NO_ITEM && !item_valid(reg, item) {return false}}
-	return p.held == NO_ITEM || item_valid(reg, p.held)
+	if !game.name_valid(p.name) {return false}
+	for item in p.worn {if item != game.NO_ITEM && !game.item_valid(reg, item) {return false}}
+	return p.held == game.NO_ITEM || game.item_valid(reg, p.held)
 }
 
 @(private = "file")
-check_player_motion :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_player_motion :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	m := (^Player_Motion)(v)
 	return position_ok(m.position) && look_ok(m.yaw, m.pitch)
 }
 
 @(private = "file")
-check_entity_record :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_entity_record :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	r := (^Entity_Record)(v)
 	st := r.stack
 	return(
-		kind_info(reg, r.kind) != nil &&
+		game.kind_info(reg, r.kind) != nil &&
 		st.count >= 0 &&
-		(st.item == NO_ITEM || item_valid(reg, st.item)) \
+		(st.item == game.NO_ITEM || game.item_valid(reg, st.item)) \
 	)
 }
 
 @(private = "file")
-check_entity_motion :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_entity_motion :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	m := (^Entity_Motion)(v)
 	return position_ok(m.position) && look_ok(m.yaw, m.pitch)
 }
 
 @(private = "file")
-check_explosion :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_explosion :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	x := (^Explosion)(v)
 	return position_ok(x.position) && x.radius >= 0 && x.radius <= 64
 }
 
 @(private = "file")
-check_block_record :: proc(reg: ^Registry, v: rawptr) -> bool {
-	return block_valid(&reg.blocks, (^Block_Record)(v).block)
+check_block_record :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	return game.block_valid(&reg.blocks, (^Block_Record)(v).block)
 }
 
 @(private = "file")
-check_place :: proc(reg: ^Registry, v: rawptr) -> bool {
+check_place :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	p := (^Place)(v)
 	return(
 		(p.biome < MAX_BIOMES || p.biome == NO_BIOME) &&

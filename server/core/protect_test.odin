@@ -4,6 +4,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
+import "common:access"
 import "common:game"
 
 // Region protection. A protection holds out a non-member's edits, by
@@ -12,7 +13,7 @@ import "common:game"
 
 @(private = "file")
 Guest :: struct {
-	owner: [dynamic]game.Grant,
+	owner: [dynamic]access.Grant,
 }
 
 // guest_begin makes c an ordinary player (may edit, has every item, may use
@@ -23,10 +24,10 @@ guest_begin :: proc(g: ^Grief) -> Guest {
 	gu := Guest {
 		owner = c.grants,
 	}
-	c.grants = make([dynamic]game.Grant)
-	append(&c.grants, game.Grant{"world.edit", true, 0})
-	append(&c.grants, game.Grant{"items.infinite", true, 0})
-	append(&c.grants, game.Grant{"world.edit.bulk", true, 0})
+	c.grants = make([dynamic]access.Grant)
+	append(&c.grants, access.Grant{"world.edit", true, 0})
+	append(&c.grants, access.Grant{"items.infinite", true, 0})
+	append(&c.grants, access.Grant{"world.edit.bulk", true, 0})
 	return gu
 }
 

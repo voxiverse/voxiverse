@@ -1,6 +1,7 @@
 package core
 
 import "common:game"
+import "common:protocol"
 import "common:worldgen"
 
 // Column heights (the highest opaque block of each block column) for sky
@@ -62,8 +63,8 @@ naturals_take :: proc(w: ^World) {
 }
 
 // column_message has the heights of a chunk column.
-column_message :: proc(w: ^World, column: [2]i32) -> game.Column {
-	m := game.Column {
+column_message :: proc(w: ^World, column: [2]i32) -> protocol.Column {
+	m := protocol.Column {
 		pos = column,
 	}
 	for z in i32(0) ..< game.CHUNK_SIZE {

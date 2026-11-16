@@ -9,7 +9,7 @@ import "core:time"
 import "client:engine"
 import "client:overlay"
 import "client:screen"
-import "common:game"
+import "common:starmap"
 import "generated:games"
 import games_client "generated:games/client"
 import "server:core"
@@ -70,8 +70,8 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 	testing.expect_value(t, newest.seed, 42)
 	testing.expect_value(t, newest.mode, "survival")
 	testing.expect(t, newest.stars[0].home, "the thumbnail's home star")
-	galaxy: [engine.THUMB_STARS]game.Star
-	game.galaxy_stars(game.seed_glyphs(42), galaxy[:])
+	galaxy: [engine.THUMB_STARS]starmap.Star
+	starmap.galaxy_stars(starmap.seed_glyphs(42), galaxy[:])
 	testing.expect(t, newest.stars == galaxy, "the thumbnail is the seed's galaxy")
 	// The screen draws them, the name and the mode and the time on each.
 	app.screen = .Universes

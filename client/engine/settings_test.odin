@@ -2,6 +2,7 @@ package engine
 
 import "core:testing"
 
+import "common:access"
 import "common:base"
 import "common:game"
 
@@ -11,7 +12,7 @@ import "common:game"
 @(test)
 test_unnamed_players_join_apart :: proc(t: ^testing.T) {
 	settings := SETTINGS_DEFAULTS
-	alice, bob: game.Account
+	alice, bob: access.Account
 	alice[0], alice[1] = 0x3f, 0x0a
 	bob[0], bob[1] = 0x3f, 0x0b
 	testing.expect_value(t, join_name(&settings, alice), "Player-3f0a")

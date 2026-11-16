@@ -11,6 +11,7 @@ import "client:mesh"
 import "client:render"
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // The client's copy of the world: the chunks the server sent, and their
 // meshes. Storage is sized once from the interest area the server announced
@@ -285,7 +286,7 @@ world_get :: proc(w: ^World, pos: game.Chunk_Pos) -> ^Client_Chunk {
 
 // world_set_chunk stores a chunk from the server (blocks from the decoder's
 // scratch array unless uniform).
-world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_Array) -> bool {
+world_set_chunk :: proc(w: ^World, m: protocol.Chunk_Message, scratch: ^game.Block_Array) -> bool {
 	h, exists := w.by_pos[m.pos]
 	c: ^Client_Chunk
 	if exists {
@@ -507,7 +508,7 @@ task_free :: proc(w: ^World, task: ^Mesh_Task) {
 
 // world_set_column stores a column's heights from the server, re-meshing
 // where they changed (sky light below a top that moved).
-world_set_column :: proc(w: ^World, m: game.Column) {
+world_set_column :: proc(w: ^World, m: protocol.Column) {
 	column, existed := &w.columns[m.pos]
 	if !existed {
 		w.columns[m.pos] = {

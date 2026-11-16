@@ -7,7 +7,7 @@ import "client:console"
 import "client:engine"
 import "client:platform"
 import "client:testkit"
-import "common:game"
+import "common:protocol"
 
 @(private = "file")
 last_line :: proc(c: ^engine.Console) -> string {
@@ -17,13 +17,13 @@ last_line :: proc(c: ^engine.Console) -> string {
 
 sent :: proc(f: ^Overlay_Fixture) -> (commands: [dynamic]string) {
 	commands = make([dynamic]string, context.temp_allocator)
-	packets := make([dynamic]game.Packet, context.temp_allocator)
-	server := game.Endpoint{&f.pipe, .Server}
-	game.receive(server, &packets)
+	packets := make([dynamic]protocol.Packet, context.temp_allocator)
+	server := protocol.Endpoint{&f.pipe, .Server}
+	protocol.receive(server, &packets)
 	for p in packets {
-		defer game.packet_free(server, p)
-		if m, ok := game.decode_client(p, testkit.test_reg()); ok {
-			if c, is_command := m.(game.Command);
+		defer protocol.packet_free(server, p)
+		if m, ok := protocol.decode_client(p, testkit.test_reg()); ok {
+			if c, is_command := m.(protocol.Command);
 			   is_command {append(&commands, strings.clone(c.command, context.temp_allocator))}
 		}
 	}

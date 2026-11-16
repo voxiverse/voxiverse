@@ -3,6 +3,7 @@ package engine
 import "core:math"
 
 import "common:game"
+import "common:protocol"
 
 // What the player does besides moving: the hotbar and the mouse buttons
 // (items.odin), edits predicted at once and confirmed by the server, hits,
@@ -15,7 +16,7 @@ EDIT_REPEAT_SECONDS :: 0.25 // a held button edits again this often
 session_attack :: proc(s: ^Session) -> bool {
 	id, ok := s.aim_entity.?
 	if !ok {return false}
-	send_message(s, game.Attack{id, s.prediction.next_sequence - 1})
+	send_message(s, protocol.Attack{id, s.prediction.next_sequence - 1})
 	return true
 }
 
@@ -23,14 +24,14 @@ session_attack :: proc(s: ^Session) -> bool {
 // none (the server strikes whatever is in the weapon's arc either way).
 session_swing :: proc(s: ^Session) {
 	id := s.aim_entity.? or_else 0
-	send_message(s, game.Attack{id, s.prediction.next_sequence - 1})
+	send_message(s, protocol.Attack{id, s.prediction.next_sequence - 1})
 }
 
 // session_use_entity uses the aimed entity (right click); false if none is aimed at.
 session_use_entity :: proc(s: ^Session) -> bool {
 	id, ok := s.aim_entity.?
 	if !ok {return false}
-	send_message(s, game.Use_Entity{id, s.prediction.next_sequence - 1})
+	send_message(s, protocol.Use_Entity{id, s.prediction.next_sequence - 1})
 	return true
 }
 
@@ -45,7 +46,7 @@ session_use_block :: proc(s: ^Session) -> bool {
 	}
 	if b != .Chest {return false}
 	if !s.inventory.chest_open {
-		send_message(s, game.Use_Block{hit.block, s.prediction.next_sequence - 1})
+		send_message(s, protocol.Use_Block{hit.block, s.prediction.next_sequence - 1})
 	}
 	return true
 }
@@ -136,7 +137,7 @@ session_pick :: proc(s: ^Session) -> bool {
 // session_fire launches a rocket where we look (the server makes it).
 session_fire :: proc(s: ^Session) -> bool {
 	if !session_allowed(s, "world.fire") {return false}
-	send_message(s, game.Fire{s.prediction.next_sequence - 1, s.camera.yaw, s.camera.pitch})
+	send_message(s, protocol.Fire{s.prediction.next_sequence - 1, s.camera.yaw, s.camera.pitch})
 	append(&s.sounds, Sound_Event{.Launch, .Air, s.camera.position, 1})
 	return true
 }
@@ -146,7 +147,7 @@ session_fire :: proc(s: ^Session) -> bool {
 session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 	hit, aimed := s.aim.?
 	if !aimed || len(s.edits) >= MAX_PENDING_EDITS {return false}
-	edit := game.Edit {
+	edit := protocol.Edit {
 		id    = s.next_edit + 1,
 		after = s.prediction.next_sequence - 1, // the last input predicted
 	}
@@ -247,7 +248,7 @@ session_toggle :: proc(s: ^Session, pos: game.Block_Pos, b: game.Block) -> bool 
 	i, found := game.prop_index(t, t.type_of[b], "open")
 	if !found {return false}
 	flipped := game.state_with(t, b, i, 1 - game.state_value(t, b, i))
-	edit := game.Edit {
+	edit := protocol.Edit {
 		id    = s.next_edit + 1,
 		after = s.prediction.next_sequence - 1,
 		pos   = pos,
@@ -270,7 +271,7 @@ session_till :: proc(s: ^Session) -> bool {
 	current, _ := world_block(&s.world, hit.block)
 	above, loaded := world_block(&s.world, hit.block + {0, 1, 0})
 	if !loaded || !game.can_till(s.reg, current, above) {return false}
-	edit := game.Edit {
+	edit := protocol.Edit {
 		id    = s.next_edit + 1,
 		after = s.prediction.next_sequence - 1,
 		pos   = hit.block,

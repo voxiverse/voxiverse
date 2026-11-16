@@ -7,15 +7,14 @@ import "common:base"
 
 // A test world: listed blocks are stone, the rest air; everything is
 // loaded unless unloaded_below is set (then y < it is "not loaded").
-@(private = "file")
 Test_World :: struct {
 	solid:          map[Block_Pos]bool,
 	water:          map[Block_Pos]bool,
 	unloaded_below: Maybe(i32),
 }
 
-@(private = "file")
-query :: proc(w: ^Test_World) -> Block_Query {
+// test_world_query: the world's blocks as physics asks for them.
+test_world_query :: proc(w: ^Test_World) -> Block_Query {
 	return {w, proc(data: rawptr, p: Block_Pos) -> (Block, bool) {
 			w := (^Test_World)(data)
 			if limit, ok := w.unloaded_below.?; ok && p.y < limit {return .Air, false}
@@ -24,7 +23,6 @@ query :: proc(w: ^Test_World) -> Block_Query {
 		}, test_blocks(), {}}
 }
 
-@(private = "file")
 floor :: proc(w: ^Test_World, y: i32, size: i32 = 8) {
 	for x in -size ..= size {
 		for z in -size ..= size {w.solid[{x, y, z}] = true}
@@ -43,7 +41,7 @@ run :: proc(
 	rules := RULES_DEFAULTS,
 ) {
 	rules := rules
-	for _ in 0 ..< ticks {player_step(s, input, &rules, query(w), DT)}
+	for _ in 0 ..< ticks {player_step(s, input, &rules, test_world_query(w), DT)}
 }
 
 @(test)
@@ -136,9 +134,9 @@ test_jump_height_and_ceiling :: proc(t: ^testing.T) {
 	run(&s, {}, &w, 2) // settle
 	peak := s.position.y
 	defaults := RULES_DEFAULTS
-	player_step(&s, {buttons = {.Jump}}, &defaults, query(&w), DT)
+	player_step(&s, {buttons = {.Jump}}, &defaults, test_world_query(&w), DT)
 	for _ in 0 ..< 30 {
-		player_step(&s, {}, &defaults, query(&w), DT)
+		player_step(&s, {}, &defaults, test_world_query(&w), DT)
 		peak = max(peak, s.position.y)
 	}
 	rise := peak - 1
@@ -152,8 +150,8 @@ test_jump_height_and_ceiling :: proc(t: ^testing.T) {
 	}
 	rules := RULES_DEFAULTS
 	rules.jump_height = 5
-	player_step(&c, {buttons = {.Jump}}, &rules, query(&w), DT)
-	for _ in 0 ..< 10 {player_step(&c, {}, &rules, query(&w), DT)}
+	player_step(&c, {buttons = {.Jump}}, &rules, test_world_query(&w), DT)
+	for _ in 0 ..< 10 {player_step(&c, {}, &rules, test_world_query(&w), DT)}
 	testing.expect(t, c.position.y + PLAYER_HEIGHT <= 3 + 1e-6, "head went into the ceiling")
 }
 
@@ -321,7 +319,7 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 			position  = {0.5, 1, 0.5},
 			on_ground = true,
 		}
-		for _ in 0 ..< 60 {player_step(&s, {move = {0, 1}}, rules, query(w), DT, mods)}
+		for _ in 0 ..< 60 {player_step(&s, {move = {0, 1}}, rules, test_world_query(w), DT, mods)}
 		return abs(s.position.z - 0.5)
 	}
 	plain, fast :=
@@ -340,9 +338,9 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 			on_ground = true,
 		}
 		peak := f64(1)
-		player_step(&s, {buttons = {.Jump}}, rules, query(w), DT, mods)
+		player_step(&s, {buttons = {.Jump}}, rules, test_world_query(w), DT, mods)
 		for _ in 0 ..< 40 {
-			player_step(&s, {}, rules, query(w), DT, mods)
+			player_step(&s, {}, rules, test_world_query(w), DT, mods)
 			peak = max(peak, s.position.y)
 		}
 		return peak - 1
@@ -362,20 +360,20 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,
 	}
-	player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods)
-	for _ in 0 ..< 5 {player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods)} 	// held: no second jump
+	player_step(&s, {buttons = {.Jump}}, &rules, test_world_query(&w), DT, mods)
+	for _ in 0 ..< 5 {player_step(&s, {buttons = {.Jump}}, &rules, test_world_query(&w), DT, mods)} 	// held: no second jump
 	before := s.velocity.y
 	testing.expect(t, before < 7, "holding jump jumped again")
-	player_step(&s, {}, &rules, query(&w), DT, mods) // released
-	player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods) // pressed: the air jump
+	player_step(&s, {}, &rules, test_world_query(&w), DT, mods) // released
+	player_step(&s, {buttons = {.Jump}}, &rules, test_world_query(&w), DT, mods) // pressed: the air jump
 	testing.expectf(t, s.velocity.y > 7.5, "no air jump (vy %.2f)", s.velocity.y)
 	testing.expect_value(t, s.air_jumps, 0)
-	player_step(&s, {}, &rules, query(&w), DT, mods)
-	player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods)
+	player_step(&s, {}, &rules, test_world_query(&w), DT, mods)
+	player_step(&s, {buttons = {.Jump}}, &rules, test_world_query(&w), DT, mods)
 	testing.expect(t, s.velocity.y < 7.5, "a second air jump with one charm")
-	for _ in 0 ..< 120 {player_step(&s, {}, &rules, query(&w), DT, mods)}
+	for _ in 0 ..< 120 {player_step(&s, {}, &rules, test_world_query(&w), DT, mods)}
 	testing.expect(t, s.on_ground, "did not land")
-	player_step(&s, {}, &rules, query(&w), DT, mods)
+	player_step(&s, {}, &rules, test_world_query(&w), DT, mods)
 	testing.expect_value(t, s.air_jumps, 1) // given back
 
 	// derive_mods: worn boots and a charm in the offhand; the pocket's do not count.
@@ -397,49 +395,6 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 	testing.expect_value(t, derive_mods(test_reg(), &Inventory{}), MODS_NONE)
 }
 
-// Prediction and the server agree with mods, tick for tick, including an air jump.
-@(test)
-test_prediction_agrees_with_mods :: proc(t: ^testing.T) {
-	w: Test_World
-	defer delete(w.solid)
-	floor(&w, 0, 40)
-	rules := RULES_DEFAULTS
-	mods := Mods{1.1, 1.1, 1, BASE_HEALTH + 4, {.Fly}, {}}
-	start := Player_State {
-		position  = {0.5, 1, 0.5},
-		on_ground = true,
-	}
-	predicted: Prediction
-	prediction_init(&predicted, start)
-	server := start
-	for tick in 0 ..< 200 {
-		in_ := Player_Input {
-			move    = {0.3, 1},
-			buttons = {.Jump} if tick % 25 < 2 || tick % 25 == 8 else {},
-		}
-		msg := prediction_tick(&predicted, in_, &rules, query(&w), mods)
-		player_step(&server, msg.input, &rules, query(&w), TICK_SECONDS, mods)
-		testing.expectf(
-			t,
-			predicted.state == server,
-			"tick %d: predicted %v, the server %v",
-			tick,
-			predicted.state,
-			server,
-		)
-		if predicted.state != server {break}
-	}
-	// Reconciling with the server's state and the pending inputs gives the same again.
-	prediction_reconcile(
-		&predicted,
-		{acked = predicted.next_sequence - 1, state = server},
-		&rules,
-		query(&w),
-		mods,
-	)
-	testing.expect(t, predicted.state == server)
-}
-
 // Flight needs the fly ability as well as the world's rule: the same step the
 // server and the client's prediction run.
 @(test)
@@ -453,13 +408,13 @@ test_fly_needs_the_ability :: proc(t: ^testing.T) {
 	}
 	mods := MODS_NONE
 	mods.abilities = {}
-	player_step(&s, {buttons = {.Toggle_Fly}}, &rules, query(&w), DT, mods)
+	player_step(&s, {buttons = {.Toggle_Fly}}, &rules, test_world_query(&w), DT, mods)
 	testing.expect(t, !s.flying, "no fly ability: the toggle does nothing")
 	mods.abilities = {.Fly}
-	player_step(&s, {buttons = {.Toggle_Fly}}, &rules, query(&w), DT, mods)
+	player_step(&s, {buttons = {.Toggle_Fly}}, &rules, test_world_query(&w), DT, mods)
 	testing.expect(t, s.flying)
 	mods.abilities = {} // (a mode change took it away)
-	player_step(&s, {}, &rules, query(&w), DT, mods)
+	player_step(&s, {}, &rules, test_world_query(&w), DT, mods)
 	testing.expect(t, !s.flying, "losing the ability ends the flight")
 }
 
@@ -487,26 +442,24 @@ test_jump_boots_give_one_extra_jump :: proc(t: ^testing.T) {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,
 	}
-	player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods) // the jump
+	player_step(&s, {buttons = {.Jump}}, &rules, test_world_query(&w), DT, mods) // the jump
 	jumps := 1
 	for _ in 0 ..< 4 { 	// four more presses in the air, a release between each
-		player_step(&s, {}, &rules, query(&w), DT, mods)
+		player_step(&s, {}, &rules, test_world_query(&w), DT, mods)
 		before := s.velocity.y
-		player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods)
+		player_step(&s, {buttons = {.Jump}}, &rules, test_world_query(&w), DT, mods)
 		if s.velocity.y > before {jumps += 1}
 	}
 	testing.expect_value(t, jumps, 2)
 }
 
 // A wall of stone `distance` blocks ahead (z = -distance), 12 wide and 12 high.
-@(private = "file")
 hook_wall :: proc(w: ^Test_World, distance: i32) {
 	for x in i32(-6) ..= 6 {
 		for y in i32(0) ..= 12 {w.solid[{x, y, -distance}] = true}
 	}
 }
 
-@(private = "file")
 HOOK :: Grapple_Info{30, 20, 2}
 
 // The hook: it attaches to a block in range, pulls at about its speed, lets go
@@ -528,19 +481,19 @@ test_grapple_pulls_and_releases :: proc(t: ^testing.T) {
 		pitch   = 0.15, // (slightly up: the wall's face ahead)
 		buttons = {.Grapple},
 	}
-	player_step(&s, look, &rules, query(&w), DT, mods)
+	player_step(&s, look, &rules, test_world_query(&w), DT, mods)
 	if !testing.expect(t, s.hooked, "the line did not attach") {return}
 	testing.expect_value(t, s.hook_block.z, -25)
 	fastest := f32(0)
 	for _ in 0 ..< 20 {
-		player_step(&s, look, &rules, query(&w), DT, mods)
+		player_step(&s, look, &rules, test_world_query(&w), DT, mods)
 		fastest = max(fastest, -s.velocity.z)
 	}
 	testing.expectf(t, fastest > 15 && fastest < 21, "pulled at %.1f blocks a second", fastest)
 	testing.expectf(t, s.position.z < -5, "pulled to z %.1f", s.position.z)
 	// Let go: the velocity stays (momentum), the cooldown starts, gravity is back.
 	moving := s.velocity
-	player_step(&s, {pitch = 0.15}, &rules, query(&w), DT, mods)
+	player_step(&s, {pitch = 0.15}, &rules, test_world_query(&w), DT, mods)
 	testing.expect(t, !s.hooked)
 	testing.expect_value(t, s.hook_cooldown, 60)
 	testing.expectf(
@@ -552,12 +505,12 @@ test_grapple_pulls_and_releases :: proc(t: ^testing.T) {
 	)
 	// Held during the cooldown: nothing. After it: again.
 	for _ in 0 ..< 59 {
-		player_step(&s, look, &rules, query(&w), DT, mods)
+		player_step(&s, look, &rules, test_world_query(&w), DT, mods)
 		if s.hooked {break}
 	}
 	testing.expect(t, !s.hooked, "attached during the cooldown")
-	player_step(&s, look, &rules, query(&w), DT, mods)
-	player_step(&s, look, &rules, query(&w), DT, mods)
+	player_step(&s, look, &rules, test_world_query(&w), DT, mods)
+	player_step(&s, look, &rules, test_world_query(&w), DT, mods)
 	testing.expect(t, s.hooked, "did not attach after the cooldown")
 }
 
@@ -577,7 +530,14 @@ test_grapple_respects_range :: proc(t: ^testing.T) {
 			position  = {0.5, 1, 0.5},
 			on_ground = true,
 		}
-		player_step(&s, {pitch = 0.1, buttons = {.Grapple}}, &rules, query(&w), DT, mods)
+		player_step(
+			&s,
+			{pitch = 0.1, buttons = {.Grapple}},
+			&rules,
+			test_world_query(&w),
+			DT,
+			mods,
+		)
 		testing.expectf(
 			t,
 			s.hooked == (distance <= 29),
@@ -595,7 +555,7 @@ test_grapple_respects_range :: proc(t: ^testing.T) {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,
 	}
-	player_step(&s, {pitch = 0.1, buttons = {.Grapple}}, &rules, query(&w), DT) // no hook in hand
+	player_step(&s, {pitch = 0.1, buttons = {.Grapple}}, &rules, test_world_query(&w), DT) // no hook in hand
 	testing.expect(t, !s.hooked)
 }
 
@@ -617,59 +577,12 @@ test_grapple_lets_go_of_a_broken_block :: proc(t: ^testing.T) {
 		pitch   = 0.1,
 		buttons = {.Grapple},
 	}
-	player_step(&s, look, &rules, query(&w), DT, mods)
+	player_step(&s, look, &rules, test_world_query(&w), DT, mods)
 	testing.expect(t, s.hooked)
 	delete_key(&w.solid, s.hook_block)
-	player_step(&s, look, &rules, query(&w), DT, mods)
+	player_step(&s, look, &rules, test_world_query(&w), DT, mods)
 	testing.expect(t, !s.hooked, "held a block that is gone")
 	testing.expect_value(t, s.hook_cooldown, 60)
-}
-
-// Prediction and the server step agree with the hook, tick for tick.
-@(test)
-test_prediction_agrees_with_the_hook :: proc(t: ^testing.T) {
-	w: Test_World
-	defer delete(w.solid)
-	floor(&w, 0, 40)
-	hook_wall(&w, 25)
-	rules := RULES_DEFAULTS
-	mods := MODS_NONE
-	mods.grapple = HOOK
-	start := Player_State {
-		position  = {0.5, 1, 0.5},
-		on_ground = true,
-	}
-	predicted: Prediction
-	prediction_init(&predicted, start)
-	server := start
-	hooked_ticks := 0
-	for tick in 0 ..< 200 {
-		in_ := Player_Input {
-			pitch   = 0.15,
-			move    = {0.2, 0.5},
-			buttons = {.Grapple} if tick % 100 < 40 else {},
-		}
-		msg := prediction_tick(&predicted, in_, &rules, query(&w), mods)
-		player_step(&server, msg.input, &rules, query(&w), TICK_SECONDS, mods)
-		if server.hooked {hooked_ticks += 1}
-		if !testing.expectf(
-			t,
-			predicted.state == server,
-			"tick %d: %v against %v",
-			tick,
-			predicted.state,
-			server,
-		) {break}
-	}
-	testing.expect(t, hooked_ticks > 20, "it never hooked")
-	prediction_reconcile(
-		&predicted,
-		{acked = predicted.next_sequence - 1, state = server},
-		&rules,
-		query(&w),
-		mods,
-	)
-	testing.expect(t, predicted.state == server)
 }
 
 // A player with no body (Ability.Bodiless: a camera's focus) goes straight through a
@@ -690,7 +603,7 @@ test_bodiless_moves_through_everything :: proc(t: ^testing.T) {
 	east := Player_Input {
 		move = {1, 0},
 	} // (yaw 0: right is +x)
-	for _ in 0 ..< TICK_RATE {player_step(&s, east, &rules, query(&w), DT, mods)}
+	for _ in 0 ..< TICK_RATE {player_step(&s, east, &rules, test_world_query(&w), DT, mods)}
 	testing.expectf(
 		t,
 		abs(s.position.x - (0.5 + f64(rules.fly_speed))) < 1e-3,
@@ -702,6 +615,6 @@ test_bodiless_moves_through_everything :: proc(t: ^testing.T) {
 	up := Player_Input {
 		buttons = {.Jump},
 	}
-	for _ in 0 ..< 100 * TICK_RATE {player_step(&s, up, &rules, query(&w), DT, mods)}
+	for _ in 0 ..< 100 * TICK_RATE {player_step(&s, up, &rules, test_world_query(&w), DT, mods)}
 	testing.expect_value(t, s.position.y, f64(WORLD_MAX_Y))
 }

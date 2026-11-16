@@ -3,23 +3,25 @@ package replay
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 
 // welcome_trace: a trace's records with the server's Welcome naming a game.
 @(private = "file")
-welcome_trace :: proc(played: string) -> []game.Trace_Record {
+welcome_trace :: proc(played: string) -> []protocol.Trace_Record {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	welcome := game.Welcome {
-		protocol    = game.PROTOCOL_VERSION,
+	welcome := protocol.Welcome {
+		protocol    = protocol.PROTOCOL_VERSION,
 		tick_rate   = game.TICK_RATE,
 		view_radius = 4,
 		view_height = 2,
 		rules       = game.RULES_DEFAULTS,
-		address     = {game.EARTH_GALAXY, game.EARTH_WORLD},
+		address     = {starmap.EARTH_GALAXY, starmap.EARTH_WORLD},
 		game        = played,
 	}
-	game.encode_server(&w, welcome)
-	records := make([]game.Trace_Record, 1, context.temp_allocator)
+	protocol.encode_server(&w, welcome)
+	records := make([]protocol.Trace_Record, 1, context.temp_allocator)
 	records[0] = {0, .Server, w.buf[:]}
 	return records
 }

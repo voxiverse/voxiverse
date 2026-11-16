@@ -93,7 +93,7 @@ handshake and checked by the client.
 - The client sends tick-stamped input commands; the server simulates every player with the
   shared physics and sends state; the client predicts its own player and reconciles. The server
   queues inputs per player with a bounded depth and a per-tick budget (`INPUT_QUEUE_MAX`,
-  `INPUT_BUDGET_MAX` in `game/prediction.odin`), so a client cannot run faster than the server
+  `INPUT_BUDGET_MAX` in `protocol/prediction.odin`), so a client cannot run faster than the server
   ticks.
 - Block edits and attacks are requests: predicted locally, confirmed or rolled back by the
   server. Each names the input it follows, and the server applies it right after that input, so
@@ -114,7 +114,7 @@ handshake and checked by the client.
 
 ### State replication
 Server-to-client state is **records** of typed **state kinds** (a value type, a key, a lane;
-`game/state_kinds.odin`) and one-off **events**, encoded by one codec derived by reflection
+`protocol/state_kinds.odin`) and one-off **events**, encoded by one codec derived by reflection
 from the value types (field tags give string limits and the `acked` field). Adding a replicated
 value is a struct, an entry in the table and the code that puts it; the codec, the Wireshark
 dissector's table (`build schema`) and the wire tests follow from the types. A game declares

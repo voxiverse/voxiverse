@@ -6,7 +6,9 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
+import "common:access"
 import "common:game"
+import "common:protocol"
 
 // The exit check for items, two players over UDP: the kit, dropping a
 // stack that the other picks up, placing using one up, breaking leaving
@@ -79,14 +81,14 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	})
 	if !testing.expect(t, ok, "the players never landed with their kits") {return}
 	testing.expect(t, alice.inventory.slots[0] == {stone, 64, 0, 0}, "no kit")
-	testing.expect(t, !game.allowed(alice.grants[:], "items.infinite"))
+	testing.expect(t, !access.allowed(alice.grants[:], "items.infinite"))
 
 	// Alice drops all her stone at her feet (looking down); bob, standing
 	// there too, picks it up.
 	alice.look = {0, -1.5}
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.2)
 	alice.seq += 1
-	net_send(alice, game.Inventory_Request{1, {.Drop, 0, 1}})
+	net_send(alice, protocol.Inventory_Request{1, {.Drop, 0, 1}})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return(
 			cs[0].inv_acked == 1 &&
@@ -97,14 +99,14 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, game.inventory_count(&alice.inventory, stone), 0)
 
 	// Alice places dirt (slot 1) beside her: one used up.
-	net_send(alice, game.Inventory_Request{2, {.Select, 0, 1}})
+	net_send(alice, protocol.Inventory_Request{2, {.Select, 0, 1}})
 	feet := alice.update.state.position
 	beside := game.Block_Pos {
 		i32(math.floor(feet.x)) + 1,
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(alice, game.edit_plain(1, alice.seq, beside, .Dirt))
+	net_send(alice, protocol.edit_plain(1, alice.seq, beside, .Dirt))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return(
 			1 in cs[0].results &&
@@ -113,7 +115,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	})
 	testing.expect(t, ok && alice.results[1].accepted, "placing did not use one up")
 	// She breaks it: it falls at her side; she picks it up.
-	net_send(alice, game.edit_plain(2, alice.seq, beside, .Air))
+	net_send(alice, protocol.edit_plain(2, alice.seq, beside, .Air))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return game.inventory_count(&cs[0].inventory, game.item_of_block(test_reg(), .Dirt)) == 64
 	})
@@ -129,8 +131,8 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 
 	// Refused: a click on nothing, the catalog without items.catalog.
 	before := bob.inventory
-	net_send(bob, game.Inventory_Request{1, {.Click, 25, 0}})
-	net_send(bob, game.Inventory_Request{2, {.Take, game.CURSOR_SLOT, int(dirt)}})
+	net_send(bob, protocol.Inventory_Request{1, {.Click, 25, 0}})
+	net_send(bob, protocol.Inventory_Request{2, {.Take, game.CURSOR_SLOT, int(dirt)}})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[1].inv_acked == 2})
 	testing.expect(t, ok && bob.inventory == before, "a refused request changed the inventory")
 
@@ -148,7 +150,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 				{
 					dir,
 					CHARACTERS_DIR,
-					game.account_text(test_key(name).account),
+					access.account_text(test_key(name).account),
 					strings.concatenate({name, ".json"}, context.temp_allocator),
 				},
 				context.temp_allocator,

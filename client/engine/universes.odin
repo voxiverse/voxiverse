@@ -1,6 +1,6 @@
 package engine
 
-import "common:game"
+import "common:starmap"
 import "core:time"
 
 THUMB_STARS :: 400 // stars a card's thumbnail draws
@@ -13,7 +13,7 @@ Save_Entry :: struct {
 	game_id:      string, // the game it plays, as universe.cfg says it ("": from before games were recorded)
 	mode:         string, // the universe's default game mode, as universe.cfg says it
 	mode_changed: bool, // /gamemode changed it since it was made
-	stars:        [THUMB_STARS]game.Star, // its galaxy
+	stars:        [THUMB_STARS]starmap.Star, // its galaxy
 }
 
 Saves_Mode :: enum u8 {

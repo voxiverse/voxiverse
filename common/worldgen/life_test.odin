@@ -2,11 +2,11 @@ package worldgen
 
 import "core:testing"
 
-import "common:game"
+import "common:starmap"
 
 @(test)
 test_world_life :: proc(t: ^testing.T) {
-	a := game.address_derive(7)
+	a := starmap.address_derive(7)
 	testing.expect(t, world_life(a) == world_life(a))
 	earth := world_life(a, home = true)
 	testing.expect(t, earth.life == .Animals && earth.peoples == 0 && earth.peoples_age == 0)
@@ -15,7 +15,7 @@ test_world_life :: proc(t: ^testing.T) {
 	kinds: [Life]int
 	animals, with_peoples: int
 	for i in 0 ..< N {
-		w := world_life(game.address_derive(u64(i)))
+		w := world_life(starmap.address_derive(u64(i)))
 		kinds[w.life] += 1
 		if w.life == .Animals {animals += 1}
 		if w.peoples > 0 {

@@ -7,6 +7,7 @@ import "core:math/linalg"
 import "client:render"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 
 // The other players' avatars: boxes in the entity pass (legs, a body that
 // turns with them, a head that also looks up and down), a shirt colour
@@ -151,7 +152,7 @@ Avatar_Hand :: struct {
 }
 
 // swung_seen: someone near us swung (the arm arc, on their avatar).
-swung_seen :: proc(s: ^Session, v: ^game.Swung) {
+swung_seen :: proc(s: ^Session, v: ^protocol.Swung) {
 	if o, known := &s.others[v.player]; known {o.swing = 1e-4}
 }
 

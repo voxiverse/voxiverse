@@ -6,8 +6,8 @@ import "core:testing"
 import "client:engine"
 import "client:testkit"
 import "client:ui"
+import "common:access"
 import "common:base"
-import "common:game"
 
 // Every variable table names real fields of supported types, with defaults
 // inside their ranges.
@@ -155,7 +155,7 @@ test_console_command_needs :: proc(t: ^testing.T) {
 	s.state = .Playing
 	console_execute(app, "poke it")
 	testing.expect_value(t, last(&app.console), "poke: not allowed on this server")
-	append(&s.grants, game.Grant{pattern = "world.*", allow = true})
+	append(&s.grants, access.Grant{pattern = "world.*", allow = true})
 	defer delete(s.grants)
 	console_execute(app, "poke it")
 	testing.expect_value(t, ran, 1)

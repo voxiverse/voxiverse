@@ -5,6 +5,7 @@ import "core:path/filepath"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 @(private = "file")
 Sheep_Info :: struct {
@@ -115,9 +116,9 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(a, game.Command{"time midnight"})
-	net_send(a, game.Command{"summon sheep"})
-	net_send(a, game.Command{"summon sheep"})
+	net_send(a, protocol.Command{"time midnight"})
+	net_send(a, protocol.Command{"summon sheep"})
+	net_send(a, protocol.Command{"summon sheep"})
 	ok = wait_for(
 		t,
 		both,
@@ -138,7 +139,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	seq := u32(0)
 	req :: proc(a: ^Net_Client, seq: ^u32, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
 		seq^ += 1
-		net_send(a, game.Inventory_Request{seq^, {kind, slot, arg}})
+		net_send(a, protocol.Inventory_Request{seq^, {kind, slot, arg}})
 	}
 	req(a, &seq, .Take, game.CURSOR_SLOT, int(wheat))
 	req(a, &seq, .Click, 3)
@@ -147,8 +148,8 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	testing.expect(t, ok && a.inventory.slots[3] == {wheat, 64, 0, 0}, "no wheat in hand")
 
 	// Feeding: both ready (hearts), two wheat used; feeding the same one again does nothing.
-	net_send(a, game.Use_Entity{black.id, a.seq})
-	net_send(a, game.Use_Entity{plain.id, a.seq})
+	net_send(a, protocol.Use_Entity{black.id, a.seq})
+	net_send(a, protocol.Use_Entity{plain.id, a.seq})
 	// The lamb: a third sheep.
 	ok = wait_for(
 		t,
@@ -181,9 +182,9 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 		}
 	}
 	// Fed again while waiting: not used up. A lamb fed: grows a tenth sooner, wheat used.
-	net_send(a, game.Use_Entity{black.id, a.seq})
+	net_send(a, protocol.Use_Entity{black.id, a.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.4)
-	net_send(a, game.Use_Entity{lamb.id, a.seq})
+	net_send(a, protocol.Use_Entity{lamb.id, a.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.6)
 	list = sheep_list(srv)
 	for s in list {
@@ -207,7 +208,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	req(a, &seq, .Select, 0, 0)
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 	bring(srv, lamb.id)
-	net_send(a, game.Use_Entity{lamb.id, a.seq})
+	net_send(a, protocol.Use_Entity{lamb.id, a.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.4)
 	for s in sheep_list(srv) {if s.id == lamb.id {testing.expect(t, !s.shorn, "a lamb was shorn")}}
 	// The black sheep drops black wool (shorn on the server's thread, wool counted at once).

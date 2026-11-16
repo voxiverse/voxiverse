@@ -8,6 +8,7 @@ import "client:font"
 import "client:hud"
 import "client:testkit"
 import "client:ui"
+import "common:access"
 import "common:game"
 import "server:core"
 
@@ -74,8 +75,8 @@ start :: proc(
 	rig.ui = o.ui
 	rig.games = {client_game}
 	rig.s = new(engine.Session)
-	key: game.Account_Key
-	game.account_key_set(&key, {0 ..< 32 = 5})
+	key: access.Account_Key
+	access.account_key_set(&key, {0 ..< 32 = 5})
 	engine.session_start(
 		rig.s,
 		{

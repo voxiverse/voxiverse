@@ -5,20 +5,22 @@ import "core:log"
 import "core:strings"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "common:worldgen"
 
 // What the server's State and Snapshot messages do to the session: the
-// receiver decodes them into records and events (common/game/replica.odin), and one
+// receiver decodes them into records and events (common/protocol/replica.odin), and one
 // table says what each kind of record does here, a switch what each event does; the
 // game's kinds go to its received hook (game.odin).
 
 @(private)
-Apply_Proc :: proc(s: ^Session, g: game.Received)
+Apply_Proc :: proc(s: ^Session, g: protocol.Received)
 
 @(private, rodata)
-APPLY := [game.State_Kind]Apply_Proc {
+APPLY := [protocol.State_Kind]Apply_Proc {
 	.Own_Player    = apply_own_player,
 	.Health        = apply_health,
 	.Mode          = apply_mode,
@@ -41,7 +43,7 @@ APPLY := [game.State_Kind]Apply_Proc {
 
 // apply_received does what a message's records and events say, in order.
 @(private)
-apply_received :: proc(s: ^Session, got: []game.Received) {
+apply_received :: proc(s: ^Session, got: []protocol.Received) {
 	for g in got {
 		if g.kind >= s.schema.engine { 	// the game's (game.odin)
 			if s.game.received != nil {s.game.received(s, g)}
@@ -50,18 +52,18 @@ apply_received :: proc(s: ^Session, got: []game.Received) {
 		if g.op == .Event {
 			apply_event(s, g)
 		} else {
-			APPLY[game.State_Kind(g.kind)](s, g)
+			APPLY[protocol.State_Kind(g.kind)](s, g)
 		}
 	}
 }
 
 @(private)
-apply_own_player :: proc(s: ^Session, g: game.Received) {
-	v := (^game.Own_Player)(g.value)^
+apply_own_player :: proc(s: ^Session, g: protocol.Received) {
+	v := (^protocol.Own_Player)(g.value)^
 	teleported := v.teleports != s.teleports
 	s.teleports = v.teleports
 	s.last_acked = v.acked
-	game.prediction_reconcile(
+	protocol.prediction_reconcile(
 		&s.prediction,
 		v,
 		&s.rules,
@@ -73,45 +75,45 @@ apply_own_player :: proc(s: ^Session, g: game.Received) {
 }
 
 @(private)
-apply_mode :: proc(s: ^Session, g: game.Received) {
-	if m, ok := game.mode_find(s.reg, (^game.Mode_Record)(g.value).mode); ok {s.mode = m}
+apply_mode :: proc(s: ^Session, g: protocol.Received) {
+	if m, ok := game.mode_find(s.reg, (^protocol.Mode_Record)(g.value).mode); ok {s.mode = m}
 }
 
 @(private)
-apply_health :: proc(s: ^Session, g: game.Received) {
-	h := (^game.Health)(g.value)
+apply_health :: proc(s: ^Session, g: protocol.Received) {
+	h := (^protocol.Health)(g.value)
 	s.health, s.max_health, s.dead = h.health, h.max, h.dead
 }
 
 @(private)
-apply_place :: proc(s: ^Session, g: game.Received) {
-	s.place = (^game.Place)(g.value)^
+apply_place :: proc(s: ^Session, g: protocol.Received) {
+	s.place = (^protocol.Place)(g.value)^
 }
 
 @(private)
-apply_inventory :: proc(s: ^Session, g: game.Received) {
-	inventory_reconcile(s, (^game.Inventory_State)(g.value)^)
+apply_inventory :: proc(s: ^Session, g: protocol.Received) {
+	inventory_reconcile(s, (^protocol.Inventory_State)(g.value)^)
 }
 
 @(private)
-apply_rules :: proc(s: ^Session, g: game.Received) {
+apply_rules :: proc(s: ^Session, g: protocol.Received) {
 	s.rules = (^game.Rules)(g.value)^
 }
 
 @(private)
-apply_clock :: proc(s: ^Session, g: game.Received) {
-	c := (^game.Clock)(g.value)
+apply_clock :: proc(s: ^Session, g: protocol.Received) {
+	c := (^protocol.Clock)(g.value)
 	// the anchor is the time at its tick; this message is of s.rx.tick
 	behind := f64(s.rx.tick - c.tick) * f64(game.TICK_SECONDS)
 	s.clock = game.advance_time(c.time, max(behind, 0), &s.rules)
 }
 
 @(private)
-apply_grants :: proc(s: ^Session, g: game.Received) {
-	v := (^game.Grants)(g.value)
+apply_grants :: proc(s: ^Session, g: protocol.Received) {
+	v := (^protocol.Grants)(g.value)
 	for gr in s.grants {delete(gr.pattern)}
 	clear(&s.grants)
-	if !game.grants_parse(v.text, &s.grants) {log.warn("session grants not understood")}
+	if !access.grants_parse(v.text, &s.grants) {log.warn("session grants not understood")}
 	for c in s.commands {delete(c)}
 	clear(&s.commands)
 	for name in strings.fields(v.commands, context.temp_allocator) {
@@ -120,32 +122,32 @@ apply_grants :: proc(s: ^Session, g: game.Received) {
 }
 
 @(private)
-apply_variables :: proc(s: ^Session, g: game.Received) {
+apply_variables :: proc(s: ^Session, g: protocol.Received) {
 	s.has_worldgen = true
-	for p in base.vars_read(worldgen.params_table(), &s.worldgen, (^game.Variables)(g.value).text) {
+	for p in base.vars_read(worldgen.params_table(), &s.worldgen, (^protocol.Variables)(g.value).text) {
 		log.warnf("session variable not applied problem=%v text=%q", p.error, p.text)
 	}
 }
 
 @(private)
-apply_selection :: proc(s: ^Session, g: game.Received) {
-	s.selection = (^game.Selection)(g.value).corners // (drawn: camera.odin)
+apply_selection :: proc(s: ^Session, g: protocol.Received) {
+	s.selection = (^protocol.Selection)(g.value).corners // (drawn: camera.odin)
 }
 
 @(private)
-apply_island :: proc(s: ^Session, g: game.Received) {
-	s.island = (^game.Island)(g.value)^
+apply_island :: proc(s: ^Session, g: protocol.Received) {
+	s.island = (^protocol.Island)(g.value)^
 }
 
 @(private)
-apply_player :: proc(s: ^Session, g: game.Received) {
+apply_player :: proc(s: ^Session, g: protocol.Received) {
 	id := u16(g.key.a)
 	if g.op == .Remove {
 		if o, known := s.others[id]; known {delete(o.name)}
 		delete_key(&s.others, id)
 		return
 	}
-	v := (^game.Player_Record)(g.value)
+	v := (^protocol.Player_Record)(g.value)
 	if o, known := &s.others[id]; known && g.op == .Change {
 		if o.name != v.name {
 			delete(o.name)
@@ -165,33 +167,33 @@ apply_player :: proc(s: ^Session, g: game.Received) {
 		deaths = v.deaths,
 	}
 	// its motion may have arrived first (the lanes are not ordered together)
-	if m := game.receiver_snapshot_get(&s.rx, int(game.State_Kind.Player_Motion), g.key);
+	if m := protocol.receiver_snapshot_get(&s.rx, int(protocol.State_Kind.Player_Motion), g.key);
 	   m != nil {
-		other_snapshot(&s.others[id], s.rx.tick, (^game.Player_Motion)(m)^)
+		other_snapshot(&s.others[id], s.rx.tick, (^protocol.Player_Motion)(m)^)
 	}
 }
 
 @(private)
-apply_tally :: proc(s: ^Session, g: game.Received) {
-	s.tally = (^game.Tally)(g.value)^
+apply_tally :: proc(s: ^Session, g: protocol.Received) {
+	s.tally = (^protocol.Tally)(g.value)^
 }
 
 @(private)
-apply_player_motion :: proc(s: ^Session, g: game.Received) {
+apply_player_motion :: proc(s: ^Session, g: protocol.Received) {
 	if g.op == .Remove {return}
 	if o, known := &s.others[u16(g.key.a)]; known {
-		other_snapshot(o, s.rx.tick, (^game.Player_Motion)(g.value)^)
+		other_snapshot(o, s.rx.tick, (^protocol.Player_Motion)(g.value)^)
 	}
 }
 
 @(private)
-apply_entity :: proc(s: ^Session, g: game.Received) {
+apply_entity :: proc(s: ^Session, g: protocol.Received) {
 	id := u32(g.key.a)
 	if g.op == .Remove {
 		delete_key(&s.entities, id)
 		return
 	}
-	v := (^game.Entity_Record)(g.value)
+	v := (^protocol.Entity_Record)(g.value)
 	if e, known := &s.entities[id]; known && g.op == .Change {
 		e.kind, e.stack, e.health, e.max_health = v.kind, v.stack, v.health, v.max_health
 		return
@@ -202,33 +204,33 @@ apply_entity :: proc(s: ^Session, g: game.Received) {
 		health     = v.health,
 		max_health = v.max_health,
 	}
-	if m := game.receiver_snapshot_get(&s.rx, int(game.State_Kind.Entity_Motion), g.key);
+	if m := protocol.receiver_snapshot_get(&s.rx, int(protocol.State_Kind.Entity_Motion), g.key);
 	   m != nil {
-		entity_snapshot(&s.entities[id], s.rx.tick, (^game.Entity_Motion)(m)^)
+		entity_snapshot(&s.entities[id], s.rx.tick, (^protocol.Entity_Motion)(m)^)
 	}
 }
 
 @(private)
-apply_entity_motion :: proc(s: ^Session, g: game.Received) {
+apply_entity_motion :: proc(s: ^Session, g: protocol.Received) {
 	if g.op == .Remove {return}
 	if e, known := &s.entities[u32(g.key.a)]; known {
-		entity_snapshot(e, s.rx.tick, (^game.Entity_Motion)(g.value)^)
+		entity_snapshot(e, s.rx.tick, (^protocol.Entity_Motion)(g.value)^)
 	}
 }
 
 // entity_snapshot adds what an Entity_Motion said about an entity.
 @(private)
-entity_snapshot :: proc(e: ^Other_Entity, tick: u32, m: game.Entity_Motion) {
+entity_snapshot :: proc(e: ^Other_Entity, tick: u32, m: protocol.Entity_Motion) {
 	track_add(&e.track, {tick, m.position, m.yaw, m.pitch, false, false})
 	e.looks = m.looks
 	if e.last_seen == {} {e.last_seen = m.position}
 }
 
 @(private)
-apply_block :: proc(s: ^Session, g: game.Received) {
+apply_block :: proc(s: ^Session, g: protocol.Received) {
 	base.profile_scope("apply block change")
-	v := (^game.Block_Record)(g.value)
-	p := game.key_block(g.key)
+	v := (^protocol.Block_Record)(g.value)
+	p := protocol.key_block(g.key)
 	if !v.heard {
 		world_set_block(&s.world, p, game.Block(v.block)) // the world's own changes (flowing water): quietly
 		return
@@ -240,10 +242,10 @@ apply_block :: proc(s: ^Session, g: game.Received) {
 }
 
 @(private)
-apply_channel :: proc(s: ^Session, g: game.Received) {
+apply_channel :: proc(s: ^Session, g: protocol.Received) {
 	if g.op == .Remove {return}
 	id := int(g.key.d)
-	v := (^game.Channel_Record)(g.value).value
+	v := (^protocol.Channel_Record)(g.value).value
 	if id <= 0 || id >= len(s.reg.channels) || !s.reg.channels[id].replicated {
 		fail(s, fmt.tprintf("the server sent a value of channel %d, which is not replicated", id))
 		return
@@ -261,47 +263,47 @@ apply_channel :: proc(s: ^Session, g: game.Received) {
 		)
 		return
 	}
-	world_set_channel(&s.world, game.key_block(g.key), id, v)
+	world_set_channel(&s.world, protocol.key_block(g.key), id, v)
 }
 
 @(private)
-apply_event :: proc(s: ^Session, g: game.Received) {
-	switch game.Event_Kind(g.kind - len(game.State_Kind)) {
+apply_event :: proc(s: ^Session, g: protocol.Received) {
+	switch protocol.Event_Kind(g.kind - len(protocol.State_Kind)) {
 	case .Notice:
-		notice(s, (^game.Notice)(g.value).text)
+		notice(s, (^protocol.Notice)(g.value).text)
 	case .Chat_Line:
-		v := (^game.Chat_Line)(g.value)
+		v := (^protocol.Chat_Line)(g.value)
 		chat_add(s, v.id, v.text)
 		log.info("session chat ", game.format_strip(v.text))
 		append(&s.notices, strings.clone(game.format_strip(v.text)))
 	case .Chat_Delete:
-		chat_delete(s, (^game.Chat_Delete)(g.value).id)
+		chat_delete(s, (^protocol.Chat_Delete)(g.value).id)
 	case .Entity_Hurt:
-		if e, known := &s.entities[(^game.Entity_Hurt)(g.value).entity]; known {
+		if e, known := &s.entities[(^protocol.Entity_Hurt)(g.value).entity]; known {
 			e.hurt_at = time.tick_now()
 			append(&s.sounds, Sound_Event{.Entity_Hurt, .Air, e.last_seen + {0, 0.5, 0}, 1})
 		}
 	case .Entity_Died:
-		if e, known := &s.entities[(^game.Entity_Died)(g.value).entity]; known {
+		if e, known := &s.entities[(^protocol.Entity_Died)(g.value).entity]; known {
 			entity_died(s, e)
 		}
 	case .Explosion:
-		x := (^game.Explosion)(g.value)
+		x := (^protocol.Explosion)(g.value)
 		explosion_effects(s, x.position, f64(x.radius))
 	case .Damage_Hit:
-		s.hurt = (^game.Damage_Hit)(g.value)^
+		s.hurt = (^protocol.Damage_Hit)(g.value)^
 		s.hurts += 1
 		s.hurt_age = 0
 	case .Shot:
-		shot_seen(s, (^game.Shot)(g.value))
+		shot_seen(s, (^protocol.Shot)(g.value))
 	case .Swung:
-		swung_seen(s, (^game.Swung)(g.value))
+		swung_seen(s, (^protocol.Swung)(g.value))
 	case .Hit_Confirm:
-		hit_confirmed(s, (^game.Hit_Confirm)(g.value))
+		hit_confirmed(s, (^protocol.Hit_Confirm)(g.value))
 	case .Player_Died:
 		s.died += 1
 		s.death_age = 0
-		d := (^game.Player_Died)(g.value)
+		d := (^protocol.Player_Died)(g.value)
 		kind, _ := game.damage_source_parse(d.cause)
 		line := game.death_text(kind, s.config.name, d.attacker, d.weapon, true)
 		s.death_len = copy(s.death_line[:], line)

@@ -8,6 +8,7 @@ import "core:time"
 
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // The deterministic harness (docs/determinism.md, "The harness"): a stepped
 // server, an in-memory network on a tick clock, the fixed flat world and one
@@ -17,7 +18,7 @@ import "common:netcode"
 Harness :: struct {
 	srv:     Server,
 	net:     netcode.Simnet, // every remote player's network (the server listens on it)
-	pipe:    game.Pipe, // the local player's (harness_local), when there is one
+	pipe:    protocol.Pipe, // the local player's (harness_local), when there is one
 	parties: [dynamic]Harness_Party, // run each tick before the server, in the order added
 	started: bool,
 	local:   bool,
@@ -114,17 +115,17 @@ harness_start :: proc(
 	h.net.now = harness_time(0)
 	c := harness_game(config)
 	c.stepped, c.workers, c.net = true, 0, &h.net
-	end: game.Endpoint
+	end: protocol.Endpoint
 	if local {
-		game.pipe_init(&h.pipe)
+		protocol.pipe_init(&h.pipe)
 		h.pipe.clock, h.pipe.start = &h.net.now, h.net.now // (latency and jitter in ticks of the harness, drawn from its seed)
-		game.pipe_seed(&h.pipe, HARNESS_SEED)
+		protocol.pipe_seed(&h.pipe, HARNESS_SEED)
 		end = {&h.pipe, .Server}
 		h.local = true
 	}
 	if !start(&h.srv, c, end) {
 		// (h.srv stays as start left it: its refusal says why)
-		if local {game.pipe_destroy(&h.pipe)}
+		if local {protocol.pipe_destroy(&h.pipe)}
 		netcode.simnet_destroy(&h.net)
 		h.local = false
 		return false
@@ -134,7 +135,7 @@ harness_start :: proc(
 }
 
 // harness_local: the client's end of the pipe.
-harness_local :: proc(h: ^Harness) -> game.Endpoint {
+harness_local :: proc(h: ^Harness) -> protocol.Endpoint {
 	assert(h.local, "harness_local needs harness_start(local = true)")
 	return {&h.pipe, .Client}
 }
@@ -201,7 +202,7 @@ harness_ticks :: proc(h: ^Harness) -> u64 {return h.srv.tick}
 // still in flight is freed). The parties are the test's to end.
 harness_stop :: proc(h: ^Harness) -> bool {
 	ok := stop(&h.srv)
-	if h.local {game.pipe_destroy(&h.pipe)}
+	if h.local {protocol.pipe_destroy(&h.pipe)}
 	netcode.simnet_destroy(&h.net)
 	runtime.arena_destroy(&h.temp)
 	delete(h.parties)

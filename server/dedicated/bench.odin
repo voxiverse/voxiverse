@@ -8,9 +8,11 @@ import "core:os"
 import "core:sync"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 import "common:telemetry"
 import "server:core"
 
@@ -47,11 +49,11 @@ Bot_Stage :: enum u8 {
 Bot :: struct {
 	link:                     netcode.Link,
 	name:                     string,
-	key:                      game.Account_Key,
+	key:                      access.Account_Key,
 	yaw:                      f32, // its direction out
 	scratch:                  ^game.Block_Array,
-	schema:                   game.Schema,
-	rx:                       game.Receiver, // what the server says (its own player: Own_Player)
+	schema:                   protocol.Schema,
+	rx:                       protocol.Receiver, // what the server says (its own player: Own_Player)
 	messages:                 [dynamic][]u8,
 	stage:                    Bot_Stage,
 	welcomed:                 bool,
@@ -178,15 +180,15 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		b.name = fmt.aprintf("bot%d", i + 1)
 		seed: [32]u8
 		for k in 0 ..< 32 {seed[k] = u8(k * 13 + i * 101 + 7)}
-		game.account_key_set(&b.key, seed[:])
+		access.account_key_set(&b.key, seed[:])
 		b.yaw = f32(i) * 2 * math.PI / BENCH_BOTS
 		b.rng = u64(i + 1) * 0x9E3779B97F4A7C15
 		b.party = party
 		b.changes = 1000 // (the first tick takes a weapon in hand)
 		b.weapon = 0
 		b.scratch = new(game.Block_Array)
-		b.schema = game.game_schema()
-		game.receiver_init(&b.rx, &b.schema, srv.registry)
+		b.schema = protocol.game_schema()
+		protocol.receiver_init(&b.rx, &b.schema, srv.registry)
 		netcode.link_connect(&b.link, {net.IP4_Loopback, port}, "", time.tick_now())
 	}
 	defer for &b in bots {
@@ -194,8 +196,8 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		for p in b.messages {netcode.link_free(&b.link, p)}
 		delete(b.messages)
 		free(b.scratch)
-		game.receiver_destroy(&b.rx)
-		game.schema_destroy(&b.schema)
+		protocol.receiver_destroy(&b.rx)
+		protocol.schema_destroy(&b.schema)
 		delete(b.name)
 		delete(b.others)
 	}
@@ -271,8 +273,8 @@ pump :: proc(bots: []Bot) {
 		if was != .Connected && b.link.state == .Connected {
 			send(
 				&b,
-				game.Hello {
-					game.PROTOCOL_VERSION,
+				protocol.Hello {
+					protocol.PROTOCOL_VERSION,
 					b.key.account,
 					b.name,
 					b.schema.engine_hash,
@@ -284,28 +286,28 @@ pump :: proc(bots: []Bot) {
 		netcode.link_receive(&b.link, &b.messages)
 		for p in b.messages {
 			defer netcode.link_free(&b.link, p)
-			m, ok := game.decode_server(p, b.scratch, b.rx.reg)
+			m, ok := protocol.decode_server(p, b.scratch, b.rx.reg)
 			if !ok {continue}
 			#partial switch v in m {
-			case game.Challenge:
-				send(&b, game.Proof{game.account_sign(&b.key, v.nonce)})
-			case game.Characters:
-				send(&b, game.Choose{b.name})
-			case game.Welcome:
+			case protocol.Challenge:
+				send(&b, protocol.Proof{access.account_sign(&b.key, v.nonce)})
+			case protocol.Characters:
+				send(&b, protocol.Choose{b.name})
+			case protocol.Welcome:
 				b.welcomed = true
 				rules := v.rules
-				game.receiver_seed(&b.rx, int(game.State_Kind.Rules), &rules)
-			case game.State_Message, game.Snapshot_Message:
-				got := make([dynamic]game.Received, context.temp_allocator)
+				protocol.receiver_seed(&b.rx, int(protocol.State_Kind.Rules), &rules)
+			case protocol.State_Message, protocol.Snapshot_Message:
+				got := make([dynamic]protocol.Received, context.temp_allocator)
 				#partial switch s in m {
-				case game.State_Message:
-					game.receive_state(&b.rx, s.data, &got)
-				case game.Snapshot_Message:
-					game.receive_snapshot(&b.rx, s.data, &got)
+				case protocol.State_Message:
+					protocol.receive_state(&b.rx, s.data, &got)
+				case protocol.Snapshot_Message:
+					protocol.receive_snapshot(&b.rx, s.data, &got)
 				}
 				for g in got {
 					if g.op == .Event {
-						#partial switch game.Event_Kind(g.kind - len(game.State_Kind)) {
+						#partial switch protocol.Event_Kind(g.kind - len(protocol.State_Kind)) {
 						case .Shot:
 							b.shots_seen += 1
 						case .Damage_Hit:
@@ -315,22 +317,22 @@ pump :: proc(bots: []Bot) {
 						}
 						continue
 					}
-					#partial switch game.State_Kind(g.kind) {
+					#partial switch protocol.State_Kind(g.kind) {
 					case .Own_Player:
-						own := (^game.Own_Player)(g.value)
+						own := (^protocol.Own_Player)(g.value)
 						b.position, b.flying = own.state.position, own.state.flying
 					case .Player_Motion:
 						id := u16(g.key.a)
 						if g.op == .Remove {
 							delete_key(&b.others, id)
 						} else {
-							b.others[id] = (^game.Player_Motion)(g.value).position
+							b.others[id] = (^protocol.Player_Motion)(g.value).position
 						}
 					case .Health:
-						b.dead = (^game.Health)(g.value).dead
+						b.dead = (^protocol.Health)(g.value).dead
 					}
 				}
-			case game.Reject:
+			case protocol.Reject:
 				log.errorf("bench %s refused: %s", b.name, v.reason)
 			}
 		}
@@ -357,7 +359,7 @@ bot_input :: proc(b: ^Bot) {
 	case .Connecting:
 		if !b.asked {
 			x, z := b.position.x, b.position.z
-			send(b, game.Command{fmt.tprintf("tp %.1f %d %.1f", x, BENCH_ALTITUDE, z)})
+			send(b, protocol.Command{fmt.tprintf("tp %.1f %d %.1f", x, BENCH_ALTITUDE, z)})
 			input.buttons = {.Toggle_Fly}
 			b.asked = true
 		}
@@ -369,7 +371,7 @@ bot_input :: proc(b: ^Bot) {
 		input.buttons = {.Sprint}
 	}
 	b.seq += 1
-	send(b, game.Input{b.seq, input, b.rx.ack})
+	send(b, protocol.Input{b.seq, input, b.rx.ack})
 }
 
 // party_input: stand and turn about among the others, face the nearest, shoot
@@ -387,7 +389,7 @@ party_input :: proc(b: ^Bot) {
 		b.reported = true
 		send(
 			b,
-			game.Telemetry_Report {
+			protocol.Telemetry_Report {
 				count = 3,
 				entries = {
 					{u8(telemetry.Kind.Client_Info), "linux", {6, 90, 1500}},
@@ -404,7 +406,7 @@ party_input :: proc(b: ^Bot) {
 	} else if b.ticks % (20 * game.TICK_RATE) == 0 {
 		send(
 			b,
-			game.Telemetry_Report {
+			protocol.Telemetry_Report {
 				count = 1,
 				entries = {
 					{u8(telemetry.Kind.Client_Frames), "", {5000, 8000, 12000}},
@@ -423,7 +425,7 @@ party_input :: proc(b: ^Bot) {
 	if b.dead {
 		b.dead_for += 1
 		if b.dead_for > 15 {
-			send(b, game.Respawn{})
+			send(b, protocol.Respawn{})
 			b.dead_for = 0
 		}
 	} else {
@@ -446,7 +448,7 @@ party_input :: proc(b: ^Bot) {
 			b.weapon = int(roll(b) % 3) // (the kit's hotbar: rifle, shotgun, sniper, then the launcher and the hook)
 			if roll(b) % 5 == 0 {b.weapon = 4}
 			b.inv_seq += 1
-			send(b, game.Inventory_Request{b.inv_seq, {kind = .Select, arg = b.weapon}})
+			send(b, protocol.Inventory_Request{b.inv_seq, {kind = .Select, arg = b.weapon}})
 		}
 		if b.ticks % 40 < 2 || b.ticks % 40 == 6 {input.buttons += {.Jump}} 	// (a jump, and a double jump in the boots)
 		if best < 1e18 {
@@ -455,21 +457,21 @@ party_input :: proc(b: ^Bot) {
 				input.buttons += {.Grapple}
 			}
 			b.seq += 1
-			send(b, game.Input{b.seq, input, b.rx.ack})
+			send(b, protocol.Input{b.seq, input, b.rx.ack})
 			if b.weapon != 4 {
-				send(b, game.Shoot{b.seq, u8(b.weapon), true, input.yaw, input.pitch})
+				send(b, protocol.Shoot{b.seq, u8(b.weapon), true, input.yaw, input.pitch})
 			}
 			return
 		}
 	}
 	b.seq += 1
-	send(b, game.Input{b.seq, input, b.rx.ack})
+	send(b, protocol.Input{b.seq, input, b.rx.ack})
 }
 
 @(private = "file")
-send :: proc(b: ^Bot, m: game.Client_Message) {
+send :: proc(b: ^Bot, m: protocol.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.encode_client(&w, m)
-	netcode.link_send(&b.link, w.buf[:], game.message_reliable(.Client, w.buf[0]))
+	protocol.encode_client(&w, m)
+	netcode.link_send(&b.link, w.buf[:], protocol.message_reliable(.Client, w.buf[0]))
 }

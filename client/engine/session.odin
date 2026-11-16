@@ -14,9 +14,12 @@ import "client:gpu"
 import "client:mesh"
 import "client:render"
 import "client:steam"
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
+import "common:starmap"
 import "common:worldgen"
 import "server:core"
 
@@ -26,12 +29,12 @@ import "server:core"
 // player and what it knows of the other players; everything it allocates
 // long-term is in its arena, freed at once by session_end. The client talks
 // to the server only through messages, the same either way: it sends
-// inputs, predicts their effect (common/game/prediction.odin), and the server's
+// inputs, predicts their effect (common/protocol/prediction.odin), and the server's
 // Player_Updates have the last word.
 
 Session_Config :: struct {
 	name:              string, // the character to play ("": ask for the account's)
-	key:               game.Account_Key, // the account
+	key:               access.Account_Key, // the account
 	join:              Maybe(Join), // play on that server; otherwise host the world here
 	seed:              i64,
 	earth:             bool, // a new universe's home world is Earth (else one made from the seed)
@@ -70,15 +73,15 @@ Session :: struct {
 	loading:          Maybe(Loading), // the loading screen is up (screen_loading.odin)
 	failure:          string, // why it failed (in the arena)
 	arena:            virtual.Arena,
-	pipe:             game.Pipe, // to our own server (hosting)
-	endpoint:         game.Endpoint,
+	pipe:             protocol.Pipe, // to our own server (hosting)
+	endpoint:         protocol.Endpoint,
 	ticket:           steam.Ticket, // the Steam auth ticket Hello carried (cancelled at the end)
 	server:           core.Server,
 	remote:           bool, // playing on someone else's server, through link
 	link:             netcode.Link,
 	capture:          netcode.Capture,
 	last_flush:       time.Tick,
-	traffic:          [game.Side]game.Traffic, // counted here when remote (the pipe counts its own)
+	traffic:          [protocol.Side]protocol.Traffic, // counted here when remote (the pipe counts its own)
 	others:           map[u16]Other_Player, // the other players, by player id (players.odin)
 	entities:         map[u32]Other_Entity, // near us, by id (entities.odin)
 	screen_view:      Screen_View, // the frame's view, for a HUD's marks in the world (marks.odin)
@@ -93,20 +96,20 @@ Session :: struct {
 	puffs:            [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen:     bool,
-	grants:           [dynamic]game.Grant, // what the server lets this player do (heap)
+	grants:           [dynamic]access.Grant, // what the server lets this player do (heap)
 	characters:       [dynamic]string, // the account's, to choose from (heap; Choosing)
 	commands:         [dynamic]string, // the server commands it may use (heap, for Tab)
 	chat:             [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
 	texels:           [][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures by layer, for debris (made again when the registry is swapped)
 	render_clock:     Render_Clock, // when to show the others (players.odin)
 	notices:          [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
-	welcome:          game.Welcome,
+	welcome:          protocol.Welcome,
 	reg:              ^game.Registry, // what the blocks and items are: the game's, or (hosting) the universe's
 	available:        []core.Pack_Candidate, // packs found outside the universe: local, Workshop (arena)
 	reg_owned:        bool, // reg is the universe's own (freed with the session)
 	reg_fresh:        ^game.Registry, // the registry the server's reload made, waiting for the mesh jobs to end (hot reload; the App swaps it in)
 	reg_swapped:      bool, // reg was replaced by the packs of the server joined (the App makes the new items' icons, then clears it)
-	fetch:            ^game.Pack_Fetch, // the server's packs, while joining (pack_fetch.odin)
+	fetch:            ^protocol.Pack_Fetch, // the server's packs, while joining (pack_fetch.odin)
 	fetching:         bool, // a Packs message came
 	fetched:          bool, // ... and its registry is built
 	world:            World, // set up from Welcome
@@ -145,8 +148,8 @@ Session :: struct {
 	shots:            int, // shots we fired (tests)
 	confirms:         int, // Hit_Confirm events seen
 	feet:             [3]f64, // where the predicted player stands (the avatar in third person)
-	teleport:         Maybe(game.Teleport), // requested before joining: sent on Welcome
-	prediction:       game.Prediction,
+	teleport:         Maybe(protocol.Teleport), // requested before joining: sent on Welcome
+	prediction:       protocol.Prediction,
 	rules:            game.Rules, // the server's, as last announced
 	clock:            f64, // world time: the server's last word, carried on since (common/game/time.odin)
 	cloud_drift:      f64, // blocks the clouds have moved
@@ -161,7 +164,7 @@ Session :: struct {
 	autopilot:        Maybe(game.Player_Input), // overrides the controls (fly_test)
 	aim:              Maybe(game.Ray_Hit), // the block under the crosshair, within reach
 	aim_entity:       Maybe(u32), // an entity under the crosshair, nearer than that block
-	edits:            [dynamic]game.Edit, // predicted, waiting for Edit_Result
+	edits:            [dynamic]protocol.Edit, // predicted, waiting for Edit_Result
 	next_edit:        u32,
 	edit_timer:       f32, // seconds until a held button edits again
 	input_yaw:        f32, // the yaw of the last input predicted (the one an edit follows)
@@ -174,27 +177,27 @@ Session :: struct {
 	inv_sequence:     u32,
 	writer:           game.Writer,
 	scratch:          ^game.Block_Array, // decoding target for chunk messages
-	received:         [dynamic]game.Packet,
+	received:         [dynamic]protocol.Packet,
 	last_acked:       u32, // the acked of the newest Own_Player applied
-	schema:           game.Schema, // what the server replicates (state_kinds.odin)
-	rx:               game.Receiver, // what it has told us (State and Snapshot messages)
+	schema:           protocol.Schema, // what the server replicates (state_kinds.odin)
+	rx:               protocol.Receiver, // what it has told us (State and Snapshot messages)
 	teleports:        u8, // Own_Player.teleports as last seen
 	frozen:           bool, // paused, the world standing still (session_freeze)
 	selection:        [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
-	island:           game.Island, // the simulation island we are in (F3)
+	island:           protocol.Island, // the simulation island we are in (F3)
 	stats:            Session_Stats,
 	mode:             int, // the game mode the server last said (Mode): an index into reg.game_modes
 	health:           f32, // as the server last said (Health)
 	max_health:       f32,
-	hurt:             game.Damage_Hit, // the last hit (the damage direction on the screen)
+	hurt:             protocol.Damage_Hit, // the last hit (the damage direction on the screen)
 	hurts:            int, // Damage_Hits seen
 	dead:             bool, // at the death screen (Health.dead)
 	death_line:       [96]u8, // how it happened, as the death screen says it
 	death_len:        int,
 	death_age:        f32, // seconds since the last Player_Died (the death screen's countdown)
-	tally:            game.Tally, // our kills and deaths (the P list)
-	place:            game.Place, // the server's word on where we are (the music's)
-	home:             game.Address, // the world we joined in (the music's "home")
+	tally:            protocol.Tally, // our kills and deaths (the P list)
+	place:            protocol.Place, // the server's word on where we are (the music's)
+	home:             starmap.Address, // the world we joined in (the music's "home")
 	died:             int, // Player_Died events seen (the music's death stinger)
 	arrivals:         int, // arrivals through a gate or travel (the music's discovery stinger)
 	market:           Market_State, // the town's market the server last sent (market.odin)
@@ -214,8 +217,8 @@ Net_Stats :: struct {
 	ping_pending: bool,
 	ping_timer:   f32,
 	rate_timer:   f32,
-	last:         [game.Side]game.Traffic, // counters at the last rate update
-	rates:        [game.Side]game.Traffic, // per second, over the last second
+	last:         [protocol.Side]protocol.Traffic, // counters at the last rate update
+	rates:        [protocol.Side]protocol.Traffic, // per second, over the last second
 }
 
 Session_Stats :: struct {
@@ -253,18 +256,18 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	}
 	arena := virtual.arena_allocator(&s.arena)
 	s.scratch = new(game.Block_Array, arena)
-	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
-	s.schema = game.game_schema()
+	game.writer_init(&s.writer, arena, protocol.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
+	s.schema = protocol.game_schema()
 	s.reg = config.registry
-	game.receiver_init(&s.rx, &s.schema, s.reg)
-	s.received = make([dynamic]game.Packet, 0, 256)
-	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
+	protocol.receiver_init(&s.rx, &s.schema, s.reg)
+	s.received = make([dynamic]protocol.Packet, 0, 256)
+	s.edits = make([dynamic]protocol.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
 	s.notices = make([dynamic]string, 0, 16) // heap: notices come and go (an arena would only grow)
 	s.fills = make([dynamic]render.Debug_Point, 0, 0) // heap: drawn and cleared every frame
 	s.world_lines = make([dynamic]render.Debug_Point, 0, 0) // heap: likewise
 	s.others = make(map[u16]Other_Player) // heap: players come and go (an arena would only grow)
-	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, 2 * game.MAX_KNOWN_ENTITIES) // (a message may create before it removes)
+	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, 2 * protocol.MAX_KNOWN_ENTITIES) // (a message may create before it removes)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
 	session_texels(s)
 	s.config.name = strings.clone(config.name, arena)
@@ -294,7 +297,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		return true // Hello goes once the link is up
 	}
 	// Our own world: its server here, through the pipe.
-	game.pipe_init(&s.pipe) // heap: both threads allocate and free packets
+	protocol.pipe_init(&s.pipe) // heap: both threads allocate and free packets
 	s.endpoint = {&s.pipe, .Client}
 	s.available = pack_candidates(config.steam, arena)
 	if own := core.registry_for_dir(
@@ -304,8 +307,8 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		extra = core.game_packs(config.host_game),
 	); own != nil {
 		s.reg, s.reg_owned = own, true // (the universe's packs: the base's, and what it lists)
-		game.receiver_destroy(&s.rx) // (the receiver is made again over the new registry)
-		game.receiver_init(&s.rx, &s.schema, s.reg)
+		protocol.receiver_destroy(&s.rx) // (the receiver is made again over the new registry)
+		protocol.receiver_init(&s.rx, &s.schema, s.reg)
 		session_texels(s)
 	}
 	if !core.start(
@@ -337,8 +340,8 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	if config.trace {session_trace(s)}
 	send_message(
 		s,
-		game.Hello {
-			game.PROTOCOL_VERSION,
+		protocol.Hello {
+			protocol.PROTOCOL_VERSION,
 			s.config.key.account,
 			s.config.name,
 			s.schema.engine_hash,
@@ -367,7 +370,7 @@ session_freeze :: proc(s: ^Session, paused: bool) {
 // session_allowed: the server lets this player do node (its Grants; it
 // checks again).
 session_allowed :: proc(s: ^Session, node: string) -> bool {
-	return s.state == .Playing && game.allowed(s.grants[:], node)
+	return s.state == .Playing && access.allowed(s.grants[:], node)
 }
 
 // session_ability: the character can do a (its mode's profile and what it wears:
@@ -395,8 +398,8 @@ session_free :: proc(s: ^Session) -> bool {
 	if s.remote {netcode.link_close(&s.link, "left the game")}
 	if s.config.steam != nil {steam.cancel_ticket(s.config.steam, &s.ticket)}
 	delete(s.entities) // the heap: entities come and go
-	game.receiver_destroy(&s.rx)
-	game.schema_destroy(&s.schema)
+	protocol.receiver_destroy(&s.rx)
+	protocol.schema_destroy(&s.schema)
 	for g in s.grants {delete(g.pattern)}
 	delete(s.grants)
 	for c in s.commands {delete(c)}
@@ -435,9 +438,9 @@ session_free :: proc(s: ^Session) -> bool {
 		)
 		world_destroy(&s.world)
 	}
-	for p in s.received {game.packet_free(s.endpoint, p)}
+	for p in s.received {protocol.packet_free(s.endpoint, p)}
 	delete(s.received)
-	if s.pipe.allocator.procedure != nil {game.pipe_destroy(&s.pipe)}
+	if s.pipe.allocator.procedure != nil {protocol.pipe_destroy(&s.pipe)}
 	log.infof(
 		"session ended chunks_received=%d received_mib=%.1f arena_mib=%.1f",
 		s.stats.chunks_received,
@@ -445,7 +448,7 @@ session_free :: proc(s: ^Session) -> bool {
 		f64(s.arena.total_used) / (1 << 20),
 	)
 	if s.fetch != nil {
-		game.pack_fetch_destroy(s.fetch)
+		protocol.pack_fetch_destroy(s.fetch)
 		free(s.fetch)
 	}
 	delete(s.texels)
@@ -464,7 +467,7 @@ session_update :: proc(
 	input: ^Input_State,
 	actions: ^Actions,
 	settings: Settings,
-	conditions: game.Conditions,
+	conditions: protocol.Conditions,
 	dt: f32,
 	look: bool,
 ) {
@@ -480,7 +483,7 @@ session_update :: proc(
 			jitter_ms  = conditions.jitter_ms,
 		}
 	} else {
-		game.pipe_set_conditions(&s.pipe, conditions)
+		protocol.pipe_set_conditions(&s.pipe, conditions)
 	}
 	{
 		// What the server sent (block changes are applied here, and settled
@@ -531,7 +534,7 @@ session_update :: proc(
 			in_.buttons += {.Toggle_Fly}
 			s.toggle_fly = false
 		}
-		sent := game.prediction_tick(
+		sent := protocol.prediction_tick(
 			&s.prediction,
 			in_,
 			&s.rules,
@@ -548,8 +551,8 @@ session_update :: proc(
 		if !camera_free(s) {edit_controls(s, input, actions, dt)}
 		game_actions(s, actions)
 	}
-	game.prediction_decay(&s.prediction, dt)
-	eyes := game.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
+	protocol.prediction_decay(&s.prediction, dt)
+	eyes := protocol.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
 	// The eyes ease down when crouching and back up (not a jump cut).
 	eye := game.player_eye_height(s.prediction.state)
 	s.eye_height += (eye - s.eye_height) * f64(1 - math.exp(-15 * dt))
@@ -607,7 +610,7 @@ session_apply :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 
 // session_teleport asks the server to move the player (feet at position;
 // now, or as soon as we have joined).
-session_teleport :: proc(s: ^Session, t: game.Teleport) {
+session_teleport :: proc(s: ^Session, t: protocol.Teleport) {
 	if s.state == .Playing {
 		send_message(s, t)
 	} else {
@@ -617,7 +620,7 @@ session_teleport :: proc(s: ^Session, t: game.Teleport) {
 
 // session_set_rule asks the server to change a rule (rules.* name).
 session_set_rule :: proc(s: ^Session, name, value: string) {
-	send_message(s, game.Set_Rule{name, value})
+	send_message(s, protocol.Set_Rule{name, value})
 }
 
 // session_others_now: the server time (ticks) to show the other players

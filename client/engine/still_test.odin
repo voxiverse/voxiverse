@@ -5,8 +5,10 @@ import "core:net"
 import "core:testing"
 
 import "client:testkit"
+import "common:access"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 import "server:core"
 
 // Those who stand still stay in sight. Snapshots carry only what changed, so
@@ -70,8 +72,8 @@ pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 		sim: ^netcode.Simnet,
 	) -> ^Session {
 		s := new(Session)
-		key: game.Account_Key
-		game.account_key_set(&key, {0 ..< 32 = seed})
+		key: access.Account_Key
+		access.account_key_set(&key, {0 ..< 32 = seed})
 		session_start(
 			s,
 			{
@@ -188,7 +190,7 @@ test_still_sheep_stays_visible :: proc(t: ^testing.T) {
 	p: Pair
 	defer pair_stop(&p)
 	if !pair_start(t, &p) {return}
-	send_message(p.mover, game.Command{"summon sheep"})
+	send_message(p.mover, protocol.Command{"summon sheep"})
 	for _ in 0 ..< 600 {
 		tick_all(&p)
 		if len(p.watch.entities) == 1 {break}
@@ -210,7 +212,7 @@ test_dropped_stack_stays_visible :: proc(t: ^testing.T) {
 	p: Pair
 	defer pair_stop(&p)
 	if !pair_start(t, &p) {return}
-	send_message(p.mover, game.Command{"give mover stone 5"})
+	send_message(p.mover, protocol.Command{"give mover stone 5"})
 	for _ in 0 ..< 100 {tick_all(&p)}
 	if !testing.expect(t, session_inventory_do(p.mover, {.Drop, p.mover.inventory.selected, 1})) {
 		return

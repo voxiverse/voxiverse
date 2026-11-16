@@ -5,7 +5,9 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
+import "common:access"
 import "common:game"
+import "common:protocol"
 
 // Roles resolve nearest first: a player's own grants, then their roles and
 // default, then what those inherit; metadata likewise.
@@ -17,35 +19,35 @@ test_permissions_resolve :: proc(t: ^testing.T) {
 	append(&player_perms(&p, "mo").roles, strings.clone("mod"))
 	append(&player_perms(&p, "grump").grants, strings.clone("-world.edit"))
 	meta_set(&player_perms(&p, "grump").meta, "prefix", "&7Grump")
-	grants :: proc(p: ^Permissions, name: string, owner := false) -> []game.Grant {
-		out := make([dynamic]game.Grant, context.temp_allocator)
+	grants :: proc(p: ^Permissions, name: string, owner := false) -> []access.Grant {
+		out := make([dynamic]access.Grant, context.temp_allocator)
 		resolve(p, name, nil, owner, &out, context.temp_allocator)
 		return out[:]
 	}
 	anyone := grants(&p, "anyone")
-	testing.expect(t, game.allowed(anyone, "world.edit") && game.allowed(anyone, "chat.send"))
-	testing.expect(t, !game.allowed(anyone, "moderation.kick"))
-	testing.expect(t, !game.allowed(anyone, "world.edit.bulk"))
+	testing.expect(t, access.allowed(anyone, "world.edit") && access.allowed(anyone, "chat.send"))
+	testing.expect(t, !access.allowed(anyone, "moderation.kick"))
+	testing.expect(t, !access.allowed(anyone, "world.edit.bulk"))
 	mo := grants(&p, "mo")
-	testing.expect(t, game.allowed(mo, "moderation.kick") && game.allowed(mo, "chat.delete"))
-	testing.expect(t, game.allowed(mo, "world.edit"), "inherited from default")
-	testing.expect(t, !game.allowed(mo, "server.stop"), "a moderator may stop the server")
-	testing.expect(t, !game.allowed(grants(&p, "grump"), "world.edit"), "their own denial")
-	testing.expect(t, game.allowed(grants(&p, "grump", owner = true), "server.stop"))
+	testing.expect(t, access.allowed(mo, "moderation.kick") && access.allowed(mo, "chat.delete"))
+	testing.expect(t, access.allowed(mo, "world.edit"), "inherited from default")
+	testing.expect(t, !access.allowed(mo, "server.stop"), "a moderator may stop the server")
+	testing.expect(t, !access.allowed(grants(&p, "grump"), "world.edit"), "their own denial")
+	testing.expect(t, access.allowed(grants(&p, "grump", owner = true), "server.stop"))
 	testing.expect_value(t, meta_of(&p, "mo", "prefix"), "&e&lMod")
 	testing.expect_value(t, meta_of(&p, "grump", "prefix"), "&7Grump")
 	testing.expect_value(t, meta_of(&p, "anyone", "prefix"), "")
 	// An inheritance loop ends.
 	append(&role_get(&p, "default").inherits, strings.clone("admin"))
-	testing.expect(t, game.allowed(grants(&p, "anyone"), "server.stop"))
+	testing.expect(t, access.allowed(grants(&p, "anyone"), "server.stop"))
 	// An account's grants reach every character of it.
 	acc := test_key("someone").account
 	append(&player_perms(&p, account_key(acc)).grants, strings.clone("world.edit.bulk"))
-	via := make([dynamic]game.Grant, context.temp_allocator)
+	via := make([dynamic]access.Grant, context.temp_allocator)
 	resolve(&p, "alt", acc, false, &via, context.temp_allocator)
 	testing.expect(
 		t,
-		game.allowed(via[:], "world.edit.bulk"),
+		access.allowed(via[:], "world.edit.bulk"),
 		"the account's grant did not reach its character",
 	)
 	testing.expect(
@@ -88,7 +90,7 @@ test_permissions_commands :: proc(t: ^testing.T) {
 		defer delete(c.columns)
 		fake_hello(t, &c, "owner")
 		for command in ([]string{"role grant builder world.edit.bulk", "role inherit builder default", "role meta builder prefix &a Builder", "user role add bea builder", "user grant bea -world.explode", "role grant bad Not-A-Node"}) {
-			fake_send(&c, game.Command{command})
+			fake_send(&c, protocol.Command{command})
 		}
 		testing.expect(
 			t,
@@ -107,10 +109,13 @@ test_permissions_commands :: proc(t: ^testing.T) {
 	s.store.dir = dir
 	permissions_open(&s)
 	defer permissions_destroy(&s.perms)
-	bea := make([dynamic]game.Grant, context.temp_allocator)
+	bea := make([dynamic]access.Grant, context.temp_allocator)
 	resolve(&s.perms, "bea", nil, false, &bea, context.temp_allocator)
-	testing.expect(t, game.allowed(bea[:], "world.edit.bulk") && game.allowed(bea[:], "chat.send"))
-	testing.expect(t, !game.allowed(bea[:], "world.explode"))
+	testing.expect(
+		t,
+		access.allowed(bea[:], "world.edit.bulk") && access.allowed(bea[:], "chat.send"),
+	)
+	testing.expect(t, !access.allowed(bea[:], "world.explode"))
 	testing.expect_value(t, meta_of(&s.perms, "bea", "prefix"), "&a Builder")
 	testing.expect(t, "bad" not_in s.perms.roles, "a bad grant made a role")
 }

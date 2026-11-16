@@ -11,6 +11,7 @@ import "client:ui"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // Multiplayer (Minecraft's screen): the servers LAN discovery finds (asked
 // about every second while the screen is open), one selected and joined
@@ -98,8 +99,8 @@ servers_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	valid := make([dynamic]int, context.temp_allocator)
 	if m.searching {
 		for f, i in m.discovery.found {
-			info, ok := game.decode_server_info(f.info)
-			if ok && info.protocol == game.PROTOCOL_VERSION {append(&valid, i)}
+			info, ok := protocol.decode_server_info(f.info)
+			if ok && info.protocol == protocol.PROTOCOL_VERSION {append(&valid, i)}
 		}
 	}
 	selected := -1
@@ -116,7 +117,7 @@ servers_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_clip_rect(ctx, area)
 	for i in valid[min(first, len(valid)):] {
 		f := m.discovery.found[i]
-		info, _ := game.decode_server_info(f.info)
+		info, _ := protocol.decode_server_info(f.info)
 		row := ui.Rect{area.x, y, area.w, SERVER_ROW}
 		y += SERVER_ROW
 		ui.push_id(ctx, fmt.tprint(f.instance))

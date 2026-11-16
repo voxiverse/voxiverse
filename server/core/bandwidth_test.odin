@@ -6,8 +6,8 @@ import "core:strconv"
 import "core:strings"
 import "core:testing"
 
-import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // The bandwidth benchmark. A stepped session is deterministic, so the bytes
 // it moves are too, on every OS: the numbers are exact, not statistical. Two
@@ -54,21 +54,23 @@ bandwidth_run :: proc(t: ^testing.T, name: string) -> (b: Bandwidth, ok: bool) {
 	ticks := CROWD_TICKS if crowd else BANDWIDTH_TICKS
 	h: State_Hash
 	for i in 0 ..< ticks {
-		if crowd && i >= 1 && i <= 5 {mirror_send(&sess.mirror, game.Command{"summon sheep 20"})}
+		if crowd &&
+		   i >= 1 &&
+		   i <= 5 {mirror_send(&sess.mirror, protocol.Command{"summon sheep 20"})}
 		h = session_step(sess, !crowd)
 	}
-	traffic := game.pipe_traffic(&sess.h.pipe)
+	traffic := protocol.pipe_traffic(&sess.h.pipe)
 	b = {
 		name  = name,
 		ticks = ticks,
 		root  = h.root,
 	}
-	for side in game.Side {
+	for side in protocol.Side {
 		for kind in 1 ..< 256 {
 			n, bytes := traffic[side].messages[kind], traffic[side].bytes[kind]
 			if n == 0 {continue}
 			if side == .Server {b.server_to_client += bytes} else {b.client_to_server += bytes}
-			label := game.message_kind_name(side, u8(kind))
+			label := protocol.message_kind_name(side, u8(kind))
 			append(
 				&b.kinds,
 				Kind_Bytes{fmt.aprintf("%s:%s", "s" if side == .Server else "c", label), n, bytes},
@@ -202,8 +204,8 @@ test_bandwidth_accept :: proc(t: ^testing.T) {
 test_snapshot_part_fits :: proc(t: ^testing.T) {
 	testing.expect(
 		t,
-		game.SNAPSHOT_PART_BYTES <= netcode.FRAGMENT_SIZE,
+		protocol.SNAPSHOT_PART_BYTES <= netcode.FRAGMENT_SIZE,
 		"a snapshot part is longer than a netcode fragment",
 	)
-	testing.expect(t, game.SNAPSHOT_PARTS * game.SNAPSHOT_PART_BYTES <= 9500)
+	testing.expect(t, protocol.SNAPSHOT_PARTS * protocol.SNAPSHOT_PART_BYTES <= 9500)
 }

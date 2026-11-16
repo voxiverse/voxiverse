@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-import "common:game"
+import "common:protocol"
 
 // schema rewrites the generated block of the Wireshark dissector
 // (tools/wireshark/voxiverse.lua, between `-- schema begin` and `-- schema end`)
@@ -23,11 +23,11 @@ main :: proc() {
 		fmt.eprintfln("schema: cannot read %s: %v", path, err)
 		os.exit(1)
 	}
-	s := game.game_schema()
+	s := protocol.game_schema()
 	b := strings.builder_make()
-	game.schema_lua(&s, &b)
+	protocol.schema_lua(&s, &b)
 	source := string(data)
-	updated, ok := game.schema_lua_splice(source, strings.to_string(b), context.allocator)
+	updated, ok := protocol.schema_lua_splice(source, strings.to_string(b), context.allocator)
 	if !ok {
 		fmt.eprintfln("schema: %s has no `-- schema begin` ... `-- schema end` block", path)
 		os.exit(1)

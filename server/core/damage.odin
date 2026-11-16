@@ -5,6 +5,7 @@ import "core:math"
 import "core:strconv"
 
 import "common:game"
+import "common:protocol"
 
 // The damage pipeline: everything that hurts a player (falls, explosions,
 // weapons, commands) goes through `damage`, which asks the abilities and the
@@ -95,7 +96,7 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 		i64(math.round(taken * 10)),
 		i64(math.round(target.health * 10)),
 	)
-	hit := game.Damage_Hit {
+	hit := protocol.Damage_Hit {
 		amount = taken,
 		known  = source.placed,
 	}
@@ -144,7 +145,7 @@ die :: proc(s: ^Server, c: ^Client, source: Damage_Source) {
 	if id, ok := source.attacker.?; ok && killer != "" && int(id) != int(player_id(s, c)) {
 		stat_add(&s.clients[id], "kills", 1)
 	}
-	died := game.Player_Died{cause, killer, source.weapon}
+	died := protocol.Player_Died{cause, killer, source.weapon}
 	event_send(s, c, .Player_Died, &died)
 	chat_system(
 		s,

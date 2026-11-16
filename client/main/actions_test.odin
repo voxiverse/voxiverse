@@ -9,7 +9,7 @@ import "core:testing"
 
 import "client:engine"
 import "client:platform"
-import "common:game"
+import "common:protocol"
 
 @(private = "file")
 Rig :: struct {
@@ -221,7 +221,7 @@ test_actions_pad_to_player :: proc(t: ^testing.T) {
 	defer free(s)
 	frame(r, .World, connect(), axis(.Left_Y, 1), button(.Left_Stick, true), button(.A, true))
 	in_ := engine.player_input(&r.a, s)
-	q := game.quantize_input(in_)
+	q := protocol.quantize_input(in_)
 	testing.expect_value(t, q.move, [2]f32{0, 1})
 	testing.expect(t, .Sprint in in_.buttons && .Jump in in_.buttons)
 	frame(r, .World, axis(.Left_Y, 0), button(.Left_Stick, false), button(.A, false))

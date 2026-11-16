@@ -12,6 +12,8 @@ import "common:base"
 import "common:game"
 import "common:intervention"
 import "common:island"
+import "common:protocol"
+import "common:starmap"
 import "common:worldgen"
 
 // Worlds: a universe (the server) has worlds, each a voxel space of its own:
@@ -21,7 +23,7 @@ import "common:worldgen"
 
 World :: struct {
 	server:              ^Server,
-	address:             game.Address,
+	address:             starmap.Address,
 	arena:               virtual.Arena,
 	dir:                 string, // its save directory ("": not saved)
 	generator:           worldgen.Kind,
@@ -83,7 +85,7 @@ world_make :: proc(s: ^Server) -> ^World {
 // alone, so its terrain is the same in every universe; any other world's is
 // its seed.
 terrain_seed :: proc(w: ^World) -> i64 {
-	if w.address == game.earth_address() {return i64(game.address_hash(w.address))}
+	if w.address == starmap.earth_address() {return i64(starmap.address_hash(w.address))}
 	return w.seed
 }
 
@@ -92,7 +94,7 @@ terrain_seed :: proc(w: ^World) -> i64 {
 // same Earth everywhere, a different place to begin in each universe).
 // Worlds made before keep their saved params.
 world_set_planet :: proc(w: ^World) {
-	if w.address != game.earth_address() {return}
+	if w.address != starmap.earth_address() {return}
 	w.params.planet = 1
 	w.params.spawn_lat, w.params.spawn_lon = worldgen.planet_spawn_pick(
 		&w.params,
@@ -193,7 +195,7 @@ world_kind :: proc(w: ^World) {
 	s := w.server
 	a := w.address
 	if w == s.home {return}
-	h := game.address_hash(a)
+	h := starmap.address_hash(a)
 	w.seed = i64(u64(s.config.seed) ~ h * 0x9e37_79b9_7f4a_7c15)
 	w.generator = .Earth
 	n := h
@@ -224,16 +226,16 @@ world_kind :: proc(w: ^World) {
 }
 
 // world_find: the loaded world at address, if any.
-world_find :: proc(s: ^Server, a: game.Address) -> ^World {
+world_find :: proc(s: ^Server, a: starmap.Address) -> ^World {
 	for w in s.worlds {if w.address == a {return w}}
 	return nil
 }
 
 // world_load: the world at address, loaded (from its save, or new) if it
 // was not; nil (logged) if it cannot be.
-world_load :: proc(s: ^Server, a: game.Address) -> ^World {
+world_load :: proc(s: ^Server, a: starmap.Address) -> ^World {
 	if w := world_find(s, a); w != nil {return w}
-	if !game.address_valid(a) {return nil}
+	if !starmap.address_valid(a) {return nil}
 	w := world_make(s)
 	w.address = a
 	world_kind(w)
@@ -243,7 +245,7 @@ world_load :: proc(s: ^Server, a: game.Address) -> ^World {
 	}
 	w.idle_since = s.tick
 	append(&s.worlds, w)
-	log.infof("server world loaded address=%s worlds=%d", game.address_dir(a), len(s.worlds))
+	log.infof("server world loaded address=%s worlds=%d", starmap.address_dir(a), len(s.worlds))
 	return w
 }
 
@@ -270,7 +272,7 @@ islands_update :: proc(s: ^Server, w: ^World) {
 			e.island,
 			e.from,
 			len(e.chunks),
-			game.address_dir(w.address),
+			starmap.address_dir(w.address),
 		)
 	}
 }
@@ -308,7 +310,7 @@ worlds_unload_idle :: proc(s: ^Server) {
 		   len(w.kept) > 0 {w.idle_since = max(w.idle_since, s.tick)}
 		if s.tick < w.idle_since + idle {continue}
 		world_save(w)
-		log.infof("server world unloaded address=%s", game.address_dir(w.address))
+		log.infof("server world unloaded address=%s", starmap.address_dir(w.address))
 		world_close(w)
 		ordered_remove(&s.worlds, i)
 	}
@@ -316,7 +318,7 @@ worlds_unload_idle :: proc(s: ^Server) {
 
 // travel takes c to the world at address (its spawn, or there: a place in
 // it); "" or why not.
-travel :: proc(s: ^Server, c: ^Client, a: game.Address, there: Maybe(Place) = nil) -> string {
+travel :: proc(s: ^Server, c: ^Client, a: starmap.Address, there: Maybe(Place) = nil) -> string {
 	to := world_load(s, a)
 	if to == nil {return "that world cannot be reached"}
 	from := c.world
@@ -330,8 +332,8 @@ travel :: proc(s: ^Server, c: ^Client, a: game.Address, there: Maybe(Place) = ni
 		c.landing = nil
 		c.action_count = 0 // (edits and shots were for the last world)
 		c.world = to
-		send_message(s, c, game.World_Changed{to.address, to.rules})
-		game.sender_reset(&c.tx) // (the client drops its keyed records and snapshots)
+		send_message(s, c, protocol.World_Changed{to.address, to.rules})
+		protocol.sender_reset(&c.tx) // (the client drops its keyed records and snapshots)
 		replica_seed(s, c)
 		c.clock_pending = true
 		selection_set(s, c, {}) // (it was in the last world)
@@ -339,8 +341,8 @@ travel :: proc(s: ^Server, c: ^Client, a: game.Address, there: Maybe(Place) = ni
 		log.infof(
 			"server travel name=%s from=%s to=%s",
 			client_name(c),
-			game.address_dir(from.address),
-			game.address_dir(a),
+			starmap.address_dir(from.address),
+			starmap.address_dir(a),
 		)
 	}
 	if p, ok := there.?; ok {
@@ -367,10 +369,10 @@ admin_travel :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	// The address may be two words (a world, its galaxy): all of them, else
 	// all but the last, which is then a character.
 	here := c.world.address.galaxy
-	a, ok := game.address_parse(strings.join(args, " ", context.temp_allocator), here)
+	a, ok := starmap.address_parse(strings.join(args, " ", context.temp_allocator), here)
 	who := c
 	if !ok && len(args) > 1 {
-		a, ok = game.address_parse(
+		a, ok = starmap.address_parse(
 			strings.join(args[:len(args) - 1], " ", context.temp_allocator),
 			here,
 		)
@@ -402,7 +404,7 @@ admin_travel :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 admin_address :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	a := c.world.address
 	home := " (the home world)" if c.world == s.home else ""
-	notice(s, c, fmt.tprintf("%s%s  %s", game.address_text(a), home, game.address_dir(a)))
+	notice(s, c, fmt.tprintf("%s%s  %s", starmap.address_text(a), home, starmap.address_dir(a)))
 	return true
 }
 
@@ -413,7 +415,7 @@ admin_worlds :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		players := 0
 		for &other in s.clients {if other.state == .Playing && other.world == w {players += 1}}
 		home := " home" if w == s.home else ""
-		notice(s, c, fmt.tprintf("%s%s: %d here", game.address_text(w.address), home, players))
+		notice(s, c, fmt.tprintf("%s%s: %d here", starmap.address_text(w.address), home, players))
 	}
 	saved := 0
 	if s.store.dir != "" {

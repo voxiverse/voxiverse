@@ -7,7 +7,7 @@ import "core:time"
 
 import "client:ui"
 import "common:base"
-import "common:game"
+import "common:protocol"
 import "common:telemetry"
 
 // What the client reports about itself: the server cannot see how a client
@@ -156,8 +156,8 @@ telemetry_update :: proc(app: ^App) {
 
 // telemetry_send sends up to a message's worth of the queue.
 telemetry_send :: proc(s: ^Session, r: ^Reporter) {
-	n := min(len(r.queue), game.MAX_TELEMETRY_ENTRIES)
-	report := game.Telemetry_Report {
+	n := min(len(r.queue), protocol.MAX_TELEMETRY_ENTRIES)
+	report := protocol.Telemetry_Report {
 		count = n,
 	}
 	for i in 0 ..< n {

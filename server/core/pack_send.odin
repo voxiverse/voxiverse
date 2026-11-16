@@ -5,6 +5,7 @@ import "core:log"
 import "core:strings"
 
 import "common:game"
+import "common:protocol"
 
 // Sending packs (the Packs phase of joining): after a remote client's
 // Proof the server lists the universe's packs (not the base pack), the client
@@ -65,7 +66,7 @@ pack_blobs_destroy :: proc(s: ^Server) {
 @(private)
 packs_begin :: proc(s: ^Server, c: ^Client) -> bool {
 	if _, local := c.link.(Local); local || len(s.pack_blobs) == 0 {return false}
-	msg := game.Packs {
+	msg := protocol.Packs {
 		content = s.registry.hash,
 		count   = u8(len(s.pack_blobs)),
 	}
@@ -81,7 +82,7 @@ packs_begin :: proc(s: ^Server, c: ^Client) -> bool {
 
 // pack_want: the client's answer: queue what it asks for.
 @(private)
-pack_want :: proc(s: ^Server, c: ^Client, w: game.Pack_Want) {
+pack_want :: proc(s: ^Server, c: ^Client, w: protocol.Pack_Want) {
 	if c.state != .Packing || c.pack_asked {
 		disconnect(s, c, "unexpected pack request")
 		return
@@ -102,7 +103,7 @@ pack_want :: proc(s: ^Server, c: ^Client, w: game.Pack_Want) {
 
 // pack_ready: the client built its registry: it must be ours.
 @(private)
-pack_ready :: proc(s: ^Server, c: ^Client, r: game.Packs_Ready) -> bool {
+pack_ready :: proc(s: ^Server, c: ^Client, r: protocol.Packs_Ready) -> bool {
 	if c.state != .Packing || !c.pack_asked || c.pack_next < c.pack_count {
 		disconnect(s, c, "unexpected packs ready")
 		return false
@@ -128,18 +129,18 @@ pack_ready :: proc(s: ^Server, c: ^Client, r: game.Packs_Ready) -> bool {
 packs_tick :: proc(s: ^Server) {
 	for &c in s.clients {
 		if c.state != .Packing {continue}
-		if s.tick - c.pack_since > game.PACK_JOIN_SECONDS * game.TICK_RATE {
+		if s.tick - c.pack_since > protocol.PACK_JOIN_SECONDS * game.TICK_RATE {
 			disconnect(s, &c, "joining took too long (the packs did not arrive)")
 			continue
 		}
-		budget := game.PACK_SEND_PER_TICK
+		budget := protocol.PACK_SEND_PER_TICK
 		for budget > 0 && c.pack_next < c.pack_count {
 			blob := s.pack_blobs[c.pack_queue[c.pack_next]]
-			n := min(game.MAX_PACK_PART, len(blob.data) - int(c.pack_offset), budget)
+			n := min(protocol.MAX_PACK_PART, len(blob.data) - int(c.pack_offset), budget)
 			send_message(
 				s,
 				&c,
-				game.Pack_Part {
+				protocol.Pack_Part {
 					c.pack_queue[c.pack_next],
 					c.pack_offset,
 					blob.data[c.pack_offset:][:n],

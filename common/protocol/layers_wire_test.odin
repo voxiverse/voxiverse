@@ -1,18 +1,19 @@
-package game
+package protocol
 
 import "core:testing"
 
 import "common:base"
+import "common:game"
 
 // Replicated channels on the wire: the layered chunk encodings and the Cell key.
 
 // wire_reg: the base registry with channels: 0 light (computed), 1 wetness (4 bits),
 // 2 secret (not replicated), 3 tint (3 bits, default 5), 4 a computed one.
 @(private = "file")
-wire_reg :: proc() -> ^Registry {
-	reg := new(Registry, context.temp_allocator)
-	reg^ = test_reg()^
-	infos := make([]Channel_Info, 5, context.temp_allocator)
+wire_reg :: proc() -> ^game.Registry {
+	reg := new(game.Registry, context.temp_allocator)
+	reg^ = game.test_reg()^
+	infos := make([]game.Channel_Info, 5, context.temp_allocator)
 	infos[0] = {
 		name       = "voxiverse:light",
 		bits       = 4,
@@ -45,56 +46,56 @@ wire_reg :: proc() -> ^Registry {
 }
 
 @(private = "file")
-wire_decode :: proc(data: []u8, scratch: ^Block_Array) -> (Server_Message, bool) {
+wire_decode :: proc(data: []u8, scratch: ^game.Block_Array) -> (Server_Message, bool) {
 	return decode_server(data, scratch, wire_reg())
 }
 
 @(private = "file")
-chunk_bytes :: proc(blocks: ^Chunk_Blocks, channels: []Wire_Channel) -> [dynamic]u8 {
-	w: Writer
-	writer_init(&w, context.temp_allocator)
+chunk_bytes :: proc(blocks: ^game.Chunk_Blocks, channels: []game.Wire_Channel) -> [dynamic]u8 {
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
 	encode_server(&w, Chunk_Message{pos = {1, 2, 3}, channels = channels}, blocks)
 	return w.buf
 }
 
 @(private = "file")
-filled :: proc(f: proc(i: int) -> u16) -> ^[CHANNEL_CELLS]u16 {
-	v := new([CHANNEL_CELLS]u16, context.temp_allocator)
+filled :: proc(f: proc(i: int) -> u16) -> ^[game.CHANNEL_CELLS]u16 {
+	v := new([game.CHANNEL_CELLS]u16, context.temp_allocator)
 	for &x, i in v {x = f(i)}
 	return v
 }
 
 @(test)
 test_layered_chunks_round_trip :: proc(t: ^testing.T) {
-	scratch := new(Block_Array)
+	scratch := new(game.Block_Array)
 	defer free(scratch)
-	arr := new(Block_Array, context.temp_allocator)
-	for &b, i in arr {b = Block(i % 3)}
-	plain_u := Chunk_Blocks {
+	arr := new(game.Block_Array, context.temp_allocator)
+	for &b, i in arr {b = game.Block(i % 3)}
+	plain_u := game.Chunk_Blocks {
 		uniform = .Stone,
 	}
-	plain_a := Chunk_Blocks {
+	plain_a := game.Chunk_Blocks {
 		array = arr,
 	}
 
 	// No channels: the plain encodings, byte for byte.
-	for blocks in ([]^Chunk_Blocks{&plain_u, &plain_a}) {
+	for blocks in ([]^game.Chunk_Blocks{&plain_u, &plain_a}) {
 		with_none := chunk_bytes(blocks, nil)
-		w: Writer
-		writer_init(&w, context.temp_allocator)
-		write_chunk_blocks(&w, blocks)
+		w: game.Writer
+		game.writer_init(&w, context.temp_allocator)
+		game.write_chunk_blocks(&w, blocks)
 		tail := string(with_none[len(with_none) - len(w.buf):])
 		testing.expect(t, tail == string(w.buf[:]), "a plain chunk's bytes changed")
 	}
 
 	// Uniform blocks with one uniform channel, and palette blocks with two.
-	uniform_ch := new([CHANNEL_CELLS]u16, context.temp_allocator)
+	uniform_ch := new([game.CHANNEL_CELLS]u16, context.temp_allocator)
 	for &v in uniform_ch {v = 5}
 	wet := filled(proc(i: int) -> u16 {return u16(i % 7 if i % 5 == 0 else 0)})
 	tint := filled(proc(i: int) -> u16 {return u16(i % 8)})
 	for c in ([]struct {
-			blocks:   ^Chunk_Blocks,
-			channels: []Wire_Channel,
+			blocks:   ^game.Chunk_Blocks,
+			channels: []game.Wire_Channel,
 		}{{&plain_u, {{3, uniform_ch}}}, {&plain_a, {{1, wet}, {3, tint}}}, {&plain_u, {{1, wet}}}}) {
 		m, ok := wire_decode(chunk_bytes(c.blocks, c.channels)[:], scratch)
 		got := m.(Chunk_Message)
@@ -110,40 +111,40 @@ test_layered_chunks_round_trip :: proc(t: ^testing.T) {
 	}
 
 	// A chunk_wire_channels of layers: only replicated, stored channels not at their default.
-	pools: Layer_Pools
-	testing.expect(t, layer_pools_init(&pools, 16) == nil)
-	defer layer_pools_destroy(&pools)
-	l: Chunk_Layers
+	pools: game.Layer_Pools
+	testing.expect(t, game.layer_pools_init(&pools, 16) == nil)
+	defer game.layer_pools_destroy(&pools)
+	l: game.Chunk_Layers
 	infos := wire_reg().channels
-	for info, id in infos {if id < MAX_CHANNELS {l.channels[id].uniform = info.default}}
-	testing.expect_value(t, len(chunk_wire_channels(&l, infos)), 0)
-	channel_set(&l.channels[2], &pools, 7, 9) // secret: not replicated
-	testing.expect_value(t, len(chunk_wire_channels(&l, infos)), 0)
-	channel_set(&l.channels[1], &pools, 7, 9)
-	channel_set(&l.channels[1], &pools, 8, 2)
+	for info, id in infos {if id < game.MAX_CHANNELS {l.channels[id].uniform = info.default}}
+	testing.expect_value(t, len(game.chunk_wire_channels(&l, infos)), 0)
+	game.channel_set(&l.channels[2], &pools, 7, 9) // secret: not replicated
+	testing.expect_value(t, len(game.chunk_wire_channels(&l, infos)), 0)
+	game.channel_set(&l.channels[1], &pools, 7, 9)
+	game.channel_set(&l.channels[1], &pools, 8, 2)
 	l.channels[3].uniform = 2
-	got := chunk_wire_channels(&l, infos)
+	got := game.chunk_wire_channels(&l, infos)
 	if testing.expect_value(t, len(got), 2) {
 		testing.expect_value(t, got[0].id, 1)
 		testing.expect_value(t, got[0].values[7], 9)
 		testing.expect_value(t, got[1].id, 3)
 		testing.expect_value(t, got[1].values[100], 2)
 	}
-	into: Chunk_Layers
-	testing.expect(t, layers_from_wire(&into, &pools, infos, got) == nil)
-	testing.expect_value(t, channel_get(&into.channels[1], 8), 2)
-	testing.expect_value(t, channel_get(&into.channels[3], 4095), 2)
-	testing.expect_value(t, channel_get(&into.channels[2], 7), 0)
-	layers_release(&into, &pools)
-	layers_release(&l, &pools)
+	into: game.Chunk_Layers
+	testing.expect(t, game.layers_from_wire(&into, &pools, infos, got) == nil)
+	testing.expect_value(t, game.channel_get(&into.channels[1], 8), 2)
+	testing.expect_value(t, game.channel_get(&into.channels[3], 4095), 2)
+	testing.expect_value(t, game.channel_get(&into.channels[2], 7), 0)
+	game.layers_release(&into, &pools)
+	game.layers_release(&l, &pools)
 }
 
 // Every malformed layered chunk is refused.
 @(test)
 test_layered_chunks_refuse_malformed :: proc(t: ^testing.T) {
-	scratch := new(Block_Array)
+	scratch := new(game.Block_Array)
 	defer free(scratch)
-	stone := Chunk_Blocks {
+	stone := game.Chunk_Blocks {
 		uniform = .Stone,
 	}
 	head := chunk_bytes(&stone, nil)
@@ -181,8 +182,8 @@ test_layered_chunks_refuse_malformed :: proc(t: ^testing.T) {
 		testing.expectf(t, !ok, "%s was accepted", c.why)
 	}
 	// Layers where the plain reader reads (saves and replays have their own sections).
-	r := reader_make(build(head[:good_len], ok_tail)[good_len - 3:], wire_reg())
-	_, _ = read_chunk_blocks(&r, scratch)
+	r := game.reader_make(build(head[:good_len], ok_tail)[good_len - 3:], wire_reg())
+	_, _ = game.read_chunk_blocks(&r, scratch)
 	testing.expect(t, !r.ok, "the plain reader took a layered chunk")
 	// Every proper prefix, and a trailing byte.
 	full := build(head[:good_len], ok_tail)
@@ -195,10 +196,10 @@ test_layered_chunks_refuse_malformed :: proc(t: ^testing.T) {
 // Mutated layered chunks never crash the decoder, and what it accepts is within the channels' maxima.
 @(test)
 test_layered_chunk_mutations :: proc(t: ^testing.T) {
-	scratch := new(Block_Array)
+	scratch := new(game.Block_Array)
 	defer free(scratch)
-	arr := new(Block_Array, context.temp_allocator)
-	for &b, i in arr {b = Block(i % 4)}
+	arr := new(game.Block_Array, context.temp_allocator)
+	for &b, i in arr {b = game.Block(i % 4)}
 	wet := filled(proc(i: int) -> u16 {return u16(i / 300)})
 	tint := filled(proc(i: int) -> u16 {return u16(i % 8)})
 	seeds := [3][dynamic]u8 {
@@ -227,7 +228,7 @@ test_layered_chunk_mutations :: proc(t: ^testing.T) {
 				t,
 				int(ch.id) < len(infos) && infos[ch.id].computed == .None,
 			) {continue}
-			for v in ch.values {testing.expect(t, v <= channel_max(infos[ch.id]), "value above max accepted")}
+			for v in ch.values {testing.expect(t, v <= game.channel_max(infos[ch.id]), "value above max accepted")}
 		}
 	}
 	testing.expect(t, accepted > 0)

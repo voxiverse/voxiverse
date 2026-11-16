@@ -10,6 +10,7 @@ import "common:base"
 import "common:game"
 import "common:island"
 import "common:planet"
+import "common:starmap"
 import "common:worldgen"
 
 // Server commands about the world and the players in it, after Minecraft's
@@ -596,14 +597,14 @@ admin_goto :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 @(private)
 share_goto :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	code := strings.join(args, " ", context.temp_allocator)
-	share, ok := game.share_parse(code)
+	share, ok := starmap.share_parse(code)
 	if !ok {
-		notice(s, c, fmt.tprintf("&cNot a place code: %s", game.SHARE_FORM))
+		notice(s, c, fmt.tprintf("&cNot a place code: %s", starmap.SHARE_FORM))
 		return true
 	}
 	if share.earth {
 		lat, lon := share.lat, share.lon
-		earth := game.earth_address()
+		earth := starmap.earth_address()
 		from_elsewhere := c.world.address != earth
 		if from_elsewhere {
 			// From elsewhere: travel, then land on the surface.
@@ -622,7 +623,7 @@ share_goto :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		return true
 	}
 	a := share.address
-	if a != game.earth_address() && a.galaxy != c.world.address.galaxy {
+	if a != starmap.earth_address() && a.galaxy != c.world.address.galaxy {
 		notice(s, c, "&cthat world is not in this universe's reach")
 		return true
 	}

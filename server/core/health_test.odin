@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "common:telemetry"
 
 @(private = "file")
@@ -273,9 +274,9 @@ test_worn_armor_raises_health :: proc(t: ^testing.T) {
 	)
 	if !testing.expect(t, ok, "never landed with its health") {return}
 	for item in ([]string{"cap", "tunic", "trousers", "boots"}) {
-		net_send(a, game.Command{fmt.tprintf("give @s %s", item)})
+		net_send(a, protocol.Command{fmt.tprintf("give @s %s", item)})
 	}
-	net_send(a, game.Command{"wear"})
+	net_send(a, protocol.Command{"wear"})
 	ok = net_wait(
 		t,
 		{a},
@@ -289,11 +290,14 @@ test_worn_armor_raises_health :: proc(t: ^testing.T) {
 		game.BASE_HEALTH + 8,
 	)
 	// Taking one off lowers it (and what was in excess is cut off).
-	net_send(a, game.Command{"clear @s tunic"})
+	net_send(a, protocol.Command{"clear @s tunic"})
 	pause(t, {a}, 0.3)
 	net_send(
 		a,
-		game.Inventory_Request{1, {.Quick_Move, game.EQUIP_BASE + int(game.Equip_Slot.Chest), 0}},
+		protocol.Inventory_Request {
+			1,
+			{.Quick_Move, game.EQUIP_BASE + int(game.Equip_Slot.Chest), 0},
+		},
 	)
 	ok = net_wait(
 		t,

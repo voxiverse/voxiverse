@@ -14,6 +14,7 @@ import "client:platform"
 import "client:ui"
 import "common:base"
 import "common:game"
+import "common:starmap"
 import "server:core"
 
 // Singleplayer's saves: one
@@ -123,7 +124,7 @@ entry_read_config :: proc(e: ^engine.Save_Entry, cfg: string) {
 			e.mode_changed = value == "true"
 		}
 	}
-	game.galaxy_stars(game.seed_glyphs(e.seed), e.stars[:])
+	starmap.galaxy_stars(starmap.seed_glyphs(e.seed), e.stars[:])
 }
 
 // save_dir_name: a save's name as a directory name (letters, digits,
@@ -177,7 +178,7 @@ universe_plan :: proc(name: string, seed: u64, mode: string, earth := false) -> 
 // variant of it) and enters it; seed_text may be a number, any text (hashed)
 // or empty (random). The creation screen does the same from its fields.
 world_create :: proc(app: ^engine.App, name, seed_text: string) {
-	seed, typed := game.seed_of_text(seed_text)
+	seed, typed := starmap.seed_of_text(seed_text)
 	if !typed {seed = u64(time.now()._nsec) ~ 0x5eed_5eed}
 	plan := universe_plan(name, seed, "creative")
 	log.infof("saves creating name=%q seed=%d", filepath.base(plan.path), i64(plan.seed))

@@ -9,13 +9,15 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 import "common:worldgen"
 
 // An address is the same kind of world in any universe (its parameters and
 // rules), with terrain of its own (the seed); the home world is Earth's.
 @(test)
 test_world_kinds :: proc(t: ^testing.T) {
-	a := game.address_derive(999)
+	a := starmap.address_derive(999)
 	one, two: Server
 	one.config.seed, two.config.seed = 1, 2
 	w1 := World {
@@ -32,7 +34,7 @@ test_world_kinds :: proc(t: ^testing.T) {
 	testing.expect(t, w1.seed != w2.seed, "two universes, the same terrain")
 	other := World {
 		server  = &one,
-		address = game.address_derive(1000),
+		address = starmap.address_derive(1000),
 	}
 	world_kind(&other)
 	testing.expect(t, other.params != w1.params, "two addresses, one kind")
@@ -78,8 +80,8 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	stopped := false
 	defer if !stopped {harness_stop(h)}
 	home := srv.home.address
-	away := game.address_derive(999)
-	@(static) want: game.Address
+	away := starmap.address_derive(999)
+	@(static) want: starmap.Address
 
 	alice := new(Net_Client)
 	defer free(alice)
@@ -105,8 +107,8 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	// Alice travels away, carrying what she carries; bob stays home.
 	net_send(
 		alice,
-		game.Command {
-			strings.concatenate({"travel ", game.address_dir(away)}, context.temp_allocator),
+		protocol.Command {
+			strings.concatenate({"travel ", starmap.address_dir(away)}, context.temp_allocator),
 		},
 	)
 	want = away
@@ -125,15 +127,15 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(alice, game.edit_plain(1, alice.seq, at, .Stone))
+	net_send(alice, protocol.edit_plain(1, alice.seq, at, .Stone))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
 	testing.expect(t, ok && alice.results[1].accepted, "her edit was refused")
 
 	// Home again: the other world goes once empty, its edit saved there.
 	net_send(
 		alice,
-		game.Command {
-			strings.concatenate({"travel ", game.address_dir(home)}, context.temp_allocator),
+		protocol.Command {
+			strings.concatenate({"travel ", starmap.address_dir(home)}, context.temp_allocator),
 		},
 	)
 	want = home
@@ -151,7 +153,7 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, stats(srv).worlds, 1)
 	away_regions :=
 		filepath.join(
-			{dir, WORLDS_DIR, game.address_dir(away), "regions"},
+			{dir, WORLDS_DIR, starmap.address_dir(away), "regions"},
 			context.temp_allocator,
 		) or_else ""
 	entries, _ := os.read_all_directory_by_path(away_regions, context.temp_allocator)
@@ -160,12 +162,12 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	// Back and forth: memory comes back each time the other world goes.
 	settled := stats(srv).arena_used
 	for _ in 0 ..< 3 {
-		for target in ([]game.Address{away, home}) {
+		for target in ([]starmap.Address{away, home}) {
 			net_send(
 				alice,
-				game.Command {
+				protocol.Command {
 					strings.concatenate(
-						{"travel ", game.address_dir(target)},
+						{"travel ", starmap.address_dir(target)},
 						context.temp_allocator,
 					),
 				},
@@ -226,7 +228,7 @@ test_earth_same_in_every_universe :: proc(t: ^testing.T) {
 	reg := game.registry_base(runtime.default_allocator())
 	one, two: Server
 	one.config.seed, two.config.seed = 1, 2
-	earth := game.earth_address()
+	earth := starmap.earth_address()
 	e1 := World {
 		server  = &one,
 		address = earth,
@@ -236,7 +238,7 @@ test_earth_same_in_every_universe :: proc(t: ^testing.T) {
 		address = earth,
 	}
 	testing.expect_value(t, terrain_hash(&e1, reg), terrain_hash(&e2, reg))
-	other := game.address_derive(7)
+	other := starmap.address_derive(7)
 	a1 := World {
 		server  = &one,
 		address = other,
@@ -253,7 +255,7 @@ test_earth_same_in_every_universe :: proc(t: ^testing.T) {
 		"alien terrain ignored the seed",
 	)
 	// A new universe's home address: Earth's when asked, else made from the seed.
-	testing.expect_value(t, home_address(&one), game.address_derive(1))
+	testing.expect_value(t, home_address(&one), starmap.address_derive(1))
 	one.config.earth = true
 	testing.expect_value(t, home_address(&one), earth)
 }
@@ -263,12 +265,12 @@ test_earth_same_in_every_universe :: proc(t: ^testing.T) {
 @(test)
 test_earth_world_is_planet :: proc(t: ^testing.T) {
 	w := World {
-		address = game.earth_address(),
+		address = starmap.earth_address(),
 	}
 	world_set_planet(&w)
 	testing.expect_value(t, w.params.planet, 1)
 	a := World {
-		address = game.address_derive(7),
+		address = starmap.address_derive(7),
 	}
 	world_set_planet(&a)
 	testing.expect_value(t, a.params.planet, worldgen.PARAMS_DEFAULTS.planet)
@@ -280,7 +282,7 @@ test_earth_world_is_planet :: proc(t: ^testing.T) {
 test_earth_start_comes_from_the_universe_seed :: proc(t: ^testing.T) {
 	start :: proc(seed: i64) -> (f32, f32) {
 		w := World {
-			address = game.earth_address(),
+			address = starmap.earth_address(),
 			seed    = seed,
 			params  = worldgen.PARAMS_DEFAULTS,
 		}

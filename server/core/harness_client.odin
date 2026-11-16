@@ -8,9 +8,11 @@ import "core:slice"
 import "core:strings"
 import "core:sync"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // The mirror and the session (shared with determinism_test.odin so a fuzz
 // target can use them): a test client on the pipe of a stepped server, and the session that
@@ -26,19 +28,19 @@ CHECKPOINT_EVERY :: 1000
 // Mirror: the client on the pipe. latency_test's predicting client grown up: it
 // answers the challenge, keeps the chunks it is sent, predicts and reconciles.
 Mirror :: struct {
-	key:           game.Account_Key,
-	endpoint:      game.Endpoint,
+	key:           access.Account_Key,
+	endpoint:      protocol.Endpoint,
 	scratch:       ^game.Block_Array,
 	arrays:        game.Block_Arrays,
 	chunks:        map[game.Chunk_Pos]game.Chunk_Blocks,
 	layers:        map[game.Chunk_Pos]game.Chunk_Layers, // its replicated channels
 	pools:         game.Layer_Pools,
-	prediction:    game.Prediction,
+	prediction:    protocol.Prediction,
 	rules:         game.Rules,
 	welcomed:      bool,
-	last_update:   game.Own_Player,
-	schema:        game.Schema,
-	rx:            game.Receiver,
+	last_update:   protocol.Own_Player,
+	schema:        protocol.Schema,
+	rx:            protocol.Receiver,
 	teleports:     u8,
 	entities:      [dynamic]u32, // ids told, in the order told
 	notices:       [dynamic]string, // the text of every Notice told (heap)
@@ -84,7 +86,7 @@ Session :: struct {
 	failures:   [dynamic]string,
 	input:      game.Player_Input, // what the mirror's turn sends when it is not scripted (scenario_test.odin sets it)
 	check:      bool, // the mirror sends a Prediction_Check every DESYNC_CHECK_INPUTS inputs, as a client does
-	hook:       proc(data: rawptr, msg: game.Input, in_: game.Player_Input), // after each input sent (not scripted)
+	hook:       proc(data: rawptr, msg: protocol.Input, in_: game.Player_Input), // after each input sent (not scripted)
 	hook_data:  rawptr,
 }
 
@@ -105,40 +107,40 @@ mirror_set :: proc(m: ^Mirror, p: game.Block_Pos, b: game.Block) {
 	}
 }
 
-mirror_send :: proc(m: ^Mirror, msg: game.Client_Message) {
+mirror_send :: proc(m: ^Mirror, msg: protocol.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.encode_client(&w, msg)
+	protocol.encode_client(&w, msg)
 	if m.sent != nil {append(m.sent, slice.clone(w.buf[:], runtime.heap_allocator()))}
-	game.send(m.endpoint, w.buf[:])
+	protocol.send(m.endpoint, w.buf[:])
 }
 
 mirror_pump :: proc(sess: ^Session) {
 	m := &sess.mirror
-	packets := make([dynamic]game.Packet, context.temp_allocator)
-	game.receive(m.endpoint, &packets)
+	packets := make([dynamic]protocol.Packet, context.temp_allocator)
+	protocol.receive(m.endpoint, &packets)
 	for p in packets {
-		defer game.packet_free(m.endpoint, p)
+		defer protocol.packet_free(m.endpoint, p)
 		if m.heard != nil {append(m.heard, slice.clone(p, runtime.heap_allocator()))}
-		msg, ok := game.decode_server(p, m.scratch, m.rx.reg)
+		msg, ok := protocol.decode_server(p, m.scratch, m.rx.reg)
 		if !ok {
 			append(&sess.failures, "the mirror could not decode a message")
 			continue
 		}
 		#partial switch v in msg {
-		case game.Packs_Changed:
+		case protocol.Packs_Changed:
 			m.packs_changed = v.content
-		case game.Challenge:
-			mirror_send(m, game.Proof{game.account_sign(&m.key, v.nonce)})
-		case game.Welcome:
+		case protocol.Challenge:
+			mirror_send(m, protocol.Proof{access.account_sign(&m.key, v.nonce)})
+		case protocol.Welcome:
 			if v.schema != m.schema.hash {
 				append(&sess.failures, strings.clone("the mirror's schema is not the server's"))
 			}
 			m.rules, m.welcomed = v.rules, true
-			game.prediction_init(&m.prediction, {position = v.spawn})
+			protocol.prediction_init(&m.prediction, {position = v.spawn})
 			rules := v.rules
-			game.receiver_seed(&m.rx, int(game.State_Kind.Rules), &rules)
-		case game.Chunk_Message:
+			protocol.receiver_seed(&m.rx, int(protocol.State_Kind.Rules), &rules)
+		case protocol.Chunk_Message:
 			blocks := game.Chunk_Blocks {
 				uniform = v.uniform,
 			}
@@ -153,7 +155,7 @@ mirror_pump :: proc(sess: ^Session) {
 			if game.layers_from_wire(l, &m.pools, m.rx.reg.channels, v.channels) != nil {
 				append(&sess.failures, "the mirror is out of channel pages")
 			}
-		case game.Unload_Chunk:
+		case protocol.Unload_Chunk:
 			if old, had := &m.chunks[v.pos]; had {
 				game.chunk_release(old, &m.arrays)
 				delete_key(&m.chunks, v.pos)
@@ -162,19 +164,19 @@ mirror_pump :: proc(sess: ^Session) {
 				game.layers_release(l, &m.pools)
 				delete_key(&m.layers, v.pos)
 			}
-		case game.State_Message:
-			got := make([dynamic]game.Received, context.temp_allocator)
-			if !game.receive_state(&m.rx, v.data, &got) {
+		case protocol.State_Message:
+			got := make([dynamic]protocol.Received, context.temp_allocator)
+			if !protocol.receive_state(&m.rx, v.data, &got) {
 				append(&sess.failures, "the mirror could not decode a State message")
 			}
 			mirror_apply(sess, got[:])
-		case game.Snapshot_Message:
-			got := make([dynamic]game.Received, context.temp_allocator)
-			if !game.receive_snapshot(&m.rx, v.data, &got) {
+		case protocol.Snapshot_Message:
+			got := make([dynamic]protocol.Received, context.temp_allocator)
+			if !protocol.receive_snapshot(&m.rx, v.data, &got) {
 				append(&sess.failures, "the mirror could not decode a Snapshot message")
 			}
 			mirror_apply(sess, got[:])
-		case game.Edit_Result:
+		case protocol.Edit_Result:
 			mirror_set(m, v.pos, v.block)
 			if c, two := v.companion.?; two {mirror_set(m, c.pos, c.block)}
 		}
@@ -198,31 +200,31 @@ chunks_agree :: proc(sess: ^Session) -> bool {
 
 // mirror_game_record: the mirror's record of the game's kind whose value type is T
 // (under key), or nil: what the server last put for it (a reliable kind's).
-mirror_game_record :: proc(m: ^Mirror, $T: typeid, key := game.Key{}) -> ^T {
-	kind, found := game.game_kind(&m.schema, T)
+mirror_game_record :: proc(m: ^Mirror, $T: typeid, key := protocol.Key{}) -> ^T {
+	kind, found := protocol.game_kind(&m.schema, T)
 	if !found {return nil}
-	return (^T)(game.replica_get(&m.rx.live, kind, key))
+	return (^T)(protocol.replica_get(&m.rx.live, kind, key))
 }
 
 // mirror_apply: what the receiver yielded, as the mirror keeps it.
-mirror_apply :: proc(sess: ^Session, got: []game.Received) {
+mirror_apply :: proc(sess: ^Session, got: []protocol.Received) {
 	m := &sess.mirror
 	for g in got {
 		if g.kind >= m.schema.engine {continue} 	// a game's: they stay in m.rx (mirror_game_record)
 		if g.op == .Event {
-			if game.Event_Kind(g.kind - len(game.State_Kind)) == .Notice {
-				append(&m.notices, strings.clone((^game.Notice)(g.value).text))
+			if protocol.Event_Kind(g.kind - len(protocol.State_Kind)) == .Notice {
+				append(&m.notices, strings.clone((^protocol.Notice)(g.value).text))
 			}
 			continue
 		}
-		switch game.State_Kind(g.kind) {
+		switch protocol.State_Kind(g.kind) {
 		case .Block:
-			v := (^game.Block_Record)(g.value)
-			mirror_set(m, game.key_block(g.key), game.Block(v.block))
+			v := (^protocol.Block_Record)(g.value)
+			mirror_set(m, protocol.key_block(g.key), game.Block(v.block))
 		case .Channel:
-			p := game.key_block(g.key)
+			p := protocol.key_block(g.key)
 			if l, ok := &m.layers[game.chunk_of(p)]; ok && g.op != .Remove {
-				v := (^game.Channel_Record)(g.value).value
+				v := (^protocol.Channel_Record)(g.value).value
 				if game.layers_set(
 					   l,
 					   &m.pools,
@@ -235,12 +237,12 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 				}
 			}
 		case .Own_Player:
-			v := (^game.Own_Player)(g.value)^
+			v := (^protocol.Own_Player)(g.value)^
 			m.last_update = v
 			before := m.prediction.corrections
 			teleported := v.teleports != m.teleports
 			m.teleports = v.teleports
-			game.prediction_reconcile(
+			protocol.prediction_reconcile(
 				&m.prediction,
 				v,
 				&m.rules,
@@ -262,12 +264,12 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 		case .Entity:
 			if g.op == .Create {append(&m.entities, u32(g.key.a))}
 		case .Mode:
-			if mode, found := game.mode_find(mirror_reg(m), (^game.Mode_Record)(g.value).mode);
+			if mode, found := game.mode_find(mirror_reg(m), (^protocol.Mode_Record)(g.value).mode);
 			   found {
 				m.mode, m.mode_known = mode, true
 			}
 		case .Inventory:
-			m.inventory = (^game.Inventory_State)(g.value).inventory
+			m.inventory = (^protocol.Inventory_State)(g.value).inventory
 		case .Health,
 		     .Clock,
 		     .Grants,
@@ -314,8 +316,8 @@ session_start :: proc(
 	game.layer_pools_init(&m.pools, 2048 * game.registry_replicated_channels(sess.h.srv.registry))
 	m.key = test_key("determinism")
 	// (the server's game's kinds too: the mirror checks Welcome's hash, as a client does)
-	m.schema = game.game_schema(sess.h.srv.config.game.id, sess.h.srv.config.game.kinds)
-	game.receiver_init(&m.rx, &m.schema, sess.h.srv.registry)
+	m.schema = protocol.game_schema(sess.h.srv.config.game.id, sess.h.srv.config.game.kinds)
+	protocol.receiver_init(&m.rx, &m.schema, sess.h.srv.registry)
 	for sec in Hash_Section {sess.seen[sec] = make(map[u64]struct{})}
 	sess.logging = logging
 	if logging {
@@ -346,8 +348,8 @@ session_stop :: proc(sess: ^Session) {
 	delete(m.entities)
 	for n in m.notices {delete(n)}
 	delete(m.notices)
-	game.receiver_destroy(&m.rx)
-	game.schema_destroy(&m.schema)
+	protocol.receiver_destroy(&m.rx)
+	protocol.schema_destroy(&m.schema)
 	game.block_arrays_destroy(&m.arrays)
 	free(m.scratch)
 	delete(sess.hashes)
@@ -383,12 +385,12 @@ look_dir :: proc(yaw, pitch: f32) -> [3]f64 {
 }
 
 command :: proc(m: ^Mirror, text: string) {
-	mirror_send(m, game.Command{text})
+	mirror_send(m, protocol.Command{text})
 }
 
 inventory :: proc(m: ^Mirror, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
 	m.inv_seq += 1
-	mirror_send(m, game.Inventory_Request{m.inv_seq, {kind, slot, arg}})
+	mirror_send(m, protocol.Inventory_Request{m.inv_seq, {kind, slot, arg}})
 }
 
 feet_block :: proc(m: ^Mirror) -> game.Block_Pos {
@@ -397,13 +399,13 @@ feet_block :: proc(m: ^Mirror) -> game.Block_Pos {
 }
 
 // act: what the script does at its tick, besides walking.
-act :: proc(m: ^Mirror, tick: u64, msg: game.Input, in_: game.Player_Input) {
+act :: proc(m: ^Mirror, tick: u64, msg: protocol.Input, in_: game.Player_Input) {
 	if tick >= 300 && tick < 3900 && tick % 40 == 0 {
 		dir := look_dir(in_.yaw, in_.pitch)
 		eye := game.player_eye(m.prediction.state)
 		if hit, aimed := game.raycast(query(m), eye, dir, f64(m.rules.reach)); aimed {
 			m.edit_id += 1
-			e := game.edit_plain(m.edit_id, msg.sequence, hit.block, .Air)
+			e := protocol.edit_plain(m.edit_id, msg.sequence, hit.block, .Air)
 			if (tick / 40) % 2 == 1 {e.pos, e.block = hit.block + hit.normal, .Stone}
 			mirror_set(m, e.pos, e.block) // predicted
 			mirror_send(m, e)
@@ -417,14 +419,14 @@ act :: proc(m: ^Mirror, tick: u64, msg: game.Input, in_: game.Player_Input) {
 	case 1200:
 		command(m, "give @s wheat 5")
 	case 1300:
-		if len(m.entities) > 0 {mirror_send(m, game.Use_Entity{m.entities[0], msg.sequence})}
+		if len(m.entities) > 0 {mirror_send(m, protocol.Use_Entity{m.entities[0], msg.sequence})}
 	case 2500:
 		command(m, "setblock ~3 ~2 ~ water")
 	case 3000:
 		command(m, "fill ~2 ~-1 ~2 ~6 ~-1 ~6 farmland")
 		command(m, "fill ~2 ~ ~2 ~6 ~ ~6 wheat_0")
 	case 6000:
-		mirror_send(m, game.Fire{msg.sequence, in_.yaw, -0.9})
+		mirror_send(m, protocol.Fire{msg.sequence, in_.yaw, -0.9})
 	case 7000:
 		command(m, "time set midnight")
 	case 7500:
@@ -435,7 +437,7 @@ act :: proc(m: ^Mirror, tick: u64, msg: game.Input, in_: game.Player_Input) {
 		command(m, "setblock ~2 ~ ~-2 chest")
 	case 9010:
 		b := feet_block(m) + {2, 0, -2}
-		mirror_send(m, game.Use_Block{b, msg.sequence})
+		mirror_send(m, protocol.Use_Block{b, msg.sequence})
 	case 9020:
 		inventory(m, .Click, 0)
 		inventory(m, .Click, game.CHEST_BASE)
@@ -445,7 +447,7 @@ act :: proc(m: ^Mirror, tick: u64, msg: game.Input, in_: game.Player_Input) {
 // mirror_check sends the Prediction_Check a client sends every DESYNC_CHECK_INPUTS
 // inputs, once the chunks around it are there.
 mirror_check :: proc(m: ^Mirror, sequence: u32) {
-	if sequence % game.DESYNC_CHECK_INPUTS != 0 {return}
+	if sequence % protocol.DESYNC_CHECK_INPUTS != 0 {return}
 	centre := game.chunk_of(feet_block(m))
 	for dy in i32(-1) ..= 1 {
 		for dz in i32(-1) ..= 1 {
@@ -454,7 +456,7 @@ mirror_check :: proc(m: ^Mirror, sequence: u32) {
 			}
 		}
 	}
-	mirror_send(m, game.Prediction_Check{sequence, game.player_fields(m.prediction.state)})
+	mirror_send(m, protocol.Prediction_Check{sequence, protocol.player_fields(m.prediction.state)})
 }
 
 // mirror_tick is the mirror's turn in a tick (a harness party): it takes what
@@ -468,7 +470,7 @@ mirror_tick :: proc(data: rawptr) {
 		tick := ticks_of(sess)
 		in_ := sess.input
 		if sess.scripted {in_ = script_input(tick)}
-		msg := game.prediction_tick(&m.prediction, in_, &m.rules, query(m), mirror_mods(m))
+		msg := protocol.prediction_tick(&m.prediction, in_, &m.rules, query(m), mirror_mods(m))
 		msg.snapshot = m.rx.ack
 		mirror_send(m, msg)
 		if sess.check {mirror_check(m, msg.sequence)}
@@ -548,16 +550,16 @@ test_blocks :: proc() -> ^game.Block_Table {
 
 // test_key: the account a test client of name has (the same every run, so
 // a restarted server knows it again).
-test_key :: proc(name: string) -> (k: game.Account_Key) {
+test_key :: proc(name: string) -> (k: access.Account_Key) {
 	seed: [32]u8
 	for i in 0 ..< 32 {seed[i] = u8(i) * 7 ~ (name[i % len(name)] if len(name) > 0 else 0)}
-	game.account_key_set(&k, seed[:])
+	access.account_key_set(&k, seed[:])
 	return
 }
 
-test_hello :: proc(name: string) -> game.Hello {
-	schema := game.game_schema(allocator = context.temp_allocator)
-	return {game.PROTOCOL_VERSION, test_key(name).account, name, schema.engine_hash, 0, nil}
+test_hello :: proc(name: string) -> protocol.Hello {
+	schema := protocol.game_schema(allocator = context.temp_allocator)
+	return {protocol.PROTOCOL_VERSION, test_key(name).account, name, schema.engine_hash, 0, nil}
 }
 
 // Harness_Player: one more player for a test, joining a listening harness server over
@@ -570,8 +572,8 @@ Harness_Player :: struct {
 	h:        ^Harness,
 	link:     netcode.Link,
 	scratch:  ^game.Block_Array,
-	schema:   game.Schema,
-	rx:       game.Receiver,
+	schema:   protocol.Schema,
+	rx:       protocol.Receiver,
 	welcomed: bool,
 	gone:     bool, // harness_player_leave: it no longer plays
 	sequence: u32,
@@ -589,9 +591,9 @@ harness_player_join :: proc(h: ^Harness, p: ^Harness_Player, name: string) {
 		name    = name,
 		h       = h,
 		scratch = new(game.Block_Array),
-		schema  = game.game_schema(s.config.game.id, s.config.game.kinds),
+		schema  = protocol.game_schema(s.config.game.id, s.config.game.kinds),
 	}
-	game.receiver_init(&p.rx, &p.schema, s.registry)
+	protocol.receiver_init(&p.rx, &p.schema, s.registry)
 	netcode.link_connect(
 		&p.link,
 		{net.IP4_Loopback, s.host.socket.port},
@@ -614,8 +616,8 @@ harness_player_leave :: proc(p: ^Harness_Player) {
 harness_player_free :: proc(p: ^Harness_Player) {
 	harness_player_leave(p)
 	free(p.scratch)
-	game.receiver_destroy(&p.rx)
-	game.schema_destroy(&p.schema)
+	protocol.receiver_destroy(&p.rx)
+	protocol.schema_destroy(&p.schema)
 	for m in p.messages {netcode.link_free(&p.link, m)}
 	delete(p.messages)
 	for n in p.notices {delete(n)}
@@ -629,18 +631,18 @@ harness_player_client :: proc(p: ^Harness_Player) -> ^Client {
 
 // harness_player_record: what the server last put for p of the game's kind whose value
 // type is T (under key), or nil.
-harness_player_record :: proc(p: ^Harness_Player, $T: typeid, key := game.Key{}) -> ^T {
-	kind, found := game.game_kind(&p.schema, T)
+harness_player_record :: proc(p: ^Harness_Player, $T: typeid, key := protocol.Key{}) -> ^T {
+	kind, found := protocol.game_kind(&p.schema, T)
 	if !found {return nil}
-	return (^T)(game.replica_get(&p.rx.live, kind, key))
+	return (^T)(protocol.replica_get(&p.rx.live, kind, key))
 }
 
 @(private = "file")
-harness_player_send :: proc(p: ^Harness_Player, m: game.Client_Message) {
+harness_player_send :: proc(p: ^Harness_Player, m: protocol.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.encode_client(&w, m)
-	netcode.link_send(&p.link, w.buf[:], game.message_reliable(.Client, w.buf[0]))
+	protocol.encode_client(&w, m)
+	netcode.link_send(&p.link, w.buf[:], protocol.message_reliable(.Client, w.buf[0]))
 }
 
 // harness_player_tick: what arrived is handled as a client handles it (the packs are
@@ -657,46 +659,53 @@ harness_player_tick :: proc(data: rawptr) {
 		k := test_key(p.name)
 		harness_player_send(
 			p,
-			game.Hello{game.PROTOCOL_VERSION, k.account, p.name, p.schema.engine_hash, 0, nil},
+			protocol.Hello {
+				protocol.PROTOCOL_VERSION,
+				k.account,
+				p.name,
+				p.schema.engine_hash,
+				0,
+				nil,
+			},
 		)
 	}
 	netcode.link_receive(&p.link, &p.messages)
 	for m in p.messages {
 		defer netcode.link_free(&p.link, m)
-		msg, ok := game.decode_server(m, p.scratch, s.registry)
+		msg, ok := protocol.decode_server(m, p.scratch, s.registry)
 		if !ok {continue}
 		#partial switch v in msg {
-		case game.Packs:
-			harness_player_send(p, game.Pack_Want{})
-			harness_player_send(p, game.Packs_Ready{v.content})
-		case game.Challenge:
+		case protocol.Packs:
+			harness_player_send(p, protocol.Pack_Want{})
+			harness_player_send(p, protocol.Packs_Ready{v.content})
+		case protocol.Challenge:
 			k := test_key(p.name)
-			harness_player_send(p, game.Proof{game.account_sign(&k, v.nonce)})
-		case game.Characters:
-			harness_player_send(p, game.Choose{p.name})
-		case game.Welcome:
+			harness_player_send(p, protocol.Proof{access.account_sign(&k, v.nonce)})
+		case protocol.Characters:
+			harness_player_send(p, protocol.Choose{p.name})
+		case protocol.Welcome:
 			p.welcomed = true
 			rules := v.rules
-			game.receiver_seed(&p.rx, int(game.State_Kind.Rules), &rules)
-		case game.State_Message:
-			got := make([dynamic]game.Received, context.temp_allocator)
-			game.receive_state(&p.rx, v.data, &got)
+			protocol.receiver_seed(&p.rx, int(protocol.State_Kind.Rules), &rules)
+		case protocol.State_Message:
+			got := make([dynamic]protocol.Received, context.temp_allocator)
+			protocol.receive_state(&p.rx, v.data, &got)
 			for g in got {
 				if g.op == .Event &&
 				   g.kind < p.schema.engine &&
-				   game.Event_Kind(g.kind - len(game.State_Kind)) == .Notice {
-					append(&p.notices, strings.clone((^game.Notice)(g.value).text))
+				   protocol.Event_Kind(g.kind - len(protocol.State_Kind)) == .Notice {
+					append(&p.notices, strings.clone((^protocol.Notice)(g.value).text))
 				}
 			}
-		case game.Snapshot_Message:
-			got := make([dynamic]game.Received, context.temp_allocator)
-			game.receive_snapshot(&p.rx, v.data, &got)
+		case protocol.Snapshot_Message:
+			got := make([dynamic]protocol.Received, context.temp_allocator)
+			protocol.receive_snapshot(&p.rx, v.data, &got)
 		}
 	}
 	clear(&p.messages)
 	if p.welcomed {
 		p.sequence += 1
-		harness_player_send(p, game.Input{p.sequence, {}, p.rx.ack})
+		harness_player_send(p, protocol.Input{p.sequence, {}, p.rx.ack})
 	}
 	netcode.link_flush(&p.link, now)
 }

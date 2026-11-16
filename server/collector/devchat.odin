@@ -10,8 +10,9 @@ import "core:sync"
 import "core:time"
 import "core:unicode/utf8"
 
-import "common:game"
+import "common:access"
 import "common:netcode"
+import "common:protocol"
 import "common:telemetry"
 
 // Developer chat (docs/telemetry.md, "Developer chat"): admin accounts write
@@ -52,7 +53,7 @@ devchat_admins :: proc(c: ^Collector) {
 	delete(c.admins_text)
 	c.admins_text = strings.clone(string(data))
 	c.admins_loaded = true
-	if bad := game.admins_parse(&c.admins, c.admins_text); bad > 0 {
+	if bad := access.admins_parse(&c.admins, c.admins_text); bad > 0 {
 		log.warnf(
 			"collector admins.cfg: lines that are not an account key or steam:<id> count=%d",
 			bad,
@@ -62,12 +63,12 @@ devchat_admins :: proc(c: ^Collector) {
 }
 
 @(private)
-dev_refuse :: proc(c: ^Collector, id: netcode.Peer_Id, m: game.Dev_Message, why: string) {
+dev_refuse :: proc(c: ^Collector, id: netcode.Peer_Id, m: protocol.Dev_Message, why: string) {
 	sync.mutex_lock(&c.mutex)
 	c.stats.dev_refused += 1
 	sync.mutex_unlock(&c.mutex)
 	log.warnf("collector refused a developer message why=%s", why)
-	send(c, id, game.Dev_Ack{m.id, false, why})
+	send(c, id, protocol.Dev_Ack{m.id, false, why})
 }
 
 // take_dev_message stores an admin's message once and acknowledges it.
@@ -76,10 +77,10 @@ take_dev_message :: proc(
 	c: ^Collector,
 	id: netcode.Peer_Id,
 	p: ^Collector_Peer,
-	m: game.Dev_Message,
+	m: protocol.Dev_Message,
 ) {
 	devchat_admins(c)
-	if !game.is_admin(&c.admins, p.account, p.steam_id) {
+	if !access.is_admin(&c.admins, p.account, p.steam_id) {
 		dev_refuse(c, id, m, "this account is not a developer-chat admin")
 		return
 	}
@@ -87,7 +88,7 @@ take_dev_message :: proc(
 		dev_refuse(c, id, m, "an empty message")
 		return
 	}
-	hex := game.account_text(p.account)
+	hex := access.account_text(p.account)
 	dir := fmt.tprintf("%s/devchat/%s/in", c.dir, hex)
 	os.make_directory_all(dir)
 	suffix := fmt.tprintf("-%08x.json", m.id)
@@ -97,7 +98,7 @@ take_dev_message :: proc(
 			sync.mutex_lock(&c.mutex)
 			c.stats.dev_duplicates += 1
 			sync.mutex_unlock(&c.mutex)
-			send(c, id, game.Dev_Ack{m.id, true, ""}) // (it was stored before)
+			send(c, id, protocol.Dev_Ack{m.id, true, ""}) // (it was stored before)
 			return
 		}
 	}
@@ -124,7 +125,7 @@ take_dev_message :: proc(
 	sync.mutex_lock(&c.mutex)
 	c.stats.dev_stored += 1
 	sync.mutex_unlock(&c.mutex)
-	send(c, id, game.Dev_Ack{m.id, true, ""})
+	send(c, id, protocol.Dev_Ack{m.id, true, ""})
 }
 
 @(private)
@@ -135,12 +136,12 @@ quote :: proc(s: string) -> string {
 
 // reply_parse reads one reply file; ok is false for a malformed one.
 @(private)
-reply_parse :: proc(data: []u8, stem: string) -> (r: game.Dev_Reply, ok: bool) {
+reply_parse :: proc(data: []u8, stem: string) -> (r: protocol.Dev_Reply, ok: bool) {
 	f: Reply_File
 	if json.unmarshal(data, &f, allocator = context.temp_allocator) != nil {return}
-	if f.id != stem || len(f.id) == 0 || len(f.id) > game.MAX_DEV_FIELD {return}
-	if f.time <= 0 || len(f.text) == 0 || len(f.text) > game.MAX_DEV_TEXT {return}
-	if len(f.link) > game.MAX_DEV_LINK {return}
+	if f.id != stem || len(f.id) == 0 || len(f.id) > protocol.MAX_DEV_FIELD {return}
+	if f.time <= 0 || len(f.text) == 0 || len(f.text) > protocol.MAX_DEV_TEXT {return}
+	if len(f.link) > protocol.MAX_DEV_LINK {return}
 	if !utf8.valid_string(f.id) ||
 	   !utf8.valid_string(f.text) ||
 	   !utf8.valid_string(f.link) {return}
@@ -149,11 +150,16 @@ reply_parse :: proc(data: []u8, stem: string) -> (r: game.Dev_Reply, ok: bool) {
 
 // take_dev_fetch answers with the replies after after_id (name order), at most one message's worth.
 @(private)
-take_dev_fetch :: proc(c: ^Collector, id: netcode.Peer_Id, p: ^Collector_Peer, m: game.Dev_Fetch) {
+take_dev_fetch :: proc(
+	c: ^Collector,
+	id: netcode.Peer_Id,
+	p: ^Collector_Peer,
+	m: protocol.Dev_Fetch,
+) {
 	devchat_admins(c)
-	out: game.Dev_Replies
-	if game.is_admin(&c.admins, p.account, p.steam_id) {
-		dir := fmt.tprintf("%s/devchat/%s/out", c.dir, game.account_text(p.account))
+	out: protocol.Dev_Replies
+	if access.is_admin(&c.admins, p.account, p.steam_id) {
+		dir := fmt.tprintf("%s/devchat/%s/out", c.dir, access.account_text(p.account))
 		infos, _ := os.read_all_directory_by_path(dir, context.temp_allocator)
 		slice.sort_by(infos, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
 		for info in infos {
@@ -161,7 +167,7 @@ take_dev_fetch :: proc(c: ^Collector, id: netcode.Peer_Id, p: ^Collector_Peer, m
 			stem := info.name[:len(info.name) - len(".json")]
 			if m.after_id != "" && stem <= m.after_id {continue}
 			data, err := os.read_entire_file_from_path(info.fullpath, context.temp_allocator)
-			reply: game.Dev_Reply
+			reply: protocol.Dev_Reply
 			ok := false
 			if err == nil {reply, ok = reply_parse(data, stem)}
 			if !ok {
@@ -170,7 +176,7 @@ take_dev_fetch :: proc(c: ^Collector, id: netcode.Peer_Id, p: ^Collector_Peer, m
 			}
 			out.entries[out.count] = reply
 			out.count += 1
-			if out.count == game.MAX_DEV_REPLIES {break}
+			if out.count == protocol.MAX_DEV_REPLIES {break}
 		}
 	}
 	send(c, id, out)

@@ -3,7 +3,9 @@ package core
 import "core:math"
 import "core:testing"
 
+import "common:access"
 import "common:game"
+import "common:protocol"
 
 // The exit check: a scripted player (walking, turning, jumping, breaking
 // and placing) gives the same results with 200 ms of latency each way (and
@@ -14,7 +16,7 @@ import "common:game"
 Run_Result :: struct {
 	server_state: game.Player_State, // the last Player_Update
 	predicted:    game.Player_State,
-	edits:        [3]game.Edit_Result,
+	edits:        [3]protocol.Edit_Result,
 	corrections:  int,
 	desyncs:      int, // checks the server found different
 	judged:       int,
@@ -28,20 +30,20 @@ Run_Result :: struct {
 
 @(private = "file")
 Predicting_Client :: struct {
-	key:         game.Account_Key,
-	endpoint:    game.Endpoint,
+	key:         access.Account_Key,
+	endpoint:    protocol.Endpoint,
 	h:           ^Harness, // the ticks it waits on
 	scratch:     ^game.Block_Array,
 	arrays:      game.Block_Arrays,
 	chunks:      map[game.Chunk_Pos]game.Chunk_Blocks,
-	prediction:  game.Prediction,
+	prediction:  protocol.Prediction,
 	rules:       game.Rules,
-	welcome:     game.Welcome,
+	welcome:     protocol.Welcome,
 	welcomed:    bool,
-	last_update: game.Own_Player,
+	last_update: protocol.Own_Player,
 	rx:          State_Rx,
 	teleports:   u8,
-	results:     map[u32]game.Edit_Result,
+	results:     map[u32]protocol.Edit_Result,
 	was_dead:    bool, // it has been
 	dead:        bool, // the server says so (Health): the client stands still
 	inventory:   game.Inventory, // as the server last said (the mods the gear gives)
@@ -70,21 +72,21 @@ query :: proc(c: ^Predicting_Client) -> game.Block_Query {
 
 @(private = "file")
 pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
-	packets := make([dynamic]game.Packet, context.temp_allocator)
-	game.receive(c.endpoint, &packets)
+	packets := make([dynamic]protocol.Packet, context.temp_allocator)
+	protocol.receive(c.endpoint, &packets)
 	for p in packets {
-		defer game.packet_free(c.endpoint, p)
-		m, ok := game.decode_server(p, c.scratch, test_reg())
+		defer protocol.packet_free(c.endpoint, p)
+		m, ok := protocol.decode_server(p, c.scratch, test_reg())
 		if !testing.expect(t, ok) {continue}
 		#partial switch v in m {
-		case game.Challenge:
-			send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
-		case game.Welcome:
+		case protocol.Challenge:
+			send(c, protocol.Proof{access.account_sign(&c.key, v.nonce)})
+		case protocol.Welcome:
 			c.welcome, c.welcomed, c.rules = v, true, v.rules
-			game.prediction_init(&c.prediction, {position = v.spawn})
+			protocol.prediction_init(&c.prediction, {position = v.spawn})
 			rules := v.rules
-			game.receiver_seed(&c.rx.rx, int(game.State_Kind.Rules), &rules)
-		case game.Chunk_Message:
+			protocol.receiver_seed(&c.rx.rx, int(protocol.State_Kind.Rules), &rules)
+		case protocol.Chunk_Message:
 			blocks := game.Chunk_Blocks {
 				uniform = v.uniform,
 			}
@@ -94,19 +96,19 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 			}
 			if old, had := &c.chunks[v.pos]; had {game.chunk_release(old, &c.arrays)}
 			c.chunks[v.pos] = blocks
-		case game.Unload_Chunk:
+		case protocol.Unload_Chunk:
 			if old, had := &c.chunks[v.pos]; had {
 				game.chunk_release(old, &c.arrays)
 				delete_key(&c.chunks, v.pos)
 			}
-		case game.State_Message, game.Snapshot_Message:
+		case protocol.State_Message, protocol.Snapshot_Message:
 			for g in state_rx_take(t, &c.rx, m) {
-				#partial switch game.State_Kind(g.kind) {
+				#partial switch protocol.State_Kind(g.kind) {
 				case .Own_Player:
-					c.last_update = (^game.Own_Player)(g.value)^
+					c.last_update = (^protocol.Own_Player)(g.value)^
 					teleported := c.last_update.teleports != c.teleports
 					c.teleports = c.last_update.teleports
-					game.prediction_reconcile(
+					protocol.prediction_reconcile(
 						&c.prediction,
 						c.last_update,
 						&c.rules,
@@ -117,16 +119,18 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 				case .Rules:
 					c.rules = (^game.Rules)(g.value)^
 				case .Health:
-					c.dead = (^game.Health)(g.value).dead
+					c.dead = (^protocol.Health)(g.value).dead
 					c.was_dead ||= c.dead
 				case .Inventory:
-					c.inventory = (^game.Inventory_State)(g.value).inventory
+					c.inventory = (^protocol.Inventory_State)(g.value).inventory
 				case .Mode:
-					if m, found := game.mode_find(test_reg(), (^game.Mode_Record)(g.value).mode);
-					   found {c.mode = m}
+					if m, found := game.mode_find(
+						test_reg(),
+						(^protocol.Mode_Record)(g.value).mode,
+					); found {c.mode = m}
 				}
 			}
-		case game.Edit_Result:
+		case protocol.Edit_Result:
 			c.results[v.id] = v
 			set_block(c, v.pos, v.block)
 			if cm, two := v.companion.?; two {set_block(c, cm.pos, cm.block)}
@@ -142,17 +146,17 @@ set_block :: proc(c: ^Predicting_Client, p: game.Block_Pos, b: game.Block) {
 }
 
 @(private = "file")
-send :: proc(c: ^Predicting_Client, m: game.Client_Message) {
+send :: proc(c: ^Predicting_Client, m: protocol.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.encode_client(&w, m)
-	game.send(c.endpoint, w.buf[:])
+	protocol.encode_client(&w, m)
+	protocol.send(c.endpoint, w.buf[:])
 }
 
 // check sends the Prediction_Check a client sends every DESYNC_CHECK_INPUTS inputs.
 @(private = "file")
 check :: proc(c: ^Predicting_Client, sequence: u32) {
-	if sequence % game.DESYNC_CHECK_INPUTS != 0 {return}
+	if sequence % protocol.DESYNC_CHECK_INPUTS != 0 {return}
 	p := c.prediction.state.position
 	centre := game.chunk_of({i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))})
 	for dy in i32(-1) ..= 1 {
@@ -162,7 +166,7 @@ check :: proc(c: ^Predicting_Client, sequence: u32) {
 			}
 		}
 	}
-	send(c, game.Prediction_Check{sequence, game.player_fields(c.prediction.state)})
+	send(c, protocol.Prediction_Check{sequence, protocol.player_fields(c.prediction.state)})
 }
 
 @(private = "file")
@@ -205,7 +209,7 @@ run_script :: proc(
 		local = true,
 	) {return} 	// (gentle hills: corrections only from latency, not chunks still arriving under a forest)
 	defer harness_stop(h)
-	game.pipe_set_conditions(&h.pipe, {latency_ms = latency_ms, jitter_ms = jitter_ms})
+	protocol.pipe_set_conditions(&h.pipe, {latency_ms = latency_ms, jitter_ms = jitter_ms})
 
 	c := Predicting_Client {
 		endpoint = harness_local(h),
@@ -236,7 +240,7 @@ run_script :: proc(
 	}
 	for {
 		pump(t, &c)
-		msg := game.prediction_tick(
+		msg := protocol.prediction_tick(
 			&c.prediction,
 			{pitch = -0.7},
 			&c.rules,
@@ -274,7 +278,7 @@ run_script :: proc(
 					damage(s, c, 1000, {kind = .Command})
 				}, nil)
 		}
-		if death && tick == 60 {send(&c, game.Respawn{})}
+		if death && tick == 60 {send(&c, protocol.Respawn{})}
 		if c.dead {in_ = {
 				yaw   = in_.yaw,
 				pitch = in_.pitch,
@@ -282,7 +286,7 @@ run_script :: proc(
 		if fly && tick == 10 {in_.buttons += {.Toggle_Fly}}
 		if fly && tick > 10 && tick < ticks {in_.buttons += {.Jump}}
 		if hook && (tick % 90 >= 10 && tick % 90 < 50) {in_.buttons += {.Grapple}} 	// (held, let go, the cooldown, held)
-		msg := game.prediction_tick(&c.prediction, in_, &c.rules, query(&c), client_mods(&c))
+		msg := protocol.prediction_tick(&c.prediction, in_, &c.rules, query(&c), client_mods(&c))
 		msg.snapshot = c.rx.rx.ack
 		if nudge {
 			v := &c.prediction.state.velocity.x
@@ -301,7 +305,7 @@ run_script :: proc(
 			eye := game.player_eye(c.prediction.state)
 			hit, aimed := game.raycast(query(&c), eye, f, f64(c.rules.reach))
 			if !testing.expectf(t, aimed, "edit %d: nothing aimed at", i) {return}
-			e := game.Edit {
+			e := protocol.Edit {
 				id    = u32(i + 1),
 				after = msg.sequence,
 				pos   = hit.block,
@@ -373,7 +377,7 @@ test_same_results_with_latency :: proc(t: ^testing.T) {
 // eight check intervals: the server applies at least one input per tick, so at
 // least some checks land after the quiet time however late the machine.
 @(private = "file")
-QUIET_STRETCH :: game.DESYNC_QUIET_TICKS + 8 * game.DESYNC_CHECK_INPUTS
+QUIET_STRETCH :: protocol.DESYNC_QUIET_TICKS + 8 * protocol.DESYNC_CHECK_INPUTS
 
 // The detector is quiet when nothing is wrong, 200 ms of latency and all, and
 // judges enough checks not to be vacuous.
@@ -448,7 +452,7 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 		),
 	) {return}
 	defer harness_stop(h)
-	game.pipe_set_conditions(&h.pipe, {latency_ms = 200, jitter_ms = 60})
+	protocol.pipe_set_conditions(&h.pipe, {latency_ms = 200, jitter_ms = 60})
 	c := Predicting_Client {
 		endpoint = harness_local(h),
 		h        = h,
@@ -473,7 +477,7 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 		seq: u32
 		for _ in 0 ..< ticks {
 			pump(t, c)
-			msg := game.prediction_tick(
+			msg := protocol.prediction_tick(
 				&c.prediction,
 				{pitch = -0.7, yaw = yaw},
 				&c.rules,
@@ -499,7 +503,7 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 	o := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
 	// A wall two blocks east, four high: stairs and slabs go against its west face.
 	for text in ([]string{"fill ~1 ~ ~-3 ~3 ~3 ~3 air", "fill ~2 ~ ~-3 ~2 ~3 ~3 stone"}) {
-		send(&c, game.Command{text})
+		send(&c, protocol.Command{text})
 		stand(t, &c, 0, 3)
 	}
 	stand(t, &c, 0, 25)
@@ -529,7 +533,7 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 		seq := stand(t, &c, face_yaw, 2)
 		id := u32(k + 1)
 		set_block(&c, pos, state) // predicted
-		send(&c, game.Edit{id, seq, pos, state, ctx.target, u8(ctx.face), ctx.hit})
+		send(&c, protocol.Edit{id, seq, pos, state, ctx.target, u8(ctx.face), ctx.hit})
 		append(&placed, Placed{id, pos, state})
 		stand(t, &c, face_yaw, 1)
 	}
@@ -546,12 +550,28 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 	seq := stand(t, &c, 0, 2)
 	send(
 		&c,
-		game.Edit{100, seq, fpos, wrong, forged_ctx.target, u8(forged_ctx.face), forged_ctx.hit},
+		protocol.Edit {
+			100,
+			seq,
+			fpos,
+			wrong,
+			forged_ctx.target,
+			u8(forged_ctx.face),
+			forged_ctx.hit,
+		},
 	)
 	seq = stand(t, &c, 0, 2)
 	send(
 		&c,
-		game.Edit{101, seq, fpos, fstate, forged_ctx.target, u8(forged_ctx.face), forged_ctx.hit},
+		protocol.Edit {
+			101,
+			seq,
+			fpos,
+			fstate,
+			forged_ctx.target,
+			u8(forged_ctx.face),
+			forged_ctx.hit,
+		},
 	)
 	// All answered.
 	deadline = harness_ticks(h) + 20 * game.TICK_RATE
@@ -600,7 +620,7 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 		),
 	) {return}
 	defer harness_stop(h)
-	game.pipe_set_conditions(&h.pipe, {latency_ms = 200, jitter_ms = 60})
+	protocol.pipe_set_conditions(&h.pipe, {latency_ms = 200, jitter_ms = 60})
 	c := Predicting_Client {
 		endpoint = harness_local(h),
 		h        = h,
@@ -625,7 +645,7 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 		seq: u32
 		for _ in 0 ..< ticks {
 			pump(t, c)
-			msg := game.prediction_tick(&c.prediction, {pitch = -0.7}, &c.rules, query(c))
+			msg := protocol.prediction_tick(&c.prediction, {pitch = -0.7}, &c.rules, query(c))
 			msg.snapshot = c.rx.rx.ack
 			send(c, msg)
 			seq = msg.sequence
@@ -646,7 +666,7 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 	o := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
 	// Room for a door at o + (2, 0, 0) and a ceiling over the one at o + (2, 0, 3).
 	for text in ([]string{"fill ~2 ~-1 ~-1 ~2 ~3 ~4 stone", "fill ~2 ~ ~ ~2 ~3 ~ air", "fill ~2 ~ ~3 ~2 ~ ~3 air"}) {
-		send(&c, game.Command{text})
+		send(&c, protocol.Command{text})
 		stand(t, &c, 3)
 	}
 	stand(t, &c, 25)
@@ -673,7 +693,7 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 		set_block(c, pos, lower)
 		_, upper, _ := game.companion(test_reg(), lower, pos)
 		set_block(c, pos + {0, 1, 0}, upper)
-		send(c, game.Edit{id, seq, pos, lower, ctx.target, u8(ctx.face), ctx.hit})
+		send(c, protocol.Edit{id, seq, pos, lower, ctx.target, u8(ctx.face), ctx.hit})
 		return
 	}
 	at_door := o + {2, 0, 0}
@@ -699,7 +719,7 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 		set_block(c, pos, flipped)
 		_, upper, _ := game.companion(test_reg(), flipped, pos)
 		set_block(c, pos + {0, 1, 0}, upper)
-		send(c, game.edit_plain(id, seq, pos, flipped))
+		send(c, protocol.edit_plain(id, seq, pos, flipped))
 		return await(t, c, id)
 	}
 	for id in u32(2) ..= 3 {
@@ -723,13 +743,13 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 	testing.expect_value(t, back, lower) // closed again
 	// No room above: the forged edit is refused and both cells go back as the server has them.
 	bad := o + {2, 0, 3}
-	send(&c, game.Command{"setblock ~2 ~1 ~3 stone"})
+	send(&c, protocol.Command{"setblock ~2 ~1 ~3 stone"})
 	stand(t, &c, 30)
 	seq := stand(t, &c, 2)
 	set_block(&c, bad, lower)
 	_, upper, _ := game.companion(test_reg(), lower, bad)
 	set_block(&c, bad + {0, 1, 0}, upper)
-	send(&c, game.Edit{4, seq, bad, lower, bad + {0, -1, 0}, u8(game.Face.Pos_Y), {8, 16, 8}})
+	send(&c, protocol.Edit{4, seq, bad, lower, bad + {0, -1, 0}, u8(game.Face.Pos_Y), {8, 16, 8}})
 	if !await(t, &c, 4) {return}
 	testing.expect(t, !c.results[4].accepted, "a door with a ceiling was accepted")
 	for cell in ([]game.Block_Pos{bad, bad + {0, 1, 0}}) {

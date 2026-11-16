@@ -12,6 +12,7 @@ import "client:prompt"
 import "client:testkit"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 
 // The inventory overlay with the mouse: dragging a stack to another slot,
 // right-click halves, shift-click to the hotbar, a number key, dropping
@@ -28,9 +29,9 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	defer ui.destroy(&app.ui)
 	s := new(engine.Session)
 	defer free(s)
-	pipe: game.Pipe
-	game.pipe_init(&pipe)
-	defer game.pipe_destroy(&pipe)
+	pipe: protocol.Pipe
+	protocol.pipe_init(&pipe)
+	defer protocol.pipe_destroy(&pipe)
 	s.endpoint = {&pipe, .Client}
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
@@ -133,9 +134,9 @@ test_characters_screen :: proc(t: ^testing.T) {
 	defer delete(app.new_character)
 	s := new(engine.Session)
 	defer free(s)
-	pipe: game.Pipe
-	game.pipe_init(&pipe)
-	defer game.pipe_destroy(&pipe)
+	pipe: protocol.Pipe
+	protocol.pipe_init(&pipe)
+	defer protocol.pipe_destroy(&pipe)
 	s.endpoint = {&pipe, .Client}
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
@@ -196,9 +197,9 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	defer ui.destroy(&app.ui)
 	s := new(engine.Session)
 	defer free(s)
-	pipe: game.Pipe
-	game.pipe_init(&pipe)
-	defer game.pipe_destroy(&pipe)
+	pipe: protocol.Pipe
+	protocol.pipe_init(&pipe)
+	defer protocol.pipe_destroy(&pipe)
 	s.endpoint = {&pipe, .Client}
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)

@@ -1,4 +1,4 @@
-package game
+package protocol
 
 import "core:mem"
 import "core:sync"

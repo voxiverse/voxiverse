@@ -5,6 +5,7 @@ import "core:math/linalg"
 
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // Hitscan weapons. A weapon is an item with a `weapon` object (data: its
 // damage, magazine, rate, range...); this file is the only place that fires
@@ -137,7 +138,7 @@ weapon_interval :: proc(info: game.Weapon_Info) -> f64 {
 weapon_shoot :: proc(
 	s: ^Server,
 	c: ^Client,
-	m: game.Shoot,
+	m: protocol.Shoot,
 	claimed_latency_ms := f32(-1),
 ) -> bool {
 	if c.dead || int(m.slot) != c.inventory.selected {return false}
@@ -248,7 +249,7 @@ weapon_shoot :: proc(
 		}
 	}
 	if hit {
-		confirm := game.Hit_Confirm {
+		confirm := protocol.Hit_Confirm {
 			kill     = killed,
 			headshot = headshot,
 		}
@@ -262,7 +263,7 @@ weapon_shoot :: proc(
 		d := o.player.position - origin
 		if d.x * d.x + d.y * d.y + d.z * d.z > SHOT_HEARD * SHOT_HEARD {continue}
 		for i in 0 ..< rays {
-			shot := game.Shot{id, stack.item, origin, ends[i]}
+			shot := protocol.Shot{id, stack.item, origin, ends[i]}
 			event_send(s, &o, .Shot, &shot)
 		}
 	}

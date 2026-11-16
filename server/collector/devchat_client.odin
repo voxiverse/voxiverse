@@ -9,9 +9,11 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 // The game's side of developer chat (docs/telemetry.md, "Developer chat"): a
 // conversation kept in one file (devchat.jsonl beside the settings), messages
@@ -63,7 +65,7 @@ Chat_Context :: struct {
 Chat :: struct {
 	path:        string, // the conversation's file
 	server:      net.Endpoint,
-	key:         game.Account_Key,
+	key:         access.Account_Key,
 	thread:      ^thread.Thread,
 	stop:        bool, // (atomic)
 	active:      bool, // (atomic) the chat screen is open: fetch often
@@ -87,7 +89,7 @@ chat_open :: proc(
 	c: ^Chat,
 	path: string,
 	server: net.Endpoint,
-	key: game.Account_Key,
+	key: access.Account_Key,
 	sim: ^netcode.Simnet = nil,
 ) {
 	c^ = {}
@@ -99,7 +101,7 @@ chat_open :: proc(
 }
 
 // chat_start opens the chat and runs its passes on a thread.
-chat_start :: proc(c: ^Chat, path: string, server: net.Endpoint, key: game.Account_Key) {
+chat_start :: proc(c: ^Chat, path: string, server: net.Endpoint, key: access.Account_Key) {
 	chat_open(c, path, server, key)
 	c.thread = thread.create_and_start_with_poly_data(
 		c,
@@ -136,7 +138,7 @@ chat_set_active :: proc(c: ^Chat, active: bool) {
 // chat_send keeps a message (in the file at once: it survives a restart) and
 // wakes the pass that sends it. Returns false for an empty or oversized text.
 chat_send :: proc(c: ^Chat, text: string, ctx: Chat_Context) -> bool {
-	if len(strings.trim_space(text)) == 0 || len(text) > game.MAX_DEV_TEXT {return false}
+	if len(strings.trim_space(text)) == 0 || len(text) > protocol.MAX_DEV_TEXT {return false}
 	sync.mutex_lock(&c.mutex)
 	id: [4]u8
 	base.entropy_fill(id[:])
@@ -197,7 +199,7 @@ chat_replies :: proc(c: ^Chat) -> u64 {
 }
 
 @(private)
-clip :: proc(s: string) -> string {return s[:min(len(s), game.MAX_DEV_FIELD)]}
+clip :: proc(s: string) -> string {return s[:min(len(s), protocol.MAX_DEV_FIELD)]}
 
 @(private)
 entry_free :: proc(e: ^Chat_Entry) {
@@ -274,21 +276,21 @@ chat_connect :: proc(c: ^Chat) -> bool {
 		}
 		chat_wait(c)
 	}
-	chat_out(c, game.Hello{game.PROTOCOL_VERSION, c.key.account, "", 0, 0, nil})
+	chat_out(c, protocol.Hello{protocol.PROTOCOL_VERSION, c.key.account, "", 0, 0, nil})
 	msg, ok := chat_message(c)
-	challenge, is_challenge := msg.(game.Challenge)
+	challenge, is_challenge := msg.(protocol.Challenge)
 	if !ok || !is_challenge {
 		netcode.link_close(&c.link, "no challenge")
 		return false
 	}
-	chat_out(c, game.Proof{game.account_sign(&c.key, challenge.nonce)})
+	chat_out(c, protocol.Proof{access.account_sign(&c.key, challenge.nonce)})
 	return true
 }
 
 @(private)
-chat_out :: proc(c: ^Chat, m: game.Client_Message) {
+chat_out :: proc(c: ^Chat, m: protocol.Client_Message) {
 	clear(&c.writer.buf)
-	game.encode_client(&c.writer, m)
+	protocol.encode_client(&c.writer, m)
 	netcode.link_send(&c.link, c.writer.buf[:], true)
 	netcode.link_flush(&c.link, chat_now(c))
 }
@@ -296,7 +298,7 @@ chat_out :: proc(c: ^Chat, m: game.Client_Message) {
 // chat_message: the next message from the collector within the timeout, its
 // strings cloned into the temp allocator (the packet is freed).
 @(private)
-chat_message :: proc(c: ^Chat) -> (m: game.Server_Message, ok: bool) {
+chat_message :: proc(c: ^Chat) -> (m: protocol.Server_Message, ok: bool) {
 	start := chat_now(c)
 	got := make([dynamic][]u8, context.temp_allocator)
 	for time.tick_diff(start, chat_now(c)) < ACK_TIMEOUT {
@@ -307,12 +309,16 @@ chat_message :: proc(c: ^Chat) -> (m: game.Server_Message, ok: bool) {
 		netcode.link_receive(&c.link, &got)
 		for data in got {
 			defer netcode.link_free(&c.link, data)
-			if msg, decoded := game.decode_server(data, c.scratch); decoded && !ok {
+			if msg, decoded := protocol.decode_server(data, c.scratch); decoded && !ok {
 				m, ok = msg, true
 				#partial switch v in msg {
-				case game.Dev_Ack:
-					m = game.Dev_Ack{v.id, v.ok, strings.clone(v.reason, context.temp_allocator)}
-				case game.Dev_Replies:
+				case protocol.Dev_Ack:
+					m = protocol.Dev_Ack {
+						v.id,
+						v.ok,
+						strings.clone(v.reason, context.temp_allocator),
+					}
+				case protocol.Dev_Replies:
 					r := v
 					for i in 0 ..< r.count {
 						e := &r.entries[i]
@@ -338,11 +344,11 @@ chat_send_waiting :: proc(c: ^Chat) -> bool {
 	for {
 		sync.mutex_lock(&c.mutex)
 		index := -1
-		m: game.Dev_Message
+		m: protocol.Dev_Message
 		for e, i in c.entries {
 			if !e.from_me || e.sent || e.refused != "" {continue}
 			index = i
-			m = game.Dev_Message {
+			m = protocol.Dev_Message {
 				id       = parse_id(e.id),
 				text     = strings.clone(e.text, context.temp_allocator),
 				version  = strings.clone(e.version, context.temp_allocator),
@@ -361,7 +367,7 @@ chat_send_waiting :: proc(c: ^Chat) -> bool {
 		for {
 			reply, ok := chat_message(c)
 			if !ok {return false}
-			ack, is_ack := reply.(game.Dev_Ack)
+			ack, is_ack := reply.(protocol.Dev_Ack)
 			if !is_ack || ack.id != m.id {continue}
 			sync.mutex_lock(&c.mutex)
 			e := &c.entries[index]
@@ -385,12 +391,12 @@ chat_fetch :: proc(c: ^Chat) {
 			if !c.entries[i].from_me {after = strings.clone(c.entries[i].id, context.temp_allocator); break}
 		}
 		sync.mutex_unlock(&c.mutex)
-		chat_out(c, game.Dev_Fetch{after})
+		chat_out(c, protocol.Dev_Fetch{after})
 		count := 0
 		for {
 			reply, ok := chat_message(c)
 			if !ok {return}
-			page, is_page := reply.(game.Dev_Replies)
+			page, is_page := reply.(protocol.Dev_Replies)
 			if !is_page {continue}
 			count = page.count
 			sync.mutex_lock(&c.mutex)
@@ -410,7 +416,7 @@ chat_fetch :: proc(c: ^Chat) {
 			sync.mutex_unlock(&c.mutex)
 			break
 		}
-		if count < game.MAX_DEV_REPLIES {return}
+		if count < protocol.MAX_DEV_REPLIES {return}
 	}
 }
 

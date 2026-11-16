@@ -1,5 +1,6 @@
-package game
+package protocol
 
+import "common:game"
 import "core:os"
 import "core:time"
 
@@ -32,23 +33,23 @@ Trace_Record :: struct {
 
 Trace_Writer :: struct {
 	file:   ^os.File,
-	writer: Writer, // reused per record
+	writer: game.Writer, // reused per record
 }
 
 trace_open :: proc(t: ^Trace_Writer, path: string, h: Trace_Header) -> bool {
 	f, err := os.open(path, {.Write, .Create, .Trunc})
 	if err != nil {return false}
 	t.file = f
-	writer_init(&t.writer)
+	game.writer_init(&t.writer)
 	w := &t.writer
 	append(&w.buf, TRACE_MAGIC)
-	write_u32(w, TRACE_VERSION)
-	write_u32(w, h.protocol)
-	write_u32(w, u32(h.seed))
-	write_u32(w, u32(h.seed >> 32))
-	write_u32(w, h.view_radius)
-	write_u32(w, h.view_height)
-	write_u8(w, 1 if h.allow_cheats else 0)
+	game.write_u32(w, TRACE_VERSION)
+	game.write_u32(w, h.protocol)
+	game.write_u32(w, u32(h.seed))
+	game.write_u32(w, u32(h.seed >> 32))
+	game.write_u32(w, h.view_radius)
+	game.write_u32(w, h.view_height)
+	game.write_u8(w, 1 if h.allow_cheats else 0)
 	os.write(f, w.buf[:])
 	return true
 }
@@ -57,10 +58,10 @@ trace_write :: proc(t: ^Trace_Writer, at: time.Duration, sender: Side, data: []u
 	w := &t.writer
 	clear(&w.buf)
 	ns := u64(at)
-	write_u32(w, u32(ns))
-	write_u32(w, u32(ns >> 32))
-	write_u8(w, u8(sender))
-	write_u32(w, u32(len(data)))
+	game.write_u32(w, u32(ns))
+	game.write_u32(w, u32(ns >> 32))
+	game.write_u8(w, u8(sender))
+	game.write_u32(w, u32(len(data)))
 	append(&w.buf, ..data)
 	os.write(t.file, w.buf[:])
 }
@@ -68,7 +69,7 @@ trace_write :: proc(t: ^Trace_Writer, at: time.Duration, sender: Side, data: []u
 trace_close :: proc(t: ^Trace_Writer) {
 	if t.file == nil {return}
 	os.close(t.file)
-	writer_destroy(&t.writer)
+	game.writer_destroy(&t.writer)
 	t^ = {}
 }
 
@@ -85,19 +86,19 @@ trace_read :: proc(
 ) {
 	records = make([dynamic]Trace_Record, allocator)
 	if len(data) < 4 || string(data[:4]) != TRACE_MAGIC {return}
-	r := reader_make(data[4:])
-	if read_u32(&r) != TRACE_VERSION {return}
-	header.protocol = read_u32(&r)
-	lo, hi := u64(read_u32(&r)), u64(read_u32(&r))
+	r := game.reader_make(data[4:])
+	if game.read_u32(&r) != TRACE_VERSION {return}
+	header.protocol = game.read_u32(&r)
+	lo, hi := u64(game.read_u32(&r)), u64(game.read_u32(&r))
 	header.seed = i64(lo | hi << 32)
-	header.view_radius = read_u32(&r)
-	header.view_height = read_u32(&r)
-	header.allow_cheats = read_u8(&r) == 1
+	header.view_radius = game.read_u32(&r)
+	header.view_height = game.read_u32(&r)
+	header.allow_cheats = game.read_u8(&r) == 1
 	if !r.ok {return}
 	for r.pos < len(r.data) {
-		lo, hi = u64(read_u32(&r)), u64(read_u32(&r))
-		sender := read_u8(&r)
-		n := read_u32(&r)
+		lo, hi = u64(game.read_u32(&r)), u64(game.read_u32(&r))
+		sender := game.read_u8(&r)
+		n := game.read_u32(&r)
 		if !r.ok ||
 		   sender > 1 ||
 		   n == 0 ||
@@ -116,7 +117,11 @@ trace_read :: proc(
 // the trace holds no Welcome), so a tool that reads a trace reads the game's records and
 // replays its rules (tools/netdump, tools/replay; they find the game by its id among
 // the lists of games).
-trace_game :: proc(records: []Trace_Record, scratch: ^Block_Array, reg: ^Registry) -> string {
+trace_game :: proc(
+	records: []Trace_Record,
+	scratch: ^game.Block_Array,
+	reg: ^game.Registry,
+) -> string {
 	for r in records {
 		if r.sender != .Server ||
 		   len(r.data) == 0 ||

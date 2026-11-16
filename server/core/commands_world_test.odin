@@ -5,6 +5,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "common:worldgen"
 
 @(private = "file")
@@ -15,7 +16,7 @@ said :: proc(c: ^Net_Client, what: string) -> bool {
 
 @(private = "file")
 cmd :: proc(c: ^Net_Client, text: string) {
-	net_send(c, game.Command{text})
+	net_send(c, protocol.Command{text})
 }
 
 @(private = "file")

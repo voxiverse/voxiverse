@@ -9,9 +9,12 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:planet"
+import "common:protocol"
+import "common:starmap"
 
 // What is kept about each character: their own file in the universe,
 // characters/<account>/<name>.json (where they are, where they look,
@@ -30,8 +33,8 @@ PLAYERS_DIR :: "players"
 PLAYER_FILE_FORMAT :: 4 // 4: an item's game data (`data`; before: 0). 3: the trader; a file before has an empty one and the starting purse. 2: a weapon's magazine (`ammo`); a file of 1 has none: full
 
 Player_Record :: struct {
-	account:   Maybe(game.Account), // whose (none: from before accounts, unclaimed)
-	world:     Maybe(game.Address), // where they are (none: the home world)
+	account:   Maybe(access.Account), // whose (none: from before accounts, unclaimed)
+	world:     Maybe(starmap.Address), // where they are (none: the home world)
 	state:     game.Player_State,
 	look:      [2]f32, // yaw, pitch
 	mode:      base.Var_Text, // their game mode's id ("": none yet: the world's default)
@@ -90,12 +93,12 @@ File_Stack :: struct {
 // character_path: where name's file is (its account's directory, or
 // before accounts players/).
 @(private)
-character_path :: proc(s: ^Server, name: string, account: Maybe(game.Account)) -> string {
+character_path :: proc(s: ^Server, name: string, account: Maybe(access.Account)) -> string {
 	file := strings.concatenate({name, ".json"}, context.temp_allocator)
 	if a, ok := account.?; ok {
 		return(
 			filepath.join(
-				{s.store.dir, CHARACTERS_DIR, game.account_text(a), file},
+				{s.store.dir, CHARACTERS_DIR, access.account_text(a), file},
 				context.temp_allocator,
 			) or_else file \
 		)
@@ -112,7 +115,7 @@ characters_open :: proc(s: ^Server) {
 	accounts, err := os.read_all_directory_by_path(root, context.temp_allocator)
 	if err != nil {return} 	// none yet
 	for a in accounts {
-		account, ok := game.account_parse(a.name)
+		account, ok := access.account_parse(a.name)
 		if a.type != .Directory || !ok {continue}
 		files, _ := os.read_all_directory_by_path(
 			filepath.join({root, a.name}, context.temp_allocator) or_else root,
@@ -129,7 +132,7 @@ characters_open :: proc(s: ^Server) {
 }
 
 // characters_of: account's character names here, sorted.
-characters_of :: proc(s: ^Server, account: game.Account) -> []string {
+characters_of :: proc(s: ^Server, account: access.Account) -> []string {
 	names := make([dynamic]string, context.temp_allocator)
 	for name, a in s.store.characters {if a == account {append(&names, name)}}
 	slice.sort(names[:])
@@ -137,10 +140,10 @@ characters_of :: proc(s: ^Server, account: game.Account) -> []string {
 }
 
 // character_claim: name is account's from now on.
-character_claim :: proc(s: ^Server, name: string, account: game.Account) {
+character_claim :: proc(s: ^Server, name: string, account: access.Account) {
 	if _, known := s.store.characters[name]; known {return}
 	s.store.characters[strings.clone(name)] = account
-	log.infof("server character made name=%s account=%s", name, game.account_text(account))
+	log.infof("server character made name=%s account=%s", name, access.account_text(account))
 }
 
 // player_record: what is kept about the character name (from memory, else
@@ -191,7 +194,7 @@ player_parse :: proc(reg: ^game.Registry, data: []u8) -> (r: Player_Record, ok: 
 	}
 	r.look = {f.look[0], clamp(f.look[1], -game.PITCH_LIMIT, game.PITCH_LIMIT)}
 	if f.world != "" {
-		if a, valid := game.address_parse(f.world, {}); valid {r.world = a}
+		if a, valid := starmap.address_parse(f.world, {}); valid {r.world = a}
 	}
 	base.var_text_set(&r.mode, f.mode) // (too long: none)
 	r.inventory.selected = clamp(f.selected, 0, game.HOTBAR_SLOTS - 1)
@@ -283,7 +286,7 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
 		append(&seen, Seen_File{e.cell, int(e.good), e.price, f64(e.month)})
 	}
 	world := ""
-	if a, has := r.world.?; has {world = game.address_dir(a)}
+	if a, has := r.world.?; has {world = starmap.address_dir(a)}
 	f := Player_File {
 		format = PLAYER_FILE_FORMAT,
 		world = world,
@@ -632,15 +635,15 @@ trade :: proc(
 // `Market_Trade`, which also names no town: the server knows where they stand. A player away
 // from every town is sent nothing, and a trade from there is refused (`Away`).
 
-#assert(len(planet.Good) <= game.MARKET_GOODS)
+#assert(len(planet.Good) <= protocol.MARKET_GOODS)
 
 // market_view builds what a player in a town sees. `town` is an index in the economy.
 @(private = "file")
-market_view :: proc(w: ^World, c: ^Client, town: int) -> game.Market_View {
+market_view :: proc(w: ^World, c: ^Client, town: int) -> protocol.Market_View {
 	we := w.economy
 	local := we.market.local[town]
 	tw := we.economy.towns[town]
-	v := game.Market_View {
+	v := protocol.Market_View {
 		town = strings.clone(market_town_name(tw), context.temp_allocator),
 		cash = c.trader.cash,
 	}
@@ -682,7 +685,7 @@ itoa :: proc(n: int) -> string {
 
 // market_signature hashes what a view shows, to tell whether it changed.
 @(private = "file")
-market_signature :: proc(v: game.Market_View) -> u64 {
+market_signature :: proc(v: protocol.Market_View) -> u64 {
 	v := v
 	h := hash.fnv64a(transmute([]u8)v.town)
 	h = hash.fnv64a(([^]u8)(&v.cash)[:size_of(v.cash)], h)
@@ -696,7 +699,7 @@ market_update :: proc(s: ^Server, c: ^Client) {
 	town, ok := trader_where(c.world, c)
 	if !ok {
 		// Leaving a town: the client is told once (it shows the market only while there).
-		if c.market_at != 0 {send_message(s, c, game.Market_View{reason = .Away})}
+		if c.market_at != 0 {send_message(s, c, protocol.Market_View{reason = .Away})}
 		c.market_at, c.market_sig = 0, 0
 		return
 	}
@@ -709,20 +712,20 @@ market_update :: proc(s: ^Server, c: ^Client) {
 
 // market_trade answers a Market_Trade: the new view, or a refusal.
 @(private)
-market_trade :: proc(s: ^Server, c: ^Client, m: game.Market_Trade) {
+market_trade :: proc(s: ^Server, c: ^Client, m: protocol.Market_Trade) {
 	w := c.world
 	town, ok := trader_where(w, c)
 	if !ok {
-		reason := game.Market_Reason.Away
+		reason := protocol.Market_Reason.Away
 		if w == nil || w.economy == nil || !w.economy.built || !w.economy.resident {
 			reason = .No_Economy
 		}
-		send_message(s, c, game.Market_View{reason = reason})
+		send_message(s, c, protocol.Market_View{reason = reason})
 		return
 	}
 	result, _ := trade(w, c, town, planet.Good(m.good), m.quantity, .Sell if m.sell else .Buy)
 	if result != .Done {
-		send_message(s, c, game.Market_View{reason = market_reason(result)})
+		send_message(s, c, protocol.Market_View{reason = market_reason(result)})
 		return
 	}
 	v := market_view(w, c, town)
@@ -731,7 +734,7 @@ market_trade :: proc(s: ^Server, c: ^Client, m: game.Market_Trade) {
 }
 
 @(private = "file")
-market_reason :: proc(r: Trade_Result) -> game.Market_Reason {
+market_reason :: proc(r: Trade_Result) -> protocol.Market_Reason {
 	switch r {
 	case .Done:
 		return .None

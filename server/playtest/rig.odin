@@ -4,6 +4,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "server:core"
 import "server:play"
 
@@ -141,11 +142,11 @@ mode_of :: proc(rig: ^Rig, c: ^core.Client) -> string {
 
 // host_record, guest_record: what the server last put of the game's kind T for the host
 // or a guest (under key), or nil.
-host_record :: proc(rig: ^Rig, $T: typeid, key := game.Key{}) -> ^T {
+host_record :: proc(rig: ^Rig, $T: typeid, key := protocol.Key{}) -> ^T {
 	return core.mirror_game_record(&rig.sess.mirror, T, key)
 }
 
-guest_record :: proc(rig: ^Rig, $T: typeid, key := game.Key{}, i := 0) -> ^T {
+guest_record :: proc(rig: ^Rig, $T: typeid, key := protocol.Key{}, i := 0) -> ^T {
 	return core.harness_player_record(&rig.guests[i], T, key)
 }
 

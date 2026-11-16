@@ -8,6 +8,7 @@ import "core:testing"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Game modes per player, through permissions: an operator's /gamemode changes
 // their own mode (and another's); a player without the nodes is refused;
@@ -122,7 +123,7 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 	}
 
 	// The operator makes themselves creative: they may fly; bob stays in survival.
-	net_send(alice, game.Command{"gamemode creative"})
+	net_send(alice, protocol.Command{"gamemode creative"})
 	expect_told(t, alice, {bob}, "alice: game mode creative")
 	a, b := probe(srv, "alice"), probe(srv, "bob")
 	testing.expect(t, .Fly in a.abilities && .Invulnerable in a.abilities, "alice can fly")
@@ -131,19 +132,19 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 	testing.expect_value(t, bob.mode, "voxiverse:survival")
 
 	// Without the nodes: refused, clearly, whoever the target is.
-	net_send(bob, game.Command{"gamemode creative"})
+	net_send(bob, protocol.Command{"gamemode creative"})
 	expect_told(t, bob, {alice}, "You may not change your own game mode.")
-	net_send(bob, game.Command{"gamemode creative alice"})
+	net_send(bob, protocol.Command{"gamemode creative alice"})
 	expect_told(t, bob, {alice}, "You may not change another player's game mode.")
 	testing.expect_value(t, probe(srv, "bob").label, "survival")
-	net_send(bob, game.Command{"gamemode"}) // asking is free
+	net_send(bob, protocol.Command{"gamemode"}) // asking is free
 	expect_told(t, bob, {alice}, "game mode survival")
 
 	// The operator changes bob's; he is told; a mode that does not exist is refused.
-	net_send(alice, game.Command{"gamemode creative bob"})
+	net_send(alice, protocol.Command{"gamemode creative bob"})
 	expect_told(t, bob, {alice}, "Your game mode is now creative")
 	testing.expect_value(t, probe(srv, "bob").label, "creative")
-	net_send(alice, game.Command{"gamemode spectator"})
+	net_send(alice, protocol.Command{"gamemode spectator"})
 	expect_told(t, alice, {bob}, "No game mode spectator")
 
 	// The journal says who changed what.
@@ -170,15 +171,15 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 	)
 
 	// Rules: read by anyone, set only with the node, journalled with who set them.
-	net_send(bob, game.Command{"rule pvp false"})
+	net_send(bob, protocol.Command{"rule pvp false"})
 	expect_told(t, bob, {alice}, "You may not change rules here.")
-	net_send(bob, game.Command{"rule pvp"})
+	net_send(bob, protocol.Command{"rule pvp"})
 	expect_told(t, bob, {alice}, "pvp = true")
-	net_send(alice, game.Command{"rule pvp false"})
+	net_send(alice, protocol.Command{"rule pvp false"})
 	expect_told(t, alice, {bob}, "pvp = false")
-	net_send(alice, game.Command{"rule default_game_mode creative"})
+	net_send(alice, protocol.Command{"rule default_game_mode creative"})
 	expect_told(t, alice, {bob}, "default_game_mode = creative")
-	net_send(alice, game.Command{"rule keep_inventory false"})
+	net_send(alice, protocol.Command{"rule keep_inventory false"})
 	expect_told(t, alice, {bob}, "keep_inventory = false")
 	rules_found: int
 	call(srv, proc(s: ^Server, data: rawptr) {
@@ -244,15 +245,15 @@ test_spectators_change_nothing :: proc(t: ^testing.T) {
 	testing.expect(t, was != .Air, "the player stands on air")
 	testing.expect_value(t, set_game_mode(s, c, watcher, {"command", ""}), Mode_Result.Ok)
 	testing.expect(t, has_ability(s, c, .Spectate))
-	queue_action(s, c, game.edit_plain(1, c.inputs.last, under, .Air))
-	queue_action(s, c, game.Fire{c.inputs.last, 0, -1.5})
+	queue_action(s, c, protocol.edit_plain(1, c.inputs.last, under, .Air))
+	queue_action(s, c, protocol.Fire{c.inputs.last, 0, -1.5})
 	b, _ := chunks_block(&c.world.chunks, under)
 	testing.expect_value(t, b, was)
 	testing.expect_value(t, c.fired_at, 0)
 
 	testing.expect_value(t, set_game_mode(s, c, creative, {"command", ""}), Mode_Result.Ok)
-	queue_action(s, c, game.edit_plain(2, c.inputs.last, under, .Air))
-	queue_action(s, c, game.Fire{c.inputs.last, 0, -1.5})
+	queue_action(s, c, protocol.edit_plain(2, c.inputs.last, under, .Air))
+	queue_action(s, c, protocol.Fire{c.inputs.last, 0, -1.5})
 	b, _ = chunks_block(&c.world.chunks, under)
 	testing.expect_value(t, b, game.Block.Air)
 	testing.expect_value(t, c.fired_at, s.tick)
@@ -294,7 +295,7 @@ test_bodiless_has_no_body :: proc(t: ^testing.T) {
 	testing.expect_value(t, c.entity_id, game.Entity_Id(0))
 	testing.expect_value(t, len(players_near(c.world, c.player.position, 4, 4)), 0)
 	health := c.health
-	explode_by(s, "", game.block_of_position(c.player.position) + {1, 0, 0}, 3)
+	explode_by(s, "", protocol.block_of_position(c.player.position) + {1, 0, 0}, 3)
 	harness_step(&sess.h, 2)
 	testing.expect_value(t, c.health, health)
 	testing.expect(t, !c.dead)

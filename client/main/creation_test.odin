@@ -12,7 +12,7 @@ import planet "client:planet"
 import "client:screen"
 import "client:starfield"
 import "client:ui"
-import "common:game"
+import "common:starmap"
 import "common:worldgen"
 
 // The creation screen and Ignite (screen_creation.odin, screen_ignite.odin).
@@ -75,15 +75,15 @@ test_typed_seed_shows_its_glyphs :: proc(t: ^testing.T) {
 	append(&c.seed_text, "42")
 	screen.creation_sync_seed(c, 1)
 	testing.expect_value(t, c.seed, 42)
-	testing.expect_value(t, game.seed_glyphs(c.seed), game.address_derive(42))
+	testing.expect_value(t, starmap.seed_glyphs(c.seed), starmap.address_derive(42))
 	// Text is hashed, and its glyphs are on the screen as they are typed.
 	clear(&c.seed_text)
 	append(&c.seed_text, "andromeda")
 	screen.creation_sync_seed(c, 1)
-	hashed, _ := game.seed_of_text("andromeda")
+	hashed, _ := starmap.seed_of_text("andromeda")
 	testing.expect_value(t, c.seed, hashed)
 	ui_frame(app)
-	glyphs := game.address_text(game.seed_glyphs(hashed))
+	glyphs := starmap.address_text(starmap.seed_glyphs(hashed))
 	found := false
 	for text in app.ui.texts {if text == glyphs {found = true}}
 	testing.expect(t, found, "the glyphs of the typed seed are shown")
@@ -435,9 +435,9 @@ test_planet_colours_are_the_kinds :: proc(t: ^testing.T) {
 
 @(test)
 test_star_colours_come_from_the_stars :: proc(t: ^testing.T) {
-	seen: [game.STAR_COLORS][4]u8
-	for c in 0 ..< game.STAR_COLORS {
-		seen[c] = game.star_color({color = u8(c)})
+	seen: [starmap.STAR_COLORS][4]u8
+	for c in 0 ..< starmap.STAR_COLORS {
+		seen[c] = starmap.star_color({color = u8(c)})
 		testing.expect_value(t, seen[c].a, 255)
 		for o in 0 ..< c {testing.expect(t, seen[o] != seen[c], "each class has its own colour")}
 	}
@@ -500,7 +500,7 @@ test_creation_colours_from_theme_or_data :: proc(t: ^testing.T) {
 	app.last_frame_ms = 1000.0 / 60
 	allowed := make([dynamic][3]u8, context.temp_allocator)
 	for s in app.creation.stars {
-		c := game.star_color(s)
+		c := starmap.star_color(s)
 		append(&allowed, [3]u8{c.r, c.g, c.b})
 	}
 	for c in starfield.STAR_TINTS {append(&allowed, c)}
@@ -599,15 +599,15 @@ test_creation_starts_on_earth :: proc(t: ^testing.T) {
 	defer creation_free(app)
 	c := &app.creation
 	testing.expect(t, !c.alien, "Earth by default")
-	testing.expect_value(t, screen.creation_home(c), game.earth_address())
+	testing.expect_value(t, screen.creation_home(c), starmap.earth_address())
 	earth_stars := c.stars[1]
 	screen.creation_roll(c, 12345)
 	testing.expect(t, c.alien, "Roll is an alien start")
-	testing.expect_value(t, screen.creation_home(c), game.seed_glyphs(c.seed))
-	testing.expect(t, screen.creation_home(c) != game.earth_address(), "an alien address")
+	testing.expect_value(t, screen.creation_home(c), starmap.seed_glyphs(c.seed))
+	testing.expect(t, screen.creation_home(c) != starmap.earth_address(), "an alien address")
 	screen.creation_back_to_earth(c)
 	testing.expect(t, !c.alien)
-	testing.expect_value(t, screen.creation_home(c), game.earth_address())
+	testing.expect_value(t, screen.creation_home(c), starmap.earth_address())
 	testing.expect_value(t, c.stars[1], earth_stars)
 	plan := screen.universe_plan("E", c.seed, c.mode, !c.alien)
 	testing.expect(t, plan.earth, "Ignite on Earth asks for Earth")

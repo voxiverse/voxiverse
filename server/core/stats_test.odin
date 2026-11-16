@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "common:telemetry"
 
 @(private = "file")
@@ -79,37 +80,37 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok, "never landed") {return}
 	pause(t, a, 0.2)
 
-	net_send(a, game.Chat{"hello"})
-	net_send(a, game.Chat{"again"})
-	net_send(a, game.Command{"time noon"})
-	net_send(a, game.Command{"spawn"})
+	net_send(a, protocol.Chat{"hello"})
+	net_send(a, protocol.Chat{"again"})
+	net_send(a, protocol.Command{"time noon"})
+	net_send(a, protocol.Command{"spawn"})
 	pause(t, a, 0.5)
 	// Place dirt beside, break it.
-	net_send(a, game.Inventory_Request{1, {.Select, 0, 1}})
+	net_send(a, protocol.Inventory_Request{1, {.Select, 0, 1}})
 	feet := a.update.state.position
 	beside := game.Block_Pos {
 		i32(math.floor(feet.x)) + 1,
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(a, game.edit_plain(1, a.seq, beside, .Dirt))
+	net_send(a, protocol.edit_plain(1, a.seq, beside, .Dirt))
 	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
 	testing.expect(t, ok && a.results[1].accepted, "the dirt was not placed")
-	net_send(a, game.edit_plain(2, a.seq, beside, .Air))
+	net_send(a, protocol.edit_plain(2, a.seq, beside, .Air))
 	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 2 in cs[0].results})
 	testing.expect(t, ok && a.results[2].accepted, "the dirt was not broken")
 	// A sheep: sheared, then hit once.
-	net_send(a, game.Command{"summon sheep"})
+	net_send(a, protocol.Command{"summon sheep"})
 	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	testing.expect(t, ok, "no sheep")
 	id: u32
 	for k in a.entities {id = k}
-	net_send(a, game.Use_Entity{id, a.seq})
+	net_send(a, protocol.Use_Entity{id, a.seq})
 	pause(t, a, 0.3)
-	net_send(a, game.Attack{id, a.seq})
+	net_send(a, protocol.Attack{id, a.seq})
 	pause(t, a, 0.3)
 	// One stone dropped; some walking.
-	net_send(a, game.Inventory_Request{2, {.Drop, 0, 0}})
+	net_send(a, protocol.Inventory_Request{2, {.Drop, 0, 0}})
 	a.move = {0, 1}
 	pause(t, a, 1.5)
 	a.move = {0, 0}
@@ -189,7 +190,7 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	)
 
 	// Over UDP: the stats page shows the server's numbers.
-	net_send(a, game.Stats_Request{filter = "chat", page = 0})
+	net_send(a, protocol.Stats_Request{filter = "chat", page = 0})
 	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].stats_text) > 0})
 	testing.expectf(
 		t,
@@ -268,8 +269,8 @@ test_others_stats_need_permission :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(a, game.Stats_Request{filter = "", page = 0, of = "b"})
-	net_send(b, game.Stats_Request{filter = "", page = 0})
+	net_send(a, protocol.Stats_Request{filter = "", page = 0, of = "b"})
+	net_send(b, protocol.Stats_Request{filter = "", page = 0})
 	ok = net_wait(t, {a, b}, proc(cs: []^Net_Client) -> bool {return len(cs[1].stats_text) > 0})
 	testing.expect(
 		t,
@@ -299,8 +300,8 @@ test_client_reports_are_validated :: proc(t: ^testing.T) {
 	defer net_close(a)
 	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
-	report :: proc(kind: telemetry.Kind, text: string, n: [3]u32) -> game.Telemetry_Report {
-		r := game.Telemetry_Report {
+	report :: proc(kind: telemetry.Kind, text: string, n: [3]u32) -> protocol.Telemetry_Report {
+		r := protocol.Telemetry_Report {
 			count = 1,
 		}
 		r.entries[0] = {u8(kind), text, n}

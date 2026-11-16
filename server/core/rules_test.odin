@@ -4,6 +4,8 @@ import "core:testing"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 
 // rules.show_coordinates: on by default, a variable like the others
 // (world.cfg, the console), and sent to the clients with the rest of the
@@ -25,10 +27,10 @@ test_show_coordinates_rule :: proc(t: ^testing.T) {
 	w: game.Writer
 	game.writer_init(&w)
 	defer game.writer_destroy(&w)
-	game.encode_server(&w, game.World_Changed{game.address_derive(1), rules}, nil)
-	got, ok := game.decode_server(w.buf[:], nil)
+	protocol.encode_server(&w, protocol.World_Changed{starmap.address_derive(1), rules}, nil)
+	got, ok := protocol.decode_server(w.buf[:], nil)
 	testing.expect(t, ok)
-	testing.expect(t, !got.(game.World_Changed).rules.show_coordinates)
+	testing.expect(t, !got.(protocol.World_Changed).rules.show_coordinates)
 }
 
 // rules.explosion_size and rules.explosion_throw scale every explosion in their world:

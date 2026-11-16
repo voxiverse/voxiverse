@@ -4,6 +4,7 @@ import "core:math"
 import "core:time"
 
 import "common:game"
+import "common:protocol"
 
 // The other players and the entities: what the server last said about
 // each, kept as a few timed snapshots (a Track) and shown a little in the
@@ -64,7 +65,7 @@ Other_View :: struct {
 // network may reorder).
 track_add :: proc(o: ^Track, snapshot: Snapshot) {
 	if o.count > 0 &&
-	   game.sequence_before_or_at(snapshot.tick, o.snapshots[o.count - 1].tick) {return}
+	   protocol.sequence_before_or_at(snapshot.tick, o.snapshots[o.count - 1].tick) {return}
 	if o.count == SNAPSHOTS {
 		copy(o.snapshots[:], o.snapshots[1:])
 		o.count -= 1
@@ -74,7 +75,7 @@ track_add :: proc(o: ^Track, snapshot: Snapshot) {
 }
 
 // other_snapshot adds what a Player_Motion record said about a player.
-other_snapshot :: proc(o: ^Other_Player, tick: u32, m: game.Player_Motion) {
+other_snapshot :: proc(o: ^Other_Player, tick: u32, m: protocol.Player_Motion) {
 	track_add(&o.track, {tick, m.position, m.yaw, m.pitch, m.flying, m.crouched})
 }
 
@@ -156,7 +157,7 @@ clock_target :: proc(c: Render_Clock) -> f64 {
 
 // clock_heard: a snapshot of this tick came.
 clock_heard :: proc(c: ^Render_Clock, tick: u32) {
-	if c.heard && !game.sequence_before(c.newest, tick) {return}
+	if c.heard && !protocol.sequence_before(c.newest, tick) {return}
 	c.newest, c.since = tick, 0
 	if !c.heard {
 		c.heard = true

@@ -6,6 +6,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
+import "common:access"
 import "common:base"
 import "common:game"
 import "common:worldgen"
@@ -390,7 +391,7 @@ player_name :: proc(s: ^Settings) -> string {
 // DEFAULT_NAME: the second would be sent away ("that name is another account's"). An
 // unset name is DEFAULT_NAME and the account's first two bytes in hex, "Player-3f0a"
 // (temp allocator). A world of our own keeps DEFAULT_NAME (format-1 saves' one player).
-join_name :: proc(s: ^Settings, account: game.Account) -> string {
+join_name :: proc(s: ^Settings, account: access.Account) -> string {
 	if name := base.var_text(&s.name); name != "" {return name}
 	return fmt.tprintf("%s-%02x%02x", DEFAULT_NAME, account[0], account[1])
 }

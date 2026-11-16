@@ -6,6 +6,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // The exit check for chat: two players over UDP, one a moderator with a
 // tag. Formatting where the role allows it (as written where not), an
@@ -59,7 +60,7 @@ test_chat_over_the_network :: proc(t: ^testing.T) {
 	@(static) want: string
 
 	// A moderator's tag and colours; a player's codes shown as written.
-	net_send(alice, game.Chat{"&chi &lthere"})
+	net_send(alice, protocol.Chat{"&chi &lthere"})
 	want = "Mod alice: hi there"
 	ok = net_wait(
 		t,
@@ -75,24 +76,24 @@ test_chat_over_the_network :: proc(t: ^testing.T) {
 		)
 		testing.expect_value(t, bob.chat[len(bob.chat) - 1].sender, alice.welcome.player)
 	}
-	net_send(bob, game.Chat{"&cnope\x07"})
+	net_send(bob, protocol.Chat{"&cnope\x07"})
 	want = "bob: &cnope"
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return heard(cs[0]) == want})
 	testing.expectf(t, ok, "alice heard %q", heard(alice))
 
 	// Bob ignores alice: he does not hear her; she hears herself.
-	net_send(bob, game.Command{"ignore alice"})
+	net_send(bob, protocol.Command{"ignore alice"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return len(cs[1].notices) > 0})
-	net_send(alice, game.Chat{"secret"})
+	net_send(alice, protocol.Chat{"secret"})
 	want = "Mod alice: secret"
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return heard(cs[0]) == want})
 	testing.expect(t, ok)
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 	testing.expect(t, heard(bob) != "Mod alice: secret", "bob heard someone he ignores")
-	net_send(bob, game.Command{"ignore alice"}) // and not any more
+	net_send(bob, protocol.Command{"ignore alice"}) // and not any more
 
 	// Alice takes her line back: both are told.
-	net_send(alice, game.Command{"delmsg alice"})
+	net_send(alice, protocol.Command{"delmsg alice"})
 	ok = net_wait(
 		t,
 		both,
@@ -104,20 +105,20 @@ test_chat_over_the_network :: proc(t: ^testing.T) {
 
 	// Bob may not mute; alice mutes him. (Among his notices: the answer to
 	// his second ignore may still be on its way.)
-	net_send(bob, game.Command{"mute alice"})
+	net_send(bob, protocol.Command{"mute alice"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		for n in cs[1].notices {if strings.has_prefix(n, "You may not use mute") {return true}}
 		return false
 	})
 	testing.expectf(t, ok, "bob was not refused: %v", bob.notices[:])
-	net_send(alice, game.Command{"mute bob 5m"})
+	net_send(alice, protocol.Command{"mute bob 5m"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		for n in cs[1].notices {if strings.contains(n, "You were muted") {return true}}
 		return false
 	})
 	testing.expect(t, ok, "bob was not told")
 	lines := len(alice.chat)
-	net_send(bob, game.Chat{"let me speak"})
+	net_send(bob, protocol.Chat{"let me speak"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		for n in cs[1].notices {if strings.has_prefix(n, "&cYou are muted") {return true}}
 		return false
@@ -128,7 +129,7 @@ test_chat_over_the_network :: proc(t: ^testing.T) {
 	// The rate: alice says eight lines at once; some are refused.
 	for n in alice.notices {delete(n)}
 	clear(&alice.notices)
-	for _ in 0 ..< 8 {net_send(alice, game.Chat{"spam"})}
+	for _ in 0 ..< 8 {net_send(alice, protocol.Chat{"spam"})}
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		for n in cs[0].notices {if n == "&cSlow down" {return true}}
 		return false

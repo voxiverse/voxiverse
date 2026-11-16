@@ -20,6 +20,8 @@ import "client:testkit"
 import "client:ui"
 import "common:base"
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 
 // A UI test's app: the font, the UI and the base registry (a screen's
 // artwork takes its colours from it), nothing else.
@@ -597,7 +599,7 @@ pad_connect :: proc(app: ^engine.App, family: platform.Pad_Family) {
 Rig :: struct {
 	app:  ^engine.App,
 	s:    ^engine.Session,
-	pipe: game.Pipe,
+	pipe: protocol.Pipe,
 }
 
 rig_make :: proc(t: ^testing.T) -> ^Rig {
@@ -611,11 +613,11 @@ rig_make :: proc(t: ^testing.T) -> ^Rig {
 	testing.expect(t, prompt.prompt_icons_init(&app.prompt_icons, &app.ui))
 	console.console_init(&app.console)
 	engine.line_editor_init(&app.chat)
-	game.pipe_init(&r.pipe)
+	protocol.pipe_init(&r.pipe)
 	r.s = new(engine.Session)
 	r.s.endpoint = {&r.pipe, .Client}
 	game.writer_init(&r.s.writer)
-	r.s.welcome.address = game.address_derive(3)
+	r.s.welcome.address = starmap.address_derive(3)
 	return r
 }
 
@@ -630,7 +632,7 @@ rig_free :: proc(r: ^Rig) {
 	delete(s.chat)
 	virtual.arena_destroy(&s.arena)
 	game.writer_destroy(&s.writer)
-	game.pipe_destroy(&r.pipe)
+	protocol.pipe_destroy(&r.pipe)
 	delete(s.inv_pending)
 	delete(s.grants)
 	engine.stats_data_clear(&s.player_stats)
@@ -901,8 +903,8 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect(t, engine.overlay_is_open(&app.overlays, .Dial))
 	pad_tap(app, .A)
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Dial))
-	m, decoded := game.decode_client(s.writer.buf[:], testkit.test_reg())
-	_, is_dial := m.(game.Dial)
+	m, decoded := protocol.decode_client(s.writer.buf[:], testkit.test_reg())
+	_, is_dial := m.(protocol.Dial)
 	testing.expect(t, decoded && is_dial, "no Dial sent")
 	clear(&s.writer.buf)
 
@@ -915,8 +917,8 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect_value(t, string(app.chat.text[:]), "hi")
 	pad_tap(app, .Start)
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Chat))
-	m, decoded = game.decode_client(s.writer.buf[:], testkit.test_reg())
-	said, is_chat := m.(game.Chat)
+	m, decoded = protocol.decode_client(s.writer.buf[:], testkit.test_reg())
+	said, is_chat := m.(protocol.Chat)
 	testing.expect(t, decoded && is_chat, "no chat line sent")
 	testing.expect_value(t, said.text, "hi")
 	// B closes the keyboard, B again the chat.
@@ -1048,8 +1050,8 @@ test_welcome_with_other_content_is_refused :: proc(t: ^testing.T) {
 	context.logger = log.nil_logger() // (the refusal is logged: the point)
 	engine.welcome(
 		s,
-		game.Welcome {
-			protocol = game.PROTOCOL_VERSION,
+		protocol.Welcome {
+			protocol = protocol.PROTOCOL_VERSION,
 			tick_rate = game.TICK_RATE,
 			view_radius = 4,
 			view_height = 2,

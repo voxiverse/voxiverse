@@ -9,6 +9,7 @@ import "client:testkit"
 import "client:ui"
 import "common:game"
 import "common:planet"
+import "common:protocol"
 
 // The market screen: the HUD line near a town and not away from one, the goods with the age of
 // their news, and a buy that sends the trade (the server's market_view then changes cash and cargo).
@@ -17,7 +18,7 @@ import "common:planet"
 Market_Fixture :: struct {
 	app:  ^engine.App,
 	s:    ^engine.Session,
-	pipe: game.Pipe,
+	pipe: protocol.Pipe,
 }
 
 @(private = "file")
@@ -29,7 +30,7 @@ market_fixture :: proc(t: ^testing.T, f: ^Market_Fixture) {
 	testing.expect(t, ok)
 	testing.expect(t, ui.init(&f.app.ui, &f.app.font))
 	f.s = new(engine.Session)
-	game.pipe_init(&f.pipe)
+	protocol.pipe_init(&f.pipe)
 	f.s.endpoint = {&f.pipe, .Client}
 	game.writer_init(&f.s.writer)
 	f.s.state = .Playing
@@ -42,15 +43,15 @@ market_fixture :: proc(t: ^testing.T, f: ^Market_Fixture) {
 market_fixture_destroy :: proc(f: ^Market_Fixture) {
 	f.app.session = nil
 	game.writer_destroy(&f.s.writer)
-	game.pipe_destroy(&f.pipe)
+	protocol.pipe_destroy(&f.pipe)
 	free(f.s)
 	ui.destroy(&f.app.ui)
 	free(f.app)
 }
 
 @(private = "file")
-market_view :: proc(cash: f64) -> game.Market_View {
-	v := game.Market_View {
+market_view :: proc(cash: f64) -> protocol.Market_View {
+	v := protocol.Market_View {
 		town = "Town 7",
 		cash = cash,
 	}
@@ -103,7 +104,7 @@ test_market_hud_line_only_in_a_town :: proc(t: ^testing.T) {
 	testing.expect(t, market_drawn(&f.app.ui, "Market of Town 7 (M)"), "no HUD line in a town")
 
 	// Walking out: the server says Away; the line goes.
-	engine.market_take(&f.s.market, game.Market_View{reason = .Away})
+	engine.market_take(&f.s.market, protocol.Market_View{reason = .Away})
 	testing.expect(t, !screen.market_near(f.app))
 	market_frame(f.app)
 	testing.expect(t, !market_drawn(&f.app.ui, "Market of Town 7 (M)"), "the line stayed")
@@ -128,8 +129,8 @@ test_market_screen_lists_goods_and_buys :: proc(t: ^testing.T) {
 
 	// Buy: the click sends a Market_Trade for the chosen good and quantity.
 	engine.market_trade(f.s, &f.s.market, int(planet.Good.Grain), false)
-	m, decoded := game.decode_client(f.s.writer.buf[:], testkit.test_reg())
-	trade, is_trade := m.(game.Market_Trade)
+	m, decoded := protocol.decode_client(f.s.writer.buf[:], testkit.test_reg())
+	trade, is_trade := m.(protocol.Market_Trade)
 	testing.expect(t, decoded && is_trade, "no Market_Trade sent")
 	testing.expect_value(t, trade.good, u8(planet.Good.Grain))
 	testing.expect_value(t, trade.sell, false)
@@ -145,13 +146,13 @@ test_market_screen_lists_goods_and_buys :: proc(t: ^testing.T) {
 	testing.expect(t, market_drawn(&app.ui, "Silver: 7.50"), "cash not updated")
 
 	// A refusal keeps the market_view and says why.
-	engine.market_take(&f.s.market, game.Market_View{reason = .No_Cash})
+	engine.market_take(&f.s.market, protocol.Market_View{reason = .No_Cash})
 	testing.expect(t, screen.market_near(app))
 	market_frame(app)
 	testing.expect(t, market_drawn(&app.ui, "Not enough silver."), "no refusal line")
 
 	// M closes it; Away closes it too.
-	engine.market_take(&f.s.market, game.Market_View{reason = .Away})
+	engine.market_take(&f.s.market, protocol.Market_View{reason = .Away})
 	screen.market_keys(app)
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Market), "open away from town")
 }

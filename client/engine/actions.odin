@@ -6,7 +6,7 @@ import "core:reflect"
 import "core:strings"
 
 import "common:base"
-import "common:game"
+import "common:protocol"
 
 import "client:platform"
 
@@ -73,7 +73,7 @@ Action :: enum u8 {
 }
 
 // GAME_ACTIONS: the actions a game's client part names, in its list's order.
-GAME_ACTIONS :: [game.MAX_GAME_ACTIONS]Action{.Game_1, .Game_2, .Game_3}
+GAME_ACTIONS :: [protocol.MAX_GAME_ACTIONS]Action{.Game_1, .Game_2, .Game_3}
 
 // Action_Context: where an action is read. World is game_controls(app);
 // Menu is everything else (menu screens, overlays that take the keyboard or

@@ -20,6 +20,11 @@ WORLD_MAX_Y :: 256
 CHUNK_MIN_Y :: WORLD_MIN_Y / CHUNK_SIZE
 CHUNK_MAX_Y :: WORLD_MAX_Y / CHUNK_SIZE
 
+// Positions and chunk coordinates are kept far from integer overflow: block
+// coordinates stay within ±2^28 (chunk coordinates within ±2^24).
+WORLD_LIMIT :: 1 << 28
+CHUNK_LIMIT :: WORLD_LIMIT >> CHUNK_SHIFT
+
 chunk_of :: #force_inline proc(p: Block_Pos) -> Chunk_Pos {
 	// Arithmetic shift: floors negative positions.
 	return {p.x >> CHUNK_SHIFT, p.y >> CHUNK_SHIFT, p.z >> CHUNK_SHIFT}

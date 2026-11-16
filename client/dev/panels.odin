@@ -15,11 +15,12 @@ import "client:screen"
 import "client:ui"
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "server:core"
 
 net_line :: proc(s: ^engine.Session) -> string {
 	n := &s.net
-	total :: proc(t: game.Traffic) -> (bytes: int) {
+	total :: proc(t: protocol.Traffic) -> (bytes: int) {
 		for b in t.bytes {bytes += b}
 		return
 	}
@@ -28,7 +29,7 @@ net_line :: proc(s: ^engine.Session) -> string {
 		n.rtt_ms,
 		f64(total(n.rates[.Server])) / 1000,
 		f64(total(n.rates[.Client])) / 1000,
-		", tracing" if game.pipe_tracing(&s.pipe) else "",
+		", tracing" if protocol.pipe_tracing(&s.pipe) else "",
 	)
 }
 

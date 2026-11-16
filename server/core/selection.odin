@@ -5,6 +5,7 @@ import "core:strconv"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // World editing's selection (commands): each player's two
 // corners, kept here (all world changes are the server's), set with /pos1
@@ -17,7 +18,7 @@ SELECTION_REACH :: 128 // blocks: how far /pos1 and /pos2 see
 // selection_set sets c's selection and tells c.
 selection_set :: proc(s: ^Server, c: ^Client, corners: [2]Maybe(game.Block_Pos)) {
 	c.selection = corners
-	selection := game.Selection{corners}
+	selection := protocol.Selection{corners}
 	state_put(s, c, .Selection, &selection)
 }
 

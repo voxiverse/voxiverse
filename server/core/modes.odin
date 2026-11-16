@@ -5,6 +5,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Game modes, per player. A mode is a profile of abilities from a pack
 // (data/game_modes/); what a character can do is derive_abilities(mode,
@@ -111,7 +112,7 @@ game_mode :: proc(s: ^Server, c: ^Client, id: string) -> Mode_Result {
 
 // mode_put: the Mode record (sent when it changes).
 mode_put :: proc(s: ^Server, c: ^Client) {
-	rec := game.Mode_Record{s.registry.game_modes[c.mode].id}
+	rec := protocol.Mode_Record{s.registry.game_modes[c.mode].id}
 	state_put(s, c, .Mode, &rec)
 }
 

@@ -6,6 +6,8 @@ import "core:time"
 
 import "client:music"
 import "common:game"
+import "common:protocol"
+import "common:starmap"
 
 // The music in the app: the director, fed each frame from the session,
 // and its actions carried out on the mixer.
@@ -16,7 +18,7 @@ Music_App :: struct {
 	player:        music.Music_Player,
 	director:      music.Music_Director,
 	actions:       [dynamic]music.Music_Action,
-	seen:          [dynamic]game.Address, // the worlds visited this run
+	seen:          [dynamic]starmap.Address, // the worlds visited this run
 	session:       ^Session, // (the counts below belong to this session)
 	died_seen:     int,
 	arrivals_seen: int,
@@ -24,7 +26,7 @@ Music_App :: struct {
 }
 
 @(private = "file")
-address_seen :: proc(m: ^Music_App, a: game.Address) -> bool {
+address_seen :: proc(m: ^Music_App, a: starmap.Address) -> bool {
 	for s in m.seen {if s == a {return true}}
 	return false
 }
@@ -63,7 +65,7 @@ music_column_depth :: proc(s: ^Session) -> f32 {
 music_input :: proc(app: ^App) -> (in_: music.Music_Input) {
 	m := &app.music
 	in_.gap = app.settings.music_gap
-	in_.biome = game.NO_BIOME
+	in_.biome = protocol.NO_BIOME
 	in_.ignite = app.ignite.active
 	s := app.session
 	if s == nil {return}

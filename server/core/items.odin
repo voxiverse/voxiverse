@@ -5,6 +5,7 @@ import "core:slice"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 
 // Items on the server: inventory requests (applied by the shared rules,
 // common/game/inventory.odin), placing blocks from the stack in hand, what
@@ -17,7 +18,7 @@ import "common:game"
 // (the inventory, and how far it got) goes out at the end of the tick,
 // refused or not, so a refused prediction is rolled back.
 @(private)
-inventory_request :: proc(s: ^Server, c: ^Client, q: game.Inventory_Request) {
+inventory_request :: proc(s: ^Server, c: ^Client, q: protocol.Inventory_Request) {
 	chest_refresh(s, c)
 	before := c.inventory.cursor
 	dropped, ok := game.inventory_apply(

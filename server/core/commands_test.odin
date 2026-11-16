@@ -6,6 +6,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 @(private = "file")
 want_text: string
@@ -93,7 +94,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok, "the players never landed") {return}
 
 	// Alice flies off and sets a warp there; bob warps to it.
-	net_send(alice, game.Command{"tp 40.5 60 40.5"})
+	net_send(alice, protocol.Command{"tp 40.5 60 40.5"})
 	@(static) at: [3]f64
 	at = {40.5, 0, 40.5}
 	ok = net_wait(
@@ -102,21 +103,21 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return near(cs[0].update.state.position, at)},
 	)
 	testing.expect(t, ok, "tp did not move alice")
-	net_send(alice, game.Command{"setwarp market"})
+	net_send(alice, protocol.Command{"setwarp market"})
 	expect_told(t, alice, {bob}, "Warp market set")
 	bob_was := bob.update.state.position
-	net_send(bob, game.Command{"warp market"})
+	net_send(bob, protocol.Command{"warp market"})
 	ok = net_wait(
 		t,
 		both,
 		proc(cs: []^Net_Client) -> bool {return near(cs[1].update.state.position, at)},
 	)
 	testing.expect(t, ok, "bob did not warp")
-	net_send(bob, game.Command{"setwarp mine"})
+	net_send(bob, protocol.Command{"setwarp mine"})
 	expect_told(t, bob, {alice}, "You may not use setwarp")
 
 	// Back where he was; then three homes, not four.
-	net_send(bob, game.Command{"back"})
+	net_send(bob, protocol.Command{"back"})
 	at = bob_was
 	ok = net_wait(
 		t,
@@ -124,15 +125,15 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return near(cs[1].update.state.position, at)},
 	)
 	testing.expect(t, ok, "back did not go back")
-	for h in ([]string{"a", "b", "c"}) {net_send(bob, game.Command{strings.concatenate({"sethome ", h}, context.temp_allocator)})}
+	for h in ([]string{"a", "b", "c"}) {net_send(bob, protocol.Command{strings.concatenate({"sethome ", h}, context.temp_allocator)})}
 	expect_told(t, bob, {alice}, "Home c set")
-	net_send(bob, game.Command{"sethome d"})
+	net_send(bob, protocol.Command{"sethome d"})
 	expect_told(t, bob, {alice}, "You have 3 homes")
 
 	// A teleport request: bob asks, alice accepts, bob arrives.
-	net_send(bob, game.Command{"tpa alice"})
+	net_send(bob, protocol.Command{"tpa alice"})
 	expect_told(t, alice, {bob}, "bob asks to teleport to you")
-	net_send(alice, game.Command{"tpaccept"})
+	net_send(alice, protocol.Command{"tpaccept"})
 	at = alice.update.state.position
 	ok = net_wait(
 		t,
@@ -142,40 +143,40 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "tpaccept did not bring bob")
 
 	// Whispers and answers; actions.
-	net_send(alice, game.Command{"msg bob psst"})
+	net_send(alice, protocol.Command{"msg bob psst"})
 	expect_told(t, bob, {alice}, "[Admin alice -> me] psst")
-	net_send(bob, game.Command{"r what"})
+	net_send(bob, protocol.Command{"r what"})
 	expect_told(t, alice, {bob}, "[bob -> me] what")
-	net_send(bob, game.Command{"me waves"})
+	net_send(bob, protocol.Command{"me waves"})
 	expect_told(t, alice, {bob}, "* bob waves")
 
 	// Nicknames: not for bob; alice is Ally.
-	net_send(bob, game.Command{"nick &cBobby"})
+	net_send(bob, protocol.Command{"nick &cBobby"})
 	expect_told(t, bob, {alice}, "You may not use nick")
-	net_send(alice, game.Command{"nick &bAlly"})
+	net_send(alice, protocol.Command{"nick &bAlly"})
 	expect_told(t, alice, {bob}, "alice is now Ally")
-	net_send(alice, game.Chat{"hello"})
+	net_send(alice, protocol.Chat{"hello"})
 	expect_told(t, bob, {alice}, "Admin Ally: hello")
-	net_send(bob, game.Command{"realname Ally"})
+	net_send(bob, protocol.Command{"realname Ally"})
 	expect_told(t, bob, {alice}, "Ally is alice")
 
 	// Who is here, and who was.
-	net_send(bob, game.Command{"list"})
+	net_send(bob, protocol.Command{"list"})
 	expect_told(t, bob, {alice}, "Here (2 of 8): Admin Ally, bob")
-	net_send(bob, game.Command{"seen carol"})
+	net_send(bob, protocol.Command{"seen carol"})
 	expect_told(t, bob, {alice}, "carol has never been here")
-	net_send(alice, game.Command{"status"})
+	net_send(alice, protocol.Command{"status"})
 	expect_told(t, alice, {bob}, "Voxiverse ")
 
 	// Kicks: bob may not; alice may not be kicked; bob is.
-	net_send(bob, game.Command{"kick alice"})
+	net_send(bob, protocol.Command{"kick alice"})
 	expect_told(t, bob, {alice}, "You may not use kick")
-	net_send(alice, game.Command{"kick bob be nice"})
+	net_send(alice, protocol.Command{"kick bob be nice"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[1].rejected != ""})
 	testing.expect_value(t, bob.rejected, "be nice")
 
 	// A ban by name keeps him out; unbanned, he is back.
-	net_send(alice, game.Command{"ban bob griefing"})
+	net_send(alice, protocol.Command{"ban bob griefing"})
 	expect_told(t, alice, {}, "Banned bob for good")
 	again := new(Net_Client)
 	defer free(again)
@@ -183,7 +184,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	defer net_close(again)
 	ok = net_wait(t, {again, alice}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})
 	testing.expect_value(t, again.rejected, "Banned for good: griefing")
-	net_send(alice, game.Command{"unban bob"})
+	net_send(alice, protocol.Command{"unban bob"})
 	expect_told(t, alice, {}, "Unbanned bob")
 	back_again := new(Net_Client)
 	defer free(back_again)
@@ -193,7 +194,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "unbanned bob could not join")
 
 	// A ban by address (loopback: everyone here but the one banning).
-	net_send(alice, game.Command{"ban-ip bob spam"})
+	net_send(alice, protocol.Command{"ban-ip bob spam"})
 	ok = net_wait(
 		t,
 		{back_again, alice},
