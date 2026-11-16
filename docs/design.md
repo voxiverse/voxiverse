@@ -237,8 +237,10 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   state invalidation and stale cache artifacts. A test that loops over independent cases that each take
   seconds (the music, the audio scenarios, seeking in each file) is one test per case, so the runner's
   threads share them; an `#assert` on the count says when a case lacks its test.
-- **This machine is the gate.** There is no remote CI: the one workflow on GitHub builds a
-  version tag's packages for the three platforms and publishes them, and tests nothing. The `pre-commit` hook runs `check`, and
+- **This machine is the gate.** No commit waits on a remote machine: the one workflow on
+  GitHub builds the three platforms' packages, for a version tag (published) and once a day
+  for `main` (not published), and tests nothing. A change needs `check` and its packages'
+  tests; the whole gate runs once a day and before a version tag. The `pre-commit` hook runs `check`, and
   `test` passes before a change lands on `main`. `./build.sh gate` runs all of it in one
   blocking command (`check --cross`, `test`, `bench budgets -check`, `fuzz --smoke`, each a
   child of the gate's under its build lock, logged in `build/gate/`), goes on past a failed

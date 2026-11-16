@@ -5,10 +5,14 @@ The code is written by agents and read by a person, so it has to read well.
 
 ## How work lands
 
-- There is one branch, `main`, and it always passes `./build.sh check` and `./build.sh test`.
-  Commit to it directly. There are no pull requests and no remote CI; this machine is the gate.
-  The one workflow on GitHub (`.github/workflows/release.yml`) only builds a version tag's
-  packages; it tests nothing and gates nothing.
+- There is one branch, `main`. Commit to it directly: there are no pull requests, and no
+  commit waits on a remote machine. Every commit passes `./build.sh check` (half a minute;
+  the hook runs it) and the tests of the packages it touched. That is all a change needs.
+- The whole gate (`./build.sh gate`, twenty minutes) runs once a day and before a version
+  tag, not for every change. Whoever finds it failing fixes it first.
+- The one workflow on GitHub (`.github/workflows/release.yml`) builds the three platforms'
+  packages: for a version tag, which publishes them, and once a day for `main`, which
+  publishes nothing. It tests nothing and gates nothing.
 - A worktree or branch exists only while one change is being made. Rebase it onto `main`,
   land it, and delete it the same day. Do not leave a branch behind: the next agent will
   mistake it for something that matters.
@@ -21,7 +25,7 @@ The code is written by agents and read by a person, so it has to read well.
 ./build.sh check            # type checks, lints, layout, formatting (the pre-commit hook runs it)
 ./build.sh test <package>   # every package you touched; all of them for a change in common/
 ./build.sh check --cross    # also compiles for Windows and macOS: for any change to platform code
-./build.sh gate             # the whole gate main passes: below
+./build.sh gate             # the whole gate: once a day and before a version tag, not per change
 ```
 
 `./build.sh gate` is the whole gate in one command: `check --cross`, every test package
