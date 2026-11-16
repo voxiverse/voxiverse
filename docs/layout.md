@@ -60,7 +60,7 @@ Cap: `70` files per package.
 
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
-read from the line above. The largest packages are `client/engine` (69 files),
+read from the line above. The largest packages are `client/engine` (68 files),
 `server/core` (65), `common/game` (56) and `common/base` (34); every other package has 31
 or fewer (the `layout` lint holds these counts to the tree, so they are never stale). The
 cap leaves the largest no room beyond it, so a package that keeps growing splits into
@@ -107,6 +107,10 @@ package** is enforced by the `layout` lint (see above).
 | `assets/fixtures/save-v7/characters/581908591313bb46a2c4097685ed7fdc65970aa9085a25e0a63e7c35edc0a104` | Its character | `*.json` |
 | `assets/fixtures/save-v7/worlds/09180a2606240d00-030c231f211b1a` | Its home world | `*.cfg`, `*.json` |
 | `assets/fixtures/save-v7/worlds/09180a2606240d00-030c231f211b1a/journal` | Its edit journal | `*.vxj` |
+| `assets/fixtures/save-v8` | A universe of save format 8 written by that format's server, the commit before the markets left the engine (a planet world with its economy and interventions files, a trader with cargo and seen prices) | `*.cfg` |
+| `assets/fixtures/save-v8/characters/01ff5021b7bbecff5ed759200066950cd0ffd9cf7734206027c3588a8d6f6d0a` | Its character | `*.json` |
+| `assets/fixtures/save-v8/worlds/111a140f0413180e-14040022162710` | Its home world | `*.cfg`, `*.json`, `*.vxe`, `*.vxi` |
+| `assets/fixtures/save-v8/worlds/111a140f0413180e-14040022162710/journal` | Its edit journal | `*.vxj` |
 | `assets/fonts` | The one font and its licence | `*.ttf`, `*.txt` |
 | `assets/music` | Rendered music: Ogg, score and decisions, credits, soundfont | `*.ogg`, `*.score`, `*.json`, `*.txt`, `*.bin`, `*.sf2` |
 | `assets/packs/voxiverse` | The base pack's manifest | `*.json` |
@@ -134,7 +138,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/menu` | The game menu, the player menu, the inventory and statistics sections | `*.odin` |
 | `client/overlay` | The overlay stack's drawing and the dialogs: chat, death, dial, LAN, quit, toasts | `*.odin` |
 | `client/prompt` | Button prompts: an action's glyph and the prompt bar | `*.odin` |
-| `client/screen` | The title, options, credits, universes, creation, ignite, multiplayer, loading and market screens | `*.odin` |
+| `client/screen` | The title, options, credits, universes, creation, ignite, multiplayer and loading screens | `*.odin` |
 | `client/engine` | The client's state and machinery: `App`, `Session`, the world copy, settings, input, prediction, sounds, the client side of a game (`Game`), and the state every feature of `App` holds | `*.odin` |
 | `client/font` | The font rasterizer | `*.odin` |
 | `client/formatted` | Formatted text: drawing and wrapping styled runs | `*.odin` |
@@ -167,7 +171,6 @@ package** is enforced by the `layout` lint (see above).
 | `common/ogg/testdata/reference` | Reference decodes | `*.s16` |
 | `common/platform` | The platform layer both binaries share: reads the machine (arguments, environment, process id, core count, folders, CPU and OS, stdout and stderr, entropy, clocks, stack calls, the system libraries to link) into the `base.Host` at boot | `*.odin` |
 | `common/planet` | The home world as a planet: Earth's relief (its file format), other worlds' relief by plate tectonics (`relief_generate`: an address and seed to a relief on the same grid), sunlight, temperature, winds, ocean currents, moisture and rain, Köppen classes, rivers and lakes from the relief, the sampling of the climate, and the peoples' history | `*.odin` |
-| `common/intervention` | A world's interventions log: what players did that its history carries forward, and its file | `*.odin` |
 | `common/island` | The world's simulation islands: the chunks around its observers, merging and splitting as they meet and part | `*.odin` |
 | `common/script` | The script language: compiler, VM, collector, libraries and trace | `*.odin`, `*.vxs` |
 | `common/script/testdata/ast` | The parser's AST dumps | `*.vxs`, `*.txt` |

@@ -76,7 +76,6 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			fake_send(c, protocol.Proof{access.account_sign(&c.key, v.nonce)})
 		case protocol.Characters: // (tests name their character in Hello)
 		case protocol.Packs, protocol.Pack_Part: // (no packs in these universes)
-		case protocol.Market_View: // (the market tests read it through the net harness)
 		case protocol.Packs_Changed:
 			c.packs_changed = v.content
 		case protocol.Welcome:

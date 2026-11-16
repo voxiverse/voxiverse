@@ -43,9 +43,6 @@ Net_Client :: struct {
 	looks:                       map[u32]u16, // entities' looks as last told (their bits)
 	motions:                     map[u32][3]f64, // every entity's place as last told, its record come or not
 	stats_text:                  string, // the last Stats_Page's lines (heap)
-	market:                      protocol.Market_View, // the last Market_View (its town is market_town)
-	market_town:                 string, // (heap)
-	market_views:                int, // Market_View messages received
 	stats_pages:                 int,
 	health:                      protocol.Health, // the last Health message
 	island:                      protocol.Island, // the last Island record
@@ -175,7 +172,6 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.looks)
 	delete(c.motions)
 	delete(c.stats_text)
-	delete(c.market_town)
 	delete(c.results)
 	delete(c.messages)
 	delete(c.rejected)
@@ -440,11 +436,6 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 				"invalid Snapshot message",
 			)
 			net_apply(c, got[:])
-		case protocol.Market_View:
-			delete(c.market_town)
-			c.market, c.market_town = v, strings.clone(v.town)
-			c.market.town = c.market_town
-			c.market_views += 1
 		case protocol.Stats_Page:
 			delete(c.stats_text)
 			c.stats_text = strings.clone(v.text)

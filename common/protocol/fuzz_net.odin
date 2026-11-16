@@ -115,7 +115,7 @@ word :: proc(rng: ^base.Rng, max_len: int) -> string {
 }
 
 fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
-	which := base.rng_int_max(rng, 30)
+	which := base.rng_int_max(rng, 29)
 	m: Client_Message
 	switch which {
 	case 0:
@@ -246,16 +246,10 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		m = Dev_Fetch{word(rng, MAX_DEV_FIELD)}
 	case 28:
 		m = Game_Action{u8(base.rng_int_max(rng, MAX_GAME_ACTIONS + 1)), edge_u32(rng)}
-	case 29:
+	case 27:
 		data := make([]u8, base.rng_int_max(rng, MAX_GAME_REQUEST + 1), context.temp_allocator)
 		for &b in data {b = u8(base.rng_int_max(rng, 256))}
 		m = Game_Request{u16(edge_u32(rng)), edge_u32(rng), data}
-	case 27:
-		m = Market_Trade {
-			u8(base.rng_int_max(rng, MARKET_GOODS + 1)),
-			base.rng_int_max(rng, 2) == 0,
-			edge_f32(rng),
-		}
 	case 23:
 		m = Shoot {
 			edge_u32(rng),
@@ -285,7 +279,7 @@ fuzz_net_server_decode :: proc(data: []u8, allocator: runtime.Allocator) -> u64 
 }
 
 fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
-	which := base.rng_int_max(rng, 21)
+	which := base.rng_int_max(rng, 20)
 	m: Server_Message
 	blocks: game.Chunk_Blocks
 	switch which {
@@ -392,16 +386,6 @@ fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 			e = {word(rng, 20), i64(base.rng_u32(rng)), word(rng, 300), word(rng, 40)}
 		}
 		m = d
-	case 19:
-		v := Market_View {
-			reason = Market_Reason(base.rng_int_max(rng, 8)),
-			town   = word(rng, MAX_MARKET_NAME),
-			cash   = f64(edge_f32(rng)),
-		}
-		for &g in v.goods {
-			g = {base.rng_int_max(rng, 2) == 0, edge_f32(rng), edge_f32(rng), edge_f32(rng), -1}
-		}
-		m = v
 	case:
 		m = Packs_Changed{base.rng_u64(rng)}
 	}

@@ -48,7 +48,6 @@ hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		health_bar(ctx, s)
 		hud_popup(app, ctx)
 	}
-	screen.market_hud_line(app, ctx)
 	engine.game_hud(s, ctx, app.debug_bottom) // the game's (its client part's), below F3
 }
 

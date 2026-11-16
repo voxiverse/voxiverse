@@ -188,8 +188,6 @@ handle_packets :: proc(s: ^Session, packets: []protocol.Packet) {
 			for _, &o in s.others {track_hold(&o.track, s.rx.tick)}
 			for _, &e in s.entities {track_hold(&e.track, s.rx.tick)}
 		case protocol.Telemetry_Ack, protocol.Dev_Ack, protocol.Dev_Replies:
-		case protocol.Market_View:
-			market_take(&s.market, v)
 		case protocol.Stats_Page:
 			stats_data_take(&s.player_stats, v)
 		case protocol.Bulk_Begin:

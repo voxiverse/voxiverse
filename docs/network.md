@@ -46,14 +46,11 @@ A message that fails to decode, or whose values are out of range, is refused as 
 An aim pitch beyond `PITCH_LIMIT` (`Fire`, and therefore any aim computed straight up or
 down) is such a message: clamp an aim before sending it.
 
-## Market messages
+## Retired kinds
 
-`Market_View` (server to client, kind 43) and `Market_Trade` (client to server, kind 28) carry
-a player's market ([world.md](world.md), the economy). A view is about 190 bytes (name, silver,
-and 8 goods of 17 bytes), sent on arrival at a town, when its content changes (at most once a
-second) and in answer to each trade; a refusal is 2 bytes. Walking out of a town sends one
-refusal, `Away`, so the client knows to close its market screen. Only a player within a town's trade
-radius is sent any, so the baseline scenarios, which are not on a planet, are unchanged.
+`Market_Trade` (client to server, kind 28) and `Market_View` (server to client, kind 43) are
+retired (protocol 47): a town's market is the sandbox's own records and requests now
+([games.md](games.md); `games/sandbox`). Their numbers are not reused.
 
 ## Bandwidth baselines
 

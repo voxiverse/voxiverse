@@ -1,0 +1,88 @@
+{
+  "format": 4,
+  "world": "111a140f0413180e-14040022162710",
+  "position": [
+    -8256.0,
+    4.0,
+    4288.0
+  ],
+  "look": [
+    0.0,
+    0.0
+  ],
+  "flying": false,
+  "selected": 0,
+  "mode": "voxiverse:creative",
+  "items": [
+
+  ],
+  "trader": {
+    "cash": 9897.249825109646,
+    "cargo": [
+      217.4607,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "seen": [
+      {
+        "cell": 82623,
+        "good": 0,
+        "price": 0.45,
+        "month": 3.0
+      },
+      {
+        "cell": 82623,
+        "good": 1,
+        "price": 0.75,
+        "month": 3.0
+      },
+      {
+        "cell": 82623,
+        "good": 2,
+        "price": 3.4071436,
+        "month": 3.0
+      },
+      {
+        "cell": 82623,
+        "good": 3,
+        "price": 3.0,
+        "month": 3.0
+      },
+      {
+        "cell": 82623,
+        "good": 4,
+        "price": 1.0,
+        "month": 3.0
+      },
+      {
+        "cell": 82623,
+        "good": 5,
+        "price": 2.0629244,
+        "month": 3.0
+      },
+      {
+        "cell": 82623,
+        "good": 6,
+        "price": 8.5178585,
+        "month": 3.0
+      },
+      {
+        "cell": 82623,
+        "good": 7,
+        "price": 5.5011315,
+        "month": 3.0
+      }
+    ]
+  }
+,
+  "stats": {
+    "distance.fallen": 87,
+    "sessions": 1,
+    "time.played": 1
+  }
+}

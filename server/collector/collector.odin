@@ -293,7 +293,6 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 	     protocol.Respawn,
 	     protocol.Shoot,
 	     protocol.Reload,
-	     protocol.Market_Trade,
 	     protocol.Game_Action,
 	     protocol.Game_Request,
 	     protocol.Fire,

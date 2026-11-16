@@ -42,13 +42,12 @@ test_section_table :: proc(t: ^testing.T) {
 		testing.expectf(t, sec.visible == shown, "%v: visible is %v", id, sec.visible)
 		testing.expectf(t, (sec.draw != nil) == shown, "%v: a draw proc iff shown", id)
 	}
-	// The defaults: Tab, E, K, M, J, C, L.
+	// The defaults: Tab, E, K, N, J, C, L.
 	b := engine.DEFAULT_BINDINGS
 	testing.expect_value(t, b.player_menu, platform.Key.Tab)
 	testing.expect_value(t, b.inventory, platform.Key.E)
 	testing.expect_value(t, b.stats, platform.Key.K)
 	testing.expect_value(t, b.world_map, platform.Key.N)
-	testing.expect_value(t, b.market, platform.Key.M)
 	testing.expect_value(t, b.journal, platform.Key.J)
 	testing.expect_value(t, b.character, platform.Key.C)
 	testing.expect_value(t, b.atlas, platform.Key.L)

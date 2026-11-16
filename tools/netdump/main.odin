@@ -432,14 +432,6 @@ describe :: proc(
 					len(v.data),
 				),
 				true
-		case protocol.Market_Trade:
-			return fmt.tprintf(
-					"market_trade good=%d sell=%v quantity=%.2f",
-					v.good,
-					v.sell,
-					v.quantity,
-				),
-				true
 		case protocol.Shoot:
 			return fmt.tprintf(
 					"shoot after=%d slot=%d press=%v yaw=%.2f pitch=%.2f",
@@ -552,14 +544,6 @@ describe :: proc(
 			return fmt.tprintf("characters names=%q", v.names), true
 		case protocol.Packs:
 			return fmt.tprintf("packs content=%016x count=%d", v.content, v.count), true
-		case protocol.Market_View:
-			return fmt.tprintf(
-					"market_view reason=%v town=%q cash=%.2f",
-					v.reason,
-					v.town,
-					v.cash,
-				),
-				true
 		case protocol.Packs_Changed:
 			return fmt.tprintf("packs_changed content=%016x", v.content), true
 		case protocol.Pack_Part:

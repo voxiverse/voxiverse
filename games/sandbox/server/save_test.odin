@@ -37,6 +37,44 @@ test_an_older_universe_keeps_its_sheep :: proc(t: ^testing.T) {
 	}
 }
 
+// A sandbox universe of format 8 (assets/fixtures/save-v8, from the commit before the
+// markets left the engine) opens with its markets as they were, now the sandbox's: the
+// world's economy file and interventions log read back, and the trader's silver, cargo and
+// the prices it saw its character's record.
+@(test)
+test_an_older_universe_keeps_its_markets :: proc(t: ^testing.T) {
+	dir :: "build/tmp/sandbox_save_markets"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	copy_dir("assets/fixtures/save-v8", dir)
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, GAME, {save_dir = dir}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	sw := world_of(s.home)
+	testing.expect(t, sw.economy != nil, "the economy file was not read")
+	testing.expect_value(t, len(sw.interventions.list), 2)
+	if len(sw.interventions.list) == 2 {
+		testing.expect_value(
+			t,
+			sw.interventions.list[0].kind,
+			Intervention_Kind.Founded_Settlement,
+		)
+		testing.expect_value(t, sw.interventions.list[0].actor, "trader")
+	}
+	r, found := core.player_record(s, "trader")
+	defer core.counters_free(&r.stats)
+	if !testing.expect(t, found, "the trader's character is gone") {return}
+	rec := (^Trader_Record)(&r.character_data.bytes)
+	testing.expect_value(t, rec.cash, 9897.249825109646)
+	testing.expect_value(t, rec.cargo[sandbox.Good.Grain], 217.4607)
+	testing.expect_value(t, rec.count, 8)
+	testing.expect(t, rec.given, "a trader of format 8 would be given the purse again")
+	seen, known := trader_known(rec, 82623, .Salt)
+	testing.expect(t, known && seen.price == 3 && seen.month == 3, "the prices it saw are gone")
+}
+
 @(private = "file")
 keeps_its_sheep :: proc(t: ^testing.T, fixture: string) {
 	dir :: "build/tmp/sandbox_save_older"

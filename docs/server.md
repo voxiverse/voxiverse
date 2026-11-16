@@ -60,7 +60,6 @@ game, and `/help` does not list them.
 
 | Command | Effect |
 |---|---|
-| `/interventions [radius]` | Lists the last 20 of the world's interventions (a radius in blocks: those within it of you; `world.interventions`). |
 | `/history <x y z>` | Lists the last changes at a block (`world.rollback`). |
 | `/undo [n]`, `/redo [n]` | Undoes or redoes your own last n actions (`world.edit.undo`). |
 | `/rollback player <name> <time> [radius <n> \| sel \| world]`, `system <system> <time> [...]`, `area <time> [radius <n> \| sel]`, `status`, `cancel` | Reverts changes by a player, a system or in an area, up to a time back (`90s`, `10m`, `2h`, `1d`; `world.rollback`). |

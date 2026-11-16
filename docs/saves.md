@@ -14,8 +14,6 @@ save.tx                 only while a save is being applied (the commit record)
 permissions.cfg, community.cfg
 characters/<account>/<name>.json   (players/<name>.json: a character file from before accounts, still read)
 worlds/<address>/world.cfg, entities.cfg, protections.cfg
-worlds/<address>/interventions.vxi            interventions log format 1
-worlds/<address>/economy.vxe                  economy format 1 (planet worlds)
 worlds/<address>/<game>.<name>                the game's own files of the world (Game.world_files: docs/games.md)
 worlds/<address>/regions/r.<x>.<z>.vxr      region format 5
 worlds/<address>/journal/<seq>.vxj
@@ -185,7 +183,7 @@ releases the lock with its process, so a crash leaves no stale lock.
 
 ## Formats
 
-`SAVE_FORMAT` (8) is recorded in `universe.cfg` and in each `world.cfg`. A universe of an older format the migrations reach is brought up to date when it is opened, any other refused (see [Migrations](#migrations)).
+`SAVE_FORMAT` (9) is recorded in `universe.cfg` and in each `world.cfg`. A universe of an older format the migrations reach is brought up to date when it is opened, any other refused (see [Migrations](#migrations)).
 
 ### Region format 5
 
@@ -210,34 +208,6 @@ registry whose numbers have moved (a different pack set, or one pack ordered ahe
 loads them. A name the registry lacks causes the world to be refused at start, naming the
 blocks, unless `universe.cfg` says `unknown_blocks = air`, in which case they load as air.
 
-### The interventions log
-
-`interventions.vxi` (`common/intervention`) holds what players did that the world's history
-carries forward, in time order: `"VXIV"`, `u32 version` (1), `u32 count`, then per
-intervention its day (`f64`), place (3 x `i32`), kind (`u8`, append-only: `Founded_Settlement`,
-`Built`, `Destroyed`, `Taught`, `Traded`), the actor's name (`u8` length, bytes) and 16 data
-bytes, and last the CRC-32 of everything before it (all little-endian). It is staged in the save
-transaction when the log changed. A file that is cut, has a bad CRC, an unknown kind or
-records out of order is refused whole: the world moves it aside (`interventions.vxi.bad`),
-starts with an empty log and logs an error; `--check` reports it.
-`interventions_since(log, day)` and `interventions_near(log, place, radius_blocks, since_day)`
-are the queries for the systems that replay them.
-
-### The economy
-
-`economy.vxe` (`server/core/save.odin`) holds what the server computed of a planet world's
-markets that the history function does not give back: `"VXEC"`, `u32 version` (1), `u64` key of
-the placement it was made for, `f64` market month, `u32` market count, `u32` memory count, then
-per detailed town its climate cell (`u32`) and each good's stock and inbound goods (`f32`, in
-the order of `planet.Good`), per lazy memory its cell, each good's relative gap to the lazy price
-(`f32`) and the month it was left (`f64`), and last the CRC-32 of everything before it (all
-little-endian). It is staged in the save transaction when the economy changed. Normal prices,
-the kernel and the settlements are not stored: they come from the history. A file made for
-another placement (the history changed) is read and ignored, so the markets are recomputed; a
-file that is cut, has a bad CRC or a number that is negative or not finite is moved aside
-(`economy.vxe.bad`) and the markets are recomputed; `--check` reports it. News and caravans in
-flight are not saved.
-
 ### The game's record on a character
 
 A character file of format 5 (`PLAYER_FILE_FORMAT`) may have a `game` member: the record the
@@ -245,15 +215,6 @@ universe's game keeps on the character (`Game.character_data`, [games.md](games.
 of its fields not at zero by their dotted paths, each value a number, `true` or `false`, or an
 enum's name as a string. A file before has none: the record is zero. A path the game's type
 lacks, or a value it cannot hold, is skipped (and logged); the rest is read.
-
-### The player's trader
-
-A character file of format 3 (`PLAYER_FILE_FORMAT`) has a `trader` member: `cash` (silver),
-`cargo` (units of each good, in the order of `planet.Good`) and `seen`, the prices the player
-saw where they stood (`cell` of the town, `good`, `price`, `month` the price was true; at most
-`MAX_SEEN`, the oldest forgotten first). A file of format 1 or 2 loads with no cargo, nothing
-seen and the starting purse (`STARTING_PURSE`, 20 silver); so does a new player. From format 4
-each stack also has its `data`, the game's number for it (a rolled stat); before, 0.
 
 ### The edit journal
 
@@ -288,6 +249,7 @@ this world was made by an older build; create a new one
 |---|---|---|
 | 6 | `entities.cfg`'s lines name their fields (`item=`, `shorn=`...) where format 6 placed them by position; a `critter` is a `voxiverse:sheep` | `assets/fixtures/save-v6` |
 | 7 | The base pack's sheep (`voxiverse:sheep`) are the sandbox's (`sandbox:sheep`): what the engine kept of each (`shorn`, `genes`, `love`, `wait`; `growth` as `grows`, the ticks before it is grown) is the sandbox's record on it (`data.<field>`) | `assets/fixtures/save-v7` |
+| 8 | The towns' markets, the traders and the interventions log are the sandbox's: each world's `economy.vxe` and `interventions.vxi` are its `sandbox.economy.vxe` and `sandbox.interventions.vxi` (their bytes as they were), and a character file's `trader` (silver, cargo, the prices seen) is the sandbox's record on the character (`game`: `cash`, `cargo.<i>`, `seen.<i>.cell`/`price`/`month`/`good`, `count`, `given`), in a universe the sandbox plays; in another it is dropped. The counters stay last in the file | `assets/fixtures/save-v8` |
 
 A migration that fails commits nothing, and the open fails with "this world could not be
 brought up to date (the log says why); nothing in it was changed". The rules for a

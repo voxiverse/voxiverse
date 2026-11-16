@@ -793,7 +793,6 @@ tick :: proc(s: ^Server) {
 	for _ in 0 ..< s.sim_steps {
 		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
 	}
-	economy_tick(s)
 	tick_mark(s, "economy")
 	Move :: struct {
 		world:    ^World,
@@ -1161,8 +1160,6 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		queue_action(s, c, v)
 	case protocol.Reload:
 		weapon_reload(s, c)
-	case protocol.Market_Trade:
-		market_trade(s, c, v)
 	case protocol.Game_Action:
 		if g := &s.config.game; g.action != nil && !c.dead {g.action(s, c, int(v.index))}
 	case protocol.Game_Request:

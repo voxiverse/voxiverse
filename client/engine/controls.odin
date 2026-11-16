@@ -28,7 +28,6 @@ Bindings :: struct {
 	stats:           platform.Key, // open the statistics
 	player_menu:     platform.Key, // the last section; closes the menu
 	world_map:       platform.Key, // (the Map section: hidden for now)
-	market:          platform.Key, // the market screen, in a town
 	journal:         platform.Key, // (hidden)
 	character:       platform.Key, // (hidden)
 	atlas:           platform.Key, // (hidden)
@@ -72,7 +71,6 @@ DEFAULT_BINDINGS :: Bindings {
 	stats        = .K,
 	player_menu  = .Tab,
 	world_map    = .N,
-	market       = .M,
 	journal      = .J,
 	character    = .C,
 	atlas        = .L,
@@ -133,7 +131,6 @@ BINDING_VARS := [?]base.Var {
 		help = "Open the player menu at the section you had open last; the same key closes it.",
 	},
 	{field = "world_map", label = "Map", help = "Open the map (not there yet)."},
-	{field = "market", help = "Open the market of the town you stand in."},
 	{field = "journal", help = "Open the journal (not there yet)."},
 	{field = "character", help = "Open your character (not there yet)."},
 	{field = "atlas", help = "Open the atlas (not there yet)."},

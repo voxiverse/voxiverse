@@ -230,7 +230,7 @@ at their day and place and change nothing before it.
   people name the chronicle's collapse. `Settlement_Cache` keeps the history and placement and
   recomputes only when the history changes (a new decade or an intervention). Placement for 10
   peoples takes under 300 ms (`build bench budgets`, `planet_placement`).
-- **The economy, part 1** (`common/planet/economy.odin`): `economy_build(planet, settlements,
+- **The economy, part 1** (the sandbox's: `games/sandbox/economy.odin`): `economy_build(planet, settlements,
   roads)` gives each standing settlement a `Town`. `produce` is what the land in its cell and the
   ring around it gives, in *people supplied* (grain from rain and warmth, never in deserts or
   under 5 °C; timber from forested Köppen classes; ore from rugged ground; fish and salt from
@@ -243,7 +243,7 @@ at their day and place and change nothing before it.
   yearly cycle: `town_price(town, good, month_fraction)` is lowest right after the harvest
   (`harvest_month`: two months after the warmest, in the tropics after the wettest) and rises
   ±12 % to the next one. 600 towns take under 100 ms.
-- **The economy, part 2** (`common/planet/market.odin`): the same towns, two ways. *Detailed*
+- **The economy, part 2** (`games/sandbox/market.odin`): the same towns, two ways. *Detailed*
   (`Market`, for the towns of one island): each town keeps a stock per good in months of need;
   the price is its normal price over the stock (within 0.5-4 times); supply answers the price;
   merchants load along `Economy.links` (each town's six cheapest ways) while a gap beats 60 %
@@ -259,7 +259,7 @@ at their day and place and change nothing before it.
   `market_leave` keeps the detailed price's gap to the lazy one in `Lazy_State`, fading over
   3 months. The islands themselves (who observes, what runs when) are issues #132 and #133;
   this part takes the towns of an island as a list. Only grain is hit by droughts so far.
-- **The economy, part 3** (`common/planet/trade.odin`): news at the speed of travellers. Every
+- **The economy, part 3** (`games/sandbox/trade.odin`): news at the speed of travellers. Every
   town of an island keeps `Knowledge` (per town and good: the price it last heard and the month
   that price was true, so news has an age). A `Caravan` leaves along each way (`convoy_step`)
   with a copy of its origin's knowledge, refreshed with the origin's prices, and travels
@@ -274,44 +274,43 @@ at their day and place and change nothing before it.
   merchants judge a buyer by the price their own town last heard (`market_step` with the
   island's `News`; no report, no shipment) and count what is already on the road. The first
   trader to arrive sells at the peak; later ones meet the caravans that came before. Tested
-  by `test_first_to_a_drought_profits_more`. Not yet: the market screen (reached in play with
-  M inside a settlement's radius) and caravans as entities (see #141).
-- **The server holds the markets** (`server/core/save.odin`, `World.economy`; only worlds
-  with `worldgen.planet`). The history's day is `ECONOMY_PRESENT` (6 000 years) plus the world
-  clock; the settlements are placed on the first arrival (`settlements_at`, cached; a new decade
-  or an intervention rebuilds the economy and drops what hung on it). Once a second the server
-  looks at where its players stand: towns within `ECONOMY_RADIUS_KM` (600) of one are in detail
-  (a `Market` with news and caravans, stepped by `convoy_step`), a market month being 30 world
-  days. A town that no player is near goes back to the lazy model (`market_leave`) and is
-  priced from the history function when perceived again (`market_enter`), so a year away
-  changes no price. A market resident for more than `ECONOMY_CATCH_UP` (120) months behind the
-  clock is entered afresh instead of stepped. No system causes droughts yet, so none are
-  stepped; the news and caravans in flight are not saved and start again when the market is
-  next entered. (The islands of #132 do not exist yet: "near a player" stands in for them.)
-- **The player trades** (`server/core/player_data.odin`, `trade`). Each player carries a
-  `Trader_Record` (silver, cargo, the prices seen; saved in the character file, see
-  docs/saves.md). `trade(world, player, town, good, quantity, Buy | Sell)` refuses when the
-  world has no market in detail there, the quantity is not positive, the player is not within
-  `TRADE_RADIUS_KM` (15) of the town, the town does not deal in the good, the cargo (a sale is
-  all or nothing) or the silver is short, or the market's stock is at its reserve. A buy may be
-  filled in part. Goods and silver move through `trader_buy` / `trader_sell`, which move the
-  market's stock, hence its price, as an arriving caravan does. The player sees a town's
-  prices when they stand within its radius (once a second, and at each trade), and keeps those;
-  what the town knows of other towns is told them but not kept. Not yet: the market screen and
-  the `Traded` intervention for a large trade.
-- **The market on the wire** (`server/core/player_data.odin`, `market_update`, `market_trade`;
-  `Market_View` and `Market_Trade` in `common/protocol/protocol.odin`). A player within
-  `TRADE_RADIUS_KM` of a town is sent a `Market_View`: the town's name (a placeholder,
-  "Town <climate cell>": the peoples' names are not kept with the economy), per good whether
-  the town deals in it, its price (silver per unit), its stock in units, the player's cargo, and
-  the age in days of the news behind the price, and the player's silver. It is sent on arrival
-  and when anything it shows changes, checked once a second, and as the answer to a trade. A
-  player away from every town is sent nothing, except one `Away` view as they walk out of a
-  town (the client shows the market only while it holds a view). `Market_Trade` (good, buy or sell, quantity)
-  names no town: the server uses where the player stands, and answers with the new view or a
-  `Market_View` whose `reason` is the refusal (`Away`, `No_Cash`, ...) and nothing else. The
-  client keeps the last view (`Market_State`, `client/engine/market.odin`) and shows it: the
-  HUD line `Market of <town> (M)` and the market screen (`client/screen/market.odin`, key M).
+  by `test_first_to_a_drought_profits_more`. Not yet: caravans as entities (see #141).
+- **The sandbox holds the markets** (`games/sandbox/server/economy.odin`, its `world_state` of
+  each world; only worlds with `worldgen.planet`). The history's day is `ECONOMY_PRESENT`
+  (6 000 years) plus the world clock; the settlements are placed on the first arrival
+  (`settlements_at`, cached; a new decade or an intervention rebuilds the economy and drops what
+  hung on it). Once a second the sandbox looks at where its players stand: towns within
+  `ECONOMY_RADIUS_KM` (600) of one are in detail (a `Market` with news and caravans, stepped by
+  `convoy_step`), a market month being 30 world days. A town that no player is near goes back to
+  the lazy model (`market_leave`) and is priced from the history function when perceived again
+  (`market_enter`), so a year away changes no price. A market resident for more than
+  `ECONOMY_CATCH_UP` (120) months behind the clock is entered afresh instead of stepped. No
+  system causes droughts yet, so none are stepped; the news and caravans in flight are not saved
+  and start again when the market is next entered. What is saved is the sandbox's file of the
+  world, `sandbox.economy.vxe` (its README). (The islands of #132 do not exist yet: "near a
+  player" stands in for them.)
+- **The player trades** (`games/sandbox/server/trader.odin`, `trade`). Each character carries
+  a `Trader_Record` (silver, cargo, the prices seen; the sandbox's record on the character,
+  saved in its file). `trade(server, world, player, town, good, quantity, Buy | Sell)` refuses
+  when the world has no market in detail there, the quantity is not positive, the player is not
+  within `TRADE_RADIUS_KM` (15) of the town, the town does not deal in the good, the cargo (a sale
+  is all or nothing) or the silver is short, or the market's stock is at its reserve. A buy may
+  be filled in part. Goods and silver move through `trader_buy` / `trader_sell`, which move the
+  market's stock, hence its price, as an arriving caravan does. The player sees a town's prices
+  when they stand within its radius (once a second, and at each trade), and keeps those; what
+  the town knows of other towns is told them but not kept. Not yet: the `Traded` intervention
+  for a large trade.
+- **The market on the wire** (the sandbox's records, `games/sandbox/records.odin`). A player's
+  `sandbox.market` record is the town it stands in: its name (a placeholder, "Town <climate
+  cell>": the peoples' names are not kept with the economy), per good whether the town deals in
+  it, its price (silver per unit), its stock in units, the player's cargo, and the age in days of
+  the news behind the price, and the player's silver; in no town, the record names none. It is
+  put once a second (only a change is sent) and as the answer to a trade. A trade is a request,
+  `sandbox.trade` (good, buy or sell, quantity), naming no town: the server uses where the player
+  stands, and answers with the record or a `sandbox.trade_refused` event (`Away`, `No_Cash`,
+  ...). The client part keeps the record and shows it (`games/sandbox/client/market.odin`): the
+  HUD line `Market of <town>` and the market's screen (the game's screen), opened by the game's
+  action `Market` in a town (the server answers with `sandbox.market_open`).
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of

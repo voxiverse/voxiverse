@@ -18,7 +18,6 @@ DETERMINISM_DIRS :: []string {
 	"server/dedicated",
 	"common/worldgen",
 	"common/planet",
-	"common/intervention",
 	"common/island",
 	"common/script",
 	"games", // (a game's shared rules and its server part run in the server's tick)

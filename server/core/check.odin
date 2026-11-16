@@ -7,7 +7,6 @@ import "core:strconv"
 import "core:strings"
 
 import "common:game"
-import "common:intervention"
 import "server:store"
 
 // universe_check: is the universe in dir whole? Read-only; run it after
@@ -139,24 +138,6 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 		false,
 		"protect",
 	)
-	interventions := fmt.tprintf("%s/%s", world, INTERVENTIONS_FILE)
-	if idata, ierr := os.read_entire_file_from_path(
-		store.full_path(dir, interventions),
-		context.temp_allocator,
-	); ierr == nil {
-		if log, ok := intervention.decode(idata); ok {
-			intervention.log_destroy(&log)
-		} else {
-			problem(r, "%s is damaged", interventions)
-		}
-	}
-	economy := fmt.tprintf("%s/%s", world, ECONOMY_FILE)
-	if edata, eerr := os.read_entire_file_from_path(
-		store.full_path(dir, economy),
-		context.temp_allocator,
-	); eerr == nil {
-		if !economy_check(edata) {problem(r, "%s is damaged", economy)}
-	}
 	if r.game != nil {
 		for f in r.game.world_files {
 			if f.check == nil {continue}

@@ -40,7 +40,6 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		c.player = saved.state
 		c.look = saved.look
 		c.inventory = saved.inventory
-		c.trader = saved.trader
 		c.character_data = saved.character_data
 		ledger_inventory(s, w, .Scope_In, &c.inventory)
 		for st in saved.overflow {
@@ -51,7 +50,6 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		}
 		land(s, c, saved.state.position, c.look, .Exact, remember = false)
 	} else {
-		c.trader.cash = STARTING_PURSE
 		land_at_spawn(s, c, remember = false)
 	}
 	mode := mode_default(s, w)
