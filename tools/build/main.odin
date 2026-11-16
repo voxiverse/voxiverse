@@ -60,6 +60,7 @@ PACKAGES :: []string {
 	"client/autopilot",
 	"client/dev",
 	"client/testkit",
+	"client/playtest",
 	"client/mesh",
 	"client/starfield",
 	"client/planet",
