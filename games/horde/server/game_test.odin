@@ -4,6 +4,7 @@ import "core:os"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "games:horde"
 import "server:core"
 import "server:playtest"
@@ -103,7 +104,7 @@ test_horde_waves :: proc(t: ^testing.T) {
 	testing.expect_value(t, survivor(s, g).coins, horde.DEFAULT_SETTINGS.coins)
 	testing.expect_value(t, d.best, 1)
 	playtest.step(rig, 2)
-	mine := playtest.host_record(rig, horde.Survivor, game.key_player(core.player_id(s, h)))
+	mine := playtest.host_record(rig, horde.Survivor, protocol.key_player(core.player_id(s, h)))
 	testing.expect(t, mine != nil && int(mine.kills) == shamblers)
 
 	// The break runs out: the second wave, skitters with the shamblers.

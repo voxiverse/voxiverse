@@ -7,6 +7,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:protocol"
 import "games:horde"
 import "server:core"
 import "server:play"
@@ -448,7 +449,7 @@ put_records :: proc(s: ^core.Server) {
 				down  = r.down,
 				guns  = u8(r.guns),
 			}
-			core.game_put(s, &c, &v, game.key_player(core.player_id(s, &o)))
+			core.game_put(s, &c, &v, protocol.key_player(core.player_id(s, &o)))
 		}
 	}
 }

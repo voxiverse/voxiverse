@@ -1,6 +1,7 @@
 package horde
 
 import "common:game"
+import "common:protocol"
 
 // What the game replicates besides the engine's kinds (docs/games.md): the run (a
 // singleton), every survivor's purse and tally (keyed by player id, put to every player,
@@ -38,7 +39,7 @@ Wave_News :: struct {
 	held: bool,
 }
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states = {
 		{name = "horde.run", value = Run},
 		{name = "horde.survivor", value = Survivor, key = .Player, max_records = game.MAX_PLAYERS},

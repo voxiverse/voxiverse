@@ -7,6 +7,7 @@ import "core:strings"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 import "games:horde"
 
 // Horde's client part (the game: games/horde): it keeps the run and every survivor's
@@ -67,7 +68,7 @@ started :: proc(s: ^engine.Session) {
 	v.round, _ = game.registry_item(s.reg, horde.ROUND_ITEM)
 }
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if run, ok := engine.game_value(s, r, horde.Run); ok && run != nil {
 		v.run = run^
