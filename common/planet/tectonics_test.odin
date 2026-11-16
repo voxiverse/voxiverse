@@ -42,6 +42,38 @@ test_relief_generate_deterministic :: proc(t: ^testing.T) {
 	testing.expect_value(t, relief_hash(r1), u64(0xed0b125a2ae0f1be))
 }
 
+// mountains_near_boundaries: 90% of a world's high cells (above 3000 m) lie within 500 km
+// of a convergent boundary: its ranges are where plates meet, not plateaus anywhere.
+@(private = "file")
+mountains_near_boundaries :: proc(t: ^testing.T, r: Relief, points: [][3]f64, n: int) {
+	high, near := 0, 0
+	// Every 4th high cell, against every 2nd boundary point: 500 km is a chord of 0.0785.
+	for e, k in r.elevation {
+		if e <= 3000 || k % 4 != 0 {continue}
+		high += 1
+		i, j := k % r.width, k / r.width
+		lat := relief_cell_lat(r, j) * PI / 180
+		lon := relief_cell_lon(r, i) * PI / 180
+		x := [3]f64{base.cos(lat) * base.cos(lon), base.cos(lat) * base.sin(lon), base.sin(lat)}
+		for q := 0; q < len(points); q += 2 {
+			d := x - points[q]
+			if d.x * d.x + d.y * d.y + d.z * d.z < 0.0785 * 0.0785 {
+				near += 1
+				break
+			}
+		}
+	}
+	testing.expectf(t, high > 0, "world %d has no high ground", n)
+	testing.expectf(
+		t,
+		near * 10 >= high * 9,
+		"world %d: %d of %d high cells near a boundary",
+		n,
+		near,
+		high,
+	)
+}
+
 @(test)
 test_relief_generate_mountains_by_convergent_boundaries :: proc(t: ^testing.T) {
 	for n in 0 ..< 3 {
@@ -50,36 +82,7 @@ test_relief_generate_mountains_by_convergent_boundaries :: proc(t: ^testing.T) {
 		defer delete(points)
 		r := relief_generate(a, 9, convergent = &points)
 		defer relief_destroy(&r)
-		high, near := 0, 0
-		// Every 4th high cell, against every 2nd boundary point: 500 km is a chord of 0.0785.
-		for e, k in r.elevation {
-			if e <= 3000 || k % 4 != 0 {continue}
-			high += 1
-			i, j := k % r.width, k / r.width
-			lat := relief_cell_lat(r, j) * PI / 180
-			lon := relief_cell_lon(r, i) * PI / 180
-			x := [3]f64 {
-				base.cos(lat) * base.cos(lon),
-				base.cos(lat) * base.sin(lon),
-				base.sin(lat),
-			}
-			for q := 0; q < len(points); q += 2 {
-				d := x - points[q]
-				if d.x * d.x + d.y * d.y + d.z * d.z < 0.0785 * 0.0785 {
-					near += 1
-					break
-				}
-			}
-		}
-		testing.expectf(t, high > 0, "world %d has no high ground", n)
-		testing.expectf(
-			t,
-			near * 10 >= high * 9,
-			"world %d: %d of %d high cells near a boundary",
-			n,
-			near,
-			high,
-		)
+		mountains_near_boundaries(t, r, points[:], n)
 		free_all(context.temp_allocator)
 	}
 }
@@ -136,8 +139,11 @@ test_relief_generate_world_19 :: proc(t: ^testing.T) {relief_world_check(t, 19)}
 @(private = "file")
 relief_world_check :: proc(t: ^testing.T, n: int) {
 	a := address_n(u64(200 + n))
-	r := relief_generate(a, 5)
+	points: [dynamic][3]f64
+	defer delete(points)
+	r := relief_generate(a, 5, convergent = &points)
 	defer relief_destroy(&r)
+	mountains_near_boundaries(t, r, points[:], n)
 
 	ch := relief_character(a)
 	share := land_share(r)

@@ -242,7 +242,10 @@ relief_generate :: proc(
 	total_weight := 0.0
 	for j in 0 ..< h {total_weight += row_weight[j] * f64(w)}
 
-	// Which plates are continental: in a seeded order, until their area is the land's share.
+	// Which plates are continental: in a seeded order, until their area is at least the
+	// land's share. Short of it, the sea would sink below the continents' base to give
+	// the land its share and leave whole cratons as plateaus kilometres high, far from
+	// any range; a little over it, the sea floods the lowest coasts instead.
 	order := make([]int, ch.plates, context.temp_allocator)
 	for k in 0 ..< ch.plates {order[k] = k}
 	for k := ch.plates - 1; k > 0; k -= 1 {
@@ -252,7 +255,7 @@ relief_generate :: proc(
 	taken := 0.0
 	for k, idx in order {
 		share := area[k] / total_weight
-		if idx == 0 || taken + share / 2 <= ch.land_fraction {
+		if idx == 0 || taken < ch.land_fraction {
 			plates[k].continental = true
 			taken += share
 		}
