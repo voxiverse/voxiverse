@@ -128,6 +128,8 @@ TEST_PACKAGES :: []string {
 	"client/console",
 	"tools/analytics",
 	"tools/music",
+	"tools/netdump",
+	"tools/replay",
 	"tools/build",
 }
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).

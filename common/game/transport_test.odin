@@ -99,3 +99,26 @@ test_trace_round_trip :: proc(t: ^testing.T) {
 	defer delete(none)
 	testing.expect(t, !none_ok && len(none) == 0)
 }
+
+// A trace says which game its session played: its Welcome's (none: "").
+@(test)
+test_trace_game :: proc(t: ^testing.T) {
+	reg := registry_base(context.temp_allocator)
+	w: Writer
+	writer_init(&w, context.temp_allocator)
+	welcome := Welcome {
+		protocol    = PROTOCOL_VERSION,
+		tick_rate   = TICK_RATE,
+		view_radius = 4,
+		view_height = 2,
+		rules       = RULES_DEFAULTS,
+		address     = {EARTH_GALAXY, EARTH_WORLD},
+		game        = "flood",
+	}
+	encode_server(&w, welcome)
+	scratch := new(Block_Array)
+	defer free(scratch)
+	records := []Trace_Record{{0, .Client, []u8{1, 2, 3}}, {1, .Server, w.buf[:]}}
+	testing.expect_value(t, trace_game(records, scratch, reg), "flood")
+	testing.expect_value(t, trace_game(records[:1], scratch, reg), "")
+}

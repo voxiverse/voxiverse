@@ -8,6 +8,7 @@ import "core:strings"
 import "core:time"
 
 import "common:game"
+import games "generated:games"
 
 // netdump prints a network trace (build/net.trace, recorded with
 // `set debug.net_trace 1` or the net_trace command), decoding every message
@@ -252,7 +253,7 @@ main :: proc() {
 	}
 
 	scratch := new(game.Block_Array)
-	schema := game.game_schema()
+	schema := trace_schema(records[:], scratch)
 	Total :: struct {
 		messages, bytes: int,
 	}
@@ -567,4 +568,15 @@ describe :: proc(
 		}
 	}
 	return "", true
+}
+
+// trace_schema: the state kinds of the traced session: the engine's and its game's (the
+// game its Welcome named, found among the games this build has: a State message of a game
+// the build lacks counts as one that does not decode).
+trace_schema :: proc(records: []game.Trace_Record, scratch: ^game.Block_Array) -> game.Schema {
+	played := game.trace_game(records, scratch, base_registry)
+	for g in games.SERVER {
+		if g.id == played {return game.game_schema(g.id, g.kinds)}
+	}
+	return game.game_schema()
 }

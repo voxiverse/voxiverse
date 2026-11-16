@@ -111,3 +111,20 @@ trace_read :: proc(
 	}
 	return header, records, true
 }
+
+// trace_game: the game the traced session played, as the server's Welcome named it ("":
+// the trace holds no Welcome), so a tool that reads a trace reads the game's records and
+// replays its rules (tools/netdump, tools/replay; they find the game by its id among
+// the lists of games).
+trace_game :: proc(records: []Trace_Record, scratch: ^Block_Array, reg: ^Registry) -> string {
+	for r in records {
+		if r.sender != .Server ||
+		   len(r.data) == 0 ||
+		   message_kind_name(.Server, r.data[0]) != "welcome" {
+			continue
+		}
+		m, ok := decode_server(r.data, scratch, reg)
+		if w, is := m.(Welcome); ok && is {return w.game}
+	}
+	return ""
+}

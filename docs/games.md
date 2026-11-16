@@ -40,7 +40,8 @@ folders in `games/` (the collection `generated` is `build/generated`): `generate
 whose `SERVER` holds every server part's `GAME`, and `generated:games/client`, whose
 `CLIENT` holds every client part's. Both are sorted by folder, an `#assert` keeps each
 game's id its folder's name, and only the executables' main packages import them
-(`client/main` the client's list alone, so the dedicated server links no client code).
+(`client/main` the client's list alone, so the dedicated server links no client code), and
+the trace tools the server's.
 
 ## A walk-through
 
@@ -454,8 +455,12 @@ KINDS :: game.Game_Kinds {
   and server with different records of a game refuse each other.
 
 `build schema` writes the engine's kinds into the Wireshark dissector; a game's kinds are not
-in it. `build netdump` decodes with the engine's schema alone: in a trace of a session with a
-game, a State message that carries the game's records counts as one that does not decode.
+in it. A trace knows its game (its Welcome names it, `game.trace_game`): `build netdump` reads
+it with that game's kinds and `build replay` replays it with that game's rules, both finding
+the game among the server parts' list (`generated:games`); a game this build lacks is read
+with the engine's kinds alone (its records do not decode) and replayed as the default game.
+Both still decode blocks and items by the base pack's registry, not the session's, so a
+game's pack content in a trace reads as numbers.
 
 ## Requests
 

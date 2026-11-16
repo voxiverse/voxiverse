@@ -46,7 +46,8 @@ directly in it, not its sub-folders: each sub-folder has its own row. A row whos
    `stopwatch_server.GAME`. Each shape gets its row with the first game that has one (a
    shape no game has is a stale row, as a folder with no file is). Nothing outside `games/`
    imports a game except the executables' main packages (`client/main`, `server/dedicated`;
-   a game's client part `client/main` alone), a game imports no other game, and a part
+   a game's client part `client/main` alone) and the tools that read a session's trace
+   (`tools/netdump`, `tools/replay`: the server parts' list), a game imports no other game, and a part
    imports no other part of its game but the shared package (but for the client part's
    tests, which play the game against its server part): the `import` lint in `check`, which
    also checks the package names. The main packages reach the games through the lists the

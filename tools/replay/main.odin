@@ -8,6 +8,7 @@ import "core:time"
 import "common:base"
 import "common:game"
 import platform "common:platform"
+import games "generated:games"
 import "server:core"
 
 // replay feeds the client's messages from a network trace to a fresh server
@@ -78,16 +79,12 @@ run :: proc(opts: Options) -> bool {
 	) {log.warnf("replay cannot record path=%s", opts.out)}
 	srv: core.Server
 	config := core.Config {
-		seed = header.seed,
-		view_radius = i32(header.view_radius),
-		view_height = i32(header.view_height),
-		workers = 2,
+		seed         = header.seed,
+		view_radius  = i32(header.view_radius),
+		view_height  = i32(header.view_height),
+		workers      = 2,
 		allow_cheats = header.allow_cheats,
-		// The default game by its id alone: a tool imports no game, and the trace does not
-		// say which one its session played. The sandbox's one hook only chooses the Earth
-		// generator, which is the zero Config's anyway; another game's trace replays
-		// without that game's rules.
-		game = {info = {id = game.DEFAULT_GAME}},
+		game         = trace_game(records[:]),
 	}
 	if !core.start(&srv, config, {&pipe, .Server}) {return false}
 	client := game.Endpoint{&pipe, .Client}
@@ -175,4 +172,20 @@ run :: proc(opts: Options) -> bool {
 	)
 	if disconnected {log.error("replay the server disconnected the client (see its warning above)")}
 	return server_ok && !disconnected
+}
+
+// trace_game: the game the traced session played (its Welcome's), with its rules, so the
+// replay runs them again; a game this build lacks replays as the default one.
+trace_game :: proc(records: []game.Trace_Record) -> core.Game {
+	scratch := new(game.Block_Array)
+	defer free(scratch)
+	played := game.trace_game(records, scratch, base_registry)
+	fallback := core.Game{}
+	for g in games.SERVER {
+		if g.id == played {return g}
+		if g.id == game.DEFAULT_GAME {fallback = g}
+	}
+	if played !=
+	   "" {log.warnf("replay trace plays %s, a game this build lacks; replaying %s", played, fallback.id)}
+	return fallback
 }
