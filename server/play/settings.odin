@@ -17,10 +17,13 @@ import "server:core"
 //	@(rodata) SETTINGS_VARS := [?]base.Var{{field = "frags", help = "the first to this many wins", min = 1, max = 200}, ...}
 //	SETTINGS :: base.Var_Table{"", Settings, SETTINGS_VARS[:], &DEFAULT_SETTINGS}
 
-// settings_command: `/<game> <name> <value>` sets a setting when c holds the permission
-// node and the value is in its bounds, and says so; handled false when args name no
-// setting (the game's other commands), changed true when one was set. A value out of
-// its bounds, or a player without the node, is refused and told why.
+// settings_command: `/<game> set <name> <value>` sets a setting when c holds the
+// permission node and the value is in its bounds, and says so; `/<game> set` alone tells
+// the settings and how to set them. handled false when the first argument is not `set`
+// (the game's own commands, which may share a setting's name), changed true when one
+// was set. A name that is no setting, a value out of its bounds, or a player without
+// the node is refused and told why. (`/<game> <name> <value>`, the older form, still
+// sets a setting while the games move to `set`.)
 settings_command :: proc(
 	s: ^core.Server,
 	c: ^core.Client,
@@ -31,10 +34,34 @@ settings_command :: proc(
 ) -> (
 	handled, changed: bool,
 ) {
+	name := s.config.game.name
+	if len(args) >= 1 && args[0] == "set" {
+		if len(args) != 3 {
+			core.notice(
+				s,
+				c,
+				fmt.tprintf(
+					"%s: %s (%s)",
+					name,
+					settings_text(table, settings),
+					settings_usage(table),
+				),
+			)
+			return true, false
+		}
+		if _, known := base.var_find(table, args[1]); !known {
+			core.notice(
+				s,
+				c,
+				fmt.tprintf("%s: no setting %s (%s)", name, args[1], settings_usage(table)),
+			)
+			return true, false
+		}
+		return settings_command(s, c, table, settings, node, args[1:])
+	}
 	if len(args) != 2 {return false, false}
 	v, known := base.var_find(table, args[0])
 	if !known {return false, false}
-	name := s.config.game.name
 	if !core.allowed(s, c, node) {
 		core.notice(s, c, fmt.tprintf("You may not change %s's settings (%s)", name, node))
 		return true, false
@@ -59,10 +86,11 @@ settings_command :: proc(
 	return true, true
 }
 
-// settings_usage: every setting as its command takes it, "frags <1..200> | time <30..3600>".
+// settings_usage: every setting as its command takes it, "set frags <1..200> | set time
+// <30..3600>".
 settings_usage :: proc(table: base.Var_Table) -> string {
 	parts := make([dynamic]string, context.temp_allocator)
-	for &v in table.vars {append(&parts, setting_usage(table, &v))}
+	for &v in table.vars {append(&parts, fmt.tprintf("set %s", setting_usage(table, &v)))}
 	return strings.join(parts[:], " | ", context.temp_allocator)
 }
 
@@ -79,6 +107,58 @@ settings_text :: proc(table: base.Var_Table, settings: rawptr) -> string {
 // "name = value" lines, each under its help as a comment.
 settings_save :: proc(table: base.Var_Table, settings: rawptr, out: ^strings.Builder) {
 	base.vars_write(table, settings, out)
+}
+
+// Saved_Line: a line of what a game keeps with the universe (game.cfg): its key, the
+// first word (or what stands before an `=`), and the rest, trimmed: "best = 12" and
+// "hero 3 140 7 ana" are {"best", "12"} and {"hero", "3 140 7 ana"}.
+Saved_Line :: struct {
+	key, value: string,
+}
+
+// saved_lines: the text's lines as keys and values (temp memory), blank lines and
+// `#` comments left out.
+saved_lines :: proc(text: string) -> []Saved_Line {
+	out := make([dynamic]Saved_Line, context.temp_allocator)
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		l := strings.trim_space(line)
+		if l == "" || l[0] == '#' {continue}
+		cut := strings.index_any(l, "= \t")
+		if cut < 0 {
+			append(&out, Saved_Line{l, ""})
+			continue
+		}
+		value := strings.trim_space(l[cut:])
+		if strings.has_prefix(value, "=") {value = strings.trim_space(value[1:])}
+		append(&out, Saved_Line{l[:cut], value})
+	}
+	return out[:]
+}
+
+// settings_read: what the universe kept (the game's load hook), its settings and the
+// game's own lines together: the lines that name a setting are read into settings, and
+// the rest are the game's (own, temp memory), in order. False, with no setting changed,
+// for a value out of its bounds.
+settings_read :: proc(
+	table: base.Var_Table,
+	settings: rawptr,
+	text: string,
+) -> (
+	own: []Saved_Line,
+	ok: bool,
+) {
+	mine := strings.builder_make(context.temp_allocator)
+	rest := make([dynamic]Saved_Line, context.temp_allocator)
+	for l in saved_lines(text) {
+		if _, known := base.var_find(table, l.key); known {
+			fmt.sbprintfln(&mine, "%s = %s", l.key, l.value)
+		} else {
+			append(&rest, l)
+		}
+	}
+	if !settings_load(table, settings, strings.to_string(mine)) {return nil, false}
+	return rest[:], true
 }
 
 // settings_load: the settings the universe kept (the game's load hook); false, with

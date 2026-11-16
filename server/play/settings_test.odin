@@ -31,7 +31,11 @@ test_settings_kept :: proc(t: ^testing.T) {
 	testing.expect(t, base.var_table_check(test_table()))
 	r := Test_Settings{7, 3.5}
 	testing.expect_value(t, settings_text(test_table(), &r), "frags 7, respawn 3.5")
-	testing.expect_value(t, settings_usage(test_table()), "frags <1..200> | respawn <0..30>")
+	testing.expect_value(
+		t,
+		settings_usage(test_table()),
+		"set frags <1..200> | set respawn <0..30>",
+	)
 	b := strings.builder_make(context.temp_allocator)
 	settings_save(test_table(), &r, &b)
 	back := TEST_DEFAULTS
@@ -40,6 +44,28 @@ test_settings_kept :: proc(t: ^testing.T) {
 	testing.expect(t, !settings_load(test_table(), &back, "frags = 9\nrespawn = 99\n"))
 	testing.expect(t, !settings_load(test_table(), &back, "frags = 9\nlives = 3\n"))
 	testing.expect_value(t, back, r)
+}
+
+// A game's saved text carries its settings and its own lines through one reading: the
+// settings' lines are read, the rest come back to the game in order, as keys and values.
+@(test)
+test_settings_read_leaves_the_games_lines :: proc(t: ^testing.T) {
+	back := TEST_DEFAULTS
+	own, ok := settings_read(
+		test_table(),
+		&back,
+		"# the first to this many wins\nfrags = 9\nbest = 12\nhero 3 140 7 ana\n\nrespawn=4\n",
+	)
+	testing.expect(t, ok)
+	testing.expect_value(t, back, Test_Settings{9, 4})
+	testing.expect_value(t, len(own), 2)
+	if len(own) == 2 {
+		testing.expect_value(t, own[0], Saved_Line{"best", "12"})
+		testing.expect_value(t, own[1], Saved_Line{"hero", "3 140 7 ana"})
+	}
+	_, ok = settings_read(test_table(), &back, "frags = 900\nbest = 1\n")
+	testing.expect(t, !ok)
+	testing.expect_value(t, back, Test_Settings{9, 4})
 }
 
 // A game whose command is its settings': /kit <name> <value>.
@@ -100,12 +126,30 @@ test_settings_command :: proc(t: ^testing.T) {
 	testing.expect_value(t, k.settings, Test_Settings{9, 2})
 	testing.expect_value(t, k.changed, 1)
 	testing.expect_value(t, say(sess, "kit lives 3"), "Kit: not a setting")
+	// The namespace: `set` and a setting's name; the game's own command may share a name.
+	testing.expect_value(
+		t,
+		say(sess, "kit set respawn 4"),
+		"Kit: respawn = 4 (seconds from a death to coming back)",
+	)
+	testing.expect_value(t, k.settings.respawn, 4)
+	testing.expect_value(
+		t,
+		say(sess, "kit set lives 3"),
+		"Kit: no setting lives (set frags <1..200> | set respawn <0..30>)",
+	)
+	testing.expect_value(
+		t,
+		say(sess, "kit set"),
+		"Kit: frags 9, respawn 4 (set frags <1..200> | set respawn <0..30>)",
+	)
+	testing.expect_value(t, say(sess, "kit frags"), "Kit: not a setting")
 	// Without the node (the host holds every one; here they are taken away a while).
 	owned := s.clients[0].grants
 	s.clients[0].grants = {}
 	testing.expect_value(
 		t,
-		say(sess, "kit frags 3"),
+		say(sess, "kit set frags 3"),
 		"You may not change Kit's settings (kit.admin)",
 	)
 	s.clients[0].grants = owned
