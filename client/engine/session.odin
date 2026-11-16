@@ -664,6 +664,20 @@ server_explode :: proc(s: ^Session, p: game.Block_Pos, radius: f64) {
 		}, mem.ptr_to_bytes(&e))
 }
 
+// server_hurry: our own server runs its next n ticks as fast as it can (core.hurry: a
+// script's `ticks`); false, and nothing hurried, on someone else's server, which keeps
+// its own time.
+server_hurry :: proc(s: ^Session, ticks: int) -> bool {
+	if s.remote || s.state == .Failed {return false}
+	core.hurry(&s.server, ticks)
+	return true
+}
+
+// server_hurrying: our own server has ticks of a hurry still to run.
+server_hurrying :: proc(s: ^Session) -> bool {
+	return !s.remote && s.state != .Failed && core.hurrying(&s.server) > 0
+}
+
 // still_rules: nothing changing by itself, for benchmarks and exit checks.
 still_rules :: proc() -> game.Rules {
 	return game.rules_still()

@@ -2,6 +2,7 @@ package console
 
 import "client:engine"
 import "client:screen"
+import "common:game"
 import "core:log"
 import "core:strconv"
 import "core:strings"
@@ -9,16 +10,21 @@ import "core:time"
 
 
 // Startup scripts (--exec "cmd; cmd; ..."): console commands run in order,
-// one batch per frame, with two script-only commands that pause it:
+// one batch per frame, with script-only commands that pause it:
 //
+//	ticks <n>        resume once the server has run n more ticks: our own server
+//	                 runs them back to back, as fast as it can (core.hurry), so
+//	                 `ticks 600` (half a minute of play) takes a second or two;
+//	                 someone else's keeps its time (n ticks of the clock)
 //	wait <frames>    resume after that many frames
-//	sleep <seconds>  resume after that much time (frame counts vary with vsync)
+//	sleep <seconds>  resume after that much time (frame counts vary with vsync):
+//	                 for what the clock and not the game decides; `ticks` for play
 //	wait_world       resume once the world has loaded and finished meshing
 //	                 (no world, or it failed: the run fails and quits)
 //	wait_joined      resume once the session plays, its world perhaps still
 //	                 loading (no world, or it failed: as wait_world)
 //
-//	--exec "singleplayer; wait_world; screenshot world; wait 2; quit"
+//	--exec "singleplayer; wait_world; ticks 200; wait_world; screenshot world; quit"
 //
 // Settings changes made by scripts are never saved (App.scripted).
 
@@ -39,7 +45,8 @@ script_done :: proc(s: ^engine.Script) -> bool {
 		s.wait == 0 &&
 		s.until == {} &&
 		!s.wait_world &&
-		!s.wait_joined \
+		!s.wait_joined &&
+		!s.hurried \
 	)
 }
 
@@ -51,6 +58,10 @@ script_run :: proc(app: ^engine.App, s: ^engine.Script) {
 	if s.until != {} {
 		if time.tick_diff(time.tick_now(), s.until) > 0 {return}
 		s.until = {}
+	}
+	if s.hurried {
+		if app.session != nil && engine.server_hurrying(app.session) {return}
+		s.hurried = false
 	}
 	if s.wait_world || s.wait_joined {
 		if app.session == nil || app.session.state == .Failed {
@@ -78,6 +89,18 @@ script_run :: proc(app: ^engine.App, s: ^engine.Script) {
 				continue
 			}
 			s.wait = n
+			return
+		case "ticks":
+			n, ok := strconv.parse_int(args[1] if len(args) > 1 else "")
+			if !ok || n < 0 {
+				log.warnf("script bad ticks line=%q", line)
+				continue
+			}
+			if app.session != nil && engine.server_hurry(app.session, n) {
+				s.hurried = true
+			} else {
+				s.until = time.tick_add(time.tick_now(), time.Duration(n) * game.TICK_DURATION)
+			}
 			return
 		case "wait_world":
 			s.wait_world = true

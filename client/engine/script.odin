@@ -9,4 +9,5 @@ Script :: struct {
 	wait_world:  bool,
 	wait_joined: bool, // until the session plays (its world may still be loading)
 	until:       time.Tick, // sleeping until then (zero: not)
+	hurried:     bool, // until our own server has run the ticks it was asked to hurry (`ticks`)
 }

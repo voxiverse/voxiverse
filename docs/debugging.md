@@ -216,13 +216,17 @@ Nothing in the console duplicates a key, the UI or a server command.
 ### Scripts
 
 Scripts (`--exec "cmd; cmd"`) are console input typed at startup, with the additional
-commands `wait <frames>`, `sleep <seconds>`, `wait_world` (until the world has loaded and
-meshed; a missing or failed world fails the run) and `wait_joined` (until the session plays,
-its world perhaps still loading; likewise). They exist to reproduce a state and capture
-its picture:
+commands `ticks <n>` (until the server has run n more ticks: our own server runs them back
+to back, as fast as it can, so `ticks 600`, half a minute of play, takes a second or two;
+someone else's server keeps its time), `wait <frames>`, `sleep <seconds>` (the clock's
+time: for what the clock decides, a fade, a toast; play is `ticks`), `wait_world` (until
+the world has loaded and meshed; a missing or failed world fails the run) and `wait_joined`
+(until the session plays, its world perhaps still loading; likewise). They exist to
+reproduce a state and capture its picture:
 
 ```
 --exec "singleplayer; wait_world; screenshot world; wait 3; quit"
+--exec "singleplayer; wait_world; /time set noon; ticks 400; wait_world; screenshot later; quit"
 --exec "screen options"
 --exec "set debug.net_trace 1" --check fly
 ```
