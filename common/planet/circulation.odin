@@ -101,21 +101,52 @@ itcz_lat :: proc(l: Land, declination: f64, allocator := context.temp_allocator)
 	return out
 }
 
+// Land_Windows: for each cell, the land cells within `reach` columns of it on its row
+// (the row wraps), summed down the rows (sums[j * w + i]: rows 0..<j), so the land of a
+// band of rows is the difference of two sums rather than a scan of the band.
+@(private = "file")
+Land_Windows :: struct {
+	reach: int,
+	sums:  []i32, // (height + 1) * width
+}
+
+@(private = "file")
+land_windows_make :: proc(l: Land, reach: int, allocator := context.allocator) -> Land_Windows {
+	w, h := l.width, l.height
+	sums := make([]i32, (h + 1) * w, allocator)
+	for j in 0 ..< h {
+		count := i32(0) // land within reach of column 0, then slid along the row
+		for d in -reach ..= reach {
+			if l.is_land[j * w + (d + w) % w] {count += 1}
+		}
+		for i in 0 ..< w {
+			sums[(j + 1) * w + i] = sums[j * w + i] + count
+			if l.is_land[j * w + (i - reach + w) % w] {count -= 1}
+			if l.is_land[j * w + (i + reach + 1) % w] {count += 1}
+		}
+	}
+	return {reach, sums}
+}
+
 // land_share is the share of land cells among the cells of column i (and its neighbours
 // within `reach`) whose latitudes are between lat_a and lat_b.
 @(private = "file")
-land_share :: proc(l: Land, i, reach: int, lat_a, lat_b: f64) -> f64 {
+land_share :: proc(l: Land, lw: Land_Windows, i: int, lat_a, lat_b: f64) -> f64 {
 	w, h := l.width, l.height
 	lo, hi := min(lat_a, lat_b), max(lat_a, lat_b)
-	n, land := 0, 0
-	for j in 0 ..< h {
-		lat := climate_lat(h, j)
-		if lat < lo || lat > hi {continue}
-		for d in -reach ..= reach {
-			n += 1
-			if l.is_land[j * w + (i + d + w) % w] {land += 1}
-		}
+	// The rows' latitudes fall with j, so the band is the rows first..<last.
+	first := 0
+	for b := h; first < b; {
+		mid := (first + b) / 2
+		if climate_lat(h, mid) > hi {first = mid + 1} else {b = mid}
 	}
+	last := first
+	for b := h; last < b; {
+		mid := (last + b) / 2
+		if climate_lat(h, mid) >= lo {last = mid + 1} else {b = mid}
+	}
+	n := (last - first) * (2 * lw.reach + 1)
+	land := int(lw.sums[last * w + i] - lw.sums[first * w + i])
 	return f64(land) / f64(max(n, 1))
 }
 
@@ -128,7 +159,7 @@ winds_build :: proc(l: Land, b: Basin, month: int, allocator := context.allocato
 	decl := solar_declination(days[month])
 	s := decl / AXIAL_TILT
 	itcz := itcz_lat(l, decl)
-	reach := max(w / 64, 1)
+	lw := land_windows_make(l, max(w / 64, 1), context.temp_allocator)
 	out := make([]Wind, w * h, allocator)
 	for j in 0 ..< h {
 		lat := climate_lat(h, j)
@@ -158,8 +189,8 @@ winds_build :: proc(l: Land, b: Basin, month: int, allocator := context.allocato
 			// The monsoon: onshore and westerly in the summer, where the sea is equatorward
 			// and the land poleward.
 			if summer && abs(lat) > 5 && abs(lat) < 30 {
-				poleward := land_share(l, i, reach, lat + hs * 10, lat + hs * 25)
-				equatorward := land_share(l, i, reach, lat - hs * 15, lat)
+				poleward := land_share(l, lw, i, lat + hs * 10, lat + hs * 25)
+				equatorward := land_share(l, lw, i, lat - hs * 15, lat)
 				if poleward > 0.5 && equatorward < 0.5 {u, v = 0.7, hs * 0.2}
 			}
 			out[k] = {i8(math.round(u * WIND_UNIT)), i8(math.round(v * WIND_UNIT))}
