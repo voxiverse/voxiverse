@@ -253,7 +253,8 @@ game_action_pressed :: proc(s: ^Session, index: int) -> bool {
 // own keys' state from the input (game_key_pressed).
 game_screen_sync :: proc(app: ^App) {
 	s := app.session
-	if s != nil && !s.binds.loaded {game_binds_load(app, s)}
+	// (read once the session plays: before Welcome it knows no game)
+	if s != nil && s.state == .Playing && !s.binds.loaded {game_binds_load(app, s)}
 	if s != nil {
 		b := &s.binds
 		s.game_pressed = {}

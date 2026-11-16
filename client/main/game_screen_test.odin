@@ -320,3 +320,20 @@ test_a_games_keys_are_saved_for_it :: proc(t: ^testing.T) {
 	testing.expect_value(t, s.binds.actions[0], platform.Key.Z)
 	testing.expect_value(t, s.binds.keys[1], platform.Key.S)
 }
+
+// A game's bindings are read once the session plays its game (before Welcome the session
+// knows none): its actions have their keys.
+@(test)
+test_a_games_keys_are_read_when_it_plays :: proc(t: ^testing.T) {
+	f: Shop_Fixture
+	shop_fixture(t, &f)
+	defer shop_fixture_destroy(&f)
+	app, s := f.app, f.s
+	s.game, s.state = {}, .Connecting
+	shop_frame(app)
+	s.game, s.state = SHOP_GAME, .Playing
+	s.game.actions = {"Shop"}
+	shop_frame(app)
+	keys := engine.action_keys(&app.settings.keys, .Game_1, engine.game_binds(app))
+	testing.expect_value(t, keys[0], platform.Key.Z)
+}
