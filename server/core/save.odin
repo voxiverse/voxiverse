@@ -304,6 +304,7 @@ world_stage :: proc(w: ^World) -> bool {
 	if w.economy != nil && w.economy.dirty && !economy_write(w) {ok = false}
 	if !write_entities(w) {ok = false}
 	if !write_stats(w) {ok = false}
+	if save := w.server.config.game.world_save; save != nil && w.game_open {save(w.server, w)}
 	return ok
 }
 

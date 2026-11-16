@@ -16,6 +16,7 @@ characters/<account>/<name>.json   (players/<name>.json: a character file from b
 worlds/<address>/world.cfg, entities.cfg, protections.cfg
 worlds/<address>/interventions.vxi            interventions log format 1
 worlds/<address>/economy.vxe                  economy format 1 (planet worlds)
+worlds/<address>/<game>.<name>                the game's own files of the world (Game.world_files: docs/games.md)
 worlds/<address>/regions/r.<x>.<z>.vxr      region format 5
 worlds/<address>/journal/<seq>.vxj
 backups/g<generation>-<UTC time>/, pre-migration-<from>/, pre-restore-g<N>/

@@ -100,6 +100,8 @@ Game :: struct {
 	client_state:  typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none
 	entity_data:   typeid, // its record on each entity of its pack's kinds (entity_data): zero at spawn, saved with the world; nil: none
 	stats:         []Game_Stat, // the statistics it keeps of its players (stat_count, stat_world): with the character, shown with the engine's
+	world_state:   typeid, // its state for each world (world_state): zero when the world opens, freed with it; nil: none
+	world_files:   []World_File, // the files it keeps in each world's directory (world_file_read, world_file_write)
 	configure:     proc(config: ^Config), // before anything else: may change the config
 	start:         proc(s: ^Server) -> bool, // the session is set up, no tick has run (false: start fails)
 	stop:          proc(s: ^Server), // after the last tick, before the last save
@@ -142,6 +144,9 @@ Game :: struct {
 	harming:       proc(s: ^Server, h: ^Harming), // any harm about to be done, to a player or an entity: may change h.amount (0 or less: none)
 	save:          proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
 	load:          proc(s: ^Server, text: string) -> (ok: bool), // its game.cfg, after start, before the first tick (a universe that has one); false: start fails
+	world_opened:  proc(s: ^Server, w: ^World), // w is open (started, its entities loaded; the home world after start and load): the game makes what it keeps of it (world_state, its files read)
+	world_closed:  proc(s: ^Server, w: ^World), // w closes (unloaded, or the session stops), after its last save: the game frees what it made of it
+	world_save:    proc(s: ^Server, w: ^World), // a save captures w at this tick (with the universe, or w alone as it unloads): the game stages its files (world_file_write)
 	pack:          game.Pack_Source, // its own pack (games/<game>/pack, named for the game; its shared package's): loaded only where it is played (game_packs)
 }
 
@@ -299,6 +304,10 @@ start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 		log.errorf("server game's statistics cannot be kept game=%s: %s", config.game.id, why)
 		return false
 	}
+	if why := world_files_valid(config.game.world_files); why != "" {
+		log.errorf("server game's world files cannot be kept game=%s: %s", config.game.id, why)
+		return false
+	}
 	if config.game.configure != nil {config.game.configure(&config)}
 	if config.net != nil && (!config.stepped || config.conditions != {}) {
 		log.warnf("a simulated network needs a stepped server and no conditions of its own")
@@ -431,6 +440,7 @@ start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 		teardown(s, world = true)
 		return false
 	}
+	world_open_game(s.home)
 
 	if !config.stepped {
 		s.thread = thread.create(server_main, name = "server")

@@ -189,6 +189,9 @@ world, its configure choosing the Earth generator); the engine's own tests play
 | `action(s, c, index)` | A player pressed one of the game's own actions (`index` into the client part's `actions`): an ability, a potion. Not while dead | the server's |
 | `request(s, c, r)` | A player's client part sent one of the game's requests ([below](#requests)), decoded and checked: `core.request_value(s, r, T)` reads it. Whether the player may, can afford it and where it goes is the hook's to judge | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
+| `world_opened(s, w)` | A world is open: the home world right after `start` (and `load`), any other as it loads (a player travels there), its entities loaded. The game makes what it keeps of it: its `world_state`, its files read back (`world_file_read`) | the caller's for the home world, else the server's |
+| `world_save(s, w)` | A save captures world `w` at this tick (with the universe, or `w` alone as it unloads): the game stages its files (`world_file_write`), in the same transaction | as `save` |
+| `world_closed(s, w)` | A world closes (unloaded when nobody has been in it for a while, or the session stopping), after its last save: the game frees what it made of it | the server's, or the caller's at `stop` |
 | `save(s, out)` | A save captures this tick (an autosave, `/save`, the last one): the game writes what it keeps to the `strings.Builder` as text, saved with the universe as `game.cfg` in the same transaction ([saves.md](saves.md)) | the server's (the last save: the caller's) |
 | `load(s, text) -> bool` | Right after `start`, in a universe that has a `game.cfg`: its text; false: the game does not understand it, and the universe is refused | the caller's |
 
@@ -206,7 +209,8 @@ the engine commit that makes it for games, documented where it is declared.
 | Name | What it is for |
 |---|---|
 | `Game`, `Config`, `Server`, `Client`, `World`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change`, `Pickup`, `Request` | The game itself, the config `configure` changes, the session, a player, a world, and what its hooks are told |
-| `game_state(s, T)`, `game_client_state(s, c, T)`, `entity_data(w, h, T)` | The game's state, for the session and for a seat; its record on an entity of its kinds ([below](#the-games-state)) |
+| `game_state(s, T)`, `game_client_state(s, c, T)`, `world_state(w, T)`, `entity_data(w, h, T)` | The game's state, for the session, for a seat and for a world; its record on an entity of its kinds ([below](#the-games-state)) |
+| `World_File`, `world_file_read(w, name)`, `world_file_write(w, name, data)`, `world_file_aside(w, name)` | The files it keeps with each world (`Game.world_files`): read one back as saved (false: none), stage one in the save being made (its `world_save` hook), move a damaged one aside ([below](#the-games-state)) |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `request_value(s, r, T)` | One of its requests, in its `request` hook, as its type ([below](#requests)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
@@ -431,6 +435,19 @@ A game declares two types and the server owns their memory (the session's arena,
 - `server_state`: one per session, zero when `start` is called: `core.game_state(s, T)`.
 - `client_state`: one per seat, zero for each player who joins (the seat's block is zeroed
   when it is freed): `core.game_client_state(s, c, T)`.
+
+- `world_state`: one per world, zero when the world opens (before `world_opened`), in the
+  world's memory and freed with it: `core.world_state(w, T)`. What the game makes of a world
+  beyond it (a model it builds, a thread it starts) it makes in `world_opened` and frees in
+  `world_closed`.
+- `world_files`: the files it keeps in each world's directory, `[]core.World_File{{name =
+  "economy.vxe"}}`, saved as `<game>.<name>` (`sandbox.economy.vxe`) beside the world's own
+  ([saves.md](saves.md)). Its `world_save` hook stages them (`core.world_file_write(w, name,
+  bytes)`, in the save's transaction: written whole with the rest or not at all), its
+  `world_opened` reads them back (`core.world_file_read(w, name)`); one it cannot read it moves
+  aside (`core.world_file_aside`: `<file>.bad`, logged) and goes on without it. A world not
+  saved (a scratch world) keeps none. `start` refuses a name that is not 1 to 32 bytes of
+  `a-z`, `0-9`, `_` and `.`, or one named twice.
 
 - `entity_data`: a record on each entity of the game's own kinds (its pack's,
   `<game>:<name>`): `core.entity_data(w, h, T)`, nil for an entity of another kind. Zero

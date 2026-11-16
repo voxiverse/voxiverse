@@ -1,10 +1,12 @@
 package core
 
 import "base:runtime"
+import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 import "core:testing"
 
@@ -332,4 +334,118 @@ test_world_keeps_an_area :: proc(t: ^testing.T) {
 	world_release(w)
 	harness_step(&sess.h, UNLOAD_SWEEP_TICKS)
 	testing.expect(t, chunks_get(&w.chunks, game.chunk_of(area.lo)) == nil, "released, it stayed")
+}
+
+// A game keeps state and files of its own for each world: made when the world opens (the
+// home world after start, another as it loads), its files staged by each save and read back
+// when the universe opens again, freed when the world closes (unloaded, or the session
+// stops); a damaged file is moved aside; a name it may not keep is refused at start.
+@(private = "file")
+Notes_Game :: struct {
+	opened, closed, saved: int,
+}
+
+@(private = "file")
+Notes :: struct {
+	n:    int,
+	read: bool, // its file was there when it opened
+}
+
+@(private = "file")
+NOTES_GAME :: Game {
+	info = {id = "notes", name = "Notes", description = "Keeps a note in each world."},
+	server_state = Notes_Game,
+	world_state = Notes,
+	world_files = {{name = "note.txt"}},
+	world_opened = proc(s: ^Server, w: ^World) {
+		game_state(s, Notes_Game).opened += 1
+		if data, ok := world_file_read(w, "note.txt"); ok {
+			n, parsed := strconv.parse_int(string(data))
+			if !parsed {
+				world_file_aside(w, "note.txt")
+				return
+			}
+			world_state(w, Notes)^ = {n, true}
+		}
+	},
+	world_closed = proc(s: ^Server, w: ^World) {game_state(s, Notes_Game).closed += 1},
+	world_save = proc(s: ^Server, w: ^World) {
+		game_state(s, Notes_Game).saved += 1
+		world_file_write(w, "note.txt", transmute([]u8)fmt.tprint(world_state(w, Notes).n))
+	},
+}
+
+@(test)
+test_a_game_keeps_files_of_its_own_in_each_world :: proc(t: ^testing.T) {
+	dir := scratch_dir("world_files")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	cfg := grief_config(dir)
+	cfg.game = NOTES_GAME
+	cfg.world_idle = 0.5
+	g, ok := grief_open(t, dir, cfg)
+	if !ok {
+		grief_close(g)
+		return
+	}
+	s := grief_srv(g)
+	notes := game_state(s, Notes_Game)
+	testing.expect_value(t, notes.opened, 1)
+	world_state(s.home, Notes).n = 42
+	testing.expect(t, save(s))
+	path := filepath.join({s.home.dir, "notes.note.txt"}, context.temp_allocator) or_else ""
+	text, _ := os.read_entire_file_from_path(path, context.temp_allocator)
+	testing.expect_value(t, string(text), "42")
+
+	// Another world opens as it loads and closes as it unloads, saved first.
+	other := world_load(s, starmap.address_derive(4242))
+	if !testing.expect(t, other != nil, "no second world") {
+		grief_close(g)
+		return
+	}
+	testing.expect_value(t, notes.opened, 2)
+	world_state(other, Notes).n = 7
+	run(g, 60)
+	testing.expect_value(t, len(s.worlds), 1)
+	testing.expect_value(t, notes.closed, 1)
+	other_path :=
+		filepath.join(
+			{dir, "worlds", starmap.address_dir(starmap.address_derive(4242)), "notes.note.txt"},
+			context.temp_allocator,
+		) or_else ""
+	text, _ = os.read_entire_file_from_path(other_path, context.temp_allocator)
+	testing.expect_value(t, string(text), "7")
+	grief_close(g)
+
+	// Opened again: the home world's note is read back.
+	g2, ok2 := grief_open(t, dir, cfg)
+	if ok2 {
+		home := grief_srv(g2).home
+		testing.expect_value(t, world_state(home, Notes)^, Notes{42, true})
+		grief_close_keep(g2)
+	}
+	grief_close(g2)
+
+	// A file the game cannot read is moved aside; the world opens without it.
+	_ = os.write_entire_file(path, transmute([]u8)string("forty-two"))
+	quiet := context.logger // (opening reports it as an error, quieted here)
+	quiet.lowest_level = .Fatal
+	context.logger = quiet
+	g3, ok3 := grief_open(t, dir, cfg)
+	if ok3 {
+		testing.expect_value(t, world_state(grief_srv(g3).home, Notes)^, Notes{})
+		testing.expect(t, os.exists(fmt.tprintf("%s.bad", path)), "the damaged file stayed")
+		grief_close_keep(g3)
+	}
+	grief_close(g3)
+
+	// Names a game may not keep.
+	for bad in ([]string{"", "../note", "Note", "a/b"}) {
+		game := NOTES_GAME
+		game.world_files = {{name = bad}}
+		testing.expectf(t, harness_refused({game = game}), "%q was kept", bad)
+	}
+	game := NOTES_GAME
+	game.world_files = {{name = "note.txt"}, {name = "note.txt"}}
+	testing.expect(t, harness_refused({game = game}), "a name twice was kept")
 }

@@ -65,6 +65,8 @@ World :: struct {
 	noted_changes:       [dynamic]Noted_Change, // block changes the game's block_changed hook is told before its tick (changes.odin; heap)
 	noted_dropped:       int, // ... and those past MAX_NOTED_CHANGES this tick
 	revisit:             map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (server/store/compact.odin)
+	game_state:          []byte, // the game's state for this world (world_state; the world's arena)
+	game_open:           bool, // the game's world_opened ran: its world_closed runs when the world closes
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -153,6 +155,10 @@ world_start :: proc(w: ^World) -> bool {
 // world_close frees everything the world has (its save written first by
 // the caller).
 world_close :: proc(w: ^World) {
+	if w.game_open {
+		w.game_open = false
+		if closed := w.server.config.game.world_closed; closed != nil {closed(w.server, w)}
+	}
 	rollback_free(w)
 	journal_close(w)
 	protections_free(w)
@@ -246,6 +252,7 @@ world_load :: proc(s: ^Server, a: starmap.Address) -> ^World {
 	}
 	w.idle_since = s.tick
 	append(&s.worlds, w)
+	world_open_game(w)
 	log.infof("server world loaded address=%s worlds=%d", starmap.address_dir(a), len(s.worlds))
 	return w
 }
@@ -430,4 +437,94 @@ admin_worlds :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	}
 	notice(s, c, fmt.tprintf("%d loaded, %d saved", len(s.worlds), saved))
 	return true
+}
+
+// ---- what the game keeps of each world ----
+// A game may keep state of its own for each world (Game.world_state, zero when the world
+// opens, in the world's arena) and files in its directory (Game.world_files: saved as
+// `<game>.<name>`, staged in the save transaction by its world_save hook, read back by its
+// world_opened hook). docs/games.md, the game's state; docs/saves.md.
+
+// World_File: a file a game keeps in each world's directory.
+World_File :: struct {
+	name: string, // its name after the game's id and a dot: [a-z0-9_.], at most MAX_WORLD_FILE_NAME bytes
+}
+
+MAX_WORLD_FILE_NAME :: 32
+
+// world_files_valid: "" for names a game may keep, else why not.
+@(private)
+world_files_valid :: proc(files: []World_File) -> string {
+	for f, i in files {
+		if len(f.name) == 0 || len(f.name) > MAX_WORLD_FILE_NAME {
+			return fmt.tprintf("%q: a name is 1 to %d bytes", f.name, MAX_WORLD_FILE_NAME)
+		}
+		for ch in f.name {
+			if !(ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '.') {
+				return fmt.tprintf("%q: a name is a-z, 0-9, _ and .", f.name)
+			}
+		}
+		for g in files[:i] {if g.name == f.name {return fmt.tprintf("%q is named twice", f.name)}}
+	}
+	return ""
+}
+
+// world_open_game makes the game's state for w and tells the game w is open.
+@(private)
+world_open_game :: proc(w: ^World) {
+	g := &w.server.config.game
+	if g.world_state != nil {
+		info := type_info_of(g.world_state)
+		w.game_state = make([]byte, info.size, virtual.arena_allocator(&w.arena))
+	}
+	w.game_open = true
+	if g.world_opened != nil {g.world_opened(w.server, w)}
+}
+
+// world_state: the game's state for w, as the type it declared (Game.world_state). Zero when
+// the world opens; its memory is the world's, freed when it closes.
+world_state :: proc(w: ^World, $T: typeid) -> ^T {
+	assert(w.server.config.game.world_state == T, "not the game's world_state")
+	return (^T)(raw_data(w.game_state))
+}
+
+// world_file_path: where the game's file `name` of w is (it must be one of Game.world_files).
+@(private)
+world_file_path :: proc(w: ^World, name: string) -> string {
+	g := &w.server.config.game
+	declared := false
+	for f in g.world_files {declared ||= f.name == name}
+	assert(declared, "not one of the game's world_files")
+	file := strings.concatenate({g.id, ".", name}, context.temp_allocator)
+	return filepath.join({w.dir, file}, context.temp_allocator) or_else file
+}
+
+// world_file_read: the game's file `name` of w as saved (temporary memory); false when there is
+// none (a new world, a world not saved, a file never written).
+world_file_read :: proc(w: ^World, name: string) -> ([]u8, bool) {
+	if w.dir == "" {return nil, false}
+	path := world_file_path(w, name)
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {
+		if err != .Not_Exist {log.errorf("server cannot read path=%s error=%v", path, err)}
+		return nil, false
+	}
+	return data, true
+}
+
+// world_file_write: the game's file `name` of w is data, from the save being made (its
+// world_save hook: in the save's transaction); outside a save it is replaced at once. False
+// if it could not be (logged). A world not saved keeps nothing: true.
+world_file_write :: proc(w: ^World, name: string, data: []u8) -> bool {
+	if w.dir == "" {return true}
+	return store_write(w.server, world_file_path(w, name), data)
+}
+
+// world_file_aside: the game's file `name` of w is damaged: it is moved aside (`.bad`, as a
+// damaged region is) and logged, and the game goes on without it.
+world_file_aside :: proc(w: ^World, name: string) {
+	if w.dir == "" {return}
+	path := world_file_path(w, name)
+	log.errorf("server game's world file is damaged, moved aside path=%s", path)
+	os.rename(path, fmt.tprintf("%s.bad", path))
 }
