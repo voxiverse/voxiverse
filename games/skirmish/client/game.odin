@@ -37,6 +37,8 @@ GAME :: engine.Game {
 	no_hotbar  = true, // (a commander is bodiless: its digits are the control groups)
 }
 
+SMALL_UNIT :: 16 // pixels: a unit drawn shorter than this gets its side's square
+
 CAMERA :: engine.Game_Camera {
 	kind     = .Free,
 	distance = 26,
@@ -299,6 +301,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	if team != 0 {overview.fog_draw(&v.fog, s, {0, 0, 0, 110}, {0, 0, 0, 200})}
 	overview.rings_draw(&v.sel, s, 0.55, skirmish.TEAM_COLORS[team])
 	engine.entity_bars(s, ctx)
+	overview.small_marks(s, ctx, SMALL_UNIT, skirmish.TEAM_COLORS[:])
 
 	// The panel along the bottom: the minimap, what is picked, the commands.
 	panel := ui.cut_bottom(&rest, 180)
@@ -466,10 +469,25 @@ picked :: proc(s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect) {
 // Slot: one of the command panel's buttons.
 Slot :: struct {
 	label: string,
-	cost:  string,
+	cost:  string, // its cost; what it lacks when it is off (said in the warning colour)
 	act:   proc(s: ^engine.Session, arg: int),
 	arg:   int,
 	off:   bool,
+}
+
+// short_text: what a side's stock lacks of a cost ("" when it has it all).
+short_text :: proc(stock, cost: skirmish.Cost) -> string {
+	ore := max(int(cost[.Ore]) - int(stock[.Ore]), 0)
+	wood := max(int(cost[.Wood]) - int(stock[.Wood]), 0)
+	switch {
+	case ore > 0 && wood > 0:
+		return skirmish.tr(.Short_Both, ore, wood)
+	case ore > 0:
+		return skirmish.tr(.Short_Ore, ore)
+	case wood > 0:
+		return skirmish.tr(.Short_Wood, wood)
+	}
+	return ""
 }
 
 // commands: the panel's buttons for what is picked, each with its key.
@@ -487,12 +505,13 @@ commands :: proc(s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect) {
 	case workers:
 		for b, i in ([4]skirmish.Building{.Barracks, .Workshop, .Tower, .Depot}) {
 			info := skirmish.BUILDINGS[b]
+			short := short_text(stock, info.cost)
 			slots[i] = {
 				skirmish.tr(info.name),
-				cost_text(info.cost),
+				short if short != "" else cost_text(info.cost),
 				place,
 				int(b),
-				!skirmish.can_afford(stock, info.cost),
+				short != "",
 			}
 		}
 		slots[4] = {skirmish.tr(.Command_Stop), "", stop, 0, false}
@@ -505,12 +524,14 @@ commands :: proc(s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect) {
 		for u in skirmish.Unit {
 			if u not_in skirmish.BUILDINGS[b.building].trains {continue}
 			info := skirmish.UNITS[u]
+			short := short_text(stock, info.cost)
+			why := skirmish.tr(.Unbuilt) if b.built < 100 else short
 			slots[i] = {
 				skirmish.tr(info.name),
-				cost_text(info.cost),
+				why if why != "" else cost_text(info.cost),
 				train,
 				int(u),
-				b.built < 100 || !skirmish.can_afford(stock, info.cost),
+				why != "",
 			}
 			i += 1
 		}
@@ -532,7 +553,7 @@ commands :: proc(s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect) {
 			{mid.x, mid.y + t.row_height, mid.w, mid.h},
 			slot.cost,
 			size,
-			t.text_muted,
+			t.warning if slot.off else t.text_muted,
 			.Center,
 		)
 		ui.draw_text(

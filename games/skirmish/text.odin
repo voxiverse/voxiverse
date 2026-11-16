@@ -35,6 +35,10 @@ Text :: enum u8 {
 	Cost_Ore, // {0}: ore
 	Cost_Wood, // {0}: wood
 	Cost_Both, // {0}: ore, {1}: wood
+	Short_Ore, // {0}: ore lacking
+	Short_Wood, // {0}: wood lacking
+	Short_Both, // {0}: ore, {1}: wood lacking
+	Unbuilt,
 	Selected_Units, // {0}: how many
 	Selected_One, // {0}: what, {1}: health, {2}: most
 	Building_Progress, // {0}: what, {1}: percent
@@ -82,6 +86,10 @@ TEXT_EN := [Text]string {
 	.Cost_Ore              = "({0})",
 	.Cost_Wood             = "({0}w)",
 	.Cost_Both             = "({0}/{1}w)",
+	.Short_Ore             = "{0} ore short",
+	.Short_Wood            = "{0} wood short",
+	.Short_Both            = "{0} ore, {1} wood short",
+	.Unbuilt               = "not built yet",
 	.Selected_Units        = "{0} units",
 	.Selected_One          = "{0}  {1}/{2}",
 	.Building_Progress     = "{0}: building {1}%",
