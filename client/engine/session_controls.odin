@@ -36,13 +36,18 @@ session_use_entity :: proc(s: ^Session) -> bool {
 }
 
 // session_use_block uses the aimed block if it is one that is used (a chest
-// opens: the server answers with its contents; a door turns); false if it is not.
+// opens: the server answers with its contents; a door turns; a game's machine:
+// its game answers, its panel); false if it is not.
 session_use_block :: proc(s: ^Session) -> bool {
 	hit, aimed := s.aim.?
 	if !aimed {return false}
 	b, _ := world_block(&s.world, hit.block)
 	if s.reg.blocks.types[s.reg.blocks.type_of[b]].use == .Toggle_Open {
 		return session_toggle(s, hit.block, b)
+	}
+	if game.block_entity_kind(&s.reg.blocks, b) == .Machine {
+		send_message(s, protocol.Use_Block{hit.block, s.prediction.next_sequence - 1})
+		return true
 	}
 	if b != .Chest {return false}
 	if !s.inventory.chest_open {
