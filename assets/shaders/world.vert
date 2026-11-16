@@ -18,6 +18,7 @@ layout(location = 2) in ivec4 in_chunk;
 layout(location = 0) out vec3 out_uvw; // texture coordinates and layer
 layout(location = 1) out vec3 out_light;
 layout(location = 2) out vec3 out_pos; // from the camera chunk's origin
+out float gl_ClipDistance[1]; // the cut: what is above it is clipped away
 
 // +x -x +y -y +z -z, then a plant's two diagonal planes.
 const float FACE_LIGHT[8] = float[](0.80, 0.80, 1.00, 0.50, 0.65, 0.65, 0.90, 0.90);
@@ -63,6 +64,9 @@ void main() {
 	}
 	vec3 pos = chunk_offset + local;
 	gl_Position = s.view_proj * vec4(pos, 1.0);
+	// The cut (a top-down camera's roof): clipped by the rasterizer, so the fragments
+	// keep early depth.
+	gl_ClipDistance[0] = float(s.camera_chunk.w - s.camera_chunk.y * 16) - pos.y;
 
 	uint sky = (in_layer >> 12) & 15u;
 	uint block = (in_layer >> 16) & 15u;

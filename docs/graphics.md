@@ -75,6 +75,12 @@ with one `vkCmdDrawIndexedIndirect`:
   `firstInstance` is the mesh's slot, so the hardware fetches that mesh's record. The
   chunk's offset from the camera's chunk is computed in integers from the scene's
   `camera_chunk`, so positions stay exact far from the origin.
+- **The cut**: a camera may leave out the world from a height up (`render.Camera.cut`, a
+  game's top-down camera: [games.md](games.md)), so a roof does not hide the avatar under it.
+  The scene carries it in `camera_chunk.w` (`NO_CUT`: none) and `world.vert` writes it as
+  a clip distance, so the rasterizer clips every layer's faces there and the fragment
+  shaders keep early depth (no `discard`). It needs `shaderClipDistance`, a device
+  requirement.
 - **Vertices** (8 bytes each) come through vertex input (binding 0); the command's
   `vertexOffset` is the run's first vertex in the shared buffer, and the static quad index
   buffer supplies the rest. Pulling them by address (`gl_VertexIndex`) cost `gpu_world`

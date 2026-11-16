@@ -139,6 +139,7 @@ on the main thread, in the frame.
 | `debug(s) -> string` | Every frame with F3 open: one line of the overlay, shown as `game <id>: <line>` ("": none) |
 | `scoreboard(s, board)` | Every frame the player list's key (<kbd>P</kbd>, `Player_List`) is held: the game fills `board` (an `engine.Scoreboard`: a title, `scoreboard_columns(board, "Frags", ...)`, at most `SCOREBOARD_COLUMNS`, and `scoreboard_row(board, name, cells..., you = mine)` per player, in the order to show), which the list shows in place of the engine's names, kills, deaths and pings |
 | `commands` | Console commands (`engine.Command_Spec`), there while a world plays the game: `help` lists them and Tab completes them |
+| `camera(s) -> Game_Camera` | Every frame: the camera the game wants (`.Player`: the player's own, <kbd>F5</kbd>; `.First`, `.Third`; `.Top_Down`: over the head, `distance` blocks away, looking `angle` degrees down along `heading`, the world cut `cut` blocks above the feet so a roof does not hide the avatar). Under a top-down camera the mouse is free: the pointer aims (`s.aim`, `s.aim_entity`, and the point under it, `s.pointer`), the avatar faces it, and the movement keys move across the screen; the input sent is an ordinary one, so the server stays the judge and prediction holds |
 
 A game draws in the world from its `hud` hook (`client/engine/marks.odin`), through the
 view the frame is drawn with: `world_point(s, ctx, p)` is where a point of the world is on

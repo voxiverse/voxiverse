@@ -240,6 +240,8 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 			multiDrawIndirect         = true,
 			drawIndirectFirstInstance = true,
 			pipelineStatisticsQuery   = supported.pipelineStatisticsQuery,
+			// The world's cut (a top-down camera's roof: world.vert).
+			shaderClipDistance        = true,
 		},
 	}
 	device_extensions := make([dynamic]cstring, context.temp_allocator)
@@ -416,6 +418,7 @@ supports_required_features :: proc(device: vk.PhysicalDevice) -> bool {
 	return bool(
 		features.features.multiDrawIndirect &&
 		features.features.drawIndirectFirstInstance &&
+		features.features.shaderClipDistance &&
 		features13.dynamicRendering &&
 		features13.synchronization2 &&
 		features13.shaderDemoteToHelperInvocation &&

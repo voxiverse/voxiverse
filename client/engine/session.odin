@@ -107,7 +107,9 @@ Session :: struct {
 	world_init:       bool,
 	camera:           View, // the eyes, from the prediction; looking turns it every frame
 	view:             View, // what is drawn from: the eyes, or the third person camera, with the bobbing (view_camera.odin)
-	camera_mode:      Camera_Mode, // F5 (not saved)
+	camera_mode:      Camera_Mode, // F5 (not saved); what the game's camera says, while it chooses
+	game_camera:      Game_Camera, // the game's choice this frame (view_camera.odin)
+	pointer:          Maybe([3]f64), // the top-down camera: the point of the world under the pointer
 	pull:             f64, // the third person camera's distance now (pulled in against walls, easing back out)
 	fov_kick:         f32, // 0 ..= 1: how far the sprint widening has come
 	bob_phase:        f32,
@@ -490,8 +492,14 @@ session_update :: proc(
 	}
 	s.clock = game.advance_time(s.clock, f64(dt), &s.rules)
 	if !s.config.still_clouds {s.cloud_drift += f64(dt) * render.CLOUD_SPEED}
+	camera_game(s)
+	query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
 	if look {
-		look_update(&s.camera, input, actions, settings, dt, zoom_factor(s))
+		if camera_pointer(s) {
+			pointer_update(s, input.mouse, query)
+		} else {
+			look_update(&s.camera, input, actions, settings, dt, zoom_factor(s))
+		}
 		movement_toggles(s, actions, settings)
 		if action_pressed(actions, .Jump) {
 			if s.frame_seconds - s.last_jump < DOUBLE_TAP_SECONDS {s.toggle_fly = true}
@@ -501,7 +509,6 @@ session_update :: proc(
 	// Fixed ticks, like the server's; a long hitch is not caught up on.
 	s.tick_time += dt
 	if s.tick_time > 4 * game.TICK_SECONDS {s.tick_time = game.TICK_SECONDS}
-	query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
 	for s.tick_time >= game.TICK_SECONDS {
 		base.profile_scope("prediction tick")
 		s.tick_time -= game.TICK_SECONDS
@@ -534,6 +541,15 @@ session_update :: proc(
 	s.camera.position = eyes + {0, s.eye_height, 0}
 	s.feet = eyes
 	base.profile_begin("aim (raycasts)") // (no return before its end)
+	if !camera_pointer(s) {aim_update(s, query)}
+	base.profile_end()
+	camera_update(s, actions, settings, query, dt, look)
+	world_update(&s.world, camera_chunk(&s.camera))
+}
+
+// aim_update: what the eyes aim at, straight ahead within reach: a block (s.aim), and
+// an entity in front of it (s.aim_entity), which takes the click instead.
+aim_update :: proc(s: ^Session, query: game.Block_Query) {
 	s.aim = nil
 	f := render.forward(s.camera.yaw, s.camera.pitch)
 	if hit, ok := game.raycast(
@@ -544,16 +560,12 @@ session_update :: proc(
 	); ok {
 		s.aim = hit
 	}
-	// An entity in front of the aimed block takes the click instead.
 	s.aim_entity = nil
 	nearest := s.aim.?.distance if s.aim != nil else f64(s.rules.reach)
 	if id, _, ok := entity_aimed(s, s.camera.position, {f64(f.x), f64(f.y), f64(f.z)}, nearest);
 	   ok {
 		s.aim_entity = id
 	}
-	base.profile_end()
-	camera_update(s, actions, settings, query, dt, look)
-	world_update(&s.world, camera_chunk(&s.camera))
 }
 
 // movement_toggles: sneak and sprint as Options chooses: held, or toggled by

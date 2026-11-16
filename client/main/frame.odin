@@ -252,10 +252,9 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		// be playing (a remote server, the LAN open), so it runs on.
 		engine.session_freeze(app.session, engine.world_paused(app))
 		// (The pad flight check runs on whatever desktop: focus is given.)
-		platform.set_mouse_captured(
-			w,
-			engine.game_controls(app) && (w.focused || app.fly_test.pad),
-		)
+		// (A top-down camera leaves the pointer free: it aims.)
+		controls := engine.game_controls(app) && (w.focused || app.fly_test.pad)
+		platform.set_mouse_captured(w, controls && !engine.camera_pointer(app.session))
 		conditions := game.Conditions {
 			latency_ms     = app.debug.net_latency_ms,
 			jitter_ms      = app.debug.net_jitter_ms,
@@ -270,7 +269,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			app.settings,
 			conditions,
 			app.last_frame_ms / 1000,
-			w.mouse_captured,
+			w.mouse_captured || (controls && engine.camera_pointer(app.session)),
 		)
 		base.profile_begin("after session (packs, checks, sounds, loading)") // (no return before its end)
 		if app.session.reg_swapped { 	// (joined a server with packs: its textures, sounds and items)

@@ -25,6 +25,7 @@ Game :: struct {
 	debug:      proc(s: ^Session) -> string, // its line of the F3 overlay ("": none; temporary memory)
 	scoreboard: proc(s: ^Session, board: ^Scoreboard), // fill board: what the player list shows while its key is held, in place of the engine's
 	commands:   []Command_Spec, // its console commands, there while a world plays it
+	camera:     proc(s: ^Session) -> Game_Camera, // the camera it wants, every frame (nil: the player's own, F5)
 }
 
 // SCOREBOARD_COLUMNS: the most columns a game's scoreboard has besides the name.

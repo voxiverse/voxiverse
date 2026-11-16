@@ -97,7 +97,7 @@ world_cull_check :: proc(p: ^World_Pass, g: ^gpu.Gpu) -> (failures: [dynamic]str
 		(^Scene)(scene.mapped)^ = Scene {
 			view_proj    = camera.view_proj,
 			camera       = {c.eye.x, c.eye.y, c.eye.z, 0},
-			camera_chunk = {CAMERA_CHUNK.x, CAMERA_CHUNK.y, CAMERA_CHUNK.z, 0},
+			camera_chunk = {CAMERA_CHUNK.x, CAMERA_CHUNK.y, CAMERA_CHUNK.z, NO_CUT},
 		}
 		// Neither zero nor what it writes: every command must be written.
 		for &b in commands.mapped[:commands.size] {b = 0xa5}

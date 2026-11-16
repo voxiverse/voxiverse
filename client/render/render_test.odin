@@ -269,3 +269,15 @@ test_cull_reference :: proc(t: ^testing.T) {
 	testing.expect_value(t, stats, Cull_Stats{})
 	testing.expect_value(t, commands, [CULL_LAYERS * CULL_RUNS]Cull_Command{})
 }
+
+// A camera's cut reaches the scene the world's vertex shader reads (its clip distance:
+// nothing at that y or above); with none, the cut is far above anything there is.
+@(test)
+test_scene_carries_the_cut :: proc(t: ^testing.T) {
+	sky := sky_at(0.5)
+	cut := scene_make({chunk = {0, 2, 0}, cut = 37}, sky, 100, 0)
+	testing.expect_value(t, cut.camera_chunk.w, 37)
+	whole := scene_make({chunk = {0, 2, 0}}, sky, 100, 0)
+	testing.expect_value(t, whole.camera_chunk.w, NO_CUT)
+	testing.expect(t, NO_CUT > 256 + 16, "above the world's top")
+}

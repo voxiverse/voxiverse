@@ -15,6 +15,7 @@ View :: struct {
 	position:   [3]f64, // the eyes
 	yaw, pitch: f32, // radians: yaw turns left from -z, pitch up
 	roll:       f32, // radians, the drawn view's sway (view_camera.odin)
+	cut:        Maybe(i32), // nothing of the world at this y or above is drawn (the top-down camera's roof cut)
 }
 
 MOUSE_RADIANS_PER_PIXEL :: 0.0025 // at mouse_sensitivity 1
@@ -48,6 +49,9 @@ player_input :: proc(a: ^Actions, s: ^Session) -> game.Player_Input {
 		pitch = s.camera.pitch,
 		move  = a.move,
 	}
+	if s.game_camera.kind == .Top_Down {
+		in_.move = screen_move(a.move, s.game_camera.heading, s.camera.yaw)
+	}
 	if action_down(a, .Jump) {in_.buttons += {.Jump}}
 	if action_down(a, .Sneak) || s.sneak_on {in_.buttons += {.Sneak}}
 	if action_down(a, .Sprint) || s.sprint_on {in_.buttons += {.Sprint}}
@@ -74,6 +78,7 @@ camera_render :: proc(c: ^View, width, height: i32, fov_degrees: f32) -> render.
 	return {
 		chunk = chunk,
 		position = position,
+		cut = c.cut,
 		view_proj = proj *
 		linalg.matrix4_rotate_f32(c.roll, {0, 0, 1}) *
 		render.view_matrix(position, c.yaw, c.pitch),

@@ -113,6 +113,7 @@ Camera :: struct {
 	chunk:     [3]i32, // the camera's chunk; everything below is relative to its origin
 	position:  [3]f32,
 	view_proj: matrix[4, 4]f32,
+	cut:       Maybe(i32), // nothing of the world at this y (absolute, blocks) or above is drawn
 }
 
 World_Settings :: struct {
