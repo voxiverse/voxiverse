@@ -65,10 +65,10 @@ spent). F3 shows the run, the wave and the field's seed.
 Server commands (the console, `~`):
 
 - `/towers`: the run, its phase, wave, lives and seed, and the rules.
-- `/towers coins <0..5000>`: each builder's coins at the start of a run (60).
-- `/towers lives <1..500>`: the lives (20; before the first wave, this run's too).
-- `/towers waves <1..50>`: the waves to hold (10).
-- `/towers build <5..600>`: seconds to build before the first wave (20).
+- `/towers set coins <0..5000>`: each builder's coins at the start of a run (60).
+- `/towers set lives <1..500>`: the lives (20; before the first wave, this run's too).
+- `/towers set waves <1..50>`: the waves to hold (10).
+- `/towers set build <5..600>`: seconds to build before the first wave (20).
 - `/towers wave`: send the next wave now; `/towers restart`: a new run now.
 
 All but `/towers` need the permission `towers.admin` (the host has it). The rules are kept

@@ -317,10 +317,10 @@ test_the_rules_are_the_admins_and_kept :: proc(t: ^testing.T) {
 	defer rig_stop(rig)
 	s := srv(rig)
 	d := state(s)
-	core.command(&rig.sess.mirror, "towers lives 7")
-	core.command(&rig.sess.mirror, "towers coins 120")
-	core.command(&rig.sess.mirror, "towers waves 3")
-	core.command(&rig.sess.mirror, "towers build 45")
+	core.command(&rig.sess.mirror, "towers set lives 7")
+	core.command(&rig.sess.mirror, "towers set coins 120")
+	core.command(&rig.sess.mirror, "towers set waves 3")
+	core.command(&rig.sess.mirror, "towers set build 45")
 	step(rig, 3)
 	testing.expect_value(
 		t,

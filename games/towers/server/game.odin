@@ -382,7 +382,7 @@ run_put :: proc(s: ^core.Server) {
 	}
 }
 
-// command: /towers shows the run and its settings; /towers <setting> <value> sets one
+// command: /towers shows the run and its settings; /towers set <setting> <value> sets one
 // (coins, lives, waves, build: from the next run, the lives this one's too before its
 // first wave), /towers wave sends the next wave now, /towers restart begins a new run.
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
@@ -445,7 +445,8 @@ save :: proc(s: ^core.Server, out: ^strings.Builder) {
 // its first wave).
 load :: proc(s: ^core.Server, text: string) -> bool {
 	d := state(s)
-	play.settings_load(towers.settings_table(), &d.settings, text) or_return
+	own := play.settings_read(towers.settings_table(), &d.settings, text) or_return
+	if len(own) > 0 {return false}
 	if d.wave == 0 {d.lives = d.settings.lives}
 	return true
 }
