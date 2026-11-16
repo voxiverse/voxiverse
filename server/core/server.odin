@@ -236,6 +236,7 @@ Server :: struct {
 	schema:            protocol.Schema, // what is replicated to clients (state_kinds.odin)
 	time_stopped:      bool, // the clock stands still (the local player paused): clients are given a new anchor every tick
 	frozen:            bool, // (atomic) the local player paused: time and entities stand still
+	hurry:             int, // (atomic) ticks left to run back to back, not waiting for their time (hurry)
 	sim_speed:         int, // the world's steps a tick, as the game set it (sim_speed_set; 0: paused; 1 at start)
 	sim_steps:         int, // this tick's: sim_speed, or 0 while frozen (a game steps its own simulation as many times)
 	failed:            bool, // (atomic)
@@ -579,6 +580,20 @@ freeze :: proc(s: ^Server, on: bool) {
 	sync.atomic_store(&s.frozen, on)
 }
 
+// hurry: the server's next n ticks run one after another, as fast as they go, without
+// waiting for their time (from its own thread; a stepped server's caller steps it at
+// its own pace): a script's `ticks <n>` (client/console/script.odin), so a screenshot's
+// minute of play costs what its ticks cost. Each tick is the same tick, only sooner;
+// players still move by their inputs as they come.
+hurry :: proc(s: ^Server, ticks: int) {
+	if ticks > 0 {sync.atomic_add(&s.hurry, ticks)}
+}
+
+// hurrying: the ticks hurry asked for that have not run yet.
+hurrying :: proc(s: ^Server) -> int {
+	return sync.atomic_load(&s.hurry)
+}
+
 // block_capacity is the most chunk arrays the server can ever hold.
 block_capacity :: proc(s: ^Server) -> int {
 	return s.capacity
@@ -741,6 +756,11 @@ server_main :: proc(t: ^thread.Thread) {
 		)
 		s.tick_start = {}
 
+		if sync.atomic_load(&s.hurry) > 0 {
+			sync.atomic_sub(&s.hurry, 1) // (only this thread takes from it)
+			next = time.tick_now()
+			continue
+		}
 		next = time.tick_add(next, game.TICK_DURATION)
 		left := time.tick_diff(time.tick_now(), next)
 		if left < -5 * game.TICK_DURATION {
