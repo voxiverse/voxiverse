@@ -5,6 +5,7 @@ import "core:testing"
 
 import "client:engine"
 import "client:playtest"
+import "common:game"
 import "games:foundry"
 import foundry_server "games:foundry/server"
 import "server:core"
@@ -52,9 +53,15 @@ test_foundry_on_the_hud :: proc(t: ^testing.T) {
 	engine.game_screen_close(s)
 
 	// A machine's panel, opened by the player's use of it.
+	// (the player's use of the block it aims at, as its right button sends it)
 	c := playtest.client(rig)
 	c.player.position = {58.5, 0, 42.5}
-	foundry_server.machine_use(srv, c, {58, 0, 40})
+	s.aim = game.Ray_Hit {
+		block    = {58, 0, 40},
+		normal   = {0, 0, 1},
+		distance = 2,
+	}
+	testing.expect(t, engine.session_use_block(s), "the use of a machine was not sent")
 	playtest.until(rig, proc(rig: ^playtest.Rig) -> bool {return view(rig.s).panel.open}, 5)
 	testing.expect(t, playtest.drawn(rig, "Furnace"), "no panel")
 	testing.expect(t, playtest.drawn(rig, foundry.tr(.Panel_Take)), "no panel buttons")
