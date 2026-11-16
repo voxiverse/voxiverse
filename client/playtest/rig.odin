@@ -59,15 +59,16 @@ start :: proc(
 ) -> bool {
 	radius := o.view_radius if o.view_radius > 0 else 3
 	config := core.Config {
-		seed            = o.seed if o.seed != 0 else 33,
-		view_radius     = radius,
-		view_height     = 2,
-		max_players     = 1 + MAX_GUESTS,
-		listen          = true,
-		rules           = engine.still_rules(),
-		game            = server_game,
-		allow_cheats    = o.everyone_cheats,
-		everyone_cheats = o.everyone_cheats,
+		seed              = o.seed if o.seed != 0 else 33,
+		view_radius       = radius,
+		view_height       = 2,
+		max_players       = 1 + MAX_GUESTS,
+		listen            = true,
+		no_natural_spawns = true, // (nothing wanders in by chance)
+		rules             = engine.still_rules(),
+		game              = server_game,
+		allow_cheats      = o.everyone_cheats,
+		everyone_cheats   = o.everyone_cheats,
 	}
 	if !testing.expect(t, core.harness_start(&rig.h, config), "no server") {return false}
 	rig.ui = o.ui
