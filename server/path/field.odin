@@ -112,8 +112,6 @@ field_cost :: proc(f: ^Field, p: game.Block_Pos) -> (cost: f32, ok: bool) {
 // block a body of that size can reach the goal from gets its cost. Returns how many
 // it reached (0: the goal is not standable or outside). Moves never leave the area.
 field_build :: proc(f: ^Field, q: game.Block_Query, goal: game.Block_Pos, body := SMALL) -> int {
-	f.goal, f.body, f.reached = goal, body, 0
-	for &c in f.cost {c = NO_WAY}
 	cell := 0
 	for y in 0 ..< f.grid_size.y {
 		for z in 0 ..< f.grid_size.z {
@@ -123,6 +121,34 @@ field_build :: proc(f: ^Field, q: game.Block_Query, goal: game.Block_Pos, body :
 			}
 		}
 	}
+	return field_search(f, goal, body)
+}
+
+// field_trial: a search over `from`'s copy of the blocks with the block at `at` solid or
+// not (solid): would a block there shut the way? `trial` (made with field_make over the
+// same area) gets the answer; `from` is left as it was. What the blocks were is not read
+// again, so a question costs a search, not a look at every block of the area.
+field_trial :: proc(trial, from: ^Field, at: game.Block_Pos, solid: bool) -> int {
+	assert(trial.lo == from.lo && trial.hi == from.hi, "a trial field over another area")
+	copy(trial.solid, from.solid)
+	d := at - from.grid_lo
+	if d.x >= 0 &&
+	   d.y >= 0 &&
+	   d.z >= 0 &&
+	   d.x < from.grid_size.x &&
+	   d.y < from.grid_size.y &&
+	   d.z < from.grid_size.z {
+		trial.solid[d.x + from.grid_size.x * (d.z + from.grid_size.z * d.y)] = solid
+	}
+	return field_search(trial, from.goal, from.body)
+}
+
+// field_search: the search of field_build over the field's copy of the blocks.
+@(private = "file")
+field_search :: proc(f: ^Field, goal: game.Block_Pos, body: Body) -> int {
+	f.goal, f.body, f.reached = goal, body, 0
+	for &c in f.cost {c = NO_WAY}
+	cell := 0
 	solid := field_solid(f)
 	at, inside := field_index(f, goal)
 	if !inside || !stands(solid, goal, body) {return 0}

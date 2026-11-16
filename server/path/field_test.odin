@@ -85,6 +85,19 @@ test_field_walls_and_the_last_gap :: proc(t: ^testing.T) {
 	field_build(&f, q, {6, 1, 0}, {1, 1, 0})
 	_, ok = field_cost(&f, {-6, 1, 0})
 	testing.expect(t, ok, "asking changed the blocks")
+
+	// The same question against the field's own copy of the blocks (no query read).
+	trial: Field
+	if !testing.expect(t, field_make(&trial, f.lo, f.hi)) {return}
+	defer field_destroy(&trial)
+	field_trial(&trial, &f, {0, 1, 12}, true)
+	_, ok = field_cost(&trial, {-6, 1, 0})
+	testing.expect(t, !ok, "a trial with the gap's block left a way")
+	field_trial(&trial, &f, {0, 1, 12}, false)
+	_, ok = field_cost(&trial, {-6, 1, 0})
+	testing.expect(t, ok, "a trial with the gap open has no way")
+	_, ok = field_cost(&f, {-6, 1, 0})
+	testing.expect(t, ok, "a trial changed the field asked")
 }
 
 // A body two blocks tall does not pass under a beam a short one walks under; one two

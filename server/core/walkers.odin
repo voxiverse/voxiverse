@@ -193,9 +193,9 @@ route_would_shut :: proc(
 	ask := path.With_Block{walk_query(w), p, block}
 	trial: path.Field
 	if !path.field_make(&trial, f.lo, f.hi, context.temp_allocator) {return false}
-	path.field_build(&trial, path.with_block(&ask), f.goal, route_body(w, r))
+	path.field_trial(&trial, f, p, game.solid_at(path.with_block(&ask), p))
 	if _, ok := path.field_cost(&trial, r.start); !ok {return true}
-	body := route_body(w, r)
+	body := f.body
 	it := entities_each(w)
 	for e in entities_next(&it) {
 		st := entity_steer(w, e)
