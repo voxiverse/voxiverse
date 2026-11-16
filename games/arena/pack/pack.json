@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "arena",
+	"version": "1.0.0",
+	"title": "Arena",
+	"description": "Arena's game modes: a fighter's, and a watcher's between matches.",
+	"requires": ["voxiverse"]
+}

@@ -1,0 +1,19 @@
+{
+	// In the match: health, no regeneration, and the kit; a death drops nothing.
+	"fighter": {
+		"abilities": ["health"],
+		"kit": [
+			{"item": "voxiverse:rocket_launcher", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:rifle", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:shotgun", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:grappling_hook", "count": 1, "slot": "hotbar"}
+		],
+		"rules": {}
+	},
+	// Between matches (the countdown, the results): flying, unharmed, only watching.
+	"watching": {
+		"abilities": ["fly", "invulnerable", "spectate"],
+		"kit": [],
+		"rules": {}
+	}
+}
