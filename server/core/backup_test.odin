@@ -8,6 +8,7 @@ import "core:testing"
 
 import "common:base"
 import "common:game"
+import "server:store"
 
 // edit_and_save: a block set at (x, 4, 0) from the player's spot, then a save.
 edit_and_save :: proc(g: ^Grief, x: i32) -> game.Block_Pos {
@@ -20,9 +21,9 @@ edit_and_save :: proc(g: ^Grief, x: i32) -> game.Block_Pos {
 
 region_file_of :: proc(dir: string) -> string {
 	files := make([dynamic]string, context.temp_allocator)
-	walk_files(dir, "", &files)
+	store.walk_files(dir, "", &files)
 	for rel in files {
-		if strings.has_suffix(rel, ".vxr") {return full_path(dir, rel)}
+		if strings.has_suffix(rel, ".vxr") {return store.full_path(dir, rel)}
 	}
 	return ""
 }
@@ -39,15 +40,15 @@ test_backups_rotate :: proc(t: ^testing.T) {
 	if !ok {return}
 	s := grief_srv(g)
 	disk := base.Disk{}
-	testing.expect_value(t, backup_make(dir, "pre-migration-4", &disk), "")
+	testing.expect_value(t, store.backup_make(dir, "pre-migration-4", &disk), "")
 	names: [dynamic]string
 	defer delete(names)
 	for i in 0 ..< 7 {
 		edit_and_save(g, i32(i))
-		backup_run(dir, s.store.generation, 5, &disk)
-		all := backup_names(dir)
+		store.backup_run(dir, s.store.generation, 5, &disk)
+		all := store.backup_names(dir)
 		newest := all[len(all) - 1]
-		root := full_path(dir, fmt.tprintf("%s/%s", BACKUPS_DIR, newest))
+		root := store.full_path(dir, fmt.tprintf("%s/%s", store.BACKUPS_DIR, newest))
 		testing.expectf(
 			t,
 			state_digest(root) == state_digest(dir),
@@ -56,13 +57,13 @@ test_backups_rotate :: proc(t: ^testing.T) {
 		)
 		append(&names, strings.clone(newest))
 	}
-	left := backup_names(dir)
+	left := store.backup_names(dir)
 	// (the first save made one, too: eight in all, five kept)
 	testing.expect_value(t, len(left), 5)
 	testing.expect_value(t, left[len(left) - 1], names[len(names) - 1])
 	testing.expect(
 		t,
-		os.exists(full_path(dir, "backups/pre-migration-4/universe.cfg")),
+		os.exists(store.full_path(dir, "backups/pre-migration-4/universe.cfg")),
 		"pre-migration was removed",
 	)
 	for n in names {delete(n)}
@@ -82,20 +83,26 @@ test_restore :: proc(t: ^testing.T) {
 	second := edit_and_save(g, 3)
 	testing.expect_value(t, s.store.generation, u64(2))
 	grief_close(g) // (saves once more)
-	testing.expect_value(t, len(backup_names(dir)), 1)
+	testing.expect_value(t, len(store.backup_names(dir)), 1)
 	before := read_generation(dir)
 
 	disk := base.Disk{}
-	testing.expect_value(t, universe_restore(dir, "latest", &disk), "")
+	testing.expect_value(t, store.universe_restore(dir, "latest", &disk), "")
 	testing.expect(
 		t,
-		os.exists(full_path(dir, fmt.tprintf("backups/pre-restore-g%d/universe.cfg", before))),
+		os.exists(
+			store.full_path(dir, fmt.tprintf("backups/pre-restore-g%d/universe.cfg", before)),
+		),
 		"no pre-restore backup",
 	)
 	rep := universe_check(dir)
 	testing.expectf(t, rep.ok, "the restored universe does not check: %v", rep.problems[:])
 	testing.expect_value(t, rep.generation, before + 1)
-	testing.expect(t, universe_restore(dir, "nope", &disk) != "", "a missing backup restored")
+	testing.expect(
+		t,
+		store.universe_restore(dir, "nope", &disk) != "",
+		"a missing backup restored",
+	)
 
 	g2, ok2 := grief_open(t, dir)
 	defer grief_close(g2)

@@ -7,6 +7,7 @@ import "core:testing"
 
 import "common:protocol"
 import "common:starmap"
+import "server:store"
 
 // The universes screen's creation (client/screen/creation.odin) starts a
 // universe with the typed seed and a game mode; the files say what the
@@ -63,7 +64,7 @@ test_universe_made_with_a_seed_and_a_mode :: proc(t: ^testing.T) {
 
 @(private = "file")
 read_universe :: proc(dir: string) -> string {
-	path := filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else ""
+	path := filepath.join({dir, store.UNIVERSE_FILE}, context.temp_allocator) or_else ""
 	data, _ := os.read_entire_file_from_path(path, context.temp_allocator)
 	return string(data)
 }

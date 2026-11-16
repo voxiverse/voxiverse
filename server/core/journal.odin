@@ -13,6 +13,7 @@ import "core:time"
 
 import "common:base"
 import "common:game"
+import "server:store"
 
 // The edit journal (docs/journal.md): every block a world's state changes,
 // who caused it (an action, by an actor, through a system) and how. One
@@ -683,7 +684,7 @@ journal_save_point :: proc(w: ^World) {
 	journal_note(w, game.Journal_Save{age_of(w.server)})
 	journal_flush(w)
 	if w.journal.file != nil && w.server.store.staging != nil {
-		batch_sync(w.server.store.staging, segment_path(w, w.journal.seq))
+		store.batch_sync(w.server.store.staging, segment_path(w, w.journal.seq))
 	}
 }
 

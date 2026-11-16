@@ -8,8 +8,8 @@ import "core:path/filepath"
 import "client:steam"
 import "common:base"
 import "common:game"
-import "server:core"
 import "server:packs"
+import "server:store"
 
 // Where a pack a universe lists is found when the universe's own packs/ folder does not
 // hold it (docs/packs.md, "Where a listed pack is found"): the local packs folder, then the
@@ -32,16 +32,16 @@ local_packs_dir :: proc() -> string {
 pack_candidates :: proc(
 	client: ^steam.Client,
 	allocator := context.allocator,
-) -> []core.Pack_Candidate {
+) -> []store.Pack_Candidate {
 	context.allocator = allocator
-	out := make([dynamic]core.Pack_Candidate)
+	out := make([dynamic]store.Pack_Candidate)
 	if local := local_packs_dir(); local != "" {
 		entries, _ := os.read_all_directory_by_path(local, context.temp_allocator)
 		for e in entries {
 			if e.type != .Directory {continue}
 			path := filepath.join({local, e.name}) or_else ""
 			src, errs := packs.pack_read_dir(path)
-			append(&out, core.Pack_Candidate{src, "local pack", problem_texts(errs)})
+			append(&out, store.Pack_Candidate{src, "local pack", problem_texts(errs)})
 		}
 	}
 	if client != nil {
@@ -49,7 +49,7 @@ pack_candidates :: proc(
 		for f in found {
 			append(
 				&out,
-				core.Pack_Candidate{f.source, fmt.aprintf("Workshop item %d", f.item), nil},
+				store.Pack_Candidate{f.source, fmt.aprintf("Workshop item %d", f.item), nil},
 			)
 		}
 		// A read error goes on the candidate of its pack, so a universe that lists the

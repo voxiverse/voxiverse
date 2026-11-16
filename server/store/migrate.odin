@@ -1,4 +1,4 @@
-package core
+package store
 
 import "core:fmt"
 import "core:log"
@@ -168,17 +168,6 @@ set_line :: proc(m: ^Migrator, rel, key, value: string) {
 	}
 	if !found {fmt.sbprintfln(&b, "%s = %s", key, value)}
 	mig_write(m, rel, transmute([]u8)strings.to_string(b))
-}
-
-// store_migrate: the open's step after the format is known. Saves of an
-// older format are refused, not migrated: before 1.0 nothing is compatible
-// (the registry above is the way a later format will bring them on).
-store_migrate :: proc(s: ^Server) -> bool {
-	st := &s.store
-	if st.format >= SAVE_FORMAT {return true}
-	s.refusal = OLDER_BUILD
-	log.errorf("server %s format=%d", OLDER_BUILD, st.format)
-	return false
 }
 
 // OLDER_BUILD: why a world of an older format is not opened.

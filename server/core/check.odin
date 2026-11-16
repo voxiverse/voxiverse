@@ -8,6 +8,7 @@ import "core:strings"
 
 import "common:game"
 import "common:intervention"
+import "server:store"
 
 // universe_check: is the universe in dir whole? Read-only; run it after
 // store_recover (the dedicated server's --check does). It reads every file the
@@ -26,19 +27,6 @@ problem :: proc(r: ^Check_Report, format: string, args: ..any) {
 	append(&r.problems, fmt.tprintf(format, ..args))
 }
 
-// text_keys: the "key = value" lines of a config text.
-text_value :: proc(text, key: string) -> (value: string, found: bool) {
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		l := strings.trim_space(line)
-		if l == "" || l[0] == '#' {continue}
-		if eq := strings.index_byte(l, '='); eq > 0 && strings.trim_space(l[:eq]) == key {
-			return strings.trim_space(l[eq + 1:]), true
-		}
-	}
-	return
-}
-
 universe_check :: proc(dir: string) -> (r: Check_Report) {
 	r.problems = make([dynamic]string, context.temp_allocator)
 	check_universe(&r, dir)
@@ -50,38 +38,46 @@ universe_check :: proc(dir: string) -> (r: Check_Report) {
 @(private = "file")
 check_universe :: proc(r: ^Check_Report, dir: string) {
 	files := make([dynamic]string, context.temp_allocator)
-	walk_files(dir, "", &files)
+	store.walk_files(dir, "", &files)
 	for rel in files {
-		if strings.has_suffix(rel, ".new") || strings.has_suffix(rel, ".tmp") || rel == TX_FILE {
+		if strings.has_suffix(rel, ".new") ||
+		   strings.has_suffix(rel, ".tmp") ||
+		   rel == store.TX_FILE {
 			problem(r, "an unfinished save left %s", rel)
 		}
 	}
 	data, err := os.read_entire_file_from_path(
-		full_path(dir, UNIVERSE_FILE),
+		store.full_path(dir, store.UNIVERSE_FILE),
 		context.temp_allocator,
 	)
 	if err != nil {
-		problem(r, "%s does not read (%v)", UNIVERSE_FILE, err)
+		problem(r, "%s does not read (%v)", store.UNIVERSE_FILE, err)
 		return
 	}
 	text := string(data)
-	if v, ok := text_value(text, "format"); ok {r.format, _ = strconv.parse_int(v)} else {
-		problem(r, "%s has no format", UNIVERSE_FILE)
+	if v, ok := store.text_value(text, "format"); ok {r.format, _ = strconv.parse_int(v)} else {
+		problem(r, "%s has no format", store.UNIVERSE_FILE)
 	}
-	if v, ok := text_value(text, "generation"); ok {r.generation, _ = strconv.parse_u64(v, 10)}
-	if r.format > SAVE_FORMAT {problem(r, "format %d is newer than this game's", r.format)}
-	if r.format < SAVE_FORMAT {problem(r, "format %d: %s", r.format, OLDER_BUILD)}
-	packs_text, _ := text_value(text, "packs")
-	reg, _, why := packs_registry(dir, packs_parse(packs_text, context.temp_allocator))
+	if v, ok := store.text_value(text, "generation");
+	   ok {r.generation, _ = strconv.parse_u64(v, 10)}
+	if r.format > store.SAVE_FORMAT {problem(r, "format %d is newer than this game's", r.format)}
+	if r.format < store.SAVE_FORMAT {problem(r, "format %d: %s", r.format, store.OLDER_BUILD)}
+	packs_text, _ := store.text_value(text, "packs")
+	reg, _, why := store.packs_registry(dir, store.packs_parse(packs_text, context.temp_allocator))
 	if reg == nil {
 		for p in why {problem(r, "packs: %s", p)}
 		return
 	}
 	r.reg = reg
-	if _, ok := text_value(text, "home"); !ok {problem(r, "%s has no home world", UNIVERSE_FILE)}
-	worlds, _ := os.read_all_directory_by_path(full_path(dir, WORLDS_DIR), context.temp_allocator)
+	if _, ok := store.text_value(text, "home");
+	   !ok {problem(r, "%s has no home world", store.UNIVERSE_FILE)}
+	worlds, _ := os.read_all_directory_by_path(
+		store.full_path(dir, store.WORLDS_DIR),
+		context.temp_allocator,
+	)
 	for e in worlds {
-		if e.type == .Directory {check_world(r, dir, fmt.tprintf("%s/%s", WORLDS_DIR, e.name))}
+		if e.type ==
+		   .Directory {check_world(r, dir, fmt.tprintf("%s/%s", store.WORLDS_DIR, e.name))}
 	}
 	for rel in files {
 		if strings.has_suffix(rel, ".json") &&
@@ -95,7 +91,7 @@ check_universe :: proc(r: ^Check_Report, dir: string) {
 
 @(private = "file")
 check_json :: proc(r: ^Check_Report, dir, rel: string) {
-	data, err := os.read_entire_file_from_path(full_path(dir, rel), context.temp_allocator)
+	data, err := os.read_entire_file_from_path(store.full_path(dir, rel), context.temp_allocator)
 	if err != nil {
 		problem(r, "%s does not read (%v)", rel, err)
 		return
@@ -107,19 +103,19 @@ check_json :: proc(r: ^Check_Report, dir, rel: string) {
 
 @(private = "file")
 check_world :: proc(r: ^Check_Report, dir, world: string) {
-	cfg := fmt.tprintf("%s/%s", world, WORLD_FILE)
-	data, err := os.read_entire_file_from_path(full_path(dir, cfg), context.temp_allocator)
+	cfg := fmt.tprintf("%s/%s", world, store.WORLD_FILE)
+	data, err := os.read_entire_file_from_path(store.full_path(dir, cfg), context.temp_allocator)
 	if err != nil {
 		problem(r, "%s does not read (%v)", cfg, err)
 		return
 	}
 	text := string(data)
 	for key in ([]string{"format", "address", "seed", "generator"}) {
-		if _, ok := text_value(text, key); !ok {problem(r, "%s has no %s", cfg, key)}
+		if _, ok := store.text_value(text, key); !ok {problem(r, "%s has no %s", cfg, key)}
 	}
 	// Regions: every header and every chunk.
 	regions, _ := os.read_all_directory_by_path(
-		full_path(dir, fmt.tprintf("%s/regions", world)),
+		store.full_path(dir, fmt.tprintf("%s/regions", world)),
 		context.temp_allocator,
 	)
 	for e in regions {
@@ -139,7 +135,7 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 	)
 	interventions := fmt.tprintf("%s/%s", world, INTERVENTIONS_FILE)
 	if idata, ierr := os.read_entire_file_from_path(
-		full_path(dir, interventions),
+		store.full_path(dir, interventions),
 		context.temp_allocator,
 	); ierr == nil {
 		if log, ok := intervention.decode(idata); ok {
@@ -150,22 +146,25 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 	}
 	economy := fmt.tprintf("%s/%s", world, ECONOMY_FILE)
 	if edata, eerr := os.read_entire_file_from_path(
-		full_path(dir, economy),
+		store.full_path(dir, economy),
 		context.temp_allocator,
 	); eerr == nil {
 		if !economy_check(edata) {problem(r, "%s is damaged", economy)}
 	}
 	stats := fmt.tprintf("%s/%s", world, STATS_FILE)
-	if os.exists(full_path(dir, stats)) {check_json(r, dir, stats)}
+	if os.exists(store.full_path(dir, stats)) {check_json(r, dir, stats)}
 	// The journal, up to where the save says it ends.
-	segment, have_segment := text_value(text, "journal.segment")
-	offset_text, _ := text_value(text, "journal.offset")
+	segment, have_segment := store.text_value(text, "journal.segment")
+	offset_text, _ := store.text_value(text, "journal.offset")
 	if have_segment {
 		seq, _ := strconv.parse_int(segment)
 		offset, _ := strconv.parse_int(offset_text)
 		if seq > 0 {
 			rel := fmt.tprintf("%s/%s/%08d.vxj", world, JOURNAL_DIR, seq)
-			seg, serr := os.read_entire_file_from_path(full_path(dir, rel), context.temp_allocator)
+			seg, serr := os.read_entire_file_from_path(
+				store.full_path(dir, rel),
+				context.temp_allocator,
+			)
 			switch {
 			case serr != nil:
 				problem(r, "%s does not read (%v)", rel, serr)
@@ -181,7 +180,7 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 
 @(private = "file")
 check_region :: proc(r: ^Check_Report, dir, rel, name: string) {
-	data, err := os.read_entire_file_from_path(full_path(dir, rel), context.temp_allocator)
+	data, err := os.read_entire_file_from_path(store.full_path(dir, rel), context.temp_allocator)
 	if err != nil {
 		problem(r, "%s does not read (%v)", rel, err)
 		return
@@ -210,7 +209,7 @@ check_region :: proc(r: ^Check_Report, dir, rel, name: string) {
 
 @(private = "file")
 check_lines :: proc(r: ^Check_Report, dir, rel: string, lo, hi: int, chest: bool, first := "") {
-	data, err := os.read_entire_file_from_path(full_path(dir, rel), context.temp_allocator)
+	data, err := os.read_entire_file_from_path(store.full_path(dir, rel), context.temp_allocator)
 	if err != nil {return} 	// (not written yet: fine)
 	rest := string(data)
 	for line in strings.split_lines_iterator(&rest) {

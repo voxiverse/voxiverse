@@ -7,6 +7,7 @@ import "core:testing"
 
 import "common:game"
 import "common:starmap"
+import "server:store"
 
 // A save describes the tick it began on, however many ticks it takes to
 // encode (save_slice.odin).
@@ -35,10 +36,10 @@ slice_scene :: proc(t: ^testing.T, tag: string) -> (g: ^Grief, dir: string, ok: 
 @(private = "file")
 slice_digest :: proc(dir: string) -> (digest: u64, character: string) {
 	files := make([dynamic]string, context.temp_allocator)
-	walk_files(dir, "", &files)
+	store.walk_files(dir, "", &files)
 	for rel in files {
 		if !strings.has_prefix(rel, "characters/") {continue}
-		data, _ := os.read_entire_file_from_path(full_path(dir, rel), context.temp_allocator)
+		data, _ := os.read_entire_file_from_path(store.full_path(dir, rel), context.temp_allocator)
 		r, ok := player_parse(test_reg(), data)
 		if !ok {continue}
 		character = fmt.aprintf("%v %v %v", r.state.position, r.look, r.inventory.slots)
@@ -51,11 +52,11 @@ slice_digest :: proc(dir: string) -> (digest: u64, character: string) {
 	os.remove_all(copy)
 	defer os.remove_all(copy)
 	copy_tree(dir, copy)
-	os.remove_all(full_path(copy, "characters"))
-	os.remove(full_path(copy, COMMUNITY_FILE))
+	os.remove_all(store.full_path(copy, "characters"))
+	os.remove(store.full_path(copy, COMMUNITY_FILE))
 	rest := make([dynamic]string, context.temp_allocator)
-	walk_files(copy, "", &rest)
-	for rel in rest {if strings.has_suffix(rel, ".vxj") {os.remove(full_path(copy, rel))}}
+	store.walk_files(copy, "", &rest)
+	for rel in rest {if strings.has_suffix(rel, ".vxj") {os.remove(store.full_path(copy, rel))}}
 	return state_digest(copy), character
 }
 
@@ -109,10 +110,10 @@ region_diff :: proc(x, y: []u8) -> string {
 slice_diff :: proc(a, b: string) -> string {
 	out := strings.builder_make(context.temp_allocator)
 	files := make([dynamic]string, context.temp_allocator)
-	walk_files(a, "", &files)
+	store.walk_files(a, "", &files)
 	for rel in files {
-		x, _ := os.read_entire_file_from_path(full_path(a, rel), context.temp_allocator)
-		y, err := os.read_entire_file_from_path(full_path(b, rel), context.temp_allocator)
+		x, _ := os.read_entire_file_from_path(store.full_path(a, rel), context.temp_allocator)
+		y, err := os.read_entire_file_from_path(store.full_path(b, rel), context.temp_allocator)
 		if rel == COMMUNITY_FILE || strings.has_prefix(rel, "characters/") {continue}
 		if strings.has_suffix(rel, ".vxj") {continue}
 		if err != nil {

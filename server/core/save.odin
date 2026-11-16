@@ -24,6 +24,7 @@ import "common:intervention"
 import "common:planet"
 import "common:starmap"
 import "common:worldgen"
+import "server:store"
 
 // Saving: a universe is a directory: universe.cfg (format, seed, the game it
 // plays, the home world's address, the kit), characters/ and players/ (player_data.odin),
@@ -44,18 +45,8 @@ import "common:worldgen"
 
 AUTOSAVE_SECONDS :: 60
 
-UNIVERSE_FILE :: "universe.cfg"
 GAME_FILE :: "game.cfg" // what the game keeps (Game.save and load)
-WORLDS_DIR :: "worlds"
-WORLD_FILE :: "world.cfg"
 ENTITIES_FILE :: "entities.cfg"
-// 2: players by name (format 1's single player becomes LEGACY_PLAYER); 3:
-// players in players/ (player_data.odin); 4: a universe of worlds; 5:
-// regions with a checksum per chunk, saves as transactions (save_tx.odin),
-// migrations in a registry (migrate.odin); 6: regions name their
-// blocks, universes list their packs. Older ones are refused (no migration
-// before 1.0).
-SAVE_FORMAT :: 6
 LEGACY_PLAYER :: "Player"
 
 Store :: struct {
@@ -64,12 +55,12 @@ Store :: struct {
 	characters:     map[string]access.Account, // every character's account, by name
 	writer:         game.Writer,
 	last_save:      u64, // the tick of the last save
-	// The disk (save_tx.odin): the disk, the save worker, and the save in flight.
+	// The disk (server/store/save_tx.odin): the disk, the save worker, and the save in flight.
 	disk:           base.Disk,
 	jobs:           base.Jobs,
 	jobs_ready:     bool,
-	staging:        ^Save_Batch, // the save being collected
-	inflight:       ^Save_Batch, // handed to the worker
+	staging:        ^store.Save_Batch, // the save being collected
+	inflight:       ^store.Save_Batch, // handed to the worker
 	carry:          Carry, // what a failed save did not write
 	generation:     u64, // the last committed save's
 	format:         int, // the format universe.cfg had when opened
@@ -106,12 +97,17 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 		return false
 	}
 	if !universe_lock(st, dir) {return false}
-	if problem := store_recover(dir, &st.disk); problem != "" {
+	if problem := store.store_recover(dir, &st.disk); problem != "" {
 		log.errorf("server cannot open the save: %s", problem)
 		return false
 	}
-	universe := filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else UNIVERSE_FILE
-	legacy := filepath.join({dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE
+	universe :=
+		filepath.join(
+			{dir, store.UNIVERSE_FILE},
+			context.temp_allocator,
+		) or_else store.UNIVERSE_FILE
+	legacy :=
+		filepath.join({dir, store.WORLD_FILE}, context.temp_allocator) or_else store.WORLD_FILE
 	switch {
 	case os.exists(universe):
 		data, err := os.read_entire_file_from_path(universe, context.temp_allocator)
@@ -122,8 +118,8 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 		read_universe_file(s, string(data), universe) or_return
 		home.seed, home.generator = s.config.seed, s.config.generator
 	case os.exists(legacy):
-		s.refusal = OLDER_BUILD
-		log.errorf("server %s path=%s", OLDER_BUILD, legacy)
+		s.refusal = store.OLDER_BUILD
+		log.errorf("server %s path=%s", store.OLDER_BUILD, legacy)
 		return false
 	case:
 		log.infof("server new universe dir=%s seed=%d", dir, s.config.seed)
@@ -131,20 +127,20 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 		world_set_planet(home)
 		home.seed, home.generator = s.config.seed, s.config.generator
 		write_universe_file(s) or_return
-		st.format = SAVE_FORMAT
+		st.format = store.SAVE_FORMAT
 	}
 	store_migrate(s) or_return
 	return world_dir_open(home)
 }
 
-// UNIVERSE_LOCK: the file an open universe holds a lock on (its text is the
-// owner's process id, for the message only).
-UNIVERSE_LOCK :: "lock"
-
 // universe_lock: one process has a universe open at a time. False (logged)
 // if another has it.
 universe_lock :: proc(st: ^Store, dir: string) -> bool {
-	path := filepath.join({dir, UNIVERSE_LOCK}, context.temp_allocator) or_else UNIVERSE_LOCK
+	path :=
+		filepath.join(
+			{dir, store.UNIVERSE_LOCK},
+			context.temp_allocator,
+		) or_else store.UNIVERSE_LOCK
 	lock, holder, ok := base.file_lock(path, fmt.tprintf("%d", base.boot_info().pid))
 	defer delete(holder)
 	if !ok {
@@ -166,7 +162,7 @@ world_dir_open :: proc(w: ^World) -> bool {
 	if s.store.dir == "" {return true}
 	w.dir = strings.clone(
 		filepath.join(
-			{s.store.dir, WORLDS_DIR, starmap.address_dir(w.address)},
+			{s.store.dir, store.WORLDS_DIR, starmap.address_dir(w.address)},
 			context.temp_allocator,
 		) or_else "",
 	)
@@ -176,7 +172,8 @@ world_dir_open :: proc(w: ^World) -> bool {
 		log.errorf("server cannot create the world directory dir=%s error=%v", w.dir, err)
 		return false
 	}
-	path := filepath.join({w.dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE
+	path :=
+		filepath.join({w.dir, store.WORLD_FILE}, context.temp_allocator) or_else store.WORLD_FILE
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err == .Not_Exist {return write_world_file(w)}
 	if err != nil {
@@ -258,7 +255,7 @@ mark_edited :: proc(w: ^World, pos: game.Chunk_Pos) {
 }
 
 // save writes the universe's files and every loaded world's (its settings,
-// entities and changed regions) as one transaction (save_tx.odin), by the save
+// entities and changed regions) as one transaction (server/store/save_tx.odin), by the save
 // worker. The save describes this tick (save_slice.odin captures it at once and
 // encodes the big parts over the next ticks); with wait, returns when it is
 // committed (false if it failed: logged, and the next save writes the files
@@ -427,11 +424,11 @@ region_ingest :: proc(
 @(private = "file")
 region_from_backup :: proc(w: ^World, region: game.Region_Pos, path: string) {
 	st := &w.server.store
-	rel := relative_path(st.dir, path)
-	names := backup_names(st.dir)
+	rel := store.relative_path(st.dir, path)
+	names := store.backup_names(st.dir)
 	#reverse for name in names {
 		data, err := os.read_entire_file_from_path(
-			full_path(st.dir, fmt.tprintf("%s/%s/%s", BACKUPS_DIR, name, rel)),
+			store.full_path(st.dir, fmt.tprintf("%s/%s/%s", store.BACKUPS_DIR, name, rel)),
 			context.temp_allocator,
 		)
 		if err != nil {continue}
@@ -458,7 +455,7 @@ region_from_backup :: proc(w: ^World, region: game.Region_Pos, path: string) {
 write_universe_file :: proc(s: ^Server) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&b, "# Voxiverse universe (written by the server)")
-	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
+	fmt.sbprintfln(&b, "format = %d", store.SAVE_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "game = %s", s.config.game.id)
 	fmt.sbprintfln(&b, "home = %s", starmap.address_dir(s.home.address))
@@ -472,7 +469,10 @@ write_universe_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "age = %d", age_of(s)) // ticks of the universe, across runs
 	return store_write(
 		s,
-		filepath.join({s.store.dir, UNIVERSE_FILE}, context.temp_allocator) or_else UNIVERSE_FILE,
+		filepath.join(
+			{s.store.dir, store.UNIVERSE_FILE},
+			context.temp_allocator,
+		) or_else store.UNIVERSE_FILE,
 		b.buf[:],
 	)
 }
@@ -496,7 +496,7 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 		switch {
 		case key == "format":
 			n, ok := strconv.parse_int(value)
-			if !ok || n > SAVE_FORMAT {
+			if !ok || n > store.SAVE_FORMAT {
 				log.errorf(
 					"server universe from a newer game, not loaded path=%s format=%s",
 					path,
@@ -543,7 +543,7 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 		case key == "age":
 			if n, ok := strconv.parse_u64(value, 10); ok {s.age_base = n}
 		case key == "packs":
-			s.store.packs = packs_parse(value, virtual.arena_allocator(&s.arena))
+			s.store.packs = store.packs_parse(value, virtual.arena_allocator(&s.arena))
 		case key == "unknown_blocks":
 			s.store.unknown_air = value == "air"
 		case key == "kit":
@@ -592,7 +592,7 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 write_world_file :: proc(w: ^World) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&b, "# Voxiverse world (written by the server)")
-	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
+	fmt.sbprintfln(&b, "format = %d", store.SAVE_FORMAT)
 	fmt.sbprintfln(&b, "address = %s", starmap.address_dir(w.address))
 	fmt.sbprintfln(&b, "seed = %d", w.seed)
 	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[w.generator])
@@ -614,7 +614,7 @@ write_world_file :: proc(w: ^World) -> bool {
 	base.vars_write(worldgen.params_table(), &w.params, &b)
 	return store_write(
 		w.server,
-		filepath.join({w.dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE,
+		filepath.join({w.dir, store.WORLD_FILE}, context.temp_allocator) or_else store.WORLD_FILE,
 		b.buf[:],
 	)
 }
@@ -633,7 +633,7 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 		key, value := strings.trim_space(l[:eq]), strings.trim_space(l[eq + 1:])
 		switch {
 		case key == "format":
-			if n, ok := strconv.parse_int(value); !ok || n > SAVE_FORMAT {
+			if n, ok := strconv.parse_int(value); !ok || n > store.SAVE_FORMAT {
 				log.errorf(
 					"server world from a newer game, not loaded path=%s format=%s",
 					path,
@@ -1517,4 +1517,194 @@ game_load :: proc(s: ^Server) -> bool {
 	s.refusal = fmt.tprintf("this universe's %s is not one %s understands", GAME_FILE, g.id)
 	log.errorf("server game state not loaded path=%s game=%s error=%v", path, g.id, err)
 	return false
+}
+
+// ---- the store's side: staging, the worker, the result ----
+
+// Carry: the files of a save that failed, written again by the next one.
+Carry :: struct {
+	files:   [dynamic]store.Prepared,
+	deletes: [dynamic]string,
+}
+
+carry_clear :: proc(c: ^Carry) {
+	a := runtime.heap_allocator()
+	for f in c.files {
+		delete(f.path, a)
+		delete(f.bytes, a)
+	}
+	for p in c.deletes {delete(p, a)}
+	clear(&c.files)
+	clear(&c.deletes)
+}
+
+// store_stage starts collecting a save's files; false if one is being
+// collected already (a world saved inside a save).
+store_stage :: proc(s: ^Server) -> (started: bool) {
+	st := &s.store
+	if st.dir == "" || st.staging != nil {return false}
+	save_wait(s)
+	st.staging = store.batch_make(st.dir, st.generation + 1, age_of(s), &st.disk)
+	if keep := backups_kept(s);
+	   keep > 0 && (!st.backed_up || age_of(s) - st.backup_age >= store.BACKUP_EVERY) {
+		st.staging.backup = keep
+	}
+	// What a failed save carried comes first (anything staged since replaces it).
+	for f in st.carry.files {store.batch_stage(st.staging, f.path, f.bytes)}
+	for p in st.carry.deletes {store.batch_delete(st.staging, p)}
+	return true
+}
+
+// store_write: path (in the universe) is part of the save being collected;
+// outside a save it is replaced at once. False if it could not be.
+store_write :: proc(s: ^Server, path: string, data: []u8) -> bool {
+	st := &s.store
+	if st.staging != nil {
+		store.batch_stage(st.staging, store.relative_path(st.dir, path), data)
+		return true
+	}
+	save_wait(s) // (the worker may be renaming over it)
+	// A save still being sliced holds an older copy of this file: it must not win.
+	if st.job != nil {
+		if rel := store.relative_path(st.dir, path); store.batch_has(st.job.batch, rel) {
+			store.batch_stage(st.job.batch, rel, data)
+		}
+	}
+	if err := base.disk_replace(&st.disk, path, data); err != .None {
+		log.errorf("server cannot write path=%s error=%v", path, err)
+		return false
+	}
+	return true
+}
+
+// store_delete: path is removed with the save (at once outside one).
+store_delete :: proc(s: ^Server, path: string) {
+	st := &s.store
+	if st.staging != nil {
+		store.batch_delete(st.staging, store.relative_path(st.dir, path))
+		return
+	}
+	save_wait(s)
+	base.disk_remove(&st.disk, path)
+}
+
+// store_commit hands the collected files to the worker; with wait, returns when
+// it is done. False if that save failed (logged).
+store_commit :: proc(s: ^Server, wait: bool) -> bool {
+	st := &s.store
+	b := st.staging
+	st.staging = nil
+	if b == nil {return true}
+	carry_clear(&st.carry)
+	st.inflight = b
+	if !st.jobs_ready {
+		base.jobs_init(&st.jobs, "save", 0 if s.config.stepped else 1, runtime.heap_allocator())
+		st.jobs_ready = true
+	}
+	base.jobs_submit(&st.jobs, proc(data: rawptr) {
+			store.batch_run((^store.Save_Batch)(data))
+		}, b)
+	if wait {return save_wait(s)}
+	return save_poll(s)
+}
+
+// save_wait blocks until the batch in flight is done; false if it failed.
+save_wait :: proc(s: ^Server) -> bool {
+	st := &s.store
+	for st.inflight != nil && !sync.atomic_load(&st.inflight.done) {
+		sync.cpu_relax()
+	}
+	return save_poll(s)
+}
+
+// save_poll collects a finished batch (each tick): its generation counts, or its
+// files wait for the next save. True unless a failure was just collected.
+save_poll :: proc(s: ^Server) -> bool {
+	st := &s.store
+	b := st.inflight
+	if b == nil || !sync.atomic_load(&b.done) {return true}
+	st.inflight = nil
+	defer store.batch_free(b)
+	if b.problem == "" {
+		compaction_apply(s, b)
+		st.generation = b.generation
+		st.saved_at = b.age
+		if b.backup > 0 {st.backed_up, st.backup_age = true, b.age}
+		return true
+	}
+	log.errorf("server save failed generation=%d problem=%s", b.generation, b.problem)
+	// Its files are written again by the next save (unless newer ones replace them).
+	a := runtime.heap_allocator()
+	for f in b.files {
+		append(&st.carry.files, store.Prepared{strings.clone(f.path, a), slice.clone(f.bytes, a)})
+	}
+	for p in b.deletes {append(&st.carry.deletes, strings.clone(p, a))}
+	return false
+}
+
+// store_workers_stop waits for the worker and frees it.
+store_workers_stop :: proc(s: ^Server) {
+	st := &s.store
+	save_wait(s)
+	if st.job != nil {save_job_abandon(s)}
+	if st.staging != nil {store.batch_free(st.staging); st.staging = nil}
+	if st.jobs_ready {
+		base.jobs_destroy(&st.jobs)
+		st.jobs_ready = false
+	}
+	carry_clear(&st.carry)
+}
+
+// backups_kept: how many rolling backups the server keeps (0: none).
+backups_kept :: proc(s: ^Server) -> int {
+	if n, ok := s.config.backups.?; ok {return n}
+	return store.BACKUP_KEEP
+}
+
+// store_migrate: the open's step after the format is known. Saves of an
+// older format are refused, not migrated: before 1.0 nothing is compatible
+// (the registry above is the way a later format will bring them on).
+store_migrate :: proc(s: ^Server) -> bool {
+	st := &s.store
+	if st.format >= store.SAVE_FORMAT {return true}
+	s.refusal = store.OLDER_BUILD
+	log.errorf("server %s format=%d", store.OLDER_BUILD, st.format)
+	return false
+}
+
+// compaction_apply: the server's side once a batch committed. A dropped chunk
+// that is as it was at the capture (loaded or not) is natural now.
+compaction_apply :: proc(s: ^Server, b: ^store.Save_Batch) {
+	for j in b.regions {
+		w: ^World
+		for x in s.worlds {if x.address == j.world {w = x}}
+		if w == nil {continue}
+		for c in j.chunks {
+			if !c.dropped {continue}
+			if saved, ok := w.saved[c.pos]; ok {
+				if string(saved) == string(c.bytes) {
+					delete(saved)
+					delete_key(&w.saved, c.pos)
+				}
+			} else if chunk := chunks_get(&w.chunks, c.pos);
+			   chunk != nil && chunk.state == .Ready {
+				if chunk.modified && string(chunk_bytes(chunk)) == string(c.bytes) {
+					chunk.modified = false
+				}
+			}
+		}
+		for t in j.tops_dropped {
+			if top, ok := w.tops[{t.x, t.z}];
+			   ok && top == t.top {delete_key(&w.tops, [2]i32{t.x, t.z})}
+		}
+	}
+}
+
+// chunk_bytes: c's blocks as saved (temp).
+@(private = "file")
+chunk_bytes :: proc(c: ^Chunk) -> []u8 {
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	game.write_chunk_payload(&w, &c.blocks, c.block_entities[:])
+	return w.buf[:]
 }

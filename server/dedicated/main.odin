@@ -19,6 +19,7 @@ import platform "common:platform"
 import "server:collector"
 import "server:core"
 import steam "server:steam"
+import "server:store"
 
 import "generated:games"
 
@@ -71,7 +72,7 @@ main :: proc() {
 		max_players = core.DEFAULT_MAX_PLAYERS,
 		view_radius = 12,
 		view_height = 6,
-		backups     = core.BACKUP_KEEP,
+		backups     = store.BACKUP_KEEP,
 		watchdog    = 60,
 	}
 	flags.parse_or_exit(&opts, os.args, .Unix, context.temp_allocator)
@@ -274,7 +275,7 @@ server_key :: proc(dir: string) -> (key: access.Account_Key) {
 
 // run_check: --check. A save the server could open is whole.
 run_check :: proc(universe: string) -> bool {
-	if why := core.store_recover(universe, &base.Disk{}); why != "" {
+	if why := store.store_recover(universe, &base.Disk{}); why != "" {
 		fmt.eprintfln("%s", why)
 		return false
 	}
@@ -289,7 +290,7 @@ run_check :: proc(universe: string) -> bool {
 
 // run_restore: --restore.
 run_restore :: proc(universe, name: string) -> bool {
-	if why := core.universe_restore(universe, name, &base.Disk{}); why != "" {
+	if why := store.universe_restore(universe, name, &base.Disk{}); why != "" {
 		fmt.eprintfln("cannot restore: %s", why)
 		return false
 	}
@@ -299,7 +300,7 @@ run_restore :: proc(universe, name: string) -> bool {
 
 // run_export: --export.
 run_export :: proc(universe, file: string, journal: bool) -> bool {
-	if why := core.universe_export(universe, file, &base.Disk{}, journal); why != "" {
+	if why := store.universe_export(universe, file, &base.Disk{}, journal); why != "" {
 		fmt.eprintfln("cannot export: %s", why)
 		return false
 	}
@@ -309,7 +310,7 @@ run_export :: proc(universe, file: string, journal: bool) -> bool {
 
 // run_import: --import.
 run_import :: proc(file, universe: string) -> bool {
-	if why := core.universe_import(file, universe, &base.Disk{}); why != "" {
+	if why := store.universe_import(file, universe, &base.Disk{}); why != "" {
 		fmt.eprintfln("cannot import: %s", why)
 		return false
 	}

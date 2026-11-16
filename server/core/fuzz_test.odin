@@ -20,13 +20,7 @@ smoke :: proc(t: ^testing.T, name: string) {
 }
 
 @(test)
-test_fuzz_save_tx_smoke :: proc(t: ^testing.T) {smoke(t, "save.tx")}
-
-@(test)
 test_fuzz_save_player_smoke :: proc(t: ^testing.T) {smoke(t, "save.player")}
-
-@(test)
-test_fuzz_save_import_smoke :: proc(t: ^testing.T) {smoke(t, "save.import")}
 
 @(test)
 test_fuzz_save_config_smoke :: proc(t: ^testing.T) {smoke(t, "save.config")}

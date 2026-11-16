@@ -60,20 +60,21 @@ Cap: `70` files per package.
 
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
-read from the line above. The largest packages are `server/core` (70 files),
-`client/engine` (69), `common/game` (56) and `common/base` (34); every other package has 31
+read from the line above. The largest packages are `client/engine` (69 files),
+`server/core` (65), `common/game` (56) and `common/base` (34); every other package has 31
 or fewer (the `layout` lint holds these counts to the tree, so they are never stale). The
 cap leaves the largest no room beyond it, so a package that keeps growing splits into
 feature packages rather than get a bigger number. There is no per-folder allowance (that would
 be an exemption) and no per-file line cap. `server/core` is one cycle, which is why it is a
-single package; what needs none of its state lives below it (`server/path`).
+single package; what needs none of its state lives below it (`server/path`, `server/store`).
 
 ## Packages
 
 No package sits at the root of `client/` or `server/`; each feature has its own. `server/core`
 is the server's one package (its state is one cycle around `Server`, `Client` and `World`);
-below it, `server/path` finds ways through the blocks from a `game.Block_Query` alone, so it
-knows no server and the server imports it;
+below it, `server/path` finds ways through the blocks from a `game.Block_Query` alone, and
+`server/store` keeps a universe's files as files (the save transaction, backups, export,
+migrations, compaction), so neither knows a server and the server imports both;
 `client/engine` holds `App`, `Session`, and the state of every feature `App` holds, and the
 feature packages (`prompt`, `menu`, `screen`, `dev`, `console`, `overlay`, `hud`, `autopilot`)
 import it, in that order, with `client/main` on top. The tests that share a fixture which needs
@@ -178,6 +179,7 @@ package** is enforced by the `layout` lint (see above).
 | `games/<game>/server` | A game's server part: its `core.Game` and its tests | `*.odin` |
 | `games/<game>/client` | A game's client part: its `engine.Game` and its tests | `*.odin` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
+| `server/store` | A universe's files as files, whatever server runs: their names, the save transaction (a batch staged, committed, recovered), backups and restores, export and import, migrations, compacting region files, the packs a universe lists and the registry built from them | `*.odin` |
 | `server/path` | Pathfinding over the blocks for a body of a size: a walker's way from one block to another (A*), and fields: the way to one goal from every block of an area, which many walkers share | `*.odin` |
 | `server/play` | What the server parts of games share, built on the game API alone (docs/games.md): phases and their clocks, a walled arena from a template, watchers, the admin's settings | `*.odin` |
 | `server/playtest` | A game's server tests' rig: the game on a stepped server with its players, waiting for its phases, the host's commands and what each player was told; only tests import it | `*.odin` |

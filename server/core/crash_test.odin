@@ -12,6 +12,7 @@ import "core:testing"
 import "common:base"
 import "common:game"
 import "common:protocol"
+import "server:store"
 
 // The crash harness. Faults injected into the disk layer (not real kills),
 // so every point is reproducible: a save is run with the "process" dying at one
@@ -25,20 +26,23 @@ CRASH_POINTS :: #config(VX_CRASH_POINTS, 1000)
 // save's world.cfg says they end.
 state_digest :: proc(dir: string) -> u64 {
 	files := make([dynamic]string, context.temp_allocator)
-	walk_files(dir, "", &files)
+	store.walk_files(dir, "", &files)
 	slice.sort(files[:])
 	h := u64(0xcbf29ce484222325)
 	for rel in files {
-		data, err := os.read_entire_file_from_path(full_path(dir, rel), context.temp_allocator)
+		data, err := os.read_entire_file_from_path(
+			store.full_path(dir, rel),
+			context.temp_allocator,
+		)
 		if err != nil {continue}
 		if i := strings.index(rel, "/journal/"); i > 0 && strings.has_suffix(rel, ".vxj") {
 			cfg, _ := os.read_entire_file_from_path(
-				full_path(dir, fmt.tprintf("%s/%s", rel[:i], WORLD_FILE)),
+				store.full_path(dir, fmt.tprintf("%s/%s", rel[:i], store.WORLD_FILE)),
 				context.temp_allocator,
 			)
 			seq, _ := strconv.parse_int(rel[i + len("/journal/"):][:8])
-			seg_text, _ := text_value(string(cfg), "journal.segment")
-			off_text, _ := text_value(string(cfg), "journal.offset")
+			seg_text, _ := store.text_value(string(cfg), "journal.segment")
+			off_text, _ := store.text_value(string(cfg), "journal.offset")
 			recorded, _ := strconv.parse_int(seg_text)
 			offset, _ := strconv.parse_int(off_text)
 			if seq > recorded {continue}
@@ -79,7 +83,7 @@ Crash_Setup :: struct {
 	base:   string, // the universe at generation 1
 	run:    string, // where a run happens
 	src:    string,
-	batch:  ^Save_Batch, // the second save
+	batch:  ^store.Save_Batch, // the second save
 	d1, d2: u64,
 	ops:    int, // of a clean run of the batch
 }
@@ -133,7 +137,7 @@ crash_setup :: proc(t: ^testing.T, tag: string) -> (cs: Crash_Setup, ok: bool) {
 	}
 	rb := cs.batch^
 	rb.dir, rb.disk = cs.run, &d
-	batch_run(&rb)
+	store.batch_run(&rb)
 	delete(rb.problem, runtime.heap_allocator())
 	testing.expect_value(t, rb.problem, "")
 	cs.ops = faults.ops
@@ -147,7 +151,7 @@ crash_setup :: proc(t: ^testing.T, tag: string) -> (cs: Crash_Setup, ok: bool) {
 }
 
 crash_teardown :: proc(cs: ^Crash_Setup) {
-	if cs.batch != nil {batch_free(cs.batch)}
+	if cs.batch != nil {store.batch_free(cs.batch)}
 	os.remove_all(cs.base)
 	os.remove_all(cs.run)
 	os.remove_all(cs.src)
@@ -178,10 +182,10 @@ crash_run :: proc(
 	}
 	rb := cs.batch^
 	rb.dir, rb.disk = cs.run, &d
-	batch_run(&rb)
+	store.batch_run(&rb)
 	delete(rb.problem, runtime.heap_allocator())
 	clean := base.Disk{}
-	why := store_recover(cs.run, &clean)
+	why := store.store_recover(cs.run, &clean)
 	testing.expectf(t, why == "", "countdown %d seed %d: recovery says %s", countdown, seed, why)
 	rep := universe_check(cs.run)
 	testing.expectf(
@@ -283,7 +287,7 @@ test_backup_and_restore_survive_crashes :: proc(t: ^testing.T) {
 	}
 	os.remove_all(run_dir)
 	copy_tree(cs.base, run_dir)
-	testing.expect_value(t, backup_make(run_dir, "g00000001-t", &cd), "")
+	testing.expect_value(t, store.backup_make(run_dir, "g00000001-t", &cd), "")
 	n, stride := fault_points(counter.ops)
 	for i in 1 ..= n {
 		if i % stride != 0 && i != 1 {continue}
@@ -297,11 +301,11 @@ test_backup_and_restore_survive_crashes :: proc(t: ^testing.T) {
 		d := base.Disk {
 			faults = &faults,
 		}
-		backup_make(run_dir, "g00000001-t", &d)
+		store.backup_make(run_dir, "g00000001-t", &d)
 		base.disk_faults_destroy(&faults)
-		store_recover(run_dir, &clean)
+		store.store_recover(run_dir, &clean)
 		testing.expectf(t, state_digest(run_dir) == cs.d1, "backup point %d changed the save", i)
-		backup_rotate(run_dir, 5) // (clears what a crash left)
+		store.backup_rotate(run_dir, 5) // (clears what a crash left)
 		testing.expectf(t, universe_check(run_dir).ok, "backup point %d: does not check", i)
 	}
 	// Restores: gen 1 backed up, gen 2 saved, then restore the backup.
@@ -309,16 +313,16 @@ test_backup_and_restore_survive_crashes :: proc(t: ^testing.T) {
 		os.remove_all(dir)
 		copy_tree(cs.base, dir)
 		c := base.Disk{}
-		backup_make(dir, "g00000001-t", &c)
+		store.backup_make(dir, "g00000001-t", &c)
 		rb := cs.batch^
 		rb.dir, rb.disk = dir, &c
-		batch_run(&rb)
+		store.batch_run(&rb)
 		delete(rb.problem, runtime.heap_allocator())
 	}
 	prepare(run_dir, &cs)
 	old := state_digest(run_dir)
 	counter = base.Disk_Faults{}
-	testing.expect_value(t, universe_restore(run_dir, "latest", &cd), "")
+	testing.expect_value(t, store.universe_restore(run_dir, "latest", &cd), "")
 	restored := state_digest(run_dir)
 	testing.expect(t, restored != old, "the restore changed nothing")
 	n, stride = fault_points(counter.ops)
@@ -333,11 +337,11 @@ test_backup_and_restore_survive_crashes :: proc(t: ^testing.T) {
 		d := base.Disk {
 			faults = &faults,
 		}
-		universe_restore(run_dir, "latest", &d)
+		store.universe_restore(run_dir, "latest", &d)
 		base.disk_faults_destroy(&faults)
 		testing.expectf(
 			t,
-			store_recover(run_dir, &clean) == "",
+			store.store_recover(run_dir, &clean) == "",
 			"restore point %d: recovery failed",
 			i,
 		)
@@ -368,12 +372,12 @@ test_journal_tail_is_cut :: proc(t: ^testing.T) {
 	defer crash_teardown(&cs)
 	if !ok {return}
 	files := make([dynamic]string, context.temp_allocator)
-	walk_files(cs.base, "", &files)
+	store.walk_files(cs.base, "", &files)
 	os.remove_all(cs.run)
 	copy_tree(cs.base, cs.run)
 	for rel in files {
 		if !strings.has_suffix(rel, ".vxj") {continue}
-		f, _ := os.open(full_path(cs.run, rel), {.Write, .Append})
+		f, _ := os.open(store.full_path(cs.run, rel), {.Write, .Append})
 		os.write(f, transmute([]u8)string("torn tail after the save"))
 		os.close(f)
 	}

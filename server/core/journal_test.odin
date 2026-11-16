@@ -11,6 +11,7 @@ import "core:testing"
 import "common:game"
 import "common:protocol"
 import "common:starmap"
+import "server:store"
 
 // The edit journal. test_grief_rolled_back is the exit check: a player
 // builds a house, a pool, a chest and a field; a grief of every kind of change
@@ -430,7 +431,12 @@ test_undo_redo :: proc(t: ^testing.T) {
 // saved world's directory, as a snapshot is: its worlds/<address>/regions).
 copy_regions :: proc(s: ^Server, w: ^World, snapshot: string) {
 	from := fmt.tprintf("%s/regions", w.dir)
-	to := fmt.tprintf("%s/%s/%s/regions", snapshot, WORLDS_DIR, starmap.address_dir(w.address))
+	to := fmt.tprintf(
+		"%s/%s/%s/regions",
+		snapshot,
+		store.WORLDS_DIR,
+		starmap.address_dir(w.address),
+	)
 	os.make_directory_all(to)
 	entries, err := os.read_all_directory_by_path(from, context.temp_allocator)
 	if err != nil {return}
@@ -596,7 +602,14 @@ test_journal_matches_disk :: proc(t: ^testing.T) {
 	// when the world starts again it is dropped, and what the saved one has
 	// after the save's end is cut.
 	journal_path :: proc(dir: string, address: string, seq: u32) -> string {
-		return fmt.tprintf("%s/%s/%s/%s/%08d.vxj", dir, WORLDS_DIR, address, JOURNAL_DIR, seq)
+		return fmt.tprintf(
+			"%s/%s/%s/%s/%08d.vxj",
+			dir,
+			store.WORLDS_DIR,
+			address,
+			JOURNAL_DIR,
+			seq,
+		)
 	}
 	saved := strings.clone(journal_path(dir, address, last))
 	defer delete(saved)

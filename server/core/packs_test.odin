@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "server:store"
 
 // A universe's packs: a pack the universe lists adds a block with no
 // code of its own; the block is placed, saved by name and loaded again, and a
@@ -58,11 +59,11 @@ test_pack_block_is_placed_saved_and_loaded :: proc(t: ^testing.T) {
 	// Saved by name: the region file names it, and a game without the pack
 	// does not know it.
 	files, _ := os.read_all_directory_by_path(
-		fmt.tprintf("%s/%s", dir, WORLDS_DIR),
+		fmt.tprintf("%s/%s", dir, store.WORLDS_DIR),
 		context.temp_allocator,
 	)
 	testing.expect(t, len(files) == 1, "no world was saved")
-	regions := fmt.tprintf("%s/%s/%s/regions", dir, WORLDS_DIR, files[0].name)
+	regions := fmt.tprintf("%s/%s/%s/regions", dir, store.WORLDS_DIR, files[0].name)
 	entries, _ := os.read_all_directory_by_path(regions, context.temp_allocator)
 	testing.expect(t, len(entries) > 0, "no region was saved")
 	named := false
@@ -116,7 +117,7 @@ test_unknown_block_refuses_the_world :: proc(t: ^testing.T) {
 	)
 
 	// `unknown_blocks = air`: loads, the block is air.
-	path := fmt.tprintf("%s/%s", dir, UNIVERSE_FILE)
+	path := fmt.tprintf("%s/%s", dir, store.UNIVERSE_FILE)
 	text, _ := os.read_entire_file_from_path(path, context.temp_allocator)
 	with := fmt.tprintf("%s\nunknown_blocks = air\n", string(text))
 	_ = os.write_entire_file(path, transmute([]u8)with)
@@ -133,8 +134,8 @@ test_unknown_block_refuses_the_world :: proc(t: ^testing.T) {
 // naming where it came from; a candidate nobody lists is never loaded.
 @(test)
 test_listed_pack_is_found_among_candidates :: proc(t: ^testing.T) {
-	found := []Pack_Candidate{{source = marble_pack(), origin = "Workshop item 7"}}
-	reg, _, problems := packs_registry("", {"testpack"}, available = found)
+	found := []store.Pack_Candidate{{source = marble_pack(), origin = "Workshop item 7"}}
+	reg, _, problems := store.packs_registry("", {"testpack"}, available = found)
 	testing.expect_value(t, len(problems), 0)
 	testing.expect(t, reg != nil, "the listed pack was not found")
 	if reg != nil {
@@ -143,7 +144,7 @@ test_listed_pack_is_found_among_candidates :: proc(t: ^testing.T) {
 		game.registry_destroy(reg)
 	}
 
-	reg, _, problems = packs_registry("", nil, available = found)
+	reg, _, problems = store.packs_registry("", nil, available = found)
 	testing.expect(t, reg != nil, "an unlisted candidate stopped the universe")
 	if reg != nil {
 		_, has := game.registry_block(reg, "testpack:marble")
@@ -151,14 +152,14 @@ test_listed_pack_is_found_among_candidates :: proc(t: ^testing.T) {
 		game.registry_destroy(reg)
 	}
 
-	bad := []Pack_Candidate {
+	bad := []store.Pack_Candidate {
 		{
 			source = {namespace = "testpack"},
 			origin = "Workshop item 7",
 			problems = {"cannot read the item"},
 		},
 	}
-	reg, _, problems = packs_registry("", {"testpack"}, available = bad)
+	reg, _, problems = store.packs_registry("", {"testpack"}, available = bad)
 	testing.expect(t, reg == nil, "a bad Workshop item did not stop the universe")
 	testing.expect(
 		t,
@@ -166,7 +167,7 @@ test_listed_pack_is_found_among_candidates :: proc(t: ^testing.T) {
 		"the problem does not name the item",
 	)
 
-	reg, _, problems = packs_registry("", {"testpack"})
+	reg, _, problems = store.packs_registry("", {"testpack"})
 	testing.expect(t, reg == nil && len(problems) == 1, "a missing pack was not refused")
 }
 

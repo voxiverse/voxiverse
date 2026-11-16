@@ -8,6 +8,7 @@ import "core:path/filepath"
 import "common:base"
 import "common:game"
 import "common:protocol"
+import "server:store"
 
 // Hot reload of the packs (development builds, `Config.pack_watch`): a
 // pack author edits a file and sees it in the running game. It is a
@@ -80,7 +81,7 @@ watched :: proc(s: ^Server) -> []string {
 	dirs := make([dynamic]string, context.temp_allocator)
 	if s.reload.base_dir != "" {append(&dirs, s.reload.base_dir)}
 	for name in s.store.packs {
-		append(&dirs, fmt.tprintf("%s/%s/%s", s.store.dir, PACKS_DIR, name))
+		append(&dirs, fmt.tprintf("%s/%s/%s", s.store.dir, store.PACKS_DIR, name))
 	}
 	return dirs[:]
 }
@@ -124,7 +125,7 @@ reload_tell :: proc(s: ^Server, lines: []string) {
 
 @(private = "file")
 reload_build :: proc(s: ^Server) {
-	reg, sources, problems := packs_registry(
+	reg, sources, problems := store.packs_registry(
 		s.store.dir,
 		s.store.packs,
 		game_packs(s.config.game, s.config.extra_packs),

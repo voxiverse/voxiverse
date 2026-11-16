@@ -15,6 +15,7 @@ import "common:island"
 import "common:protocol"
 import "common:starmap"
 import "common:worldgen"
+import "server:store"
 
 // Worlds: a universe (the server) has worlds, each a voxel space of its own:
 // its generator and parameters, rules, clock, chunks, entities, liquids,
@@ -63,7 +64,7 @@ World :: struct {
 	economy:             ^World_Economy, // the markets near the observers (economy.odin; heap; nil until needed)
 	noted_changes:       [dynamic]Noted_Change, // block changes the game's block_changed hook is told before its tick (changes.odin; heap)
 	noted_dropped:       int, // ... and those past MAX_NOTED_CHANGES this tick
-	revisit:             map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (compact.odin)
+	revisit:             map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (server/store/compact.odin)
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -419,7 +420,11 @@ admin_worlds :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	}
 	saved := 0
 	if s.store.dir != "" {
-		dir := filepath.join({s.store.dir, WORLDS_DIR}, context.temp_allocator) or_else WORLDS_DIR
+		dir :=
+			filepath.join(
+				{s.store.dir, store.WORLDS_DIR},
+				context.temp_allocator,
+			) or_else store.WORLDS_DIR
 		entries, _ := os.read_all_directory_by_path(dir, context.temp_allocator)
 		for e in entries {if e.type == .Directory {saved += 1}}
 	}

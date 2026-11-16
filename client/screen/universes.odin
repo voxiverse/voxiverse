@@ -15,7 +15,7 @@ import "client:ui"
 import "common:base"
 import "common:game"
 import "common:starmap"
-import "server:core"
+import "server:store"
 
 // Singleplayer's saves: one
 // directory each under saves/ in the user data directory (or VX_SAVES),
@@ -532,7 +532,7 @@ save_export :: proc(name, file: string) -> (path, problem: string) {
 				context.temp_allocator,
 			) or_else name
 	}
-	if why := core.universe_export(dir, path, &base.Disk{}); why != "" {return "", why}
+	if why := store.universe_export(dir, path, &base.Disk{}); why != "" {return "", why}
 	return path, ""
 }
 
@@ -545,6 +545,6 @@ save_import :: proc(file, name: string) -> (path, problem: string) {
 		if name == "" {name = "Imported"}
 	}
 	path = free_save_path(name)
-	if why := core.universe_import(file, path, &base.Disk{}); why != "" {return "", why}
+	if why := store.universe_import(file, path, &base.Disk{}); why != "" {return "", why}
 	return path, ""
 }

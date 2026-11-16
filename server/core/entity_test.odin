@@ -9,6 +9,7 @@ import "core:testing"
 import "common:game"
 import "common:netcode"
 import "common:protocol"
+import "server:store"
 
 // The exit check: an entity simulated on the server, seen by the players
 // near it and only them, hit to death, and kept by the save. Over real
@@ -219,11 +220,11 @@ test_entity_list_is_touched_nowhere_else :: proc(t: ^testing.T) {
 	needle := strings.concatenate({"entities", ".list"}, context.temp_allocator)
 	for root in ([]string{"server", "client", "common", "tools"}) {
 		files := make([dynamic]string, context.temp_allocator)
-		walk_files(root, "", &files)
+		store.walk_files(root, "", &files)
 		for rel in files {
 			if !strings.has_suffix(rel, ".odin") {continue}
 			if rel == "core/entities.odin" {continue}
-			data, err := os.read_entire_file(full_path(root, rel), context.temp_allocator)
+			data, err := os.read_entire_file(store.full_path(root, rel), context.temp_allocator)
 			if err != nil {continue}
 			if strings.contains(string(data), needle) {
 				testing.expectf(t, false, "%s/%s reaches into the entity list", root, rel)

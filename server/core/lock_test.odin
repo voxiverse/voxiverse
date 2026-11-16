@@ -6,6 +6,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:base"
+import "server:store"
 
 // One process has a universe open at a time (the lock file).
 
@@ -34,7 +35,7 @@ test_second_open_sees_the_lock :: proc(t: ^testing.T) {
 	testing.expect(t, universe_lock(&first, dir), "the first open was refused")
 	testing.expect(t, refused(dir), "a second open of the same universe was allowed")
 	// An export is a second user too.
-	why := universe_export(dir, fmt.tprintf("%s.vxu", dir), &base.Disk{})
+	why := store.universe_export(dir, fmt.tprintf("%s.vxu", dir), &base.Disk{})
 	testing.expectf(
 		t,
 		strings.contains(why, "another process"),

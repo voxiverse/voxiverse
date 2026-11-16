@@ -15,6 +15,7 @@ import "common:planet"
 import "common:protocol"
 import "common:starmap"
 import "common:worldgen"
+import "server:store"
 
 // The exit check: save -> quit -> load gives back exactly the world that
 // was left (edited blocks, the player, the time, the seed), and edits survive their
@@ -306,9 +307,12 @@ test_save_round_trip :: proc(t: ^testing.T) {
 	}
 	testing.expect(
 		t,
-		os.exists(filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else "") &&
+		os.exists(filepath.join({dir, store.UNIVERSE_FILE}, context.temp_allocator) or_else "") &&
 		os.exists(
-			filepath.join({home_dir(dir, 77), WORLD_FILE}, context.temp_allocator) or_else "",
+			filepath.join(
+				{home_dir(dir, 77), store.WORLD_FILE},
+				context.temp_allocator,
+			) or_else "",
 		),
 	)
 
@@ -540,7 +544,7 @@ test_world_generator_kept :: proc(t: ^testing.T) {
 		testing.expect_value(t, srv.home.generator, worldgen.Kind.Earth)
 		testing.expect(t, harness_stop(h))
 	}
-	moved := filepath.join({home_dir(dir, 5), WORLD_FILE}, context.temp_allocator) or_else ""
+	moved := filepath.join({home_dir(dir, 5), store.WORLD_FILE}, context.temp_allocator) or_else ""
 	saved, _ := os.read_entire_file_from_path(moved, context.temp_allocator)
 	testing.expect(t, strings.contains(string(saved), "generator = "), "not written")
 	text, _ := strings.replace(
@@ -563,7 +567,7 @@ test_world_generator_kept :: proc(t: ^testing.T) {
 home_dir :: proc(dir: string, seed: i64) -> string {
 	return(
 		filepath.join(
-			{dir, WORLDS_DIR, starmap.address_dir(starmap.address_derive(u64(seed)))},
+			{dir, store.WORLDS_DIR, starmap.address_dir(starmap.address_derive(u64(seed)))},
 			context.temp_allocator,
 		) or_else dir \
 	)
@@ -572,7 +576,8 @@ home_dir :: proc(dir: string, seed: i64) -> string {
 // saved_clock: the world time in the home world's world.cfg (-1 if unreadable).
 @(private = "file")
 saved_clock :: proc(dir: string, seed: i64) -> f64 {
-	path := filepath.join({home_dir(dir, seed), WORLD_FILE}, context.temp_allocator) or_else ""
+	path :=
+		filepath.join({home_dir(dir, seed), store.WORLD_FILE}, context.temp_allocator) or_else ""
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {return -1}
 	text := string(data)
@@ -1067,7 +1072,7 @@ test_universe_records_its_game :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "universe_game"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	cfg := filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else ""
+	cfg := filepath.join({dir, store.UNIVERSE_FILE}, context.temp_allocator) or_else ""
 	recorded :: proc(cfg: string) -> string {
 		data, err := os.read_entire_file_from_path(cfg, context.temp_allocator)
 		if err != nil {return "(unreadable)"}

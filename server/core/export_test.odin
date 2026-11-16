@@ -8,8 +8,9 @@ import "core:testing"
 
 import "common:base"
 import "common:game"
+import "server:store"
 
-// A universe as one file and back (export.odin).
+// A universe as one file and back (server/store/export.odin).
 
 @(private = "file")
 Test_File :: struct {
@@ -22,8 +23,8 @@ Test_File :: struct {
 @(private = "file")
 vxu_bytes :: proc(
 	files: []Test_File,
-	save_format := SAVE_FORMAT,
-	packs := []Export_Pack{},
+	save_format := store.SAVE_FORMAT,
+	packs := []store.Export_Pack{},
 ) -> []u8 {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
@@ -31,8 +32,8 @@ vxu_bytes :: proc(
 		game.write_u32(w, u32(v))
 		game.write_u32(w, u32(v >> 32))
 	}
-	for c in EXPORT_MAGIC {game.write_u8(&w, u8(c))}
-	game.write_u32(&w, EXPORT_FORMAT)
+	for c in store.EXPORT_MAGIC {game.write_u8(&w, u8(c))}
+	game.write_u32(&w, store.EXPORT_FORMAT)
 	game.write_u32(&w, u32(save_format))
 	put_u64(&w, 1)
 	put_u64(&w, 0)
@@ -53,7 +54,7 @@ vxu_bytes :: proc(
 		crc_bytes := [4]u8{u8(crc), u8(crc >> 8), u8(crc >> 16), u8(crc >> 24)}
 		seal = hash.crc32(crc_bytes[:], seal)
 	}
-	for c in EXPORT_END {game.write_u8(&w, u8(c))}
+	for c in store.EXPORT_END {game.write_u8(&w, u8(c))}
 	game.write_u32(&w, seal)
 	return w.buf[:]
 }
@@ -64,7 +65,7 @@ vxu_bytes :: proc(
 import_of :: proc(
 	tag: string,
 	bytes: []u8,
-	limits := IMPORT_LIMITS,
+	limits := store.IMPORT_LIMITS,
 ) -> (
 	problem: string,
 	left: bool,
@@ -76,7 +77,7 @@ import_of :: proc(
 	_ = os.write_entire_file(file, bytes)
 	defer os.remove(file)
 	disk := base.Disk{}
-	problem = universe_import(file, dest, &disk, limits)
+	problem = store.universe_import(file, dest, &disk, limits)
 	left = os.exists(dest) || os.exists(fmt.tprintf("%s.import", dest))
 	os.remove_all(dest)
 	os.remove_all(fmt.tprintf("%s.import", dest))
@@ -109,7 +110,7 @@ test_export_import_round_trip :: proc(t: ^testing.T) {
 	defer delete(expect)
 	// An open universe is another process's, as far as an export goes.
 	disk := base.Disk{}
-	why := universe_export(src, file, &disk)
+	why := store.universe_export(src, file, &disk)
 	testing.expectf(
 		t,
 		strings.contains(why, "open in another process"),
@@ -118,11 +119,11 @@ test_export_import_round_trip :: proc(t: ^testing.T) {
 	)
 	grief_close(g) // (the last save, and the lock released)
 
-	testing.expectf(t, universe_export(src, file, &disk) == "", "the export failed")
-	testing.expectf(t, universe_import(file, dest, &disk) == "", "the import failed")
+	testing.expectf(t, store.universe_export(src, file, &disk) == "", "the export failed")
+	testing.expectf(t, store.universe_import(file, dest, &disk) == "", "the import failed")
 	testing.expect(
 		t,
-		universe_import(file, dest, &disk) != "",
+		store.universe_import(file, dest, &disk) != "",
 		"an existing destination was overwritten",
 	)
 	testing.expect(t, !os.exists(fmt.tprintf("%s.import", dest)), "a staging directory was left")
@@ -190,7 +191,7 @@ test_import_refuses_sizes_and_versions :: proc(t: ^testing.T) {
 	problem, _ := import_of("limits_ok", ok_file)
 	testing.expect_value(t, problem, "")
 	for c in ([]struct {
-			limits: Import_Limits,
+			limits: store.Import_Limits,
 			word:   string,
 		}{{{100, 1, 100}, "too many"}, {{100, 10, 5}, "too large"}, {{10, 10, 100}, "too large"}}) {
 		refused, left := import_of("limits", ok_file, c.limits)
@@ -200,8 +201,8 @@ test_import_refuses_sizes_and_versions :: proc(t: ^testing.T) {
 	// A header that claims more than the file holds.
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	for c in EXPORT_MAGIC {game.write_u8(&w, u8(c))}
-	for v in ([]u32{EXPORT_FORMAT, SAVE_FORMAT, 0, 0, 0, 0}) {game.write_u32(&w, v)}
+	for c in store.EXPORT_MAGIC {game.write_u8(&w, u8(c))}
+	for v in ([]u32{store.EXPORT_FORMAT, store.SAVE_FORMAT, 0, 0, 0, 0}) {game.write_u32(&w, v)}
 	game.write_varint(&w, 1)
 	game.write_string(&w, "big")
 	game.write_u32(&w, 0)
@@ -211,9 +212,9 @@ test_import_refuses_sizes_and_versions :: proc(t: ^testing.T) {
 	testing.expect(t, problem != "", "a file that claims more than it holds was accepted")
 	// A count over the limit before any entry.
 	clear(&w.buf)
-	for c in EXPORT_MAGIC {game.write_u8(&w, u8(c))}
-	for v in ([]u32{EXPORT_FORMAT, SAVE_FORMAT, 0, 0, 0, 0}) {game.write_u32(&w, v)}
-	game.write_varint(&w, IMPORT_MAX_FILES + 1)
+	for c in store.EXPORT_MAGIC {game.write_u8(&w, u8(c))}
+	for v in ([]u32{store.EXPORT_FORMAT, store.SAVE_FORMAT, 0, 0, 0, 0}) {game.write_u32(&w, v)}
+	game.write_varint(&w, store.IMPORT_MAX_FILES + 1)
 	problem, _ = import_of("count", w.buf[:])
 	testing.expect(
 		t,
@@ -221,10 +222,10 @@ test_import_refuses_sizes_and_versions :: proc(t: ^testing.T) {
 		"more files than the limit were accepted",
 	)
 	// A universe from a newer game, and an older one (it is refused when opened).
-	newer, left := import_of("newer", vxu_bytes({{"universe.cfg", "x"}}, SAVE_FORMAT + 1))
+	newer, left := import_of("newer", vxu_bytes({{"universe.cfg", "x"}}, store.SAVE_FORMAT + 1))
 	testing.expect(t, strings.contains(newer, "newer game"), "a newer universe was accepted")
 	testing.expect(t, !left, "something of the import was left")
-	problem, _ = import_of("older", vxu_bytes({{"universe.cfg", "x"}}, SAVE_FORMAT - 1))
+	problem, _ = import_of("older", vxu_bytes({{"universe.cfg", "x"}}, store.SAVE_FORMAT - 1))
 	testing.expect_value(t, problem, "")
 }
 
@@ -275,7 +276,7 @@ test_import_refuses_damaged_files :: proc(t: ^testing.T) {
 @(private = "file")
 write_pack_dir :: proc(universe: string, pack: game.Pack_Source) {
 	for f in pack.files {
-		path := fmt.tprintf("%s/%s/%s/%s", universe, PACKS_DIR, pack.namespace, f.path)
+		path := fmt.tprintf("%s/%s/%s/%s", universe, store.PACKS_DIR, pack.namespace, f.path)
 		_ = os.make_directory_all(filepath_dir(path))
 		_ = os.write_entire_file(path, f.data)
 	}
@@ -300,13 +301,13 @@ test_export_carries_packs :: proc(t: ^testing.T) {
 	}
 	_ = os.make_directory_all(src)
 	_ = os.write_entire_file(
-		fmt.tprintf("%s/%s", src, UNIVERSE_FILE),
+		fmt.tprintf("%s/%s", src, store.UNIVERSE_FILE),
 		transmute([]u8)string("format = 6\ngeneration = 1\nage = 0\npacks = testpack\n"),
 	)
 	pack := game.test_asset_pack()
 	write_pack_dir(src, pack)
 	// A server-only file travels too (an export is the universe's own backup).
-	structure_path := fmt.tprintf("%s/%s/testpack/server/structures/x.vxs", src, PACKS_DIR)
+	structure_path := fmt.tprintf("%s/%s/testpack/server/structures/x.vxs", src, store.PACKS_DIR)
 	for f in game.base_pack_source(context.temp_allocator).files {
 		if strings.has_prefix(f.path, "server/structures/") {
 			_ = os.make_directory_all(filepath_dir(structure_path))
@@ -315,7 +316,7 @@ test_export_carries_packs :: proc(t: ^testing.T) {
 		}
 	}
 	disk := base.Disk{}
-	testing.expect_value(t, export_write(src, file, &disk), "")
+	testing.expect_value(t, store.export_write(src, file, &disk), "")
 	// The header names the pack and its hash (as a player would be sent it).
 	bytes, _ := os.read_entire_file_from_path(file, context.temp_allocator)
 	sent := game.pack_hash_hex(
@@ -327,10 +328,10 @@ test_export_carries_packs :: proc(t: ^testing.T) {
 		strings.contains(string(bytes[:300]), "testpack"),
 		"the header does not list the pack and its hash",
 	)
-	testing.expect_value(t, universe_import(file, dest, &disk), "")
+	testing.expect_value(t, store.universe_import(file, dest, &disk), "")
 	testing.expect(
 		t,
-		os.exists(fmt.tprintf("%s/%s/testpack/server/structures/x.vxs", dest, PACKS_DIR)),
+		os.exists(fmt.tprintf("%s/%s/testpack/server/structures/x.vxs", dest, store.PACKS_DIR)),
 	)
 	exported := registry_for_dir(src)
 	imported := registry_for_dir(dest)
@@ -350,7 +351,7 @@ test_import_refuses_broken_packs :: proc(t: ^testing.T) {
 	for f in good.files {
 		data := string(f.data)
 		if f.path == "data/blocks/marble.json" {data = `{"marble": {"light": "bright"}}`}
-		append(&files, Test_File{fmt.tprintf("%s/testpack/%s", PACKS_DIR, f.path), data})
+		append(&files, Test_File{fmt.tprintf("%s/testpack/%s", store.PACKS_DIR, f.path), data})
 	}
 	broken := make([dynamic]game.Pack_File, context.temp_allocator)
 	for f in good.files {

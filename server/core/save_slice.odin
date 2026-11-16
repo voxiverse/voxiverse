@@ -10,6 +10,7 @@ import "core:time"
 
 import "common:base"
 import "common:game"
+import "server:store"
 
 // A save that does not stall the tick.
 //
@@ -28,7 +29,7 @@ import "common:game"
 //     are copied into Chunk_Store.cow.
 //   - Each slice encodes chunks, one by one, until SAVE_SLICE_US of the tick
 //     is used; a region's chunks go to the save worker as a Region_Job
-//     (compact.odin), which compacts and encodes the file.
+//     (server/store/compact.odin), which compacts and encodes the file.
 //
 // Counters may be a few seconds newer than the inventory beside them; that
 // is the only part of a save not from T. Timing is the wall clock's, so how
@@ -38,7 +39,7 @@ SAVE_SLICE_US :: 2000
 
 // Cap_Region: a region captured, its loaded chunks still to be encoded.
 Cap_Region :: struct {
-	job:     ^Region_Job,
+	job:     ^store.Region_Job,
 	live:    [dynamic]game.Chunk_Pos, // marked chunks to encode
 	waiting: map[game.Chunk_Pos][]game.Saved_Update, // their scheduled updates at T (heap)
 	next:    int,
@@ -59,7 +60,7 @@ Cap_Character :: struct {
 
 Save_Job :: struct {
 	id:         u32,
-	batch:      ^Save_Batch,
+	batch:      ^store.Save_Batch,
 	worlds:     [dynamic]Cap_World,
 	characters: [dynamic]Cap_Character,
 	wi, ri, ci: int, // the next world, region and character to encode
@@ -137,11 +138,14 @@ world_capture :: proc(s: ^Server, job: ^Save_Job, w: ^World) {
 	for region, changed in w.regions {
 		if !changed {continue}
 		w.regions[region] = false
-		rj := new(Region_Job, heap())
+		rj := new(store.Region_Job, heap())
 		rj.world, rj.region, rj.gen = w.address, region, w.chunks.gen
 		rj.generation = s.store.generation + 1
 		rj.reg = s.registry
-		rj.path = strings.clone(relative_path(s.store.dir, region_path(w.dir, region)), heap())
+		rj.path = strings.clone(
+			store.relative_path(s.store.dir, region_path(w.dir, region)),
+			heap(),
+		)
 		index[region] = len(cw.regions)
 		append(&cw.regions, Cap_Region{job = rj})
 	}
@@ -150,7 +154,7 @@ world_capture :: proc(s: ^Server, job: ^Save_Job, w: ^World) {
 		if i, ok := index[game.region_of(pos)]; ok {
 			append(
 				&cw.regions[i].job.chunks,
-				Job_Chunk{pos = pos, bytes = slice.clone(bytes, heap())},
+				store.Job_Chunk{pos = pos, bytes = slice.clone(bytes, heap())},
 			)
 		}
 	}
@@ -251,7 +255,7 @@ job_step :: proc(s: ^Server, job: ^Save_Job) {
 		rec.stats = r.stats
 	}
 	path := character_path(s, cc.name, rec.account)
-	batch_stage(job.batch, relative_path(st.dir, path), player_json(s.registry, &rec))
+	store.batch_stage(job.batch, store.relative_path(st.dir, path), player_json(s.registry, &rec))
 	if r, ok := &st.players[cc.name];
 	   ok && cc.forget && !r.dirty && client_by_name(s, cc.name) == nil {
 		counters_free(&r.stats)
@@ -281,7 +285,10 @@ chunk_encode :: proc(job: ^Save_Job, cw: ^Cap_World, cr: ^Cap_Region, pos: game.
 	}
 	clear(&job.writer.buf)
 	game.write_chunk_payload(&job.writer, blocks, entities, cr.waiting[pos], layers)
-	append(&cr.job.chunks, Job_Chunk{pos = pos, bytes = slice.clone(job.writer.buf[:], heap())})
+	append(
+		&cr.job.chunks,
+		store.Job_Chunk{pos = pos, bytes = slice.clone(job.writer.buf[:], heap())},
+	)
 }
 
 // job_release ends the marks and copies of a save (everything is encoded, or
@@ -310,7 +317,7 @@ job_release :: proc(s: ^Server, job: ^Save_Job) {
 @(private = "file")
 job_free :: proc(job: ^Save_Job) {
 	for &cw in job.worlds {
-		for &cr in cw.regions {if cr.job != nil {region_job_free(cr.job)}}
+		for &cr in cw.regions {if cr.job != nil {store.region_job_free(cr.job)}}
 		for &cr in cw.regions {delete(cr.live)}
 		delete(cw.regions)
 	}
@@ -330,8 +337,8 @@ save_job_commit :: proc(s: ^Server, job: ^Save_Job) -> bool {
 	ok := job.ok
 	wait := job.wait
 	if job.export {
-		name := fmt.tprintf("%s/g%d.vxu", EXPORTS_DIR, job.batch.generation)
-		st.staging.export_to = strings.clone(full_path(st.dir, name), heap())
+		name := fmt.tprintf("%s/g%d.vxu", store.EXPORTS_DIR, job.batch.generation)
+		st.staging.export_to = strings.clone(store.full_path(st.dir, name), heap())
 	}
 	job.batch = nil
 	if !ok {log.errorf("server save could not stage everything, it is committed as it is")}
@@ -357,13 +364,13 @@ save_job_abandon :: proc(s: ^Server) {
 		if slice.contains(live[:], cw.world) {
 			append(&job.worlds, cw)
 		} else {
-			for cr in cw.regions {if cr.job != nil {region_job_free(cr.job)}}
+			for cr in cw.regions {if cr.job != nil {store.region_job_free(cr.job)}}
 			delete(cw.regions)
 		}
 	}
 	delete(kept)
 	job_release(s, job)
-	if job.batch != nil {batch_free(job.batch)}
+	if job.batch != nil {store.batch_free(job.batch)}
 	job_free(job)
 }
 
@@ -381,8 +388,8 @@ save_collect :: proc(s: ^Server) -> bool {
 	job.batch = nil
 	job_free(job)
 	for j in batch.regions {
-		region_job_run(batch, j)
-		region_job_free(j)
+		store.region_job_run(batch, j)
+		store.region_job_free(j)
 	}
 	clear(&batch.regions)
 	st.staging = batch

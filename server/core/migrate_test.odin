@@ -8,6 +8,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "server:store"
 
 // fixture_expect: what a loaded fixture must hold, as expect.txt's text: the
 // hash of the chunks around its center, the character's inventory, the chests.
@@ -138,13 +139,13 @@ free_lines :: proc(lines: [dynamic]string) {
 // (empty while nothing is migrated: before 1.0 older saves are refused).
 @(test)
 test_migrations_are_a_chain :: proc(t: ^testing.T) {
-	for m, i in MIGRATIONS {
+	for m, i in store.MIGRATIONS {
 		testing.expect(t, m.name != "" && m.run != nil, "a migration needs a name and a run")
-		if i > 0 {testing.expect_value(t, m.from, MIGRATIONS[i - 1].from + 1)}
+		if i > 0 {testing.expect_value(t, m.from, store.MIGRATIONS[i - 1].from + 1)}
 	}
-	next := SAVE_FORMAT
-	for m in MIGRATIONS {next = m.from + 1}
-	testing.expect_value(t, next, SAVE_FORMAT)
+	next := store.SAVE_FORMAT
+	for m in store.MIGRATIONS {next = m.from + 1}
+	testing.expect_value(t, next, store.SAVE_FORMAT)
 }
 
 // A universe of an older format (or from before universes) is refused with
@@ -153,7 +154,7 @@ test_migrations_are_a_chain :: proc(t: ^testing.T) {
 test_older_save_is_refused :: proc(t: ^testing.T) {
 	for case_, i in ([]struct {
 			file, text: string,
-		}{{UNIVERSE_FILE, "format = 5\nseed = 7\n"}, {WORLD_FILE, "format = 4\nseed = 7\n"}}) {
+		}{{store.UNIVERSE_FILE, "format = 5\nseed = 7\n"}, {store.WORLD_FILE, "format = 4\nseed = 7\n"}}) {
 		dir := fmt.tprintf("build/test_older_save_%d", i)
 		os.remove_all(dir)
 		defer os.remove_all(dir)
@@ -172,7 +173,7 @@ test_older_save_is_refused :: proc(t: ^testing.T) {
 			context.logger = log.nil_logger() // (the refusal is the point)
 			testing.expect(t, !harness_start(h, config), "an older save was opened")
 		}
-		testing.expect_value(t, h.srv.refusal, OLDER_BUILD)
+		testing.expect_value(t, h.srv.refusal, store.OLDER_BUILD)
 		data, _ := os.read_entire_file_from_path(path, context.temp_allocator)
 		testing.expect_value(t, string(data), case_.text)
 	}
@@ -198,15 +199,15 @@ test_containers_cfg_world_is_refused :: proc(t: ^testing.T) {
 		harness_stop(h)
 	}
 	worlds, _ := os.read_all_directory_by_path(
-		fmt.tprintf("%s/%s", dir, WORLDS_DIR),
+		fmt.tprintf("%s/%s", dir, store.WORLDS_DIR),
 		context.temp_allocator,
 	)
 	testing.expect(t, len(worlds) == 1)
-	path := fmt.tprintf("%s/%s/%s/containers.cfg", dir, WORLDS_DIR, worlds[0].name)
+	path := fmt.tprintf("%s/%s/%s/containers.cfg", dir, store.WORLDS_DIR, worlds[0].name)
 	testing.expect(t, os.write_entire_file(path, transmute([]u8)string("1 2 3\n")) == nil)
 	h := new(Harness)
 	defer free(h)
 	context.logger = log.nil_logger()
 	testing.expect(t, !harness_start(h, config), "a world with a containers.cfg was opened")
-	testing.expect_value(t, h.srv.refusal, OLDER_BUILD)
+	testing.expect_value(t, h.srv.refusal, store.OLDER_BUILD)
 }

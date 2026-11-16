@@ -22,6 +22,7 @@ import "common:protocol"
 import "common:starmap"
 import "common:worldgen"
 import "server:core"
+import "server:store"
 
 // A Session is one visit to a world: from choosing Singleplayer until
 // leaving. It owns the connection (to its own in-process server, or over
@@ -105,7 +106,7 @@ Session :: struct {
 	notices:          [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
 	welcome:          protocol.Welcome,
 	reg:              ^game.Registry, // what the blocks and items are: the game's, or (hosting) the universe's
-	available:        []core.Pack_Candidate, // packs found outside the universe: local, Workshop (arena)
+	available:        []store.Pack_Candidate, // packs found outside the universe: local, Workshop (arena)
 	reg_owned:        bool, // reg is the universe's own (freed with the session)
 	reg_fresh:        ^game.Registry, // the registry the server's reload made, waiting for the mesh jobs to end (hot reload; the App swaps it in)
 	reg_swapped:      bool, // reg was replaced by the packs of the server joined (the App makes the new items' icons, then clears it)

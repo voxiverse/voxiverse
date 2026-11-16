@@ -12,6 +12,7 @@ import "common:base"
 import "common:game"
 import "common:netcode"
 import "common:worldgen"
+import "server:store"
 
 // Admin commands: what a player who may cheat can ask of the server, as
 // text (game.Command; the console's commands send them). Each one checks its
@@ -303,7 +304,7 @@ admin_export :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		c,
 		fmt.tprintf(
 			"Exporting to %s/g%d.vxu (see the server log when it is written)",
-			EXPORTS_DIR,
+			store.EXPORTS_DIR,
 			s.store.generation + 1,
 		),
 	)

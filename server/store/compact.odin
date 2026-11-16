@@ -1,4 +1,4 @@
-package core
+package store
 
 import "base:runtime"
 import "core:slice"
@@ -135,41 +135,4 @@ blocks_equal :: proc(x, y: ^game.Chunk_Blocks) -> bool {
 		if game.chunk_get(x, l) != game.chunk_get(y, l) {return false}
 	}
 	return true
-}
-
-// compaction_apply: the server's side once a batch committed. A dropped chunk
-// that is as it was at the capture (loaded or not) is natural now.
-compaction_apply :: proc(s: ^Server, b: ^Save_Batch) {
-	for j in b.regions {
-		w: ^World
-		for x in s.worlds {if x.address == j.world {w = x}}
-		if w == nil {continue}
-		for c in j.chunks {
-			if !c.dropped {continue}
-			if saved, ok := w.saved[c.pos]; ok {
-				if string(saved) == string(c.bytes) {
-					delete(saved)
-					delete_key(&w.saved, c.pos)
-				}
-			} else if chunk := chunks_get(&w.chunks, c.pos);
-			   chunk != nil && chunk.state == .Ready {
-				if chunk.modified && string(chunk_bytes(chunk)) == string(c.bytes) {
-					chunk.modified = false
-				}
-			}
-		}
-		for t in j.tops_dropped {
-			if top, ok := w.tops[{t.x, t.z}];
-			   ok && top == t.top {delete_key(&w.tops, [2]i32{t.x, t.z})}
-		}
-	}
-}
-
-// chunk_bytes: c's blocks as saved (temp).
-@(private = "file")
-chunk_bytes :: proc(c: ^Chunk) -> []u8 {
-	w: game.Writer
-	game.writer_init(&w, context.temp_allocator)
-	game.write_chunk_payload(&w, &c.blocks, c.block_entities[:])
-	return w.buf[:]
 }

@@ -12,6 +12,7 @@ import "common:game"
 import "common:protocol"
 import "common:starmap"
 import "common:worldgen"
+import "server:store"
 
 // An address is the same kind of world in any universe (its parameters and
 // rules), with terrain of its own (the seed); the home world is Earth's.
@@ -153,7 +154,7 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, stats(srv).worlds, 1)
 	away_regions :=
 		filepath.join(
-			{dir, WORLDS_DIR, starmap.address_dir(away), "regions"},
+			{dir, store.WORLDS_DIR, starmap.address_dir(away), "regions"},
 			context.temp_allocator,
 		) or_else ""
 	entries, _ := os.read_all_directory_by_path(away_regions, context.temp_allocator)

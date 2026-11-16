@@ -22,6 +22,7 @@ import "common:telemetry"
 import "common:worldgen"
 import "server:collector"
 import steam_server "server:steam"
+import "server:store"
 
 // The authoritative side of a world, on its own thread at game.TICK_RATE.
 // Everything it owns lives in its session arena and is freed at once by
@@ -82,7 +83,7 @@ Config :: struct {
 	steam:                 ^steam_server.Server, // checks joining players' Steam tickets (nil or off: tickets are ignored); the caller opens and shuts it
 	watchdog_seconds:      int, // kill on a deadlocked tick (>0: seconds, default 60 on dedicated, 0: off)
 	extra_packs:           []game.Pack_Source, // packs besides the universe's own and the game's (tests, tools), loaded last
-	available_packs:       []Pack_Candidate, // where a listed pack the universe lacks is found, in order (the client's local packs, the Workshop)
+	available_packs:       []store.Pack_Candidate, // where a listed pack the universe lacks is found, in order (the client's local packs, the Workshop)
 	game:                  Game, // the game the server runs (games/): every session plays one, so start refuses a config without it
 }
 

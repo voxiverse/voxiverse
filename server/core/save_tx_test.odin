@@ -7,19 +7,20 @@ import "core:testing"
 
 import "common:base"
 import "common:game"
+import "server:store"
 
 // A small universe by hand: a.txt and sub/b.txt exist, d.txt is to go; the
 // save changes a, creates sub/c.txt and deletes d.
-tx_world :: proc(dir: string) -> ^Save_Batch {
+tx_world :: proc(dir: string) -> ^store.Save_Batch {
 	os.remove_all(dir)
 	os.make_directory_all(fmt.tprintf("%s/sub", dir))
 	_ = os.write_entire_file(fmt.tprintf("%s/a.txt", dir), transmute([]u8)string("a1"))
 	_ = os.write_entire_file(fmt.tprintf("%s/sub/b.txt", dir), transmute([]u8)string("b1"))
 	_ = os.write_entire_file(fmt.tprintf("%s/d.txt", dir), transmute([]u8)string("d1"))
-	b := batch_make(dir, 2, 100, nil)
-	batch_stage(b, "a.txt", transmute([]u8)string("a2"))
-	batch_stage(b, "sub/c.txt", transmute([]u8)string("c2"))
-	batch_delete(b, "d.txt")
+	b := store.batch_make(dir, 2, 100, nil)
+	store.batch_stage(b, "a.txt", transmute([]u8)string("a2"))
+	store.batch_stage(b, "sub/c.txt", transmute([]u8)string("c2"))
+	store.batch_delete(b, "d.txt")
 	return b
 }
 
@@ -35,9 +36,9 @@ test_recovery_finishes_or_undoes :: proc(t: ^testing.T) {
 		faults = &faults,
 	}
 	probe.disk = &pd
-	batch_run(probe)
+	store.batch_run(probe)
 	ops := faults.ops
-	batch_free(probe)
+	store.batch_free(probe)
 	old_digest, new_digest := u64(0), state_digest(dir)
 	seen: [2]int
 	for countdown in 1 ..= ops {
@@ -51,19 +52,19 @@ test_recovery_finishes_or_undoes :: proc(t: ^testing.T) {
 			faults = &f,
 		}
 		b.disk = &d
-		batch_run(b)
-		batch_free(b)
+		store.batch_run(b)
+		store.batch_free(b)
 		clean := base.Disk{}
-		testing.expect_value(t, store_recover(dir, &clean), "")
+		testing.expect_value(t, store.store_recover(dir, &clean), "")
 		first := state_digest(dir)
-		testing.expect_value(t, store_recover(dir, &clean), "")
+		testing.expect_value(t, store.store_recover(dir, &clean), "")
 		testing.expect_value(t, state_digest(dir), first)
 		files := make([dynamic]string, context.temp_allocator)
-		walk_files(dir, "", &files)
+		store.walk_files(dir, "", &files)
 		for rel in files {
 			testing.expectf(
 				t,
-				rel != TX_FILE && rel != "a.txt.new",
+				rel != store.TX_FILE && rel != "a.txt.new",
 				"countdown %d left %s",
 				countdown,
 				rel,
@@ -125,7 +126,7 @@ test_relative_path_follows_full_path :: proc(t: ^testing.T) {
 	for dir in ([]string{"build/test_rel", "build/test_rel/", "world"}) {
 		testing.expect_value(
 			t,
-			relative_path(dir, full_path(dir, "regions/r.0.0.vxr")),
+			store.relative_path(dir, store.full_path(dir, "regions/r.0.0.vxr")),
 			"regions/r.0.0.vxr",
 		)
 	}
