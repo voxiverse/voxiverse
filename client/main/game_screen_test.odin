@@ -140,3 +140,33 @@ test_a_games_actions_name_their_keys :: proc(t: ^testing.T) {
 	shop_frame(app)
 	testing.expect(t, !engine.game_action_pressed(s, 0), "a press lasted past its frame")
 }
+
+// A game's own keys (a strategy game's hotkeys): named, pressed and held while the world
+// has the keyboard, and not while a screen over it does.
+@(test)
+test_a_games_own_keys :: proc(t: ^testing.T) {
+	f: Shop_Fixture
+	shop_fixture(t, &f)
+	defer shop_fixture_destroy(&f)
+	app, s := f.app, f.s
+	s.game.keys = {{"Group 1", .Num_1}, {"Stop", .S}}
+	app.input.pressed += {.Num_1}
+	app.input.held += {.Num_1}
+	shop_frame(app)
+	testing.expect_value(t, engine.game_key_label(s, 0), "1")
+	testing.expect_value(t, engine.game_key_label(s, 1), "S")
+	testing.expect_value(t, engine.game_key_label(s, 2), "")
+	testing.expect(t, engine.game_key_pressed(s, 0), "the key's press was not heard")
+	testing.expect(t, engine.game_key_down(s, 0))
+	testing.expect(t, !engine.game_key_pressed(s, 1))
+	app.input.pressed = {}
+	shop_frame(app)
+	testing.expect(t, !engine.game_key_pressed(s, 0), "a press lasted past its frame")
+	testing.expect(t, engine.game_key_down(s, 0), "held, but not down")
+	// A screen over the world has the keyboard: the game's keys are not heard.
+	engine.game_screen_open(s)
+	app.input.pressed += {.Num_1}
+	shop_frame(app)
+	shop_frame(app)
+	testing.expect(t, !engine.game_key_pressed(s, 0), "heard under its screen")
+}

@@ -5,6 +5,7 @@ import "core:log"
 import "core:mem"
 import "core:mem/virtual"
 
+import "client:platform"
 import "client:ui"
 import "common:game"
 import "common:protocol"
@@ -29,6 +30,21 @@ Game :: struct {
 	camera:     proc(s: ^Session) -> Game_Camera, // the camera it wants, every frame (nil: the player's own, F5)
 	actions:    []string, // its own actions' names (at most game.MAX_GAME_ACTIONS): keys Game_1.. press them, its server part's action hook hears them
 	screen:     proc(s: ^Session, ctx: ^ui.Context, top: bool), // its screen, every frame while it is open (game_screen_open): a panel over the world drawn with the UI kit; top: it has the focus
+	keys:       []Game_Key, // its client part's own keys (at most MAX_GAME_KEYS): a command panel's hotkeys, control groups; read with game_key_pressed and game_key_down, never sent
+}
+
+// MAX_GAME_KEYS: the keys a game's client part may declare (Game.keys).
+MAX_GAME_KEYS :: 32
+
+// Game_Key: one of a game's own keys: what it does (shown in the controls' words of the
+// game's HUD) and the key that does it. Unlike its actions (Game.actions: rebindable,
+// sent to its server part), these are its client part's to read alone: a strategy game's
+// many hotkeys and its control groups on the number keys. While the world has the
+// keyboard, a game's key is the game's: an engine action on the same key (a hotbar slot
+// on a number) still fires as well, so a game that takes the number keys plays bodiless.
+Game_Key :: struct {
+	name: string,
+	key:  platform.Key,
 }
 
 // The game's screen: a panel of the game's own over the world (a town's market, a shop),
@@ -68,6 +84,25 @@ game_action_key :: proc(s: ^Session, index: int) -> string {
 	return string(k.text[:k.len])
 }
 
+// game_key_pressed: the game's own key `index` (into Game.keys) went down this frame,
+// while the world has the keyboard.
+game_key_pressed :: proc(s: ^Session, index: int) -> bool {
+	return index >= 0 && index < len(s.game.keys) && index in s.game_key_pressed
+}
+
+// game_key_down: the game's own key `index` is held, while the world has the keyboard.
+game_key_down :: proc(s: ^Session, index: int) -> bool {
+	return index >= 0 && index < len(s.game.keys) && index in s.game_key_down
+}
+
+// game_key_label: the name of the game's own key `index` as the player's keyboard prints
+// it ("" for a key the game has not).
+game_key_label :: proc(s: ^Session, index: int) -> string {
+	if index < 0 || index >= len(s.game.keys) {return ""}
+	k := &s.game_key_labels[index]
+	return string(k.text[:k.len])
+}
+
 // game_action_pressed: the key of the game's action `index` was pressed this frame,
 // wherever the keyboard is (over the world or the game's own screen: the key that opened
 // a screen may close it). Over the world the action also goes to the server part.
@@ -77,8 +112,8 @@ game_action_pressed :: proc(s: ^Session, index: int) -> bool {
 
 // game_screen_sync (every frame): the overlay stack holds the game's screen while the
 // session playing has it open, and only then; the names of the keys bound to the game's
-// actions are taken from the settings (game_action_key), and which were pressed from the
-// actions (game_action_pressed).
+// actions are taken from the settings (game_action_key), which were pressed from the
+// actions (game_action_pressed), and its own keys' state from the input (game_key_pressed).
 game_screen_sync :: proc(app: ^App) {
 	s := app.session
 	if s != nil {
@@ -87,6 +122,15 @@ game_screen_sync :: proc(app: ^App) {
 			label := key_label(&app.window, action_key(&app.settings.keys, action)^)
 			s.game_keys[i].len = u8(copy(s.game_keys[i].text[:], label))
 			if key_action_pressed(&app.actions, action) {s.game_pressed += {i}}
+		}
+		s.game_key_pressed, s.game_key_down = {}, {}
+		world := game_controls(app)
+		for k, i in s.game.keys[:min(len(s.game.keys), MAX_GAME_KEYS)] {
+			label := key_label(&app.window, k.key)
+			s.game_key_labels[i].len = u8(copy(s.game_key_labels[i].text[:], label))
+			if !world || k.key == .Unknown {continue}
+			if k.key in app.input.pressed {s.game_key_pressed += {i}}
+			if k.key in app.input.held {s.game_key_down += {i}}
 		}
 	}
 	if s != nil && s.state != .Playing {s.game_screen = false} 	// (the world left: closed)

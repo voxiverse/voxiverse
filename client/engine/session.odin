@@ -207,6 +207,9 @@ Session :: struct {
 	game_screen:      bool, // the game's screen is open (game_screen_open; game.odin)
 	game_keys:        [protocol.MAX_GAME_ACTIONS]Key_Label, // the keys bound to its actions, named (game_action_key)
 	game_pressed:     bit_set[0 ..< protocol.MAX_GAME_ACTIONS], // its actions pressed this frame (game_action_pressed)
+	game_key_pressed: bit_set[0 ..< MAX_GAME_KEYS], // its own keys pressed this frame (game_key_pressed)
+	game_key_down:    bit_set[0 ..< MAX_GAME_KEYS], // ... and held
+	game_key_labels:  [MAX_GAME_KEYS]Key_Label, // ... named
 	game_playing:     bool, // its started hook ran (so ended will)
 	config:           Session_Config,
 	net:              Net_Stats,
