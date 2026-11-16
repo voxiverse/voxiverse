@@ -109,7 +109,7 @@ entity_removed :: proc(w: ^World, p: game.Block_Pos, cause: Act) {
 	c := chunks_get(&w.chunks, game.chunk_of(p))
 	at, _ := game.block_entity_find(c.block_entities[:], value.local)
 	ordered_remove(&c.block_entities, at)
-	if value.kind == .Container {container_gone(w, p, &value, cause)}
+	if value.kind == .Container || value.kind == .Machine {container_gone(w, p, &value, cause)}
 }
 
 // journal_entity keeps the value of an entity a journal entry removed: in

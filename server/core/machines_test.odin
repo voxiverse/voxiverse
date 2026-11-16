@@ -158,8 +158,15 @@ test_machines_think_when_woken_in_batches_by_kind :: proc(t: ^testing.T) {
 	// Broken: gone, what it held spilled, never thinking again.
 	machine_slots(w, ovens[0])[1] = {game.item_of_block(s.registry, .Stone), 4, 0, 0}
 	machine_wake(w, ovens[0], 1)
+	stacks :: proc(w: ^World) -> (n: int) {
+		it := entities_each(w)
+		for h in entities_next(&it) {if !game.stack_empty(entity_stack(w, h)^) {n += 1}}
+		return
+	}
+	lying := stacks(w)
 	testing.expect(t, set_block(w, ovens[0], .Air, act))
 	testing.expect(t, machine_data(w, ovens[0], Oven) == nil)
+	testing.expect_value(t, stacks(w), lying + 1) // (what it held, spilled)
 	before := l.count
 	harness_step(&rig.sess.h, 3)
 	testing.expect_value(t, l.count, before)
