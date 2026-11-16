@@ -104,6 +104,8 @@ Game :: struct {
 	hurt:         proc(s: ^Server, c: ^Client, harm: Harm), // c was hurt and lives (its health already less)
 	died:         proc(s: ^Server, c: ^Client, harm: Harm), // c died of harm (already told, counted and its things dropped)
 	respawned:    proc(s: ^Server, c: ^Client), // c stands again: at the world's spawn, full health, the mode's kit (the game may move it, change what it holds)
+	save:         proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
+	load:         proc(s: ^Server, text: string) -> (ok: bool), // its game.cfg, after start, before the first tick (a universe that has one); false: start fails
 	pack:         game.Pack_Source, // its own pack (games/<game>/pack, named for the game; its shared package's): loaded only where it is played (game_packs)
 }
 
@@ -369,6 +371,11 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	}
 	if config.game.start != nil && !config.game.start(s) {
 		log.errorf("server game did not start game=%s", config.game.id)
+		teardown(s, world = true)
+		return false
+	}
+	if !game_load(s) {
+		if config.game.stop != nil {config.game.stop(s)} 	// (its start succeeded)
 		teardown(s, world = true)
 		return false
 	}

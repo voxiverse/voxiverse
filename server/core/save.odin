@@ -43,6 +43,7 @@ import "common:worldgen"
 AUTOSAVE_SECONDS :: 60
 
 UNIVERSE_FILE :: "universe.cfg"
+GAME_FILE :: "game.cfg" // what the game keeps (Game.save and load)
 WORLDS_DIR :: "worlds"
 WORLD_FILE :: "world.cfg"
 ENTITIES_FILE :: "entities.cfg"
@@ -1479,4 +1480,33 @@ economy_check :: proc(data: []u8) -> bool {
 	s, ok := economy_decode(data)
 	if ok {saved_destroy(&s)}
 	return ok
+}
+
+// game_save: the game's game.cfg, what its save hook writes (nothing without one).
+@(private)
+game_save :: proc(s: ^Server) {
+	if s.config.game.save == nil {return}
+	b := strings.builder_make(context.temp_allocator)
+	s.config.game.save(s, &b)
+	store_write(
+		s,
+		filepath.join({s.store.dir, GAME_FILE}, context.temp_allocator) or_else GAME_FILE,
+		b.buf[:],
+	)
+}
+
+// game_load: the universe's game.cfg, given to the game's load hook (a universe
+// without one, or a game without the hook: nothing to do). False (the refusal
+// said) when the game does not understand it or it cannot be read.
+@(private)
+game_load :: proc(s: ^Server) -> bool {
+	g := &s.config.game
+	if g.load == nil || s.store.dir == "" {return true}
+	path := filepath.join({s.store.dir, GAME_FILE}, context.temp_allocator) or_else GAME_FILE
+	if !os.exists(path) {return true}
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err == nil && g.load(s, string(data)) {return true}
+	s.refusal = fmt.tprintf("this universe's %s is not one %s understands", GAME_FILE, g.id)
+	log.errorf("server game state not loaded path=%s game=%s error=%v", path, g.id, err)
+	return false
 }

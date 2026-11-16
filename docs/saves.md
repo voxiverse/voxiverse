@@ -9,6 +9,7 @@ else is.
 
 ```
 universe.cfg            format, seed, game, home world, kit, generation, age
+game.cfg                what the game keeps, as its save hook writes it (only a game with one)
 save.tx                 only while a save is being applied (the commit record)
 permissions.cfg, community.cfg
 characters/<account>/<name>.json   (players/<name>.json: a character file from before accounts, still read)

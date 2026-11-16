@@ -84,6 +84,7 @@ save_begin :: proc(s: ^Server, only: ^World = nil, export := false) -> bool {
 	game.writer_init(&job.writer, heap())
 	if only == nil {
 		write_universe_file(s)
+		game_save(s)
 		permissions_save(s)
 		community_save(s)
 		characters_capture(s, job)

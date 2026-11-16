@@ -50,6 +50,8 @@ client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 | `died(s, c, harm)` | A player died of `harm`, after the engine's death: the line told, `kills` and `deaths` counted, its things dropped (by its mode and the world's rules) | the server's |
 | `respawned(s, c)` | A dead player stands again, after the engine stood it at the world's spawn with full health and its mode's kit: the game may move it (`teleport`) and change what it holds. Also for a dead player who leaves, after `left` | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
+| `save(s, out)` | A save captures this tick (an autosave, `/save`, the last one): the game writes what it keeps to the `strings.Builder` as text, saved with the universe as `game.cfg` in the same transaction ([saves.md](saves.md)) | the server's (the last save: the caller's) |
+| `load(s, text) -> bool` | Right after `start`, in a universe that has a `game.cfg`: its text; false: the game does not understand it, and the universe is refused (`stop` is called, `start` fails) | the caller's |
 
 A game reaches the server through the procedures and types listed below and the fields of
 `Server`, `Client` and `World`. Much of `server/core` is visible to Odin code outside it; a game
@@ -221,7 +223,11 @@ so game code holds no casts. A game names them once:
 state :: proc(s: ^core.Server) -> ^Round {return core.game_state(s, Round)}
 ```
 
-Anything a game keeps beyond these blocks it frees in its own hooks.
+Anything a game keeps beyond these blocks it frees in its own hooks. Both live as long as the
+session: what a game keeps across sessions (a record, a ladder, its admin's settings) it
+writes with its `save` hook, as text of its own choosing, and reads back with `load` after
+`start` (`game.cfg` in the universe, [saves.md](saves.md)). A scratch world (no universe
+directory) saves nothing.
 
 ## Records and events
 

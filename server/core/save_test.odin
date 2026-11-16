@@ -1099,3 +1099,61 @@ test_universe_records_its_game :: proc(t: ^testing.T) {
 	testing.expect(t, harness_stop(h))
 	testing.expect_value(t, recorded(cfg), "other")
 }
+
+// A game keeps what it chooses with the universe: its save hook's text is game.cfg,
+// written with every save, and its load hook reads it back after start in the next
+// session; a game.cfg the game does not understand refuses the universe.
+@(private = "file")
+Saved_Count :: struct {
+	count: int,
+}
+
+@(test)
+test_game_saves_its_state :: proc(t: ^testing.T) {
+	dir :=
+		filepath.join({"build", "test", "universe_game_state"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	config := harness_world()
+	config.save_dir = dir
+	config.game = Game {
+		info = {id = "counter"},
+		server_state = Saved_Count,
+		save = proc(s: ^Server, out: ^strings.Builder) {
+			fmt.sbprintfln(out, "count = %d", game_state(s, Saved_Count).count)
+		},
+		load = proc(s: ^Server, text: string) -> bool {
+			value := strings.trim_space(strings.trim_prefix(strings.trim_space(text), "count ="))
+			n, ok := strconv.parse_int(value)
+			game_state(s, Saved_Count).count = n
+			return ok
+		},
+	}
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	testing.expect_value(t, game_state(&h.srv, Saved_Count).count, 0) // (a new universe: nothing to load)
+	game_state(&h.srv, Saved_Count).count = 7
+	testing.expect(t, harness_stop(h))
+	path := filepath.join({dir, GAME_FILE}, context.temp_allocator) or_else ""
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	testing.expect(t, err == nil, "no game.cfg")
+	testing.expect_value(t, string(data), "count = 7\n")
+
+	// The next session loads it after start.
+	if !testing.expect(t, harness_start(h, config)) {return}
+	testing.expect_value(t, game_state(&h.srv, Saved_Count).count, 7)
+	testing.expect(t, harness_stop(h))
+
+	// One the game does not understand: the universe is refused, and says why.
+	testing.expect(t, os.write_entire_file(path, transmute([]u8)string("count = many\n")) == nil)
+	{
+		context.logger = log.nil_logger() // (the refusal is logged: the point)
+		testing.expect(t, !harness_start(h, config), "a game.cfg not understood was played")
+	}
+	testing.expect_value(
+		t,
+		h.srv.refusal,
+		"this universe's game.cfg is not one counter understands",
+	)
+}
