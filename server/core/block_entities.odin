@@ -99,6 +99,7 @@ entity_made :: proc(w: ^World, p: game.Block_Pos, kind: game.Block_Entity_Kind) 
 		&c.block_entities,
 		game.Block_Entity{local = u16(game.local_index(game.local_of(p))), kind = kind},
 	)
+	if kind == .Machine || kind == .Belt {working_note(w, c.pos, true)}
 }
 
 @(private = "file")
@@ -112,6 +113,7 @@ entity_removed :: proc(w: ^World, p: game.Block_Pos, cause: Act) {
 	c := chunks_get(&w.chunks, game.chunk_of(p))
 	at, _ := game.block_entity_find(c.block_entities[:], value.local)
 	ordered_remove(&c.block_entities, at)
+	if value.kind == .Machine || value.kind == .Belt {working_note(w, c.pos, working_chunk(c))}
 	if value.kind == .Belt {
 		// (what it carried spills as a chest's stacks)
 		stacks := game.lane_stacks(&value.lane)

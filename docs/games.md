@@ -320,6 +320,17 @@ p, T)`), its first `n` slots (`machine_slots`: its inventory, in the item ledger
 spilled when it is broken) and when it thinks next. Building and breaking one is a block edit
 like any (the journal keeps a broken one's value for undo).
 
+**Away from players.** A factory works wherever its players are: a chunk holding a machine
+or a belt (a working chunk) stays loaded, and so simulated, with nobody near, and the world
+remembers which chunks they are (`world.cfg`), so after a restart they load and work again
+before anyone comes. The budget is `core.MAX_WORKING_CHUNKS` (512) a world, the lowest by
+position; a working chunk past it works only while a player is near and pauses when none is
+(its machines think on, as due, when it loads again: nothing is caught up). That is the
+honest minimum: the same rules run, so nothing differs between a factory watched and one
+left, at the cost of keeping its chunks in memory; catching up on load from elapsed time
+would need every game to model its production twice. (A world other than the home world
+still closes when nobody has been in it for a while, its factory with it.)
+
 A machine sleeps until woken: `machine_wake(w, p, ticks)` has it think once, that many ticks
 on (the earlier of two wakes stands), and each tick the game's `machines` hook is given every
 machine whose time has come, one call per block type, lowest position first, so tens of

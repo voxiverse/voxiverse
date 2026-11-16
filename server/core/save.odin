@@ -216,6 +216,7 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 		machines_loaded(w, chunk)
 		belts_loaded(w, chunk)
 		grids_chunk(w, chunk, true)
+		working_note(w, chunk.pos, working_chunk(chunk))
 	}
 	sim_restore(w, pos, waiting[:]) // (what was waiting when it was saved, as due then)
 	sim_wake_box(w, origin, origin + game.CHUNK_SIZE - 1, 0) // flowing again where it was
@@ -607,6 +608,10 @@ write_world_file :: proc(w: ^World) -> bool {
 	fmt.sbprintfln(&b, "journal.segment = %d", w.journal.seq)
 	fmt.sbprintfln(&b, "journal.offset = %d", w.journal.file_bytes)
 	fmt.sbprintfln(&b, "journal.next_action = %d", w.journal.next_action if w.started else 1)
+	working := make([dynamic]game.Chunk_Pos, 0, len(w.working), context.temp_allocator)
+	for pos in w.working {append(&working, pos)}
+	slice.sort_by(working[:], game.chunk_pos_less)
+	for pos in working {fmt.sbprintfln(&b, "working = %d,%d,%d", pos.x, pos.y, pos.z)}
 	strings.write_string(&b, "\n")
 	base.vars_write(game.rules_table(), &w.rules, &b)
 	base.vars_write(worldgen.params_table(), &w.params, &b)
@@ -680,6 +685,13 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 			if n, ok := strconv.parse_u64(value, 10); ok {w.journal_resume.offset = n}
 		case key == "journal.next_action":
 			if n, ok := strconv.parse_u64(value, 10); ok {w.journal_resume.next_action = u32(n)}
+		case key == "working":
+			// A chunk that held machines or belts: loaded and working again at once.
+			at: game.Chunk_Pos
+			parts := strings.split(value, ",", context.temp_allocator)
+			if len(parts) != 3 {continue}
+			for part, i in parts {at[i] = i32(strconv.parse_int(part) or_else 0)}
+			if game.in_world(at) {working_note(w, at, true)}
 		case strings.has_prefix(key, "rules."), strings.has_prefix(key, "worldgen."):
 			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
 		}

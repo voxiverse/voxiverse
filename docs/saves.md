@@ -183,6 +183,10 @@ releases the lock with its process, so a crash leaves no stale lock.
 
 ## Formats
 
+A world's `world.cfg` also lists its working chunks (`working = x,y,z`, a line each: the
+chunks holding a game's machines or belts, loaded again as the world opens: games.md,
+Machines).
+
 `SAVE_FORMAT` (10) is recorded in `universe.cfg` and in each `world.cfg`. A universe of an older format the migrations reach is brought up to date when it is opened, any other refused (see [Migrations](#migrations)).
 
 ### Region format 5

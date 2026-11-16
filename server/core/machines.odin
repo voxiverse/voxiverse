@@ -1,6 +1,7 @@
 package core
 
 import "base:runtime"
+import "core:log"
 import "core:mem"
 import "core:slice"
 
@@ -23,6 +24,15 @@ import "common:protocol"
 // changes and with the chunk; what it holds is in the item ledger as a chest's is.
 
 MAX_MACHINE_THINKS :: 1 << 15 // in one tick (more wait for the next)
+
+// A factory works wherever its players are: a chunk holding a machine or a belt (a working
+// chunk) stays loaded, and so simulated, with nobody near, as world_keep's areas do, and the
+// world remembers which chunks they are (world.cfg's `working` lines), so after a restart
+// they load and work again before anyone comes. The rule's budget: at most
+// MAX_WORKING_CHUNKS a world (the lowest by position); a chunk past it works only while a
+// player is near, and pauses when none is (its machines think on when it loads again, as
+// due, never catching up on what they missed).
+MAX_WORKING_CHUNKS :: 512
 
 Machine_Due :: struct {
 	due: u64, // server age
@@ -194,6 +204,32 @@ machines_loaded :: proc(w: ^World, chunk: ^Chunk) {
 		if e.kind != .Machine || e.due == 0 {continue}
 		queue_push(&w.machines, origin + game.local_from_index(int(e.local)), e.due)
 	}
+}
+
+// working_note: chunk holds a machine or a belt (holds false: no longer). The chunks kept
+// are the lowest MAX_WORKING_CHUNKS by position.
+@(private)
+working_note :: proc(w: ^World, chunk: game.Chunk_Pos, holds: bool) {
+	if (chunk in w.working) == holds {return}
+	if w.working == nil {w.working = make(map[game.Chunk_Pos]bool, heap_alloc())}
+	if holds {w.working[chunk] = false} else {delete_key(&w.working, chunk)}
+	all := make([dynamic]game.Chunk_Pos, 0, len(w.working), context.temp_allocator)
+	for pos in w.working {append(&all, pos)}
+	slice.sort_by(all[:], game.chunk_pos_less)
+	for pos, i in all {w.working[pos] = i < MAX_WORKING_CHUNKS}
+	if holds && len(all) == MAX_WORKING_CHUNKS + 1 {
+		log.warnf(
+			"server more working chunks than kept (%d): those past it work only with a player near",
+			MAX_WORKING_CHUNKS,
+		)
+	}
+}
+
+// working_chunk: whether chunk (loaded) holds a machine or a belt.
+@(private)
+working_chunk :: proc(c: ^Chunk) -> bool {
+	for e in c.block_entities {if e.kind == .Machine || e.kind == .Belt {return true}}
+	return false
 }
 
 // items_made, items_used: the game's machines made or used up count of item (a furnace's

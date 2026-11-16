@@ -207,11 +207,13 @@ client_wants :: proc(c: ^Client, pos: game.Chunk_Pos, config: Config, margin: i3
 	)
 }
 
-// anyone_wants: some playing client wants pos, or w keeps it (world_keep).
+// anyone_wants: some playing client wants pos, or w keeps it (world_keep, or a working
+// chunk within the budget: machines.odin).
 @(private)
 anyone_wants :: proc(w: ^World, pos: game.Chunk_Pos, margin: i32) -> bool {
 	s := w.server
 	for k in w.kept {if shape_has(k, pos) {return true}}
+	if w.working[pos] {return true} 	// (a factory's: machines.odin)
 	for &c in s.clients {
 		if c.world == w && client_wants(&c, pos, s.config, margin) {return true}
 	}
@@ -248,8 +250,8 @@ world_ready :: proc(w: ^World, area: Box) -> bool {
 	return true
 }
 
-// keep_request asks for the kept chunks that are not loaded (in order, until the
-// workers are full; the rest wait for the next tick).
+// keep_request asks for the kept chunks that are not loaded, and the working chunks a
+// world keeps (in order, until the workers are full; the rest wait for the next tick).
 @(private)
 keep_request :: proc(w: ^World) {
 	for k in w.kept {
@@ -262,6 +264,10 @@ keep_request :: proc(w: ^World) {
 				}
 			}
 		}
+	}
+	for pos, kept in w.working {
+		if !kept || chunks_get(&w.chunks, pos) != nil {continue}
+		if !request_chunk(w, pos) {return}
 	}
 }
 

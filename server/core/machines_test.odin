@@ -1,5 +1,6 @@
 package core
 
+import "core:os"
 import "core:testing"
 
 import "common:game"
@@ -170,4 +171,77 @@ test_machines_think_when_woken_in_batches_by_kind :: proc(t: ^testing.T) {
 	before := l.count
 	harness_step(&rig.sess.h, 3)
 	testing.expect_value(t, l.count, before)
+}
+
+// works_again: the oven thinks every 5 ticks for ever.
+@(private = "file")
+works_again :: proc(s: ^Server, w: ^World, kind: game.Block_Type, at: []game.Block_Pos) {
+	for p in at {
+		machine_data(w, p, Oven).thought += 1
+		machine_wake(w, p, 5)
+	}
+}
+
+// A factory works with nobody near: a chunk with a machine stays loaded and its machine
+// thinks on, and after a restart the world loads it again and it goes on where it left
+// off, before anyone comes.
+@(test)
+test_machines_work_with_nobody_near_and_after_a_restart :: proc(t: ^testing.T) {
+	dir :: "build/test/machines_working"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	files := [2]game.Pack_File {
+		{"pack.json", transmute([]u8)string(WORKS_PACK)},
+		{"data/blocks/works.json", transmute([]u8)string(WORKS_BLOCKS)},
+	}
+	config := harness_world()
+	config.save_dir = dir
+	config.game = {
+		info = {id = "works", name = "Works"},
+		pack = {"works", files[:]},
+		machine_data = Oven,
+		machines = works_again,
+	}
+	at := game.Block_Pos{40, 3, 40}
+	before: u32
+	{
+		h := new(Harness)
+		defer free(h)
+		if !testing.expect(t, harness_start(h, config)) {return}
+		s := &h.srv
+		w := s.home
+		world_keep(w, Box{at, at})
+		for _ in 0 ..< 600 {
+			if world_ready(w, Box{at, at}) {break}
+			harness_step(h, 1)
+		}
+		oven, _ := game.registry_block(s.registry, "works:oven")
+		testing.expect(t, set_block(w, at, oven, game_act(s, w, .Structure)))
+		machine_wake(w, at, 1)
+		world_release(w) // (nobody near, nothing kept but the factory)
+		harness_step(h, 200)
+		testing.expect(
+			t,
+			chunks_get(&w.chunks, game.chunk_of(at)) != nil,
+			"the factory's chunk left",
+		)
+		before = machine_data(w, at, Oven).thought
+		testing.expect(t, before >= 35, "the machine stopped with nobody near")
+		testing.expect(t, harness_stop(h))
+	}
+	{
+		h := new(Harness)
+		defer free(h)
+		if !testing.expect(t, harness_start(h, config)) {return}
+		defer harness_stop(h)
+		w := h.srv.home
+		harness_step(h, 100)
+		o := machine_data(w, at, Oven)
+		if !testing.expect(
+			t,
+			o != nil,
+			"the factory's chunk did not load after the restart",
+		) {return}
+		testing.expect(t, o.thought > before + 10, "the machine did not go on after the restart")
+	}
 }

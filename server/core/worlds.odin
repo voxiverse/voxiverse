@@ -48,6 +48,7 @@ World :: struct {
 	machines:          Machines, // the game's machines waiting to think (machines.odin; heap)
 	belts:             Belt_Set, // the conveyors awake (belts.odin; heap)
 	grids:             [dynamic]grid.Grid, // the game's networks over blocks (grids.odin; heap)
+	working:           map[game.Chunk_Pos]bool, // the chunks holding machines or belts: kept loaded (true) within the budget (machines.odin; heap)
 	saved:             map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
 	regions:           map[game.Region_Pos]bool, // read from disk; true = changed since written
 	started:           bool, // world_start ran (its chunks and the rest exist)
@@ -177,6 +178,7 @@ world_close :: proc(w: ^World) {
 	machines_destroy(&w.machines)
 	belts_destroy(&w.belts)
 	grids_destroy(w)
+	delete(w.working)
 	delete(w.tops)
 	delete(w.noted_changes)
 	delete(w.gates)
