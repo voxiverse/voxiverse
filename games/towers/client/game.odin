@@ -93,14 +93,9 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	}
 	if wave, ok := engine.game_value(s, r, towers.Wave); ok && wave != nil {
 		if wave.done {
-			engine.flash(&v.flash, s, fmt.tprintf("WAVE %d HELD", wave.wave), .Good)
+			engine.flash(&v.flash, s, towers.tr(.Wave_Held, wave.wave), .Good)
 		} else {
-			engine.flash(
-				&v.flash,
-				s,
-				fmt.tprintf("WAVE %d: %d CREEPS", wave.wave, wave.size),
-				.Warn,
-			)
+			engine.flash(&v.flash, s, towers.tr(.Wave_Sets_Out, wave.wave, wave.size), .Warn)
 		}
 	}
 	if shot, ok := engine.game_value(s, r, towers.Shot); ok && shot != nil {
@@ -169,33 +164,13 @@ status :: proc(s: ^engine.Session) -> string {
 	switch r.phase {
 	case .Building:
 		if r.wave == 0 {
-			return fmt.tprintf(
-				"TOWERS  build!  first wave in %ds   lives %d   coins %d",
-				r.left,
-				r.lives,
-				coins,
-			)
+			return towers.tr(.Status_First, r.left, r.lives, coins)
 		}
-		return fmt.tprintf(
-			"TOWERS  wave %d of %d held   next in %ds   lives %d   coins %d",
-			r.wave,
-			r.waves,
-			r.left,
-			r.lives,
-			coins,
-		)
+		return towers.tr(.Status_Held, r.wave, r.waves, r.left, r.lives, coins)
 	case .Wave:
-		return fmt.tprintf(
-			"TOWERS  wave %d of %d   creeps %d (+%d to come)   lives %d   coins %d",
-			r.wave,
-			r.waves,
-			r.alive,
-			r.to_come,
-			r.lives,
-			coins,
-		)
+		return towers.tr(.Status_Wave, r.wave, r.waves, r.alive, r.to_come, r.lives, coins)
 	case .Results:
-		return fmt.tprintf("TOWERS  run %d over   next run in %ds", r.run, r.left)
+		return towers.tr(.Status_Over, r.run, r.left)
 	}
 	return ""
 }
@@ -209,32 +184,26 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	// In the world: the creeps' health, the gate and the core, where a piece would go.
 	for kind in v.kinds {engine.entity_bars(s, ctx, kind)}
 	g := towers.GATE
-	engine.world_label(s, ctx, {f64(g.x), 4.6, f64(g.z) + 0.5}, "GATE")
-	engine.world_label(s, ctx, {f64(towers.CORE_X) + 1, 3.2, f64(towers.MID_Z)}, "CORE")
+	engine.world_label(s, ctx, {f64(g.x), 4.6, f64(g.z) + 0.5}, towers.tr(.Gate))
+	engine.world_label(s, ctx, {f64(towers.CORE_X) + 1, 3.2, f64(towers.MID_Z)}, towers.tr(.Core))
 	preview(s, ctx)
 
 	// The banner: a wave sets out or is held, the run ends.
 	if v.run.phase == .Results {
 		// The run's end stands as long as the results do, with your part in it.
-		head, color := "THE CORE HAS FALLEN", t.log_warn
-		if v.run.outcome == .Won {head, color = "THE CORE STANDS", t.success}
+		head, color := towers.tr(.Core_Fallen), t.log_warn
+		if v.run.outcome == .Won {head, color = towers.tr(.Core_Stands), t.success}
 		engine.banner(ctx, -140, head, 1.2, color)
 		me := mine(s)
-		part := fmt.tprintf(
-			"wave %d of %d   your kills %d   coins spent %d",
-			v.run.wave,
-			v.run.waves,
-			me.kills,
-			me.spent,
-		)
+		part := towers.tr(.Your_Part, v.run.wave, v.run.waves, me.kills, me.spent)
 		engine.banner(ctx, -50, part, 0.6, t.text)
-		next := fmt.tprintf("a new run in %d   (hold P for the builders)", v.run.left)
+		next := towers.tr(.Next_Run, v.run.left)
 		engine.banner(ctx, 60, next, 0.6, t.text)
 	} else {
 		engine.flash_draw(ctx, &v.flash, s, -140)
 	}
 	if v.run.phase == .Building && v.run.wave == 0 {
-		prices := "walls 2, arrow towers 12, cannons 25: leave the creeps a way"
+		prices := towers.tr(.Prices)
 		engine.banner(ctx, 200, prices, 0.5, t.text)
 	}
 }
@@ -255,8 +224,8 @@ preview :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			mine(s).coins >= towers.PIECES[p].price &&
 			v.run.phase != .Results
 		engine.world_box(s, at, at, {90, 230, 110, 255} if ok else {240, 70, 60, 255})
-		label := fmt.tprintf(
-			"%s: %s",
+		label := towers.tr(
+			.Piece_Price,
 			towers.PIECES[p].name,
 			towers.coins_text(towers.PIECES[p].price),
 		)
@@ -287,14 +256,13 @@ ranked :: proc(v: ^View) -> []Ranked {
 scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 	v := view(s)
 	r := v.run
-	board.title = fmt.tprintf(
-		"Towers: run %d, wave %d of %d, %d lives",
-		r.run,
-		r.wave,
-		r.waves,
-		r.lives,
+	board.title = towers.tr(.Board_Title, r.run, r.wave, r.waves, r.lives)
+	engine.scoreboard_columns(
+		board,
+		towers.tr(.Column_Kills),
+		towers.tr(.Column_Coins),
+		towers.tr(.Column_Spent),
 	)
-	engine.scoreboard_columns(board, "Kills", "Coins", "Spent")
 	for b in ranked(v) {
 		engine.scoreboard_row(
 			board,
