@@ -270,12 +270,16 @@ weapon_shoot :: proc(
 }
 
 // weapon_reload: start reloading the weapon in hand (nothing if it is full,
-// already reloading, or no weapon). The magazine fills when the time is up
-// (weapons_tick); changing the held slot cancels it.
+// already reloading, no weapon, or one whose ammo the player carries none of).
+// The magazine fills when the time is up (weapons_tick); changing the held slot
+// cancels it.
 weapon_reload :: proc(s: ^Server, c: ^Client) -> bool {
 	if c.dead || c.reload_until != 0 {return false}
 	stack, info, _, ok := held_weapon(s, c)
 	if !ok || int(stack.ammo) >= info.magazine {return false}
+	if info.ammo != game.NO_ITEM && game.inventory_count(&c.inventory, info.ammo) == 0 {
+		return false // (nothing to load)
+	}
 	ticks := max(1, int(math.ceil(f64(info.reload_time) * game.TICK_RATE)))
 	c.reload_until = s.tick + u64(ticks)
 	c.reload_slot = c.inventory.selected
@@ -283,7 +287,8 @@ weapon_reload :: proc(s: ^Server, c: ^Client) -> bool {
 }
 
 // weapons_tick: once a tick for each playing client: a reload ends or is
-// cancelled (the hand moved on, or the weapon is gone).
+// cancelled (the hand moved on, or the weapon is gone). A weapon with ammo (its
+// data's) is filled with what the inventory has of it, taken from there.
 weapons_tick :: proc(s: ^Server, c: ^Client) {
 	if c.reload_until == 0 {return}
 	stack, info, _, ok := held_weapon(s, c)
@@ -292,7 +297,12 @@ weapons_tick :: proc(s: ^Server, c: ^Client) {
 		return
 	}
 	if s.tick >= c.reload_until {
-		stack.ammo = u8(info.magazine)
+		want := info.magazine - int(stack.ammo)
+		if info.ammo != game.NO_ITEM {
+			want = game.inventory_remove(&c.inventory, info.ammo, want)
+			ledger(s, c.world, .Use, info.ammo, -want)
+		}
+		stack.ammo += u8(want)
 		c.reload_until = 0
 		c.inv_changed = true
 	}

@@ -101,6 +101,7 @@ Weapon_Info :: struct {
 	spread:      f32, // radians of random cone
 	sound:       string, // the shot's cue (client/sfx: "pistol", "rifle", "sniper"; "": the pistol's)
 	pellets:     int, // rays a shot casts, each doing `damage` (0 or 1: one; MAX_PELLETS at most)
+	ammo:        Item, // what a reload loads, taken from the inventory (NO_ITEM: a reload is free)
 }
 
 MAX_PELLETS :: 16

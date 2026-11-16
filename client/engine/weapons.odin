@@ -80,6 +80,7 @@ session_reload :: proc(s: ^Session) -> bool {
 	stack, w, ok := weapon_in_hand(s)
 	if !ok || s.dead || s.state != .Playing || weapon_reloading(s) {return false}
 	if weapon_ammo(s, stack) >= w.magazine {return false}
+	if w.ammo != game.NO_ITEM && game.inventory_count(&s.inventory, w.ammo) == 0 {return false}
 	send_message(s, game.Reload{})
 	s.reload_end = s.weapon_clock + f64(w.reload_time)
 	s.reload_slot = s.inventory.selected
@@ -232,7 +233,14 @@ weapon_hud :: proc(ctx: ^ui.Context, s: ^Session) {
 	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)
 	row = ui.rect_center(row, game.HOTBAR_SLOTS * (SLOT_SIZE.x + t.spacing), SLOT_SIZE.y)
 	box := ui.Rect{row.x + row.w + 12, row.y, 120, SLOT_SIZE.y}
-	text := tr(.Hud_Reloading) if weapon_reloading(s) else tr(.Hud_Ammo, weapon_ammo(s, stack))
+	text := tr(.Hud_Ammo, weapon_ammo(s, stack))
+	switch {
+	case weapon_reloading(s):
+		text = tr(.Hud_Reloading)
+	case w.ammo != game.NO_ITEM:
+		carried := game.inventory_count(&s.inventory, w.ammo)
+		text = tr(.Hud_Ammo_Carried, weapon_ammo(s, stack), carried)
+	}
 	ui.draw_text(ctx, box, text, t.font_size, t.text, .Left)
 }
 

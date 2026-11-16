@@ -12,7 +12,7 @@ Reason :: enum u8 {
 	Catalog, // taken from the creative catalog
 	Spill_Old, // found with no owner on load (a saved character's overflow)
 	Place, // used up placing a block
-	Use, // fed to a sheep
+	Use, // fed to a sheep, loaded into a weapon (its ammo)
 	Clear, // admin_clear
 	Expire, // an item entity's age
 	Catalog_Return, // put back in the catalog (the cursor's stack replaced by a Take)

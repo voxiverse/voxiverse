@@ -276,7 +276,9 @@ beaten by <kind>"). Walkers that overlap each other or a player are pushed apart
 steer (players are not pushed: their clients move them). `games/delve` is the model.
 
 A player's weapons are items with their numbers as data in a pack (`data/items`): a hitscan
-weapon's `weapon` (its `damage` hurts players and creatures alike), and a melee weapon's
+weapon's `weapon` (its `damage` hurts players and creatures alike; with `"ammo": "<item id>"`
+a reload loads what the player carries of that item, taking it, and none carried is no
+reload: without it a reload is free), and a melee weapon's
 `melee`, `{"damage": n, "reach": blocks, "arc": degrees, "cooldown": seconds}`: the attack
 button swings it, striking every hittable entity and player within reach and inside the
 arc, each for the damage (players as the `pvp` rule allows). The base pack's rifle, rocket

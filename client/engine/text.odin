@@ -179,6 +179,7 @@ Text :: enum u16 {
 	Players_Deaths, // `players.deaths`
 	Players_Player,
 	Hud_Ammo,
+	Hud_Ammo_Carried, // {0}: the magazine, {1}: the rounds carried for it
 	Hud_Reloading,
 }
 
@@ -353,6 +354,7 @@ TEXT_EN := [Text]string {
 	.Players_Player                         = "Player",
 	.Hud_Ammo                               = "{0} / inf",
 	.Hud_Reloading                          = "Reloading",
+	.Hud_Ammo_Carried                       = "{0} / {1}",
 }
 
 // tr: the string for key with {n} replaced by args[n] (temp allocator).

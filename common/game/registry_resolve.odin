@@ -906,7 +906,7 @@ WEAPON_NUMBERS := []string {
 // read_weapon: an item's `weapon` object: every number is required (a missing
 // one is a load error), so a weapon is never half-defined.
 @(private)
-read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info) {
+read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info, item_numbers: []Item) {
 	if f.value.kind != .Object {
 		fail_field(b, f, f.value, "weapon is an object: damage, magazine, fire_rate, ...")
 		return
@@ -950,6 +950,15 @@ read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info) {
 				ok = false
 			} else {
 				w.pellets = int(mm.value.i)
+			}
+		case mm.key == "ammo":
+			if mm.value.kind != .String {
+				fail_field(b, f, mm.value, "ammo is an item id")
+				ok = false
+			} else if index, known := ref_index(b, .Item, mm.value.s, f, mm.value); known {
+				w.ammo = item_numbers[index]
+			} else {
+				ok = false
 			}
 		case mm.key == "automatic":
 			if mm.value.kind != .Bool {
@@ -1117,7 +1126,7 @@ read_item :: proc(
 		}
 	}
 	if f := field_of(m, "weapon"); f != nil {
-		read_weapon(b, f, &info)
+		read_weapon(b, f, &info, item_numbers)
 	}
 	if f := field_of(m, "grapple"); f != nil {
 		read_grapple(b, f, &info)

@@ -428,3 +428,63 @@ test_weapons :: proc(t: ^testing.T) {
 		testing.expect_value(t, n, 1)
 	}
 }
+
+@(private = "file")
+AMMO_PACK :: `{"format": 1, "namespace": "ammo", "version": "1.0.0", "title": "Ammo", "requires": ["voxiverse"]}`
+@(private = "file")
+AMMO_ITEMS :: `{
+	"round": {"stack": 99},
+	"gun": {"stack": 1, "weapon": {"damage": 2, "magazine": 5, "fire_rate": 2, "automatic": false,
+	        "range": 40, "headshot": 1, "zoom": 0, "reload_time": 0.5, "spread": 0, "ammo": "ammo:round"}}
+}`
+
+// A weapon whose data names its ammo loads it from the inventory: a reload fills the
+// magazine with as many rounds as are carried, taking them, and none carried starts no
+// reload. (Before, every reload was free.)
+@(test)
+test_a_weapon_loads_its_ammo :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	files := [2]game.Pack_File {
+		{"pack.json", transmute([]u8)string(AMMO_PACK)},
+		{"data/items/guns.json", transmute([]u8)string(AMMO_ITEMS)},
+	}
+	config := harness_world()
+	config.mode = "survival"
+	config.game = {
+		info = {id = "ammo", name = "Ammo"},
+		pack = {"ammo", files[:]},
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, joined := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, joined) {return}
+	s := &sess.h.srv
+	c := &s.clients[0]
+	reg := s.registry
+	gun, has_gun := game.registry_item(reg, "ammo:gun")
+	round, has_round := game.registry_item(reg, "ammo:round")
+	if !testing.expect(t, has_gun && has_round, "the pack's items are not there") {return}
+	info, _ := game.item_info(reg, gun)
+	testing.expect_value(t, info.weapon.?.ammo, round)
+	c.inventory.slots[0] = {gun, 1, 0, 0}
+	c.inventory.selected = 0
+	reload_ticks := int(0.5 * game.TICK_RATE) + 2
+
+	// None carried: no reload.
+	testing.expect(t, !weapon_reload(s, c), "a reload with nothing to load")
+	// Three carried: the magazine takes all three.
+	testing.expect_value(t, item_give(s, c, round, 3), 3)
+	testing.expect(t, weapon_reload(s, c))
+	harness_step(&sess.h, reload_ticks)
+	testing.expect_value(t, c.inventory.slots[0].ammo, 3)
+	testing.expect_value(t, item_count(c, round), 0)
+	// Ten carried: the magazine fills (five), five are left.
+	item_give(s, c, round, 10)
+	c.inventory.slots[0].ammo = 0
+	testing.expect(t, weapon_reload(s, c))
+	harness_step(&sess.h, reload_ticks)
+	testing.expect_value(t, c.inventory.slots[0].ammo, 5)
+	testing.expect_value(t, item_count(c, round), 5)
+}
