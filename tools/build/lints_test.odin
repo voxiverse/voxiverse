@@ -320,3 +320,25 @@ test_game_shadows_lint :: proc(t: ^testing.T) {
 	)
 	testing.expect_value(t, len(lint_game_shadows("server/play/x.odin", text, {"play"})), 0)
 }
+
+// A [game <id>] section of the splashes names a game in games/; a holiday's section or
+// an unknown one is not this lint's.
+@(test)
+test_splash_games_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	text := "Everyday\n\n[game flood]\nWet\n[christmas]\nMerry\n[game gone]\nDry\n[nonsense]\nX\n"
+	found := lint_splash_games(text, {"flood", "sandbox"})
+	testing.expect_value(t, len(found), 1)
+	if len(found) == 1 {
+		testing.expect(t, strings.contains(found[0], "splashes.txt:7"), found[0])
+		testing.expect(t, strings.contains(found[0], "games/gone"), found[0])
+	}
+	testing.expect_value(t, len(lint_splash_games(text, {"flood", "gone"})), 0)
+	// The shipped file names only games there are.
+	data, err := os.read_entire_file_from_path(SPLASHES_FILE, context.temp_allocator)
+	testing.expect(t, err == nil)
+	folders := make([dynamic]string)
+	entries, _ := os.read_all_directory_by_path(GAMES_DIR, context.temp_allocator)
+	for e in entries {if e.type == .Directory {append(&folders, e.name)}}
+	testing.expect_value(t, len(lint_splash_games(string(data), folders[:])), 0)
+}

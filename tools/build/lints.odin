@@ -925,8 +925,54 @@ import_lint :: proc() -> bool {
 			}
 		}
 	}
-	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, games' packages are named for them, call what docs/games.md lists (all of it declared) and write no rules")}
+	splashes, splashes_err := os.read_entire_file_from_path(SPLASHES_FILE, context.allocator)
+	if splashes_err != nil {
+		fmt.eprintfln("lint   %s: unreadable", SPLASHES_FILE)
+		ok = false
+	}
+	folders := make([dynamic]string)
+	if entries, err := os.read_all_directory_by_path(GAMES_DIR, context.allocator); err == nil {
+		for e in entries {if e.type == .Directory {append(&folders, e.name)}}
+	}
+	for msg in lint_splash_games(string(splashes), folders[:]) {
+		fmt.eprintln(msg)
+		ok = false
+	}
+	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, games' packages are named for them, call what docs/games.md lists (all of it declared), write no rules, and the splashes name only games there are")}
 	return ok
+}
+
+SPLASHES_FILE :: "assets/splashes.txt"
+
+// lint_splash_games: each [game <id>] section of the splashes file (text) names a game
+// with a folder in games/ (folders): a game's lines go when it does.
+lint_splash_games :: proc(text: string, folders: []string) -> []string {
+	msgs := make([dynamic]string)
+	rest := text
+	n := 0
+	for line in strings.split_lines_iterator(&rest) {
+		n += 1
+		l := strings.trim_space(line)
+		if !strings.has_prefix(l, "[") || !strings.has_suffix(l, "]") {continue}
+		section := strings.trim_space(l[1:len(l) - 1])
+		if !strings.has_prefix(section, "game ") {continue}
+		id := strings.trim_space(section[len("game "):])
+		known := false
+		for f in folders {known ||= f == id}
+		if !known {
+			append(
+				&msgs,
+				fmt.aprintf(
+					"%s:%d: [game %s]: there is no games/%s (a game's splashes go with it)",
+					SPLASHES_FILE,
+					n,
+					id,
+					id,
+				),
+			)
+		}
+	}
+	return msgs[:]
 }
 
 // lint_collections: the wrapper scripts and the editor config pass the same collections the

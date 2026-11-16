@@ -565,7 +565,9 @@ server part keeps nothing between runs (`engine.game_keeps`: no `save`, `world_s
 `character_data` or `machine_data`; Flood) has Play instead, which starts a scratch world
 playing it (`App.launch`, `engine.play_game`), the same path as `--game <id>`. `--game <id>`
 with no `--exec`, `--scene`, `--check` or `--benchmark` skips the title and goes straight
-into that world. A new game appears in the list with nothing more to do.
+into that world. A new game appears in the list with nothing more to do. The title's splash
+may carry a game's flavour: `assets/splashes.txt`'s `[game <id>]` section, whose lines join
+the everyday ones; `check` refuses a section naming a game with no folder in `games/`.
 
 ## The game's pack
 
