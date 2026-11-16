@@ -508,8 +508,9 @@ players over the harness's network, each playing (`Options`: `listen`, `save_dir
 universe kept on disk, `kit`, `seed`, `plain` for guests without the host's role). The
 players hold what the game gives (its modes' kits, its configure's) and nothing else; `kit`
 names another (the engine's own tests' blocks are `core.HARNESS_KIT`). `step`,
-`until`, `until_phase` and `until_seconds` move time; `say` is the host's command, `told`
-and `guest_told` what a player was told, `host_record` and `guest_record` the game's records
+`until`, `until_phase` and `until_seconds` move time; `say` is the host's command (it steps
+for it to be done), `told` and `guest_told` what a player was told (a notice reaches a player
+a step after the tick that sent it: they step for one still on its way, at most a second), `host_record` and `guest_record` the game's records
 as each player holds them, `kill` a player killed through the engine's damage pipeline, and
 `srv`, `host`, `guest` reach the server's side to move a player or set what a test needs.
 `core.harness_request(s, c, &value)` sends a request as a client would.

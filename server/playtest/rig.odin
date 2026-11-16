@@ -123,15 +123,29 @@ say :: proc(rig: ^Rig, text: string) {
 	step(rig, 2)
 }
 
-// told: the host was told a notice that begins with text.
+// TOLD_WAIT: how long told and guest_told step for a notice still on its way.
+TOLD_WAIT :: 1.0
+
+// told: the host was told a notice that begins with text. A notice reaches a player
+// with the server's next step after the tick that sent it, so one the game sent from a
+// test's own call (not from a command `say` already stepped for) is not there yet: told
+// steps the rig until it is, at most TOLD_WAIT seconds (only while it is missing), and
+// is false when it never came.
 told :: proc(rig: ^Rig, text: string) -> bool {
-	for n in rig.sess.mirror.notices {if strings.has_prefix(n, text) {return true}}
-	return false
+	return told_wait(rig, &rig.sess.mirror.notices, text)
 }
 
-// guest_told: a guest was told a notice that begins with text.
+// guest_told: a guest was told a notice that begins with text (stepping as told does).
 guest_told :: proc(rig: ^Rig, text: string, i := 0) -> bool {
-	for n in rig.guests[i].notices {if strings.has_prefix(n, text) {return true}}
+	return told_wait(rig, &rig.guests[i].notices, text)
+}
+
+@(private = "file")
+told_wait :: proc(rig: ^Rig, notices: ^[dynamic]string, text: string) -> bool {
+	for _ in 0 ..= ticks(TOLD_WAIT) {
+		for n in notices {if strings.has_prefix(n, text) {return true}}
+		step(rig)
+	}
 	return false
 }
 
