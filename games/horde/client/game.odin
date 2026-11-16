@@ -62,21 +62,11 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	if news, ok := engine.game_value(s, r, horde.Wave_News); ok && news != nil {
 		switch {
 		case news.held:
-			engine.flash(
-				&v.flash,
-				s,
-				fmt.tprintf("WAVE %d HELD: THE SHOP IS OPEN", news.wave),
-				.Good,
-			)
+			engine.flash(&v.flash, s, horde.tr(.Wave_Held, news.wave), .Good)
 		case news.boss:
-			engine.flash(&v.flash, s, fmt.tprintf("WAVE %d: THE MATRIARCH COMES", news.wave), .Bad)
+			engine.flash(&v.flash, s, horde.tr(.Wave_Boss, news.wave), .Bad)
 		case:
-			engine.flash(
-				&v.flash,
-				s,
-				fmt.tprintf("WAVE %d: %d CREATURES", news.wave, news.size),
-				.Warn,
-			)
+			engine.flash(&v.flash, s, horde.tr(.Wave_Sets_Out, news.wave, news.size), .Warn)
 		}
 	}
 }
@@ -92,18 +82,12 @@ status :: proc(s: ^engine.Session) -> string {
 	me := mine(s)
 	switch r.phase {
 	case .Waiting:
-		return "HORDE  waiting for survivors"
+		return horde.tr(.Status_Waiting)
 	case .Countdown:
-		return fmt.tprintf(
-			"HORDE  run %d   the first wave in %ds   coins %d   best %d",
-			r.run,
-			r.left,
-			me.coins,
-			r.best,
-		)
+		return horde.tr(.Status_Countdown, r.run, r.left, me.coins, r.best)
 	case .Wave:
-		return fmt.tprintf(
-			"HORDE  wave %d   creatures %d (+%d)   standing %d/%d   coins %d   rounds %d   best %d",
+		return horde.tr(
+			.Status_Wave,
 			r.wave,
 			r.alive,
 			r.to_come,
@@ -114,16 +98,9 @@ status :: proc(s: ^engine.Session) -> string {
 			r.best,
 		)
 	case .Break:
-		return fmt.tprintf(
-			"HORDE  wave %d held   next in %ds   coins %d   rounds %d   best %d",
-			r.wave,
-			r.left,
-			me.coins,
-			rounds(s),
-			r.best,
-		)
+		return horde.tr(.Status_Break, r.wave, r.left, me.coins, rounds(s), r.best)
 	case .Over:
-		return fmt.tprintf("HORDE  run %d over   next run in %ds   best %d", r.run, r.left, r.best)
+		return horde.tr(.Status_Over, r.run, r.left, r.best)
 	}
 	return ""
 }
@@ -143,19 +120,19 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		s,
 		ctx,
 		shop,
-		"SHOP" if r.phase == .Break || r.phase == .Countdown else "SHOP (closed)",
+		horde.tr(.Shop) if r.phase == .Break || r.phase == .Countdown else horde.tr(.Shop_Closed),
 	)
 
 	switch r.phase {
 	case .Waiting:
 	case .Countdown:
-		engine.banner(ctx, -140, fmt.tprintf("RUN %d", r.run), 1.5, t.focus_ring)
+		engine.banner(ctx, -140, horde.tr(.Run_Title, r.run), 1.5, t.focus_ring)
 		engine.banner(ctx, -60, fmt.tprintf("%d", r.left), 1.5, t.text)
-		engine.banner(ctx, 40, "Hold out. Creatures come from the corners.", 0.6, t.text)
+		engine.banner(ctx, 40, horde.tr(.Rules), 0.6, t.text)
 		shop_lines(s, ctx)
 	case .Wave:
 		if mine(s).down {
-			engine.banner(ctx, -140, "DOWN: watching until the wave ends", 1, t.log_error)
+			engine.banner(ctx, -140, horde.tr(.Down), 1, t.log_error)
 		} else {
 			engine.flash_draw(ctx, &v.flash, s, -160)
 		}
@@ -163,10 +140,10 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		engine.flash_draw(ctx, &v.flash, s, -160)
 		shop_lines(s, ctx)
 	case .Over:
-		engine.banner(ctx, -160, "THE HORDE WINS", 1.5, t.log_error)
+		engine.banner(ctx, -160, horde.tr(.Horde_Wins), 1.5, t.log_error)
 		held := max(int(r.wave) - 1, 0)
-		engine.banner(ctx, -80, fmt.tprintf("%d waves held   best %d", held, r.best), 0.8, t.text)
-		next := fmt.tprintf("a new run in %d   (hold P for the survivors)", r.left)
+		engine.banner(ctx, -80, horde.tr(.Held, held, r.best), 0.8, t.text)
+		next := horde.tr(.Next_Run, r.left)
 		engine.banner(ctx, 40, next, 0.6, t.text)
 	}
 }
@@ -175,10 +152,12 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 shop_lines :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	r := view(s).run
 	t := &ctx.theme
-	if r.phase ==
-	   .Break {engine.banner(ctx, 120, fmt.tprintf("THE SHOP IS OPEN: %ds", r.left), 0.8, t.success)}
-	wares := fmt.tprintf(
-		"at the counter:  Z rounds (%d)   X medkit (%d)   B gun (%d)",
+	if r.phase == .Break {engine.banner(ctx, 120, horde.tr(.Shop_Open, r.left), 0.8, t.success)}
+	wares := horde.tr(
+		.Wares,
+		engine.game_action_key(s, 0),
+		engine.game_action_key(s, 1),
+		engine.game_action_key(s, 2),
 		r.prices[.Rounds],
 		r.prices[.Medkit],
 		r.prices[.Gun],
@@ -199,8 +178,14 @@ ranked :: proc(v: ^View) -> []int {
 scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 	v := view(s)
 	r := v.run
-	board.title = fmt.tprintf("Horde: run %d, wave %d, best %d", r.run, r.wave, r.best)
-	engine.scoreboard_columns(board, "Kills", "Coins", "Downs", "")
+	board.title = horde.tr(.Board_Title, r.run, r.wave, r.best)
+	engine.scoreboard_columns(
+		board,
+		horde.tr(.Column_Kills),
+		horde.tr(.Column_Coins),
+		horde.tr(.Column_Downs),
+		"",
+	)
 	for id in ranked(v) {
 		sv := &v.survivors.values[id]
 		engine.scoreboard_row(
@@ -209,7 +194,7 @@ scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 			fmt.tprint(sv.kills),
 			fmt.tprint(sv.coins),
 			fmt.tprint(sv.downs),
-			"down" if sv.down else "",
+			horde.tr(.Is_Down) if sv.down else "",
 			you = id == int(s.welcome.player),
 		)
 	}
