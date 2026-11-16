@@ -174,15 +174,6 @@ Ground :: struct {
 	cell_km:  f64,
 }
 
-ground_destroy :: proc(g: ^Ground) {
-	delete(g.area)
-	delete(g.capacity)
-	delete(g.river)
-	delete(g.suit)
-	delete(g.dry)
-	delete(g.row_cos)
-}
-
 @(private)
 mix64 :: proc(a, b: u64) -> u64 {
 	z := (a ~ (b + 0x9e37_79b9_7f4a_7c15)) * 0xbf58_476d_1ce4_e5b9
