@@ -37,6 +37,8 @@ game_menu_entries :: proc(
 	return entries[:]
 }
 
+GAME_MENU_HEADING :: 110 // the game's name, and "Game Paused" under it
+
 // game_menu: over the world, under the name of the game it plays: game_menu_entries.
 game_menu :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "game menu")
@@ -50,16 +52,18 @@ game_menu :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	port := core.stats(&s.server).port if hosting else 0
 	entries := game_menu_entries(hosting, port != 0, s.config.save_dir != "")
 	rows := f32(len(entries))
-	column := ui.rect_center(ctx.screen, 400, rows * t.row_height + (rows - 1) * t.spacing + 80)
-	heading := ui.cut_top(&column, 80)
+	column := ui.rect_center(
+		ctx.screen,
+		400,
+		rows * t.row_height + (rows - 1) * t.spacing + GAME_MENU_HEADING,
+	)
+	heading := ui.cut_top(&column, GAME_MENU_HEADING)
+	// "Game Paused" under the name, apart from the buttons (its place kept either way, so
+	// the name stands still).
+	ui.cut_bottom(&heading, t.spacing)
+	paused := ui.cut_bottom(&heading, t.row_height)
 	if s.frozen {
-		ui.label(
-			ctx,
-			engine.tr(.Game_Menu_Game_Paused),
-			ui.cut_bottom(&heading, t.row_height),
-			.Center,
-			t.text_muted,
-		)
+		ui.label(ctx, engine.tr(.Game_Menu_Game_Paused), paused, .Center, t.text_muted)
 	}
 	// The game's name (a session that has not been told its game yet: the menu's).
 	ui.title(ctx, s.game.name if s.game.name != "" else engine.tr(.Game_Menu_Game_Menu), heading)
