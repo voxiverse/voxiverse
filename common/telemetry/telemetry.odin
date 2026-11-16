@@ -72,6 +72,7 @@ Kind :: enum u16 {
 	Log_Line, // a warning or an error of the server's log: line: the text
 	Server_Start, // n0: the most players
 	Server_Stop, // a clean stop (a session that has none ended in a crash)
+	Game_Stat, // a game's own statistic (core.Game.stats): text: its counter; n0: the amount (counted there, under that name)
 }
 
 Kind_Info :: struct {
@@ -230,6 +231,7 @@ KIND_INFO := [Kind]Kind_Info {
 		n_names = {"max_players", "", ""},
 	},
 	.Server_Stop = {session_only = true, name = "server_stop"},
+	.Game_Stat = {name = "game_stat", text_name = "stat", n_names = {"amount", "", ""}}, // (counted by its game's name: server/core stat_count)
 }
 
 kind_by_name :: proc(name: string) -> (Kind, bool) {

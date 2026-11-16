@@ -191,6 +191,97 @@ event_for :: proc(
 	return e
 }
 
+// Game_Stat: a statistic a game keeps of its players (Game.stats): counted with the
+// character and the world as the engine's are, and shown wherever they are (the
+// statistics). A count is named as it is; a distance (centimetres) is kept under
+// `distance.<name>`, a time (seconds) under `time.<name>`, so the statistics show their
+// units. A name is dotted a-z, 0-9 and _, and a count's first part is none of the engine's.
+Game_Stat :: struct {
+	name: string,
+	kind: Stat_Kind,
+}
+
+Stat_Kind :: enum u8 {
+	Count,
+	Distance, // centimetres
+	Time, // seconds
+}
+
+// stat_counter: the counter a game's statistic is kept in.
+@(private)
+stat_counter :: proc(stat: Game_Stat) -> string {
+	switch stat.kind {
+	case .Count:
+	case .Distance:
+		return strings.concatenate({"distance.", stat.name}, context.temp_allocator)
+	case .Time:
+		return strings.concatenate({"time.", stat.name}, context.temp_allocator)
+	}
+	return stat.name
+}
+
+// ENGINE_STAT_ROOTS: the first parts of the engine's own counters, which no game's count
+// may take.
+@(private)
+ENGINE_STAT_ROOTS :: []string{"xp", "level", "kills", "deaths", "jumps", "time", "distance"}
+
+// game_stats_valid: why the game's statistics cannot be kept ("" when they can).
+@(private)
+game_stats_valid :: proc(stats: []Game_Stat) -> string {
+	for stat, i in stats {
+		ok := len(stat.name) > 0 && len(stat.name) <= 48 && stat.name[0] != '.'
+		for c in transmute([]u8)stat.name {
+			ok &&= (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.'
+		}
+		if !ok {return fmt.tprintf("statistic %q: a name is dotted a-z, 0-9 and _", stat.name)}
+		root, _, _ := strings.partition(stat.name, ".")
+		taken := stat.kind == .Count && slice.contains(ENGINE_STAT_ROOTS, root)
+		for info in telemetry.KIND_INFO {
+			counter_root, _, _ := strings.partition(info.counter, ".")
+			taken ||= stat.kind == .Count && counter_root == root
+		}
+		if taken {return fmt.tprintf("statistic %q: %q is the engine's", stat.name, root)}
+		for other in stats[:i] {
+			if other.name ==
+			   stat.name {return fmt.tprintf("statistic %q is named twice", stat.name)}
+		}
+	}
+	return ""
+}
+
+// game_stat: the game's statistic of that name (false: the game declares none).
+@(private)
+game_stat :: proc(s: ^Server, name: string) -> (Game_Stat, bool) {
+	for stat in s.config.game.stats {if stat.name == name {return stat, true}}
+	return {}, false
+}
+
+// stat_count: player c adds amount to one of the game's statistics (Game.stats): kept
+// with its character and its world, shown with the engine's.
+stat_count :: proc(s: ^Server, c: ^Client, name: string, amount := 1) {
+	stat, ok := game_stat(s, name)
+	assert(ok, "not one of the game's statistics (Game.stats)")
+	if amount <= 0 {return}
+	counter := stat_counter(stat)
+	e := event_for(s, c.world, .Game_Stat, player_id(s, c), counter, {i64(amount), 0, 0})
+	e.has_pos, e.pos = true, {i32(c.position.x), i32(c.position.y), i32(c.position.z)}
+	emit_event(s, e)
+	stat_add(c, counter, u64(amount))
+}
+
+// stat_world: amount added to one of the game's statistics for world w, with no player to
+// credit (a lamb born).
+stat_world :: proc(s: ^Server, w: ^World, name: string, amount := 1) {
+	stat, ok := game_stat(s, name)
+	assert(ok, "not one of the game's statistics (Game.stats)")
+	if amount <= 0 || w == nil {return}
+	emit_event(
+		s,
+		event_for(s, w, .Game_Stat, telemetry.NO_ACTOR, stat_counter(stat), {i64(amount), 0, 0}),
+	)
+	counter_add(&w.stats, stat_counter(stat), u64(amount))
+}
+
 // record: player c did something (kind, with its text and numbers): an event
 // at their position (or at); and the counters.
 record :: proc(

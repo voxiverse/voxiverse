@@ -251,3 +251,54 @@ test_a_game_judges_the_use_of_its_creatures :: proc(t: ^testing.T) {
 	net_for(t, {c}, 0.3)
 	testing.expect_value(t, entity_data(s.home, e, Creature_Data).number, 5)
 }
+
+// A game's own statistics are counted with the character and its world as the engine's
+// are, kept with the character, and their names are checked at start: none of the
+// engine's, each once.
+@(test)
+test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
+	testing.expect_value(t, game_stats_valid({{"herded", .Count}, {"trotted", .Distance}}), "")
+	testing.expect(t, game_stats_valid({{"xp", .Count}}) != "", "the engine's xp was taken")
+	testing.expect(
+		t,
+		game_stats_valid({{"blocks.herded", .Count}}) != "",
+		"the engine's blocks were taken",
+	)
+	testing.expect(t, game_stats_valid({{"Herded", .Count}}) != "", "a capital was taken")
+	testing.expect(t, game_stats_valid({{"a", .Count}, {"a", .Time}}) != "", "a name twice")
+	dir :: "build/tmp/test_game_stats"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	config := harness_world()
+	config.listen = true
+	config.save_dir = dir
+	config.game = harness_creatures()
+	config.game.stats = {{"herded", .Count}, {"trotted", .Distance}}
+	h := new(Harness)
+	defer free(h)
+	standing :: proc(cs: []^Net_Client) -> bool {return(
+			cs[0].welcomed &&
+			cs[0].update.state.on_ground \
+		)}
+	for round in 0 ..< 2 {
+		if !testing.expect(t, harness_start(h, config)) {return}
+		c := new(Net_Client)
+		net_connect(c, 0, "herder", h = h)
+		if testing.expect(t, net_wait(t, {c}, standing), "never stood") {
+			s := &h.srv
+			player := client_by_name(s, "herder")
+			if round == 0 {
+				stat_count(s, player, "herded", 3)
+				stat_count(s, player, "trotted", 250)
+				stat_world(s, s.home, "herded")
+			}
+			testing.expect_value(t, player.stats["herded"], 3)
+			testing.expect_value(t, player.stats["distance.trotted"], 250)
+			testing.expect_value(t, s.home.stats["herded"], 4)
+		}
+		net_close(c)
+		free(c)
+		harness_step(h, 4)
+		testing.expect(t, harness_stop(h))
+	}
+}

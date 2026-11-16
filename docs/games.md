@@ -210,6 +210,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `request_value(s, r, T)` | One of its requests, in its `request` hook, as its type ([below](#requests)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
+| `Game_Stat`, `Stat_Kind`, `stat_count(s, c, name, amount)`, `stat_world(s, w, name, amount)` | The game's own statistics (`Game.stats`: each a name and whether it counts, or measures a distance in centimetres or a time in seconds): a player's (with its character and its world) or the world's alone, kept and shown with the engine's ([below](#the-games-state)) |
 | `client_name(c)`, `allowed(s, c, node)`, `player_id(s, c)` | A player's name; whether it holds a permission; its id (its seat): the key of a record about it (`protocol.key_player`), the same on every side |
 | `player_ref(s, c)`, `player_of(s, ref)`, `Player_Ref` | A player held past the moment (who built a tower, whose kill a shot is): `player_of` gives the player still playing in that seat, or nil once it left |
 | `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |
@@ -439,6 +440,15 @@ A game declares two types and the server owns their memory (the session's arena,
   added later loads as zero. It goes to no client unless the game puts it, or what it
   shows of it, in a record of its own keyed by the entity (`protocol.key_entity(id)`, to
   the players who know it: `entity_known`).
+
+- `stats`: the statistics the game keeps of its players, `[]core.Game_Stat{{"sheep.sheared",
+  .Count}, ...}`. `core.stat_count(s, c, name, amount)` counts one for a player (and its
+  world), `core.stat_world(s, w, name, amount)` for a world alone; they are kept with the
+  character and the world as the engine's counters are and shown with them in the
+  statistics, by their dotted names (a distance under `distance.<name>`, a time under
+  `time.<name>`, so it shows its unit). `start` refuses a name that is not dotted `a-z`,
+  `0-9` and `_`, one named twice, or a count whose first part is one of the engine's
+  (`blocks`, `items`, `xp`...).
 
 A game's creature whose kind is `"saved": true` outlives a restart whole: its kind, place,
 health and most health, its record, and where it was steered (`entity_go`'s point,

@@ -98,6 +98,7 @@ Game :: struct {
 	server_state:  typeid, // its state for the session (game_state): zero at start; nil: none
 	client_state:  typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none
 	entity_data:   typeid, // its record on each entity of its pack's kinds (entity_data): zero at spawn, saved with the world; nil: none
+	stats:         []Game_Stat, // the statistics it keeps of its players (stat_count, stat_world): with the character, shown with the engine's
 	configure:     proc(config: ^Config), // before anything else: may change the config
 	start:         proc(s: ^Server) -> bool, // the session is set up, no tick has run (false: start fails)
 	stop:          proc(s: ^Server), // after the last tick, before the last save
@@ -292,6 +293,10 @@ start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 			log.errorf("server game's entity_data cannot be kept game=%s: %s", config.game.id, why)
 			return false
 		}
+	}
+	if why := game_stats_valid(config.game.stats); why != "" {
+		log.errorf("server game's statistics cannot be kept game=%s: %s", config.game.id, why)
+		return false
 	}
 	if config.game.configure != nil {config.game.configure(&config)}
 	if config.net != nil && (!config.stepped || config.conditions != {}) {
