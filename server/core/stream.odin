@@ -33,6 +33,8 @@ Client_Link :: union {
 
 Local :: struct {}
 
+// Client: one connection to the server, and once it is playing, a player: its seat, its
+// world, its player and inventory.
 Client :: struct {
 	state:           Client_State,
 	link:            Client_Link,

@@ -202,6 +202,7 @@ Game_Stat :: struct {
 	xp:   u64, // experience a player earns for each one counted (0: none)
 }
 
+// Stat_Kind: what a game's statistic measures: a count, a distance or a time.
 Stat_Kind :: enum u8 {
 	Count,
 	Distance, // centimetres

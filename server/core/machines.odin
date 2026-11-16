@@ -232,12 +232,14 @@ working_chunk :: proc(c: ^Chunk) -> bool {
 	return false
 }
 
-// items_made, items_used: the game's machines made or used up count of item (a furnace's
-// bar, the ore it took): booked in the item ledger as the game's.
+// items_made: the game's machines made count of item (a furnace's bar): booked in the item
+// ledger as the game's.
 items_made :: proc(s: ^Server, w: ^World, item: game.Item, count: int) {
 	ledger(s, w, .Game, item, count)
 }
 
+// items_used: the game's machines used up count of item (the ore a furnace took): booked in
+// the item ledger as the game's.
 items_used :: proc(s: ^Server, w: ^World, item: game.Item, count: int) {
 	ledger(s, w, .Game, item, -count)
 }

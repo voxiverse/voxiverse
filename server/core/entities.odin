@@ -469,11 +469,13 @@ entity_set_pos :: proc(w: ^World, h: game.Entity_Handle, p: [3]f64) {
 	if tf := entity_transform(w, h); tf != nil {tf.position = p}
 }
 
+// entity_yaw: which way the entity faces, radians turning left from -z (0: gone).
 entity_yaw :: proc(w: ^World, h: game.Entity_Handle) -> f32 {
 	if tf := entity_transform(w, h); tf != nil {return tf.yaw}
 	return 0
 }
 
+// entity_pitch: how far the entity looks up, radians (down below 0; 0: gone).
 entity_pitch :: proc(w: ^World, h: game.Entity_Handle) -> f32 {
 	if tf := entity_transform(w, h); tf != nil {return tf.pitch}
 	return 0
@@ -487,6 +489,8 @@ entity_set_pitch :: proc(w: ^World, h: game.Entity_Handle, pitch: f32) {
 	if tf := entity_transform(w, h); tf != nil {tf.pitch = pitch}
 }
 
+// entity_set_look: the entity turns to face yaw and look up pitch (radians, as entity_yaw
+// and entity_pitch give them).
 entity_set_look :: proc(w: ^World, h: game.Entity_Handle, yaw, pitch: f32) {
 	if tf := entity_transform(w, h); tf != nil {tf.yaw, tf.pitch = yaw, pitch}
 }
@@ -570,6 +574,7 @@ entity_age :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Age {
 	return game.store_get(&w.entity_world.store, h, game.C_AGE, game.Age)
 }
 
+// entity_health_of: the entity's health points (0: it has no health, or is gone).
 entity_health_of :: proc(w: ^World, h: game.Entity_Handle) -> int {
 	if hp := entity_health(w, h); hp != nil {return int(hp.health)}
 	return 0
@@ -1480,6 +1485,7 @@ entities_each :: proc(w: ^World, after: u32 = 0) -> Entity_Iter {
 	return {w = w, handles = handles}
 }
 
+// entities_next: the walk's next entity that still stands (ok false: the walk is over).
 entities_next :: proc(it: ^Entity_Iter) -> (h: game.Entity_Handle, index: int, ok: bool) {
 	for it.i < len(it.handles) {
 		index = it.i

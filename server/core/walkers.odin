@@ -35,6 +35,7 @@ ARRIVED :: 0.35 // blocks from its point (horizontally) a walker has arrived
 // C_STEER: a steered walker's Steer (large: set at spawn).
 C_STEER :: game.FIRST_SERVER_COMPONENT + 1
 
+// Route_Handle: a route of a world's (route_make), shared by every walker that follows it.
 Route_Handle :: distinct u32
 
 Steer_Mode :: enum u8 {

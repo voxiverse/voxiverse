@@ -25,6 +25,7 @@ import "common:protocol"
 // A team is not saved with the entity: a game whose sides outlive a restart keeps them in
 // its own record and sets them again.
 
+// MAX_TEAMS: the most sides a world's players and entities may be on (teams 1 to it; 0 is none).
 MAX_TEAMS :: protocol.MAX_TEAMS
 
 // C_SIDE: an entity's Side (added the first time it is given a team or vision).

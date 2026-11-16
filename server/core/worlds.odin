@@ -22,6 +22,8 @@ import "server:store"
 // spawn, and save. A world's memory is an arena of its own, freed whole
 // when it unloads.
 
+// World: one voxel space of the universe, loaded (docs/glossary.md): its address, rules,
+// clock, chunks and entities.
 World :: struct {
 	server:            ^Server,
 	address:           starmap.Address,

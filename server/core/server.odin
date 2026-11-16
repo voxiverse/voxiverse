@@ -44,6 +44,8 @@ Upload :: struct {
 	interval: time.Duration,
 }
 
+// Config: what a server session is started with (start): the universe, its worlds' defaults,
+// the game it plays; a game's configure hook may change it.
 Config :: struct {
 	kit:                   string, // what new players are given, as world.cfg's kit says it ("": the world's own, else the default: the launcher)
 	upload:                Maybe(Upload), // (needs save_dir: a scratch world has no log)
@@ -217,6 +219,8 @@ Stats :: struct {
 
 Thread :: thread.Thread
 
+// Server: a session of the universe: its config, worlds, clients and tick, what every hook
+// of a game is given.
 Server :: struct {
 	// The phases of the tick being run (slow-tick diagnosis: server_main logs
 	// them when a tick takes SLOW_TICK or longer).

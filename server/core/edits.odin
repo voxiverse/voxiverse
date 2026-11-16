@@ -17,6 +17,7 @@ Bulk_Shape :: union {
 	Box,
 }
 
+// Sphere: the blocks whose centres lie within radius of center.
 Sphere :: struct {
 	center: [3]f64,
 	radius: f64,
@@ -35,6 +36,7 @@ Bulk_Op :: enum u8 {
 	Unpaste, // a template's cells that are still as it made them become air: what Paste built, taken down
 }
 
+// Bulk_Edit: an operation on every block of a shape (bulk_edit).
 Bulk_Edit :: struct {
 	shape:    Bulk_Shape,
 	op:       Bulk_Op,
