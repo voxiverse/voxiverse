@@ -676,8 +676,9 @@ scratch world of that game, as without a script, and the script runs there; with
 title shows, where `singleplayer` starts a world), with `wait_world` (the world is there),
 `wait <frames>`, `sleep <seconds>`, any console command (`/tp x y z yaw pitch`, `/<game>
 ...` for the game's own, `hold <item>`, `key <key> down|up`, `pointer <x> <y>`, `set
-<variable> <value>`) and `screenshot <file>`, which writes `build/screenshots/<file>.png`; it
-ends with `quit`. A game's screenshot, with the round where it should be:
+<variable> <value>`, `universe --earth <name>` for a universe on Earth, kept with the run's
+state, not the player's saves) and `screenshot <file>`, which writes
+`build/screenshots/<file>.png`; it ends with `quit`. A game's screenshot, with the round where it should be:
 
 ```sh
 ./build.sh shot flood_water --game flood -- "wait_world; /flood rule baseline; sleep 20; screenshot flood_water; quit"

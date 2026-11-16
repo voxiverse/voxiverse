@@ -13,8 +13,8 @@ import "common:limited"
 // the script as `--exec` does (console commands, `;` between them, with the script's own
 // wait_world, wait_joined, wait <frames> and sleep <seconds>: client/console/script.odin).
 // The script's `screenshot <file>` writes build/screenshots/<file>.png; it ends with
-// `quit`. The run's log, settings and state are in build/shots/<name>/ (a fresh one
-// each run), and it is stopped after SHOT_LIMIT.
+// `quit`. The run's log, settings, state and saves (a universe the script makes) are
+// in build/shots/<name>/ (a fresh one each run), and it is stopped after SHOT_LIMIT.
 
 SHOT_DIR :: "build/shots"
 SHOT_LIMIT :: 10 * time.Minute
@@ -72,6 +72,7 @@ shot :: proc(args: []string) -> bool {
 		"env",
 		strings.concatenate({"VX_STATE_DIR=", state}),
 		strings.concatenate({"VX_SETTINGS=", state, "/settings.cfg"}),
+		strings.concatenate({"VX_SAVES=", state, "/saves"}),
 		exe,
 	)
 	if game_id != "" {append(&cmd, "--game", game_id)}
