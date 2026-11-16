@@ -22,7 +22,7 @@ Every racer's best time (with its splits) and the course record are kept with th
 
 ```sh
 ./build.sh run -- --game rally
-./build.sh run -- --game rally --exec "singleplayer; wait_world; /open_lan"
+./build.sh run -- --game rally --exec "wait_world; /open_lan"
 ./build.sh serve -- --game rally --universe build/rally-universe
 ```
 
