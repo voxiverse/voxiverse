@@ -22,10 +22,10 @@ SAFE_FALL :: 3.0 // blocks
 // health_tick: once a tick for each playing client, after its movement.
 health_tick :: proc(s: ^Server, c: ^Client) {
 	w := c.world
-	mods := character_mods(s, c)
-	if c.max_health == 0 {c.health = mods.max_health} 	// (just joined: full)
-	if mods.max_health != c.max_health {
-		c.max_health = mods.max_health
+	most := most_health(s, c)
+	if c.max_health == 0 {c.health = most} 	// (just joined: full)
+	if most != c.max_health {
+		c.max_health = most
 		c.health = min(c.health, c.max_health)
 	}
 	if c.dead && c.world.rules.respawn_auto && s.tick >= respawn_due(c) {respawn(s, c)}
@@ -70,9 +70,24 @@ head_in_water :: proc(s: ^Server, c: ^Client) -> bool {
 	return game.in_water(query, game.player_eye(c.player), 0)
 }
 
-// heal_player: c recovers amount health points.
+// heal_player: c recovers amount health points (not past its most; not a dead one).
 heal_player :: proc(c: ^Client, amount: f32) {
+	if c.dead || !(amount > 0) {return}
 	c.health = min(c.health + amount, c.max_health)
+}
+
+// most_health: c's most health: its character's (BASE_HEALTH and what it wears) and
+// the game's bonus.
+@(private)
+most_health :: proc(s: ^Server, c: ^Client) -> f32 {
+	return max(character_mods(s, c).max_health + c.health_bonus, 1)
+}
+
+// player_health_bonus: the game adds bonus health points to c's most (a level's,
+// a blessing's; 0: none): from the next tick its health tops out there, a lower most
+// cuts what it has. It stays with the seat until the game changes it.
+player_health_bonus :: proc(s: ^Server, c: ^Client, bonus: f32) {
+	c.health_bonus = max(bonus, 0)
 }
 
 // --- Experience ----------------------------------------------------------

@@ -90,6 +90,7 @@ makes it for games, documented where it is declared.
 | `item_count(c, item)`, `item_give(s, c, item, count)`, `item_take(s, c, item, count)`, `item_clear(s, c, item)` | A player's slots as a game's store: how many of an item it carries, give some (what fits: the number given), take some (the number taken), take all; booked in the item ledger as the game's |
 | `hotbar_select(s, c, slot)` | Put a hotbar slot (0 ..< `game.HOTBAR_SLOTS`) in a player's hand, as if it chose it; false for a slot out of range |
 | `head_in_water(s, c)` | A player's eyes are in water |
+| `player_health_bonus(s, c, bonus)`, `heal_player(c, amount)` | Add to a player's most health (a level's; it stays with the seat until changed, and a respawn fills it); heal a living player up to its most (a potion) |
 | `game_rule(s, w, name, value)` | Change a world's rule (`explosion_size`, as the `rule` command names it; the value as text), journalled as the game's and told to the world's players |
 | `world_keep(w, area)`, `world_ready(w, area)`, `world_release(w)` | Keep an area loaded with nobody near; whether all of it is there; let it go |
 | `block_at(w, p)` | Read a block (false: not loaded) |

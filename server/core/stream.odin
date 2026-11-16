@@ -103,6 +103,7 @@ Client :: struct {
 	mode_set:        bool, // (a new client has none yet)
 	health:          f32, // health points (health.odin)
 	max_health:      f32,
+	health_bonus:    f32, // the game's addition to its most health (player_health_bonus)
 	dead:            bool, // at the death screen, waiting for Respawn (damage.odin)
 	last_damage:     u64, // the tick it was last hurt (regeneration waits after it)
 	died_at:         u64, // the tick it last died (respawn_delay counts from it)

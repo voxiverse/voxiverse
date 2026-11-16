@@ -205,7 +205,7 @@ respawn :: proc(s: ^Server, c: ^Client) -> bool {
 	if !c.dead {return false}
 	c.dead = false
 	c.protected_until = s.tick + seconds_ticks(c.world.rules.spawn_protection)
-	c.max_health = character_mods(s, c).max_health
+	c.max_health = most_health(s, c)
 	c.health = c.max_health
 	c.airborne = false
 	c.last_damage = s.tick

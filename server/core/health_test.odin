@@ -302,3 +302,41 @@ test_worn_armor_raises_health :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, ok, "the tunic taken off did not lower the maximum")
 }
+
+// A game's health bonus raises a player's most health from the next tick (its health
+// tops out there, and a respawn fills it); taken away, the most falls and cuts what it
+// has; heal_player heals up to the most, and not the dead.
+@(test)
+test_game_health_bonus :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.mode = "survival"
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {
+		session_stop(sess)
+		return
+	}
+	defer session_stop(sess)
+	_, ok := harness_step_until(&sess.h, proc(data: rawptr) -> bool {
+			sess := (^Session)(data)
+			return sess.mirror.welcomed && sess.h.srv.clients[0].state == .Playing
+		}, sess, 600)
+	if !testing.expect(t, ok) {return}
+	s := &sess.h.srv
+	c := &s.clients[0]
+	base_most := c.max_health
+	player_health_bonus(s, c, 6)
+	harness_step(&sess.h)
+	testing.expect_value(t, c.max_health, base_most + 6)
+	heal_player(c, 100)
+	testing.expect_value(t, c.health, base_most + 6)
+	player_health_bonus(s, c, 2)
+	harness_step(&sess.h)
+	testing.expect_value(t, c.health, base_most + 2)
+	damage(s, c, 1000, {kind = .Command})
+	heal_player(c, 5)
+	testing.expect_value(t, c.health, 0)
+	harness_step(&sess.h)
+	respawn(s, c)
+	testing.expect_value(t, c.health, base_most + 2)
+}
