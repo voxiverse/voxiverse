@@ -216,6 +216,7 @@ package** is enforced by the `layout` lint (see above).
 | `tools/audiodump` | The audio dump tool | `*.odin` |
 | `tools/bench` | The benchmark tool | `*.odin` |
 | `tools/build` | The build driver | `*.odin`, `*.txt` |
+| `tools/build/game_template` | The game `build new-game` stamps out, a file each, `#load`ed (`@id@`: the new game's id) | `*.txt` |
 | `tools/debugger` | Debugger printers and trace helpers | `*.py`, `*.sh` |
 | `tools/debugger/printer_test` | The printers' test program | `*.odin` |
 | `tools/fuzz` | The fuzz tool | `*.odin` |

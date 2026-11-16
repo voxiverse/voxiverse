@@ -1,0 +1,17 @@
+package @id@
+
+import "common:base"
+
+// What @Name@'s HUD says, by key (docs/games.md, "What a game's HUD says"): the English
+// table, its own, so a translation is a table of the same keys beside it. tr formats one
+// ({0}: the arguments by position, base.text_format).
+
+Text :: enum u8 {
+	Points_Line, // {0}: the player's points
+}
+
+TEXT_EN := [Text]string {
+	.Points_Line = "@NAME@  {0} points",
+}
+
+tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}

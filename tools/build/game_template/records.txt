@@ -1,0 +1,16 @@
+package @id@
+
+import "common:protocol"
+
+// What the game replicates besides the engine's kinds (docs/games.md, "Records and
+// events"): its own kinds, as data. Both parts name them through KINDS, so their
+// schemas agree.
+
+// Points: a player's points, put for each player every tick (only a change is sent).
+Points :: struct {
+	points: u32,
+}
+
+KINDS :: protocol.Game_Kinds {
+	states = {{name = "@id@.points", value = Points}},
+}

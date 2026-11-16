@@ -319,6 +319,8 @@ main :: proc() {
 		ok = gate(args[1:])
 	case "engine-map":
 		ok = engine_map_write()
+	case "new-game":
+		ok = new_game(args[1:])
 	case "system":
 		ok = system()
 	case "determinism":
@@ -444,6 +446,9 @@ usage :: proc() {
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println(
 		"  engine-map  write docs/engine-map.md, what the engine offers a game, from the source and docs/games.md's lists (check fails while it is stale)",
+	)
+	fmt.println(
+		"  new-game  new-game <id>: stamp out the smallest working game in games/<id>/ (shared package, server and client parts, a test each, a README): check and its tests pass, `run -- --game <id>` plays it",
 	)
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
 	fmt.println(

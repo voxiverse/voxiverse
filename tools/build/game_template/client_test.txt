@@ -1,0 +1,18 @@
+package @id@_client
+
+import "core:testing"
+
+import "client:playtest"
+import @id@_server "games:@id@/server"
+
+// The game played whole: its server part on a stepped server, a session playing it over
+// the harness's network with this client part, and the HUD's line drawn.
+@(test)
+test_points_on_the_hud :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig) // (the heap: a test thread's stack is small)
+	defer free(rig)
+	if !playtest.start(t, rig, @id@_server.GAME, GAME) {return}
+	defer playtest.stop(rig)
+	playtest.step(rig, 10)
+	testing.expect(t, playtest.drawn(rig, "@NAME@  0 points"), "the points are not on the HUD")
+}

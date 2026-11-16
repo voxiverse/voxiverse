@@ -1,0 +1,27 @@
+package @id@_server
+
+import "core:testing"
+
+import "games:@id@"
+import "server:playtest"
+
+// The rule on a stepped server: a block the player broke is a point, told to it; a block
+// it placed, or one the world changed, is none.
+@(test)
+test_a_broken_block_scores :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig) // (the heap: a test thread's stack is small)
+	defer free(rig)
+	if !playtest.start(t, rig, GAME) {return}
+	defer playtest.stop(rig)
+	s, c := playtest.srv(rig), playtest.host(rig)
+	playtest.step(rig, 2)
+	points := playtest.host_record(rig, @id@.Points)
+	if !testing.expect(t, points != nil, "no points told") {return}
+	testing.expect_value(t, points.points, 0)
+
+	block_changed(s, s.home, {old = .Stone, new = .Air, by = c})
+	block_changed(s, s.home, {old = .Air, new = .Stone, by = c}) // (placed)
+	block_changed(s, s.home, {old = .Stone, new = .Air}) // (the world's)
+	playtest.step(rig, 2)
+	testing.expect_value(t, playtest.host_record(rig, @id@.Points).points, 1)
+}

@@ -1,0 +1,19 @@
+package @id@
+
+import "common:game"
+
+// @Name@: every block a player breaks scores a point, and the top of the screen says how
+// many. Stamped out by `./build.sh new-game @id@` (docs/games.md): a game's whole shape
+// with one rule, to grow into a game of its own.
+//
+// This is its shared package: what both of its sides use, its records among them
+// (records.odin) and what its HUD says (text.odin). The server part (games/@id@/server)
+// keeps the rule; the client part (games/@id@/client) shows the points.
+
+// INFO: the game's id, name and description, for both of its parts (the launcher lists
+// it by them).
+INFO :: game.Game_Info {
+	id          = "@id@",
+	name        = "@Name@",
+	description = "Every block you break scores a point.",
+}

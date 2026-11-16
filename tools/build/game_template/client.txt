@@ -1,0 +1,36 @@
+package @id@_client
+
+import "client:engine"
+import "client:ui"
+import "common:protocol"
+import "games:@id@"
+
+// @Name@'s client part (the game: games/@id@): it keeps the points the server last told
+// the player and shows them in a line across the top of the screen.
+
+GAME :: engine.Game {
+	info     = @id@.INFO,
+	kinds    = @id@.KINDS,
+	state    = View,
+	received = received,
+	hud      = hud,
+}
+
+// View: what the session knows of the game.
+View :: struct {
+	points: @id@.Points, // the server's last word (zero until the first)
+}
+
+view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
+
+received :: proc(s: ^engine.Session, r: protocol.Received) {
+	if points, ok := engine.game_value(s, r, @id@.Points); ok && points != nil {
+		view(s).points = points^
+	}
+}
+
+// hud: the player's points, a line across the top of the screen.
+hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
+	rest := ctx.screen
+	engine.top_bar(ctx, &rest, @id@.tr(.Points_Line, view(s).points.points))
+}

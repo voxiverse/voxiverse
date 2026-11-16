@@ -49,6 +49,21 @@ game's id its folder's name, and only the executables' main packages import them
 (`client/main` the client's list alone, so the dedicated server links no client code), and
 the trace tools the server's.
 
+## Starting one
+
+`./build.sh new-game <id>` stamps out the smallest working game in `games/<id>/`, the shape
+above with one rule: its shared package (`INFO`, a record `Points`, a text table), its
+server part (a `start` hook, and `block_changed` scoring a point for each block a player
+breaks), its client part (a line of HUD with the points), a test beside each and a README;
+the name players read is the id's words capitalised (`ice_race`: "Ice Race"). Its files
+are known to git (`git add --intent-to-add`), so right after it `./build.sh check` and
+`./build.sh test games/<id> games/<id>/server games/<id>/client` pass and `./build.sh run --
+--game <id>` plays it. It refuses an id that is not a game's (singular snake_case, at most
+`game.MAX_GAME_ID`), one that is an Odin keyword or a package its parts import (`game`,
+`core`, `engine`...), and one whose folder is there. The files are
+`tools/build/game_template/`'s. Then make the rule the game's own, and its README, and
+re-accept the launcher's baselines when it is committed ([The launcher](#the-launcher)).
+
 ## A walk-through
 
 A small game, from nothing: every player in a walled arena, a round counted down, played,

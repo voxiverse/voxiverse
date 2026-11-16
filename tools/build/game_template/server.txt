@@ -1,0 +1,48 @@
+package @id@_server
+
+import "core:log"
+
+import "games:@id@"
+import "server:core"
+
+// @Name@'s server part (the game: games/@id@): it counts the blocks each player breaks
+// and tells each player its points (@id@.Points).
+
+GAME :: core.Game {
+	info          = @id@.INFO,
+	kinds         = @id@.KINDS,
+	client_state  = Score,
+	start         = start,
+	tick          = tick,
+	block_changed = block_changed,
+}
+
+// Score: a player's state, zero when it joins.
+Score :: struct {
+	points: u32,
+}
+
+score :: proc(s: ^core.Server, c: ^core.Client) -> ^Score {
+	return core.game_client_state(s, c, Score)
+}
+
+// start: the session is set up, before its first tick; false would refuse it.
+start :: proc(s: ^core.Server) -> bool {
+	log.infof("@id@ started tick=%d", s.tick)
+	return true
+}
+
+// tick tells every player its points (put every tick: only a change is sent).
+tick :: proc(s: ^core.Server) {
+	for &c in s.clients {
+		if c.state != .Playing {continue}
+		points := @id@.Points{score(s, &c).points}
+		core.game_put(s, &c, &points)
+	}
+}
+
+// block_changed: the rule. A block a player broke (one block, air now) is a point.
+block_changed :: proc(s: ^core.Server, w: ^core.World, change: core.Block_Change) {
+	if change.by == nil || change.bulk || change.old == .Air || change.new != .Air {return}
+	score(s, change.by).points += 1
+}
