@@ -45,6 +45,7 @@ PACKAGES :: []string {
 	"server/path",
 	"server/core",
 	"server/play",
+	"server/playtest",
 	"client/platform",
 	"client/gpu",
 	"client/render",
