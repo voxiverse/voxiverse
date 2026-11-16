@@ -201,6 +201,8 @@ Server :: struct {
 	schema:            game.Schema, // what is replicated to clients (state_kinds.odin)
 	time_stopped:      bool, // the clock stands still (the local player paused): clients are given a new anchor every tick
 	frozen:            bool, // (atomic) the local player paused: time and entities stand still
+	sim_speed:         int, // the world's steps a tick, as the game set it (sim_speed_set; 0: paused; 1 at start)
+	sim_steps:         int, // this tick's: sim_speed, or 0 while frozen (a game steps its own simulation as many times)
 	failed:            bool, // (atomic)
 	stats_mutex:       sync.Mutex,
 	stats:             Stats,
@@ -280,6 +282,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	// Field by field: a literal of the whole Server is built on the stack first (88 KB) and copied.
 	s^ = {}
 	s.config, s.local = config, local
+	s.sim_speed = 1
 	s.schema = game.game_schema(config.game.id, config.game.kinds)
 	assert(config.perturb.what == .None || config.stepped, "perturb is for stepped servers")
 	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
@@ -474,6 +477,22 @@ teardown :: proc(s: ^Server, world: bool) {
 	virtual.arena_destroy(&s.arena)
 	s^ = {}
 	s.refusal = refusal
+}
+
+// MAX_SIM_SPEED: the most steps a tick a game may run its world at.
+MAX_SIM_SPEED :: 4
+
+// sim_speed_set: the world's life (its time, its block updates and random ticks, its
+// entities) steps speed times a tick from the next one: 0 pauses it, 2 and 4 run it
+// fast; false (and nothing changes) past MAX_SIM_SPEED. A game asks for it (a city
+// builder's speed buttons) and steps its own simulation s.sim_steps times in its tick,
+// which still comes once a tick, so its records stay. Players are not sped: each moves
+// by its own inputs, one a tick, so prediction holds; the server stays deterministic
+// (the same steps in the same order, whatever the speed).
+sim_speed_set :: proc(s: ^Server, speed: int) -> bool {
+	if speed < 0 || speed > MAX_SIM_SPEED {return false}
+	s.sim_speed = speed
+	return true
 }
 
 // freeze stops (or restarts) time and entities while the local player is
@@ -715,7 +734,8 @@ tick :: proc(s: ^Server) {
 	tick_mark(s, "chunks_and_messages")
 	frozen := sync.atomic_load(&s.frozen) && !s.listening
 	s.time_stopped = frozen
-	if !frozen {
+	s.sim_steps = 0 if frozen else s.sim_speed
+	for _ in 0 ..< s.sim_steps {
 		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
 	}
 	economy_tick(s)
@@ -761,21 +781,20 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	tick_mark(s, "unloads")
-	for w in s.worlds {
-		if !frozen {
-			sim_run_scheduled(w)
-		}
+	// The world's own life steps sim_steps times (sim_speed: none paused, more fast).
+	for _ in 0 ..< s.sim_steps {
+		for w in s.worlds {sim_run_scheduled(w)}
 	}
 	tick_mark(s, "block_updates")
-	for w in s.worlds {
-		if !frozen {
+	for _ in 0 ..< s.sim_steps {
+		for w in s.worlds {
 			base.profile_scope("random ticks")
 			random_ticks(w)
 		}
 	}
 	tick_mark(s, "random_ticks")
-	for w in s.worlds {
-		if !frozen {
+	for _ in 0 ..< s.sim_steps {
+		for w in s.worlds {
 			entities_tick(w)
 			{
 				base.profile_scope("containers")

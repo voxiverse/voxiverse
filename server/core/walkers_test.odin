@@ -648,3 +648,46 @@ test_walker_glides :: proc(t: ^testing.T) {
 	testing.expect(t, entity_go(w, e, {12.5, 0, 0.5}))
 	testing.expect(t, !entity_gliding(w, e))
 }
+
+// The world's speed: at 2 a walker gliding covers twice the ground a tick; paused, none,
+// and the game's tick still comes (its records stay); a speed past MAX_SIM_SPEED is refused.
+@(test)
+test_sim_speed_steps_the_world :: proc(t: ^testing.T) {
+	rig := new(Rig)
+	defer free(rig)
+	h := &rig.h
+	hooks := Game {
+		server_state = int, // (its ticks)
+		tick = proc(s: ^Server) {game_state(s, int)^ += 1},
+	}
+	kind, ok := walkers_start(t, rig, hooks)
+	if !ok {
+		harness_stop(h)
+		return
+	}
+	defer harness_stop(h)
+	s := &h.srv
+	w := s.home
+	e := entity_spawn(w, kind, {-11.5, 0, 0.5}, false)
+	entity_set_speed(w, e, 3)
+	entity_glide(w, e, []game.Block_Pos{{20, 0, 0}})
+	harness_step(h, 2)
+	moved :: proc(h: ^Harness, e: game.Entity_Handle, ticks: int) -> f64 {
+		from := entity_pos(h.srv.home, e)
+		harness_step(h, ticks)
+		return entity_pos(h.srv.home, e).x - from.x
+	}
+	one := moved(h, e, 10)
+	testing.expect(t, sim_speed_set(s, 2))
+	harness_step(h, 1)
+	two := moved(h, e, 10)
+	testing.expectf(t, abs(two - 2 * one) < 1e-6, "at 2: %v, at 1: %v", two, one)
+	testing.expect(t, sim_speed_set(s, 0))
+	harness_step(h, 1)
+	before := game_state(s, int)^
+	testing.expect_value(t, moved(h, e, 10), 0)
+	testing.expect_value(t, game_state(s, int)^, before + 10)
+	testing.expect_value(t, s.sim_steps, 0)
+	testing.expect(t, !sim_speed_set(s, MAX_SIM_SPEED + 1))
+	testing.expect_value(t, s.sim_speed, 0)
+}
