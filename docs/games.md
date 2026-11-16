@@ -74,6 +74,7 @@ makes it for games, documented where it is declared.
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
 | `client_name(c)`, `allowed(s, c, node)` | A player's name; whether it holds a permission |
+| `player_id(s, c)` | A player's id (its seat): the key of a record of the game's about it (`game.key_player`), the same on every side |
 | `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |
 | `game_mode(s, c, id)` | Put a player in a mode by id (a pack's too: `flood:out`); journalled as the game's |
 | `kit_give(s, c)` | Give a player what its mode's kit has that it lacks, weapons full |
@@ -85,8 +86,8 @@ makes it for games, documented where it is declared.
 | `game_act(s, w, system)`, `Act` | A cause for the game's block changes, its actor the game: one per cause |
 | `set_block(w, p, block, act)`, `bulk_edit(w, edit, act)`, `Bulk_Edit`, `Box`, `Sphere` | Change blocks through the edit journal ([journal.md](journal.md)) |
 
-The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config` and
-`registry`; `Client`'s `state`, `world`, `player` (its position, velocity, flying), `mode`
+The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
+`registry` and `listening` (others can join: opened to the LAN, or a dedicated server); `Client`'s `state`, `world`, `player` (its position, velocity, flying), `mode`
 and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's state is, in
 `start`, a world's clock; everything else goes through the list. A world's rules change
 through `game_rule` (`core.game_rule(s, w, "explosion_size", "1.75")`), never by assignment:

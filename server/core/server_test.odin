@@ -960,6 +960,9 @@ test_game_api :: proc(t: ^testing.T) {
 	_, unloaded := block_at(w, {4000, 3, 4000})
 	testing.expect(t, !unloaded)
 
+	// A player's id: its seat, what its records are keyed by.
+	testing.expect_value(t, player_id(s, c), 0)
+
 	// A mode by id, journalled as the game's; an id the registry lacks.
 	testing.expect_value(t, game_mode(s, c, "survival"), Mode_Result.Ok)
 	testing.expect_value(t, game.mode_label(s.registry, c.mode), "survival")

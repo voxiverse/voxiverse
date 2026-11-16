@@ -1126,7 +1126,8 @@ notice :: proc(s: ^Server, c: ^Client, text: string) {
 	event_send(s, c, .Notice, &shown)
 }
 
-@(private)
+// player_id: c's id, its seat: what its players' records are keyed by
+// (game.key_player). Public: a game keys its own records with it.
 player_id :: proc(s: ^Server, c: ^Client) -> u16 {
 	return u16(mem.ptr_sub(c, &s.clients[0]))
 }
