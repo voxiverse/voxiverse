@@ -143,3 +143,102 @@ structure_list :: proc(s: ^Server) -> string {
 	   0 {return "No structures yet: select a box (pos1, pos2) and `structure save <name>`"}
 	return strings.join(names[:], ", ", context.temp_allocator)
 }
+
+// A game's buildings: a structure placed and taken down as itself (a city builder's
+// house, a tower defence's tower, a dungeon's room), from a template the game holds
+// (built in code with game.template_build, or its pack's: structure_load). Each is one
+// bulk edit through the journal, credited to the game's act, so it is undone, saved,
+// sent and judged by the walkers' routes like any other edit.
+
+// Structure_Fit: whether a structure may stand somewhere (structure_fit).
+Structure_Fit :: enum u8 {
+	Fits,
+	Not_Loaded, // part of it, or of the ground under it, is not loaded
+	Blocked, // a block that is not air (nor gives way: grass, flowers, snow; water does not) is where it would build
+	Uneven, // the ground under a column of it is lower than its floor by more than the step allowed
+	Out_Of_World, // above or below the world
+}
+
+// structure_fit: whether template t, turned rotation quarter turns with its lowest
+// corner at `at`, fits: every cell it builds (not void) is air or gives way, and under
+// each column of its footprint the ground (the highest solid block) is right below its
+// floor (at.y - 1) or at most max_step lower. Nothing is changed.
+structure_fit :: proc(
+	w: ^World,
+	t: ^game.Template,
+	at: game.Block_Pos,
+	rotation: u8,
+	max_step: i32 = 0,
+) -> Structure_Fit {
+	size := game.rotated_size(t.size, rotation)
+	if at.y - 1 - max_step < game.WORLD_MIN_Y ||
+	   at.y + size.y > game.WORLD_MAX_Y {return .Out_Of_World}
+	table := &w.server.registry.blocks
+	for z in i32(0) ..< size.z {
+		for x in i32(0) ..< size.x {
+			for y in i32(0) ..< size.y {
+				cell := game.template_cell(t, {x, y, z}, rotation)
+				if cell == game.VOID {continue}
+				b, loaded := chunks_block(&w.chunks, at + {x, y, z})
+				if !loaded {return .Not_Loaded}
+				f := table.flags[b]
+				if b != .Air && (.Replaceable not_in f || .Liquid in f) {return .Blocked}
+			}
+			ground := false
+			for dy in i32(1) ..= max_step + 1 {
+				b, loaded := chunks_block(&w.chunks, at + {x, -dy, z})
+				if !loaded {return .Not_Loaded}
+				if f := table.flags[b]; b != .Air && .Replaceable not_in f && .Liquid not_in f {
+					ground = true
+					break
+				}
+			}
+			if !ground {return .Uneven}
+		}
+	}
+	return .Fits
+}
+
+// structure_place builds template t with its lowest corner at `at`, turned rotation
+// quarter turns, in one bulk edit by act (its void cells leave what is there). Whether
+// it fits is the caller's to ask first (structure_fit).
+structure_place :: proc(
+	w: ^World,
+	t: ^game.Template,
+	at: game.Block_Pos,
+	rotation: u8,
+	act: Act,
+) -> (
+	changed: int,
+	result: Bulk_Result,
+) {
+	size := game.rotated_size(t.size, rotation)
+	changed, result, _ = bulk_edit(
+		w,
+		{shape = Box{at, at + size - 1}, op = .Paste, template = t, rotation = rotation},
+		act,
+	)
+	return
+}
+
+// structure_remove takes down what structure_place built there: each of its blocks
+// still as the template made it becomes air (what was changed since stays), in one
+// bulk edit by act.
+structure_remove :: proc(
+	w: ^World,
+	t: ^game.Template,
+	at: game.Block_Pos,
+	rotation: u8,
+	act: Act,
+) -> (
+	changed: int,
+	result: Bulk_Result,
+) {
+	size := game.rotated_size(t.size, rotation)
+	changed, result, _ = bulk_edit(
+		w,
+		{shape = Box{at, at + size - 1}, op = .Unpaste, template = t, rotation = rotation},
+		act,
+	)
+	return
+}

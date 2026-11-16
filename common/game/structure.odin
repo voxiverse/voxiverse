@@ -44,6 +44,62 @@ template_cell :: proc(t: ^Template, l: [3]i32, rotation: u8) -> u16 {
 	return t.cells[template_index(t, {x, l.y, z})]
 }
 
+// template_build: a template from text, as a game writes its buildings in code: layers
+// from the bottom up, each its rows from -z to +z separated by '/', each row its cells
+// from -x to +x, one character each; key's i-th character stands for cells[i] (a
+// Block, or VOID). False for rows or layers of uneven length, a character not in key,
+// or a size past MAX_TEMPLATE_SIZE.
+//
+//	template_build({"###/#.#/###", "#.#/.../#.#"}, "#.", {u16(planks), VOID})
+template_build :: proc(
+	layers: []string,
+	key: string,
+	cells: []u16,
+	allocator := context.allocator,
+) -> (
+	t: Template,
+	ok: bool,
+) {
+	if len(layers) == 0 || len(layers) > MAX_TEMPLATE_SIZE || len(key) != len(cells) {return}
+	width, depth := -1, 0
+	for layer in layers {
+		rows, x := 1, 0
+		for c in layer {
+			if c == '/' {
+				if width >= 0 && x != width {return}
+				width, x, rows = x, 0, rows + 1
+				continue
+			}
+			x += 1
+		}
+		if width >= 0 && x != width {return}
+		width = x
+		if depth != 0 && rows != depth {return}
+		depth = rows
+	}
+	if width < 1 || width > MAX_TEMPLATE_SIZE || depth > MAX_TEMPLATE_SIZE {return}
+	t.size = {i32(width), i32(len(layers)), i32(depth)}
+	t.cells = make([]u16, width * depth * len(layers), allocator)
+	for layer, y in layers {
+		x, z := 0, 0
+		for c in layer {
+			if c == '/' {
+				x, z = 0, z + 1
+				continue
+			}
+			k := -1
+			for kc, i in key {if kc == c {k = i}}
+			if k < 0 {
+				delete(t.cells, allocator)
+				return {}, false
+			}
+			t.cells[template_index(&t, {i32(x), i32(y), i32(z)})] = cells[k]
+			x += 1
+		}
+	}
+	return t, true
+}
+
 template_encode :: proc(w: ^Writer, t: ^Template, reg: ^Registry) {
 	write_u32(w, TEMPLATE_MAGIC)
 	for v in t.size {write_i32(w, v)}

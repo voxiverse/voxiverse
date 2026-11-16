@@ -32,6 +32,7 @@ Bulk_Op :: enum u8 {
 	Replace, // blocks that are `from` become block
 	Carve, // everything becomes air (an explosion; bedrock stays)
 	Paste, // a template's cells (its void cells leave what is there)
+	Unpaste, // a template's cells that are still as it made them become air: what Paste built, taken down
 }
 
 Bulk_Edit :: struct {
@@ -157,6 +158,11 @@ edit_chunk :: proc(
 					cell := game.template_cell(e.template, p - corner, e.rotation)
 					if cell == game.VOID {continue}
 					new = game.Block(cell)
+				case .Unpaste:
+					corner, _ := shape_box(e.shape)
+					cell := game.template_cell(e.template, p - corner, e.rotation)
+					if cell == game.VOID || game.Block(cell) != old {continue}
+					new = .Air
 				}
 				if new == old {continue}
 				if len(refused) > 0 {
