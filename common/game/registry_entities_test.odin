@@ -32,6 +32,7 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	testing.expect_value(t, d.physics, Entity_Physics.Walker)
 	testing.expect_value(t, d.walker, Kind_Walker_Info{1.4, 4.2, 1.2, 0})
 	testing.expect_value(t, d.brain, Entity_Brain.Steered)
+	testing.expect_value(t, d.voice, Entity_Voice.Bleat) // (a kind that names none)
 	testing.expect_value(t, d.model, Entity_Model.Box)
 	_, dummy_spawns := d.spawn.?
 	testing.expect(t, !dummy_spawns)
@@ -42,7 +43,7 @@ test_entity_kinds :: proc(t: ^testing.T) {
 		[]File {
 			{
 				"data/entities/wild.json",
-				`{"wild": {"box": [1, 1], "physics": "walker", "walker": {"walk_speed": 1, "run_speed": 2, "jump": 1, "step": 0}, "brain": "game", "model": {"box": [1, 2, 3]},
+				`{"wild": {"box": [1, 1], "physics": "walker", "walker": {"walk_speed": 1, "run_speed": 2, "jump": 1, "step": 0}, "brain": "game", "voice": "growl", "model": {"box": [1, 2, 3]},
 				"spawn": {"on": "voxiverse:grass", "day": [0.27, 0.73], "every": 60, "chance": 0.5, "cap": 6, "within": 48, "distance": [16, 40], "group": [1, 3], "sky": true}}}`,
 			},
 		},
@@ -53,6 +54,7 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	defer registry_destroy(with_wild)
 	wild_id, _ := registry_kind(with_wild, "testpack:wild")
 	rule, spawns := kind_info(with_wild, wild_id).spawn.?
+	testing.expect_value(t, kind_info(with_wild, wild_id).voice, Entity_Voice.Growl)
 	testing.expect(t, spawns)
 	grass, _ := registry_block(with_wild, "grass")
 	testing.expect(t, rule_matcher_has(&rule.on, grass))
@@ -133,6 +135,11 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 			"unknown brain",
 			`{"k": {"box": [1, 1], ` + WALKER + `, "brain": "hunter", "model": "item"}}`,
 			`testpack/data/entities/k.json:1:120: brain is one of "none", "steered", "game"; got "hunter"`,
+		},
+		{
+			"unknown voice",
+			`{"k": {"box": [1, 1], "voice": "moo", "model": "item"}}`,
+			`testpack/data/entities/k.json:1:32: voice is one of "bleat", "none", "growl", "squeak", "groan", "croak", "grunt"; got "moo"`,
 		},
 		{
 			"unknown model",

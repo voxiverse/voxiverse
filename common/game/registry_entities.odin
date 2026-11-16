@@ -41,6 +41,20 @@ Entity_Brain :: enum u8 {
 ENTITY_BRAIN_LIST := [?]string{"none", "steered", "game"}
 #assert(len(ENTITY_BRAIN_LIST) == len(Entity_Brain))
 
+// Entity_Voice: what a creature sounds like hurt and dying (its kind's "voice"; client/sfx
+// makes each from code).
+Entity_Voice :: enum u8 {
+	Bleat, // a sheep's, and a kind's that names none
+	None, // silent (a chest, a shot)
+	Growl, // low and rough: a beast
+	Squeak, // high and short: something small and quick
+	Groan, // low and drawn out: the walking dead
+	Croak, // rasps in the throat: a spitter
+	Grunt, // a person's
+}
+ENTITY_VOICE_LIST := [?]string{"bleat", "none", "growl", "squeak", "groan", "croak", "grunt"}
+#assert(len(ENTITY_VOICE_LIST) == len(Entity_Voice))
+
 // A kind's looks are names (at most MAX_KIND_LOOKS, its pack's "looks"): bit i of a
 // replicated entity's looks (Entity_Motion.looks) is its i-th. Its game sets them
 // (core.entity_show); the engine sets "striking" while a creature's attack shows. Its
@@ -198,6 +212,7 @@ Kind_Info :: struct {
 	projectile: Kind_Projectile_Info,
 	item:       Kind_Item_Info,
 	brain:      Entity_Brain,
+	voice:      Entity_Voice, // its cry hurt and dying ("voice")
 	looks:      []string, // look i is bit i of a replicated entity's looks
 	striking:   u16, // its "striking" look's bit (0: none), which the engine sets
 	fields:     []Kind_Field,
@@ -256,6 +271,7 @@ ENTITY_FIELDS := []string {
 	"projectile",
 	"item",
 	"brain",
+	"voice",
 	"looks",
 	"fields",
 	"model",
@@ -507,6 +523,9 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 				),
 			)
 		}
+	}
+	if f := field_of(m, "voice"); f != nil {
+		info.voice = Entity_Voice(choice_of(b, f, f.value, "voice", ENTITY_VOICE_LIST[:], 0))
 	}
 	if f := field_of(m, "attack"); f != nil {
 		info.attack = read_attack(b, f, &info)

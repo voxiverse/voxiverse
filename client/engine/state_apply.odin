@@ -281,7 +281,10 @@ apply_event :: proc(s: ^Session, g: protocol.Received) {
 	case .Entity_Hurt:
 		if e, known := &s.entities[(^protocol.Entity_Hurt)(g.value).entity]; known {
 			e.hurt_at = time.tick_now()
-			append(&s.sounds, Sound_Event{.Entity_Hurt, .Air, e.last_seen + {0, 0.5, 0}, 1})
+			append(
+				&s.sounds,
+				Sound_Event{.Entity_Hurt, .Air, e.last_seen + {0, 0.5, 0}, 1, entity_voice(s, e)},
+			)
 		}
 	case .Entity_Died:
 		if e, known := &s.entities[(^protocol.Entity_Died)(g.value).entity]; known {

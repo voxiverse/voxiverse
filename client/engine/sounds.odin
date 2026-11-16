@@ -36,6 +36,7 @@ Sound_Event :: struct {
 	block:    game.Block, // what broke, was placed or was stepped on
 	position: [3]f64, // where (blocks)
 	volume:   f32, // 0..1
+	voice:    game.Entity_Voice, // a creature's (its kind's), hurt or dying
 }
 
 // Pack_Set: the files of a pack's sound set, by action (the ids are in the
@@ -53,7 +54,7 @@ Sound_Bank :: struct {
 	pack_retired: [dynamic][]f32, // the files before them: freed at the swap after next (the audio thread has stopped reading them long before)
 	block:        [sfx.Material][sfx.Action][sfx.VARIANTS]audio.Sound_Id,
 	player:       [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
-	creature:     [sfx.Creature_Sound][sfx.VARIANTS]audio.Sound_Id,
+	creature:     [game.Entity_Voice][sfx.Creature_Sound][sfx.VARIANTS]audio.Sound_Id, // (none for the voice None)
 	blast:        [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
 	gun:          [sfx.Gun_Sound][sfx.VARIANTS]audio.Sound_Id,
 	samples:      [dynamic][]f32, // owned
@@ -86,8 +87,18 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	for p in sfx.Player_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.player[p][v] = add(b, m, sfx.player_sound(p, v), fmt.tprintf("player.%v.%d", p, v))}
 	}
-	for c in sfx.Creature_Sound {
-		for v in 0 ..< sfx.VARIANTS {b.creature[c][v] = add(b, m, sfx.creature_sound(c, v), fmt.tprintf("creature.%v.%d", c, v))}
+	for voice in game.Entity_Voice {
+		if voice == .None {continue}
+		for c in sfx.Creature_Sound {
+			for v in 0 ..< sfx.VARIANTS {
+				b.creature[voice][c][v] = add(
+					b,
+					m,
+					sfx.creature_sound(voice, c, v),
+					fmt.tprintf("creature.%v.%v.%d", voice, c, v),
+				)
+			}
+		}
 	}
 	for x in sfx.Blast_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.blast[x][v] = add(b, m, sfx.blast_sound(x, v), fmt.tprintf("blast.%v.%d", x, v))}
@@ -259,10 +270,11 @@ sounds_play :: proc(
 		variant := base.rng_int_max(base.cosmetic_rng(), sfx.VARIANTS)
 		switch e.kind {
 		case .Entity_Hurt:
+			if e.voice == .None {continue}
 			audio.play(
 				m,
 				{
-					sound = b.creature[.Hurt][variant],
+					sound = b.creature[e.voice][.Hurt][variant],
 					gain = gain,
 					pitch = pitch,
 					bus = .World,
@@ -270,10 +282,11 @@ sounds_play :: proc(
 				},
 			)
 		case .Entity_Die:
+			if e.voice == .None {continue}
 			audio.play(
 				m,
 				{
-					sound = b.creature[.Die][variant],
+					sound = b.creature[e.voice][.Die][variant],
 					gain = gain,
 					pitch = pitch,
 					bus = .World,
@@ -369,7 +382,7 @@ movement_sounds :: proc(s: ^Session) {
 		speed := -was.velocity.y
 		if speed >= LAND_MIN_SPEED && solid {
 			loud := clamp((speed - LAND_MIN_SPEED) / (LAND_LOUD_SPEED - LAND_MIN_SPEED), 0.25, 1)
-			append(&s.sounds, Sound_Event{.Land, under, feet, loud})
+			append(&s.sounds, Sound_Event{.Land, under, feet, loud, {}})
 		}
 		s.walked = 0
 	}
@@ -378,7 +391,7 @@ movement_sounds :: proc(s: ^Session) {
 		s.walked += f32(math.sqrt(d.x * d.x + d.z * d.z))
 		if s.walked >= STRIDE {
 			s.walked -= STRIDE
-			if solid {append(&s.sounds, Sound_Event{.Step, under, feet, 1})}
+			if solid {append(&s.sounds, Sound_Event{.Step, under, feet, 1, {}})}
 		}
 	}
 }

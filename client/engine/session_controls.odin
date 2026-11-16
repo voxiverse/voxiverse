@@ -138,7 +138,7 @@ session_pick :: proc(s: ^Session) -> bool {
 session_fire :: proc(s: ^Session) -> bool {
 	if !session_allowed(s, "world.fire") {return false}
 	send_message(s, protocol.Fire{s.prediction.next_sequence - 1, s.camera.yaw, s.camera.pitch})
-	append(&s.sounds, Sound_Event{.Launch, .Air, s.camera.position, 1})
+	append(&s.sounds, Sound_Event{.Launch, .Air, s.camera.position, 1, {}})
 	return true
 }
 
@@ -256,7 +256,10 @@ session_toggle :: proc(s: ^Session, pos: game.Block_Pos, b: game.Block) -> bool 
 		face  = game.EDIT_FACE_PLAIN,
 	}
 	if !predict_edit(s, pos, flipped) {return false}
-	append(&s.sounds, Sound_Event{.Place, flipped, {f64(pos.x), f64(pos.y), f64(pos.z)} + 0.5, 1})
+	append(
+		&s.sounds,
+		Sound_Event{.Place, flipped, {f64(pos.x), f64(pos.y), f64(pos.z)} + 0.5, 1, {}},
+	)
 	s.next_edit = edit.id
 	append(&s.edits, edit)
 	send_message(s, edit)
@@ -291,8 +294,8 @@ session_till :: proc(s: ^Session) -> bool {
 edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
 	centre := [3]f64{f64(pos.x), f64(pos.y), f64(pos.z)} + 0.5
 	if new == .Air {
-		append(&s.sounds, Sound_Event{.Break, old, centre, 1})
+		append(&s.sounds, Sound_Event{.Break, old, centre, 1, {}})
 	} else {
-		append(&s.sounds, Sound_Event{.Place, new, centre, 1})
+		append(&s.sounds, Sound_Event{.Place, new, centre, 1, {}})
 	}
 }

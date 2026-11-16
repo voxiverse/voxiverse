@@ -291,7 +291,7 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 			},
 		)
 	}
-	append(&s.sounds, Sound_Event{.Explosion, .Air, center, 1})
+	append(&s.sounds, Sound_Event{.Explosion, .Air, center, 1, {}})
 }
 
 // entity_died: its puff, of its own colours (its model's first part's mostly, its last
@@ -332,7 +332,14 @@ entity_died :: proc(s: ^Session, e: ^Other_Entity) {
 			},
 		)
 	}
-	append(&s.sounds, Sound_Event{.Entity_Die, .Air, at + {0, 0.5, 0}, 1})
+	append(&s.sounds, Sound_Event{.Entity_Die, .Air, at + {0, 0.5, 0}, 1, entity_voice(s, e)})
+}
+
+// entity_voice: the voice an entity cries in, its kind's (a kind the registry has not: the
+// bleat, every creature's default).
+entity_voice :: proc(s: ^Session, e: ^Other_Entity) -> game.Entity_Voice {
+	if info := game.kind_info(s.reg, e.kind); info != nil {return info.voice}
+	return .Bleat
 }
 
 // entity_aimed: the nearest entity on the ray within reach (and nearer

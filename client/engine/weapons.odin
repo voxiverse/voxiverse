@@ -87,7 +87,7 @@ session_reload :: proc(s: ^Session) -> bool {
 	s.reload_slot = s.inventory.selected
 	vm_event(&s.vm, .Reload, w.reload_time)
 	s.ammo_until = 0
-	append(&s.sounds, Sound_Event{.Reload, .Air, s.camera.position, 1})
+	append(&s.sounds, Sound_Event{.Reload, .Air, s.camera.position, 1, {}})
 	return true
 }
 
@@ -136,7 +136,7 @@ session_shoot :: proc(s: ^Session, stack: game.Stack, w: game.Weapon_Info, press
 		tracer(s, muzzle, end)
 	}
 	muzzle_flash(s, muzzle)
-	append(&s.sounds, Sound_Event{gun_cue(w.sound), .Air, s.camera.position, 1})
+	append(&s.sounds, Sound_Event{gun_cue(w.sound), .Air, s.camera.position, 1, {}})
 	s.recoil += RECOIL_KICK * (3 if w.zoom > 0 else 1)
 	vm_event(&s.vm, .Shot)
 	return true
@@ -192,7 +192,7 @@ shot_seen :: proc(s: ^Session, v: ^protocol.Shot) {
 	muzzle_flash(s, v.origin)
 	info, _ := game.item_info(s.reg, v.weapon)
 	w, _ := info.weapon.?
-	append(&s.sounds, Sound_Event{gun_cue(w.sound), .Air, v.origin, 1})
+	append(&s.sounds, Sound_Event{gun_cue(w.sound), .Air, v.origin, 1, {}})
 }
 
 // hit_confirmed: the server says our shot hit: the marker (red on a kill) and
@@ -201,7 +201,7 @@ hit_confirmed :: proc(s: ^Session, v: ^protocol.Hit_Confirm) {
 	s.marker, s.marker_kill, s.marker_head = MARKER_SECONDS, v.kill, v.headshot
 	s.confirms += 1
 	kind: Sound_Kind = .Hit_Head if v.headshot else .Hit
-	append(&s.sounds, Sound_Event{kind, .Air, s.camera.position, 1})
+	append(&s.sounds, Sound_Event{kind, .Air, s.camera.position, 1, {}})
 }
 
 // weapon_hud: the magazine beside the hotbar, the hit marker on the crosshair

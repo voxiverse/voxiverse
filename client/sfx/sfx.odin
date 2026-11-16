@@ -53,7 +53,7 @@ Gun_Sound :: enum u8 {
 	Reload, // two clicks
 }
 
-// Creature_Sound: a creature's voice (every creature's: a bleat), hurt or dying.
+// Creature_Sound: a creature's cry, hurt or dying (in its kind's voice: game.Entity_Voice).
 Creature_Sound :: enum u8 {
 	Hurt, // a short bleat
 	Die, // a long, falling one, and a puff
@@ -248,21 +248,72 @@ player_sound :: proc(p: Player_Sound, variant: int, allocator := context.allocat
 	return nil
 }
 
-// creature_sound: a creature's voice, a bleat: a sliding pitch with vibrato
-// whose harmonics are shaped by two formants (no filters: each harmonic's
-// loudness is the formants' at its frequency).
-creature_sound :: proc(c: Creature_Sound, variant: int, allocator := context.allocator) -> []f32 {
+// creature_sound: a creature's cry in a voice (none for game.Entity_Voice.None). Each is a
+// voice through the formants (bleat: a sliding pitch with vibrato whose harmonics the
+// formants shape) at its own pitch and length, with noise for the throat: the sheep's
+// bleat, a beast's low growl, a small thing's squeak, the dead's slow groan, a spitter's
+// rasps, a person's grunt.
+creature_sound :: proc(
+	voice: game.Entity_Voice,
+	c: Creature_Sound,
+	variant: int,
+	allocator := context.allocator,
+) -> []f32 {
+	if voice == .None {return nil}
 	s := Synth {
-		rng = seed(7777 + u32(c) * 131 + u32(variant) * 7),
+		rng = seed(7777 + u32(c) * 131 + u32(variant) * 7 + u32(voice) * 1009),
 	}
 	r := rand_range(&s.rng, 0.9, 1.1)
-	switch c {
-	case .Hurt:
-		bleat(&s, 0.26, 560 * r, 430 * r, 1)
-		burst(&s, {start = 0, tau = 0.012, filter = .Band, freq = 1400, q = 1, gain = 0.25})
-	case .Die:
-		bleat(&s, 0.5, 470 * r, 250 * r, 1)
-		burst(&s, {start = 0.38, tau = 0.06, filter = .Low, freq = 900, gain = 0.5})
+	die := c == .Die
+	switch voice {
+	case .None:
+	case .Bleat:
+		if die {
+			bleat(&s, 0.5, 470 * r, 250 * r, 1)
+			burst(&s, {start = 0.38, tau = 0.06, filter = .Low, freq = 900, gain = 0.5})
+		} else {
+			bleat(&s, 0.26, 560 * r, 430 * r, 1)
+			burst(&s, {start = 0, tau = 0.012, filter = .Band, freq = 1400, q = 1, gain = 0.25})
+		}
+	case .Growl:
+		bleat(&s, 0.7 if die else 0.32, 150 * r, (70 if die else 120) * r, 1)
+		scatter(
+			&s,
+			14 if die else 6,
+			0,
+			0.6 if die else 0.28,
+			{tau = 0.02, filter = .Low, q = 1},
+			180,
+			420,
+			0.3,
+			0.6,
+		)
+	case .Squeak:
+		bleat(&s, 0.3 if die else 0.12, 1500 * r, (900 if die else 1900) * r, 1)
+	case .Groan:
+		bleat(&s, 0.8 if die else 0.55, 210 * r, (110 if die else 160) * r, 1)
+		burst(
+			&s,
+			{start = 0, tau = 0.1 if die else 0.06, filter = .Band, freq = 500, q = 1, gain = 0.3},
+		)
+	case .Croak:
+		rasps := 4 if die else 2
+		for k in 0 ..< rasps {
+			burst(
+				&s,
+				{
+					start = f32(k) * 0.11,
+					tau = 0.03,
+					filter = .Band,
+					freq = 380 * r,
+					q = 3,
+					gain = 1 - 0.15 * f32(k),
+				},
+			)
+		}
+	case .Grunt:
+		bleat(&s, 0.45 if die else 0.16, 240 * r, (130 if die else 190) * r, 1)
+		burst(&s, {start = 0, tau = 0.02, filter = .Low, freq = 700, gain = 0.3})
 	}
 	return finish(&s, 0.7, allocator)
 }
