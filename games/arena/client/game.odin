@@ -1,7 +1,6 @@
 package arena_client
 
 import "core:fmt"
-import "core:slice"
 import "core:strings"
 
 import "client:engine"
@@ -32,18 +31,9 @@ FEED_LINES :: 5
 View :: struct {
 	match:  arena.Match, // the server's last word (its winner is a view into winner)
 	winner: [game.MAX_NAME_LENGTH]u8,
-	scores: [game.MAX_PLAYERS]Seat, // by player id
+	scores: engine.Seats(arena.Score), // by player id
 	feed:   [FEED_LINES]Feed_Line, // a ring, newest at feed_next - 1
 	next:   int,
-}
-
-// Seat: a fighter's score, as told.
-Seat :: struct {
-	known:    bool,
-	name:     [game.MAX_NAME_LENGTH]u8,
-	name_len: int,
-	frags:    int,
-	deaths:   int,
 }
 
 // Feed_Line: a kill as the feed says it, and when it came (the match's phase and its
@@ -58,27 +48,13 @@ Feed_Line :: struct {
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
-seat_name :: proc(seat: ^Seat) -> string {return string(seat.name[:seat.name_len])}
-
 received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if m, ok := engine.game_value(s, r, arena.Match); ok && m != nil {
 		v.match = m^
 		v.match.winner = string(v.winner[:copy(v.winner[:], m.winner)])
 	}
-	if score, ok := engine.game_value(s, r, arena.Score); ok && int(r.key.a) < len(v.scores) {
-		seat := &v.scores[r.key.a]
-		if score == nil {
-			seat^ = {}
-		} else {
-			seat^ = {
-				known  = true,
-				frags  = int(score.frags),
-				deaths = int(score.deaths),
-			}
-			seat.name_len = copy(seat.name[:], score.name)
-		}
-	}
+	if engine.seats_received(s, &v.scores, r) {return}
 	if kill, ok := engine.game_value(s, r, arena.Kill); ok && kill != nil {
 		line := &v.feed[v.next % FEED_LINES]
 		v.next += 1
@@ -99,24 +75,13 @@ feed_text :: proc(k: arena.Kill) -> string {
 	return fmt.tprintf("%s [%s] %s", k.by, arena.how(k), k.victim)
 }
 
-// Ranked: a known fighter, by its player id.
-Ranked :: struct {
-	id:   int,
-	seat: ^Seat,
-}
-
 // ranked: the known fighters, the most frags first, then the fewest deaths, then by
-// name (temp memory).
-ranked :: proc(v: ^View) -> []Ranked {
-	all := make([dynamic]Ranked, context.temp_allocator)
-	for &seat, id in v.scores {if seat.known {append(&all, Ranked{id, &seat})}}
-	slice.sort_by(all[:], proc(a, b: Ranked) -> bool {
-		x, y := a.seat, b.seat
-		if x.frags != y.frags {return x.frags > y.frags}
-		if x.deaths != y.deaths {return x.deaths < y.deaths}
-		return strings.compare(seat_name(x), seat_name(y)) < 0
+// name, as player ids (temp memory).
+ranked :: proc(v: ^View) -> []int {
+	return engine.seats_ranked(&v.scores, proc(a, b: ^arena.Score) -> bool {
+		if a.frags != b.frags {return a.frags > b.frags}
+		return a.deaths < b.deaths
 	})
-	return all[:]
 }
 
 // status: the line at the top of the screen.
@@ -136,10 +101,14 @@ status :: proc(s: ^engine.Session) -> string {
 	case .Countdown:
 		return fmt.tprintf("ARENA  match %d  starting", m.match)
 	case .Playing:
-		mine := &v.scores[min(int(s.welcome.player), len(v.scores) - 1)]
+		mine := engine.seat_mine(s, &v.scores)
 		leader := "-"
 		if all := ranked(v); len(all) > 0 {
-			leader = fmt.tprintf("%s %d", seat_name(all[0].seat), all[0].seat.frags)
+			leader = fmt.tprintf(
+				"%s %d",
+				v.scores.values[all[0]].name,
+				v.scores.values[all[0]].frags,
+			)
 		}
 		return fmt.tprintf(
 			"ARENA  match %d   %d:%02d left   you %d   leader %s   first to %d",
@@ -196,8 +165,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		head, color := "DRAW", t.log_warn
 		if m.winner != "" {
 			head = strings.to_upper(fmt.tprintf("%s wins", m.winner), context.temp_allocator)
-			mine := v.scores[min(int(s.welcome.player), len(v.scores) - 1)]
-			color = t.success if seat_name(&mine) == m.winner else t.log_warn
+			color = t.success if engine.seat_mine(s, &v.scores).name == m.winner else t.log_warn
 		}
 		engine.banner(ctx, -160, head, 1.5, color)
 		engine.banner(ctx, -80, arena.frags_text(int(m.top_frags)), 0.8, t.text)
@@ -225,13 +193,14 @@ scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 		board.title = fmt.tprintf("Arena: match %d is over", m.match)
 	}
 	engine.scoreboard_columns(board, "Frags", "Deaths")
-	for r in ranked(v) {
+	for id in ranked(v) {
+		score := &v.scores.values[id]
 		engine.scoreboard_row(
 			board,
-			seat_name(r.seat),
-			fmt.tprint(r.seat.frags),
-			fmt.tprint(r.seat.deaths),
-			you = r.id == int(s.welcome.player),
+			score.name,
+			fmt.tprint(score.frags),
+			fmt.tprint(score.deaths),
+			you = id == int(s.welcome.player),
 		)
 	}
 }
