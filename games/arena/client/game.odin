@@ -155,24 +155,15 @@ status :: proc(s: ^engine.Session) -> string {
 	return ""
 }
 
-// banner: a line of big text across the screen, centred on y, with a shadow.
-banner :: proc(ctx: ^ui.Context, y: f32, text: string, size: f32, color: ui.Color) {
-	r := ui.Rect{ctx.screen.x, y - size, ctx.screen.w, size * 2}
-	ui.draw_text(ctx, {r.x + 3, r.y + 3, r.w, r.h}, text, size, ctx.theme.text_shadow, .Center)
-	ui.draw_text(ctx, r, text, size, color, .Center)
-}
-
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	v := view(s)
 	m := v.match
 	t := &ctx.theme
-	screen := ctx.screen
-	top := ui.cut_top(&screen, t.row_height + t.padding)
-	ui.fill_rect(ctx, top, t.hud_fill)
-	ui.draw_text(ctx, top, status(s), t.font_size, t.text, .Center)
+	rest := ctx.screen
+	engine.top_bar(ctx, &rest, status(s))
 
 	// The kill feed: under the bar on the right, newest last.
-	feed := ui.rect_shrink(screen, t.padding)
+	feed := ui.rect_shrink(rest, t.padding)
 	for k in 0 ..< FEED_LINES {
 		line := &v.feed[(v.next + k) % FEED_LINES]
 		if line.len == 0 || line.match != m.match || line.phase != m.phase {continue}
@@ -191,26 +182,15 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		)
 	}
 
-	// The banners are laid out for a 720-high screen and shrink with a smaller one (the
-	// engine gives the HUD only the screen below F3 while it is open).
-	k := min(1, ctx.screen.h / 720)
-	mid := ctx.screen.y + ctx.screen.h / 2
-	big := t.title_size * 1.5 * k
-	size := t.title_size * k
 	#partial switch m.phase {
 	case .Countdown:
-		banner(ctx, mid - 140 * k, fmt.tprintf("MATCH %d", m.match), big, t.focus_ring)
-		banner(ctx, mid - 60 * k, fmt.tprintf("%d", m.left), big, t.text)
-		banner(
-			ctx,
-			mid + 40 * k,
-			fmt.tprintf(
-				"First to %d frags. Every kill counts; your own death costs one.",
-				m.frag_limit,
-			),
-			size * 0.6,
-			t.text,
+		engine.banner(ctx, -140, fmt.tprintf("MATCH %d", m.match), 1.5, t.focus_ring)
+		engine.banner(ctx, -60, fmt.tprintf("%d", m.left), 1.5, t.text)
+		rules := fmt.tprintf(
+			"First to %d frags. Every kill counts; your own death costs one.",
+			m.frag_limit,
 		)
+		engine.banner(ctx, 40, rules, 0.6, t.text)
 	case .Results:
 		head, color := "DRAW", t.log_warn
 		if m.winner != "" {
@@ -218,15 +198,10 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			mine := v.scores[min(int(s.welcome.player), len(v.scores) - 1)]
 			color = t.success if seat_name(&mine) == m.winner else t.log_warn
 		}
-		banner(ctx, mid - 160 * k, head, big, color)
-		banner(ctx, mid - 80 * k, arena.frags_text(int(m.top_frags)), size * 0.8, t.text)
-		banner(
-			ctx,
-			mid + 100 * k,
-			fmt.tprintf("next match in %d   (hold P for the scores)", m.left),
-			size * 0.6,
-			t.text,
-		)
+		engine.banner(ctx, -160, head, 1.5, color)
+		engine.banner(ctx, -80, arena.frags_text(int(m.top_frags)), 0.8, t.text)
+		next := fmt.tprintf("next match in %d   (hold P for the scores)", m.left)
+		engine.banner(ctx, 100, next, 0.6, t.text)
 	}
 }
 

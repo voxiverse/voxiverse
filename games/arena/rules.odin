@@ -2,6 +2,7 @@ package arena
 
 import "core:fmt"
 
+import "common:base"
 import "common:game"
 
 // Arena: a free-for-all deathmatch. Everyone spawns with the same kit in a walled
@@ -31,23 +32,31 @@ HEIGHT :: 24
 WALL_TOP :: 31 // (the top of chunk layer 1, which the game keeps loaded)
 SPAWNS :: 8 // spawn points, along the walls
 
-// The match's rules: what an admin may change (/arena), and their bounds.
+// The match's rules: what an admin may change (/arena <name> <value>), each described
+// once with its bounds (SETTINGS_VARS), kept with the universe.
 Settings :: struct {
-	frag_limit:    int, // the first to this many wins
-	time_limit:    int, // seconds a match lasts at most
-	respawn_delay: f32, // seconds from a death to coming back
+	frags:   int, // the first to this many wins
+	time:    int, // seconds a match lasts at most
+	respawn: f32, // seconds from a death to coming back
 }
 
-DEFAULT_SETTINGS :: Settings {
-	frag_limit    = 15,
-	time_limit    = 300,
-	respawn_delay = 2,
+@(rodata)
+DEFAULT_SETTINGS := Settings {
+	frags   = 15,
+	time    = 300,
+	respawn = 2,
 }
 
-FRAG_LIMIT_MAX :: 200
-TIME_LIMIT_MIN :: 30
-TIME_LIMIT_MAX :: 3600
-RESPAWN_DELAY_MAX :: 30
+@(rodata)
+SETTINGS_VARS := [?]base.Var {
+	{field = "frags", help = "the first to this many frags wins", min = 1, max = 200},
+	{field = "time", help = "seconds a match lasts at most", min = 30, max = 3600},
+	{field = "respawn", help = "seconds from a death to coming back", min = 0, max = 30},
+}
+
+settings_table :: proc() -> base.Var_Table {
+	return {"", Settings, SETTINGS_VARS[:], &DEFAULT_SETTINGS}
+}
 
 // Seconds.
 COUNTDOWN :: 5.0 // from the courtyard built to the match

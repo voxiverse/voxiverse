@@ -6,17 +6,20 @@ import "common:base"
 import "common:game"
 import "games:arena"
 import "server:core"
+import "server:play"
 
 // The courtyard: built for each match from its seed, so a match begins whole whatever
 // the last one's rockets carved. Every block goes through the edit journal under a
 // cause of the game's (core.game_act).
 
-// AREA: what the game keeps loaded and builds in: the walls around the inside and the
-// stone under its floor.
-AREA :: core.Box{{-1, -3, -1}, {arena.SIZE, arena.WALL_TOP, arena.SIZE}}
-
-// INSIDE: the courtyard's inside, floor to sky.
-INSIDE :: core.Box{{0, 0, 0}, {arena.SIZE - 1, arena.HEIGHT - 1, arena.SIZE - 1}}
+// COURTYARD: the walled ground the matches are fought in: SIZE square, HEIGHT from the
+// floor, bedrock walls to WALL_TOP, stone under the floor (a rocket through it finds
+// stone, not the open flat world).
+COURTYARD :: play.Arena {
+	size     = {arena.SIZE, arena.HEIGHT, arena.SIZE},
+	wall_top = arena.WALL_TOP,
+	depth    = 3,
+}
 
 // Theme: the materials of a courtyard.
 Theme :: struct {
@@ -30,40 +33,14 @@ THEMES :: [?]Theme {
 	{.Clay, .Sandstone, .Planks, .Stone_Bricks, .Planks, .Planks, .Log},
 }
 
-// build: the walls, the stone under the floor (a rocket through it finds stone, not the
-// open flat world) and the courtyard for the match's seed; false while its chunks are
+// build: the courtyard for the match's seed, walls and all; false while its chunks are
 // not all loaded, unless force (the wait is over: what is there is built, and said).
 build :: proc(s: ^core.Server, force: bool) -> bool {
-	w := s.home
 	a := state(s)
-	ready := core.world_ready(w, AREA)
-	if !ready && !force {return false}
-	act := core.game_act(s, w, .Structure)
-	lo, hi := AREA.lo, AREA.hi
-	walls := [4]core.Box {
-		{{lo.x, lo.y, lo.z}, {lo.x, hi.y, hi.z}},
-		{{hi.x, lo.y, lo.z}, {hi.x, hi.y, hi.z}},
-		{{0, lo.y, lo.z}, {arena.SIZE - 1, hi.y, lo.z}},
-		{{0, lo.y, hi.z}, {arena.SIZE - 1, hi.y, hi.z}},
-	}
-	for wall in walls {
-		core.bulk_edit(w, {shape = wall, op = .Set, block = .Bedrock, partial = true}, act)
-	}
-	under := core.Box{{0, lo.y, 0}, {arena.SIZE - 1, -1, arena.SIZE - 1}}
-	core.bulk_edit(w, {shape = under, op = .Set, block = .Stone, partial = true}, act)
 	t := courtyard(a.seed, &a.spawns)
-	changed, _, _ := core.bulk_edit(
-		w,
-		{shape = INSIDE, op = .Paste, template = &t, partial = true},
-		act,
-	)
-	log.infof(
-		"arena courtyard built match=%d seed=%d changed=%d all_loaded=%v",
-		a.match,
-		a.seed,
-		changed,
-		ready,
-	)
+	built, loaded := play.arena_build(s, s.home, COURTYARD, &t, force)
+	if !built {return false}
+	log.infof("arena courtyard built match=%d seed=%d all_loaded=%v", a.match, a.seed, loaded)
 	a.built = true
 	return true
 }
@@ -75,19 +52,8 @@ build :: proc(s: ^core.Server, force: bool) -> bool {
 // the walls, kept clear.
 courtyard :: proc(seed: u32, spawns: ^[arena.SPAWNS][3]f64) -> game.Template {
 	S :: arena.SIZE
-	t := game.Template {
-		size  = {S, arena.HEIGHT, S},
-		cells = make([]u16, S * arena.HEIGHT * S, context.temp_allocator),
-	}
-	box :: proc(t: ^game.Template, lo, hi: [3]i32, b: game.Block) {
-		for y in max(lo.y, 0) ..= min(hi.y, arena.HEIGHT - 1) {
-			for z in max(lo.z, 0) ..= min(hi.z, S - 1) {
-				for x in max(lo.x, 0) ..= min(hi.x, S - 1) {
-					t.cells[game.template_index(t, {x, y, z})] = u16(b)
-				}
-			}
-		}
-	}
+	t := game.template_make({S, arena.HEIGHT, S}, context.temp_allocator)
+	box :: game.template_fill
 	r := base.rng_make(u64(seed) ~ 0xa7e4a)
 	roll :: proc(r: ^base.Rng, lo, hi: i32) -> i32 {
 		return lo + i32(base.rng_int_max(r, int(hi - lo + 1)))

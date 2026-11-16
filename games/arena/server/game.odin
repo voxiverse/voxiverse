@@ -2,14 +2,13 @@ package arena_server
 
 import "core:fmt"
 import "core:log"
-import "core:math"
-import "core:strconv"
 import "core:strings"
 
 import "common:base"
 import "common:game"
 import "games:arena"
 import "server:core"
+import "server:play"
 
 // Arena's server part (the game: games/arena): it runs the matches in the home world. A
 // warm-up waits for enough players; a match is built (courtyard.odin), counted down,
@@ -39,11 +38,10 @@ GAME :: core.Game {
 // Arena: the matches.
 Arena :: struct {
 	settings:   arena.Settings,
-	phase:      arena.Phase,
+	phase:      play.Phase(arena.Phase),
 	match:      u16, // 0: the warm-up before the first
 	seed:       u32, // the courtyard's
 	rng:        base.Rng, // the courtyards' seeds (from the universe's seed)
-	phase_tick: u64, // the server tick the phase began
 	built:      bool, // the phase's courtyard is there
 	spawns:     [arena.SPAWNS][3]f64,
 	turn:       int, // the spawn point tried first next (equal choices take turns)
@@ -66,24 +64,25 @@ fighter :: proc(s: ^core.Server, c: ^core.Client) -> ^Fighter {return core.game_
 		Fighter,
 	)}
 
-// NODE_ADMIN: the permission the match's rules need (/arena frags, time, respawn,
-// start, restart; the host has it).
+// NODE_ADMIN: the permission the match's settings and its start need (/arena frags,
+// time, respawn, start, restart; the host has it).
 NODE_ADMIN :: "arena.admin"
 
 // OVERLOOK: where watchers float between matches, above the north wall looking down
-// into the courtyard, side by side (each its seat's place along the wall).
+// at the keep, side by side (each its seat's place along the wall).
 OVERLOOK :: [3]f64{arena.SIZE / 2 + 0.5, arena.HEIGHT - 2, 2.5}
-OVERLOOK_SPACING :: 2.0
+KEEP :: [3]f64{arena.SIZE / 2, 2, arena.SIZE / 2}
 
 // LAUNCHER: what a fighter holds when it comes in.
 LAUNCHER :: "voxiverse:rocket_launcher"
 
 // configure: a flat world with nothing wandering in it, arriving above the keep.
 configure :: proc(config: ^core.Config) {
-	config.generator = .Flat
-	config.no_natural_spawns = true
-	config.spawn = {arena.SIZE / 2 + 0.5, 4, arena.SIZE / 2 + 0.5}
-	if config.mode == "" {config.mode = arena.WATCHING_MODE}
+	play.configure_flat(
+		config,
+		{arena.SIZE / 2 + 0.5, 4, arena.SIZE / 2 + 0.5},
+		arena.WATCHING_MODE,
+	)
 }
 
 // start: the home world stands at noon with nothing changing by itself and nothing
@@ -95,15 +94,12 @@ start :: proc(s: ^core.Server) -> bool {
 	a.rng = base.rng_make(u64(s.config.seed) ~ 0xa7e4a)
 	a.seed = base.rng_u32(&a.rng)
 	w := s.home
-	core.game_rule(s, w, "daylight_cycle", "false")
-	core.game_rule(s, w, "drops", "false")
-	core.game_rule(s, w, "random_tick_speed", "0")
+	play.world_still(s, w)
 	core.game_rule(s, w, "pvp", "true")
 	core.game_rule(s, w, "respawn_auto", "true")
-	core.game_rule(s, w, "spawn_protection", fmt.tprint(arena.SPAWN_PROTECTION))
+	play.world_rule(s, w, "spawn_protection", arena.SPAWN_PROTECTION)
 	rules_apply(s)
-	w.clock = 0.5
-	core.world_keep(w, AREA)
+	core.world_keep(w, play.arena_area(COURTYARD))
 	set_phase(s, .Warmup)
 	log.infof("arena started seed=%d", s.config.seed)
 	return true
@@ -111,26 +107,18 @@ start :: proc(s: ^core.Server) -> bool {
 
 // rules_apply: the settings the world's rules carry (the respawn delay).
 rules_apply :: proc(s: ^core.Server) {
-	core.game_rule(s, s.home, "respawn_delay", fmt.tprint(state(s).settings.respawn_delay))
+	play.world_rule(s, s.home, "respawn_delay", state(s).settings.respawn)
 }
 
 stop :: proc(s: ^core.Server) {
 	log.infof("arena stopped matches=%d", state(s).match)
 }
 
-// here: c is playing in the home world, where the matches are.
-here :: proc(s: ^core.Server, c: ^core.Client) -> bool {
-	return c.state == .Playing && c.world == s.home
-}
+here :: play.here
 
-seconds :: proc(s: ^core.Server) -> f32 {
-	return f32(s.tick - state(s).phase_tick) / f32(game.TICK_RATE)
-}
+seconds :: proc(s: ^core.Server) -> f32 {return f32(play.phase_seconds(s, &state(s).phase))}
 
-set_phase :: proc(s: ^core.Server, phase: arena.Phase) {
-	a := state(s)
-	a.phase, a.phase_tick = phase, s.tick
-}
+set_phase :: proc(s: ^core.Server, phase: arena.Phase) {play.phase_set(s, &state(s).phase, phase)}
 
 joined :: proc(s: ^core.Server, c: ^core.Client) {
 	a := state(s)
@@ -138,7 +126,7 @@ joined :: proc(s: ^core.Server, c: ^core.Client) {
 		match = a.match,
 	}
 	core.notice(s, c, "Arena: every kill is a frag; hold P for the scoreboard")
-	switch a.phase {
+	switch a.phase.now {
 	case .Warmup, .Playing:
 		if a.built {enlist(s, c)} else {watch(s, c)}
 	case .Countdown, .Results:
@@ -150,19 +138,8 @@ joined :: proc(s: ^core.Server, c: ^core.Client) {
 enlist :: proc(s: ^core.Server, c: ^core.Client) {
 	core.game_mode(s, c, arena.FIGHTER_MODE)
 	core.kit_give(s, c)
-	hold_launcher(s, c)
+	play.hold(s, c, LAUNCHER)
 	place(s, c)
-}
-
-hold_launcher :: proc(s: ^core.Server, c: ^core.Client) {
-	launcher, known := game.registry_item(s.registry, LAUNCHER)
-	if !known {return}
-	for st, slot in c.inventory.slots[:game.HOTBAR_SLOTS] {
-		if st.item == launcher {
-			core.hotbar_select(s, c, slot)
-			return
-		}
-	}
 }
 
 // place: c stands at the spawn point farthest from every other fighter, looking at the
@@ -176,19 +153,12 @@ place :: proc(s: ^core.Server, c: ^core.Client) {
 	i := arena.farthest(a.spawns[:], others[:], a.turn)
 	a.turn = i + 1
 	at := a.spawns[i]
-	d := [2]f64{arena.SIZE / 2 - at.x, arena.SIZE / 2 - at.z}
-	core.teleport(s, c, at, {f32(math.atan2(-d.x, -d.y)), 0})
+	core.teleport(s, c, at, {play.look_at(at, {KEEP.x, at.y, KEEP.z}).x, 0})
 }
 
 // watch: c floats above the courtyard between matches, unharmed, looking at the keep.
 watch :: proc(s: ^core.Server, c: ^core.Client) {
-	core.game_mode(s, c, arena.WATCHING_MODE)
-	seat := f64(core.player_id(s, c) % 16)
-	at := OVERLOOK + {(seat - 7.5) * OVERLOOK_SPACING, 0, 0} // (16 seats fit the wall)
-	d := [3]f64{arena.SIZE / 2, 2, arena.SIZE / 2} - at // (looking at the keep)
-	yaw := math.atan2(-d.x, -d.z)
-	pitch := math.atan2(d.y, math.sqrt(d.x * d.x + d.z * d.z))
-	core.teleport(s, c, at, {f32(yaw), f32(pitch)}, flying = true)
+	play.watch(s, c, arena.WATCHING_MODE, OVERLOOK, KEEP)
 }
 
 // countdown: the next match: a new courtyard, built while everyone watches.
@@ -218,9 +188,9 @@ begin :: proc(s: ^core.Server) {
 		fmt.tprintf(
 			"&bMatch %d&r: first to %d frags, %d:%02d on the clock",
 			a.match,
-			a.settings.frag_limit,
-			a.settings.time_limit / 60,
-			a.settings.time_limit % 60,
+			a.settings.frags,
+			a.settings.time / 60,
+			a.settings.time % 60,
 		),
 	)
 }
@@ -280,11 +250,10 @@ counted :: proc(s: ^core.Server, c: ^core.Client) -> bool {
 // tick: once a tick, after the players moved and the entities ran.
 tick :: proc(s: ^core.Server) {
 	a := state(s)
-	present := 0
-	for &c in s.clients {if here(s, &c) {present += 1}}
+	present := play.present(s)
 	needed := arena.players_needed(s.listening)
 	t := seconds(s)
-	switch a.phase {
+	switch a.phase.now {
 	case .Warmup:
 		if !a.built {
 			if build(s, force = t >= arena.BUILD_WAIT) {
@@ -310,7 +279,7 @@ tick :: proc(s: ^core.Server) {
 			set_phase(s, .Warmup)
 			break
 		}
-		if t >= f32(a.settings.time_limit) {end(s)}
+		if t >= f32(a.settings.time) {end(s)}
 	case .Results:
 		if t >= arena.RESULTS {
 			if present >= needed {
@@ -321,7 +290,7 @@ tick :: proc(s: ^core.Server) {
 			}
 		}
 	}
-	if a.phase == .Warmup || a.phase == .Playing {
+	if a.phase.now == .Warmup || a.phase.now == .Playing {
 		for &c in s.clients {if here(s, &c) && !c.dead && outside(&c) {place(s, &c)}}
 	}
 	match_put(s, present, needed)
@@ -329,15 +298,7 @@ tick :: proc(s: ^core.Server) {
 
 // outside: c has left the courtyard (over the walls, or under the floor).
 outside :: proc(c: ^core.Client) -> bool {
-	p := c.player.position
-	return(
-		p.x < 0 ||
-		p.z < 0 ||
-		p.x >= arena.SIZE ||
-		p.z >= arena.SIZE ||
-		p.y < -2 ||
-		p.y > arena.WALL_TOP + 4 \
-	)
+	return !play.arena_holds(COURTYARD, c.player.position, above = 4, below = 2)
 }
 
 // died: a frag to the killer, if another player; else one less to the one who died
@@ -354,14 +315,14 @@ died :: proc(s: ^core.Server, c: ^core.Client, harm: core.Harm) {
 		weapon = harm.weapon,
 	}
 	for &o in s.clients {if here(s, &o) {core.game_event(s, &o, &kill)}}
-	if a.phase != .Playing || !counted(s, c) {return}
+	if a.phase.now != .Playing || !counted(s, c) {return}
 	fighter(s, c).deaths += 1
 	if !by_another {
 		fighter(s, c).frags -= 1
 	} else if counted(s, by) {
 		f := fighter(s, by)
 		f.frags += 1
-		if f.frags >= a.settings.frag_limit {end(s)}
+		if f.frags >= a.settings.frags {end(s)}
 	}
 }
 
@@ -369,9 +330,9 @@ died :: proc(s: ^core.Server, c: ^core.Client, harm: core.Harm) {
 // goes to the spawn point farthest from the others, between matches it watches.
 respawned :: proc(s: ^core.Server, c: ^core.Client) {
 	if !here(s, c) {return}
-	switch state(s).phase {
+	switch state(s).phase.now {
 	case .Warmup, .Playing:
-		hold_launcher(s, c)
+		play.hold(s, c, LAUNCHER)
 		place(s, c)
 	case .Countdown, .Results:
 		watch(s, c)
@@ -384,24 +345,24 @@ match_put :: proc(s: ^core.Server, present, needed: int) {
 	a := state(s)
 	t := seconds(s)
 	m := arena.Match {
-		phase      = a.phase,
+		phase      = a.phase.now,
 		match      = a.match,
 		seed       = a.seed,
 		seconds    = u16(t),
-		frag_limit = u16(a.settings.frag_limit),
-		time_limit = u16(a.settings.time_limit),
+		frag_limit = u16(a.settings.frags),
+		time_limit = u16(a.settings.time),
 		players    = u8(present),
 		needed     = u8(needed),
 		winner     = string(a.winner[:a.winner_len]),
 		top_frags  = i16(a.top_frags),
 	}
-	#partial switch a.phase {
+	#partial switch a.phase.now {
 	case .Countdown:
-		m.left = u16(math.ceil(max(arena.COUNTDOWN - t, 0))) if a.built else u16(arena.COUNTDOWN)
+		m.left = play.phase_left(s, &a.phase, arena.COUNTDOWN) if a.built else u16(arena.COUNTDOWN)
 	case .Playing:
-		m.left = u16(math.ceil(max(f32(a.settings.time_limit) - t, 0)))
+		m.left = play.phase_left(s, &a.phase, f64(a.settings.time))
 	case .Results:
-		m.left = u16(math.ceil(max(arena.RESULTS - t, 0)))
+		m.left = play.phase_left(s, &a.phase, arena.RESULTS)
 	}
 	for &c in s.clients {
 		if !here(s, &c) {continue}
@@ -416,106 +377,63 @@ match_put :: proc(s: ^core.Server, present, needed: int) {
 	}
 }
 
-// command: /arena shows the match and its rules; /arena frags|time|respawn <n> sets one
-// (time in seconds), /arena start begins a match now, /arena restart begins a new one.
+// command: /arena shows the match and its settings; /arena <setting> <value> sets one
+// (frags, time in seconds, respawn in seconds), /arena start begins a match now, /arena
+// restart begins a new one.
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
 	if name != "arena" {return false}
 	a := state(s)
-	r := &a.settings
+	table := arena.settings_table()
 	if len(args) == 0 {
 		core.notice(
 			s,
 			c,
 			fmt.tprintf(
-				"Arena match %d, %v, seed %d: first to %d frags, %d s, back after %.1f s",
+				"Arena match %d, %v, seed %d: %s",
 				a.match,
-				a.phase,
+				a.phase.now,
 				a.seed,
-				r.frag_limit,
-				r.time_limit,
-				r.respawn_delay,
+				play.settings_text(table, &a.settings),
 			),
 		)
+		return true
+	}
+	if handled, changed := play.settings_command(s, c, table, &a.settings, NODE_ADMIN, args);
+	   handled {
+		if changed {rules_apply(s)}
 		return true
 	}
 	if !core.allowed(s, c, NODE_ADMIN) {
 		core.notice(s, c, "You may not change the match (arena.admin)")
 		return true
 	}
-	USAGE :: "Usage: arena [frags <1..200> | time <30..3600 s> | respawn <0..30 s> | start | restart]"
 	switch {
 	case len(args) == 1 && (args[0] == "start" || args[0] == "restart"):
-		if args[0] == "start" && a.phase != .Warmup {
+		if args[0] == "start" && a.phase.now != .Warmup {
 			core.notice(s, c, "Arena: a match is on already (restart begins a new one)")
 			return true
 		}
 		countdown(s)
 		core.notice(s, c, "Arena: a new match")
-	case len(args) == 2 && args[0] == "frags":
-		n, ok := strconv.parse_int(args[1])
-		if !ok || n < 1 || n > arena.FRAG_LIMIT_MAX {
-			core.notice(s, c, USAGE)
-			return true
-		}
-		r.frag_limit = n
-		core.notice(s, c, fmt.tprintf("Arena: first to %d frags", n))
-	case len(args) == 2 && args[0] == "time":
-		n, ok := strconv.parse_int(args[1])
-		if !ok || n < arena.TIME_LIMIT_MIN || n > arena.TIME_LIMIT_MAX {
-			core.notice(s, c, USAGE)
-			return true
-		}
-		r.time_limit = n
-		core.notice(s, c, fmt.tprintf("Arena: %d s a match", n))
-	case len(args) == 2 && args[0] == "respawn":
-		n, ok := strconv.parse_f32(args[1])
-		if !ok || !(n >= 0 && n <= arena.RESPAWN_DELAY_MAX) {
-			core.notice(s, c, USAGE)
-			return true
-		}
-		r.respawn_delay = n
-		rules_apply(s)
-		core.notice(s, c, fmt.tprintf("Arena: back %.1f s after a death", n))
 	case:
-		core.notice(s, c, USAGE)
+		core.notice(
+			s,
+			c,
+			fmt.tprintf("Usage: arena [%s | start | restart]", play.settings_usage(table)),
+		)
 	}
 	return true
 }
 
-// save: the match's rules, kept with the universe ("frags = 15" a line).
+// save: the match's settings, kept with the universe.
 save :: proc(s: ^core.Server, out: ^strings.Builder) {
-	r := state(s).settings
-	fmt.sbprintfln(out, "frags = %d", r.frag_limit)
-	fmt.sbprintfln(out, "time = %d", r.time_limit)
-	fmt.sbprintfln(out, "respawn = %.2f", r.respawn_delay)
+	play.settings_save(arena.settings_table(), &state(s).settings, out)
 }
 
-// load: the rules the universe kept; a line Arena does not know, or a value out of its
-// bounds, is not Arena's.
+// load: the settings the universe kept (a line Arena does not know, or a value out of
+// its bounds, is not Arena's).
 load :: proc(s: ^core.Server, text: string) -> bool {
-	r := &state(s).settings
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		if strings.trim_space(line) == "" {continue}
-		key, _, value := strings.partition(line, "=")
-		key, value = strings.trim_space(key), strings.trim_space(value)
-		switch key {
-		case "frags":
-			n, ok := strconv.parse_int(value)
-			if !ok || n < 1 || n > arena.FRAG_LIMIT_MAX {return false}
-			r.frag_limit = n
-		case "time":
-			n, ok := strconv.parse_int(value)
-			if !ok || n < arena.TIME_LIMIT_MIN || n > arena.TIME_LIMIT_MAX {return false}
-			r.time_limit = n
-		case "respawn":
-			n, ok := strconv.parse_f32(value)
-			if !ok || !(n >= 0 && n <= arena.RESPAWN_DELAY_MAX) {return false}
-			r.respawn_delay = n
-		case:
-			return false
-		}
-	}
+	play.settings_load(arena.settings_table(), &state(s).settings, text) or_return
 	rules_apply(s)
 	return true
 }
