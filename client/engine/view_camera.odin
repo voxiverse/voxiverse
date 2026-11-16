@@ -33,6 +33,7 @@ Game_Camera_Kind :: enum u8 {
 	First, // the eyes
 	Third, // behind the head, pulled in against walls
 	Top_Down, // above the head looking down, the pointer free: it aims (pointer_update)
+	Free, // over the ground, no avatar: the player pans, zooms and turns it, the pointer is the game's (free_camera.odin)
 }
 
 // Game_Camera: the camera a game wants this frame. A top-down camera follows the head
@@ -41,12 +42,18 @@ Game_Camera_Kind :: enum u8 {
 // says where the avatar faces and what it aims at, and the movement keys move along
 // the screen. `cut`: nothing of the world from that many blocks above the feet up is
 // drawn (0: all of it), so a roof or a ceiling does not hide the avatar.
+//
+// A free camera looks at the player's focus (its feet: a bodiless player's) from
+// `distance` at first, zoomed between `near` and `far` by the player, `angle` below
+// the horizon, starting along `heading` and turned by the player (free_camera.odin).
 Game_Camera :: struct {
 	kind:     Game_Camera_Kind,
 	distance: f32,
 	angle:    f32, // degrees
 	heading:  f32,
 	cut:      f32, // blocks above the feet
+	near:     f32, // .Free: the nearest it zooms to (blocks)
+	far:      f32, // .Free: the farthest
 }
 
 // TOP_DOWN_AIM: how far (blocks) the pointer's ray looks for a block or an entity.
@@ -62,15 +69,20 @@ camera_game :: proc(s: ^Session) {
 	case .Player:
 	case .First:
 		s.camera_mode = .First
-	case .Third, .Top_Down:
+	case .Third, .Top_Down, .Free:
 		s.camera_mode = .Third_Behind
 	}
+	if s.game_camera.kind != .Free {s.free.set = false}
 }
 
 // camera_pointer: the camera leaves the pointer free (a top-down camera): the mouse is
 // not captured, and it aims.
 camera_pointer :: proc(s: ^Session) -> bool {
-	return s != nil && s.state == .Playing && s.game_camera.kind == .Top_Down
+	return(
+		s != nil &&
+		s.state == .Playing &&
+		(s.game_camera.kind == .Top_Down || s.game_camera.kind == .Free) \
+	)
 }
 
 // camera_top_down: the view of a top-down camera over the eyes.
@@ -211,7 +223,9 @@ camera_update :: proc(
 
 	s.view = s.camera
 	s.view.roll = 0
-	if s.game_camera.kind == .Top_Down {
+	if s.game_camera.kind == .Free {
+		s.view = camera_free_view(s)
+	} else if s.game_camera.kind == .Top_Down {
 		s.view = camera_top_down(s.camera.position, s.game_camera)
 		if s.game_camera.cut > 0 {
 			s.view.cut = i32(math.floor(s.feet.y + f64(s.game_camera.cut)))
@@ -268,6 +282,6 @@ camera_fov :: proc(s: ^Session, settings: Settings) -> f32 {
 
 // crosshair_shown: first person always; third person only while aiming.
 crosshair_shown :: proc(s: ^Session) -> bool {
-	if s.game_camera.kind == .Top_Down {return false} 	// (the pointer is the crosshair)
+	if s.game_camera.kind == .Top_Down || s.game_camera.kind == .Free {return false} 	// (the pointer is the crosshair)
 	return s.camera_mode == .First || s.aiming
 }

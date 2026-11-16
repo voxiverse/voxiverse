@@ -170,6 +170,21 @@ on the main thread, in the frame.
 | `commands` | Console commands (`engine.Command_Spec`), there while a world plays the game: `help` lists them and Tab completes them |
 | `actions` | The names of the game's own actions, at most `game.MAX_GAME_ACTIONS` (`{"Use ability", "Drink potion"}`): the keys of `Game_1`.. (Z, X, B by default, rebindable) press them, and the server part's `action` hook hears them. The controls list shows them by the game's names while it plays |
 | `camera(s) -> Game_Camera` | Every frame: the camera the game wants (`.Player`: the player's own, <kbd>F5</kbd>; `.First`, `.Third`; `.Top_Down`: over the head, `distance` blocks away, looking `angle` degrees down along `heading`, the world cut `cut` blocks above the feet so a roof does not hide the avatar). Under a top-down camera the mouse is free: the pointer aims (`s.aim`, `s.aim_entity`, and the point under it, `s.pointer`), the avatar faces it, and the movement keys move across the screen; the input sent is an ordinary one, so the server stays the judge and prediction holds |
+| `camera(s) -> Game_Camera` (`.Free`) | A camera with no avatar, for a game whose players have no body in the world (`game.Ability.Bodiless` in their mode: they move freely, are not drawn, hit, pushed or in the way, and pick nothing up). It looks at the player's focus (its feet) from `distance` at first, zoomed by the wheel between `near` and `far`, `angle` degrees down, turned by F5 (a quarter) and Shift with the wheel; the movement keys, the pointer at a window's edge and the middle button dragged pan it, as the player's ordinary input along the camera's heading at the world's fly speed, so the server, which streams the world round the focus, stays the judge. The pointer and its buttons are the game's: `pointer_tool(s)` says what it is over (the ground's top block, an entity, the UI) and each button's press, drag and release with the block it went down on (a press over the UI is the UI's and starts none). The engine's own clicks (breaking, placing) and the hotbar are off |
+
+Under a free pointer, the HUD a game draws is clickable: a click goes to the UI when the
+pointer was over a widget or a panel (`ui.panel`, a framed backing, or `ui.block_pointer`)
+when the UI was last drawn (`ui.pointer_over`), and to the world (the
+game's `pointer_tool`) otherwise.
+
+A game marks the ground from its `hud` hook (`client/engine/free_camera.odin`):
+`ground_fill(s, lo, hi, color)` lays a translucent cover over the top of each column of a
+rectangle (its highest solid block between `lo.y` and `hi.y`; a zone, a heat map),
+`ground_outline(s, lo, hi, color)` draws the rectangle's edge on the ground, and
+`structure_ghost(s, t, at, rotation, color)` a template's blocks, tinted (what a placement
+would build: green where it may go, red where not). They are drawn by the debug pass, the
+covers as translucent triangles, `MAX_FILL_VERTICES` of them and `MAX_WORLD_LINES` line ends a
+frame: a whole map's overlay is one frame's work, not 64 outlines.
 
 A game draws in the world from its `hud` hook (`client/engine/marks.odin`), through the
 view the frame is drawn with: `world_point(s, ctx, p)` is where a point of the world is on

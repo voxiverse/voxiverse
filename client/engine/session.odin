@@ -84,6 +84,12 @@ Session :: struct {
 	screen_view:      Screen_View, // the frame's view, for a HUD's marks in the world (marks.odin)
 	world_boxes:      [MAX_WORLD_BOXES]World_Box, // outlines a game asked for this frame
 	world_box_count:  int,
+	world_lines:      [dynamic]render.Debug_Point, // lines a game drew on the ground this frame (pairs; heap)
+	fills:            [dynamic]render.Debug_Point, // ground covers and ghosts this frame (free_camera.odin; heap)
+	free:             Free_View, // the free camera (free_camera.odin)
+	free_move:        [2]f32, // ... its pan this frame, along the screen
+	tool:             Pointer_Tool, // the free pointer's (pointer_tool)
+	pointer_over_ui:  bool, // the pointer is over the UI (ui.pointer_over): the world does not take its clicks
 	puffs:            [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen:     bool,
@@ -255,6 +261,8 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
 	s.notices = make([dynamic]string, 0, 16) // heap: notices come and go (an arena would only grow)
+	s.fills = make([dynamic]render.Debug_Point, 0, 0) // heap: drawn and cleared every frame
+	s.world_lines = make([dynamic]render.Debug_Point, 0, 0) // heap: likewise
 	s.others = make(map[u16]Other_Player) // heap: players come and go (an arena would only grow)
 	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, game.MAX_KNOWN_ENTITIES)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
@@ -402,6 +410,8 @@ session_free :: proc(s: ^Session) -> bool {
 	delete(s.others)
 	for n in s.notices {delete(n)}
 	delete(s.notices)
+	delete(s.fills)
+	delete(s.world_lines)
 	stats_data_clear(&s.player_stats)
 	delete(s.player_stats.lines)
 	netcode.capture_close(&s.capture)
@@ -495,8 +505,10 @@ session_update :: proc(
 	camera_game(s)
 	query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
 	if look {
+		if camera_free(s) {free_camera_update(s, input, actions)}
 		if camera_pointer(s) {
 			pointer_update(s, input.mouse, query)
+			if camera_free(s) {pointer_tool_update(s, input)}
 		} else {
 			look_update(&s.camera, input, actions, settings, dt, zoom_factor(s))
 		}
@@ -532,7 +544,8 @@ session_update :: proc(
 		movement_sounds(s)
 	}
 	if look {
-		edit_controls(s, input, actions, dt)
+		// (under the free camera the buttons and the wheel are the game's and the camera's)
+		if !camera_free(s) {edit_controls(s, input, actions, dt)}
 		game_actions(s, actions)
 	}
 	game.prediction_decay(&s.prediction, dt)

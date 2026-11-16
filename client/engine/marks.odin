@@ -13,6 +13,7 @@ import "common:game"
 // The view they project through is the frame's (screen_view_update, before the HUD).
 
 MAX_WORLD_BOXES :: 64 // outlines a frame
+MAX_WORLD_LINES :: 2 * 8192 // ends of the lines a game draws on the ground a frame (ground_outline)
 MARK_DISTANCE :: 64 // blocks: marks further from the eyes are not drawn
 BAR_WIDTH :: 40 // a health bar, in UI units
 BAR_HEIGHT :: 5
@@ -147,6 +148,12 @@ world_box :: proc(s: ^Session, lo, hi: game.Block_Pos, color: [4]u8) {
 	s.world_box_count += 1
 }
 
+// world_line: a line in the world this frame (MAX_WORLD_LINES ends; more are not drawn).
+world_line :: proc(s: ^Session, a, b: [3]f64, color: [4]u8) {
+	if len(s.world_lines) + 2 > MAX_WORLD_LINES {return}
+	append(&s.world_lines, render.Debug_Point{a, color}, render.Debug_Point{b, color})
+}
+
 // world_boxes_draw: the frame's outlines, into the debug lines (then gone).
 world_boxes_draw :: proc(s: ^Session, d: ^render.Debug_Draw) {
 	for b in s.world_boxes[:s.world_box_count] {
@@ -157,6 +164,7 @@ world_boxes_draw :: proc(s: ^Session, d: ^render.Debug_Draw) {
 		render.debug_box(d, lo + 0.02, hi - 0.02, b.color)
 	}
 	s.world_box_count = 0
+	fills_draw(s, d)
 }
 
 // entity_place: where the session shows an entity now (false: not known, or not

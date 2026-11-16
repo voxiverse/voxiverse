@@ -52,6 +52,13 @@ player_input :: proc(a: ^Actions, s: ^Session) -> game.Player_Input {
 	if s.game_camera.kind == .Top_Down {
 		in_.move = screen_move(a.move, s.game_camera.heading, s.camera.yaw)
 	}
+	if s.game_camera.kind == .Free {
+		// (the focus moves along the screen: its yaw is the camera's heading)
+		in_.yaw, in_.pitch, in_.move = s.free.heading, 0, s.free_move
+		in_.buttons = {}
+		if action_down(a, .Sprint) {in_.buttons += {.Sprint}}
+		return in_
+	}
 	if action_down(a, .Jump) {in_.buttons += {.Jump}}
 	if action_down(a, .Sneak) || s.sneak_on {in_.buttons += {.Sneak}}
 	if action_down(a, .Sprint) || s.sprint_on {in_.buttons += {.Sprint}}

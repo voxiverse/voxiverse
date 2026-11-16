@@ -262,6 +262,8 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			loss_percent   = app.debug.net_loss,
 			dup_percent    = app.debug.net_duplicate,
 		}
+		// (a click over the UI drawn last frame is the UI's, not the world's)
+		app.session.pointer_over_ui = ui.pointer_over(&app.ui)
 		engine.session_update(
 			app.session,
 			&app.input,
