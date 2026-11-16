@@ -10,7 +10,9 @@ import "common:telemetry"
 // near it was; at nought a player dies (a Death event, the inventory dropped
 // where they fell if the character's mode drops them and keep_inventory is off);
 // they wait at the death screen and the Respawn button wakes them at the world's
-// spawn (damage.odin: the one pipeline). Every event that happens to
+// spawn once the world's respawn_delay is over (or they wake by themselves then,
+// under respawn_auto), unhurt for its spawn_protection (damage.odin: the one
+// pipeline). Every event that happens to
 // a player may also earn experience (award_xp): the pipeline from something
 // happening to the character growing, a table and a curve, kept as the counters
 // `xp` and `level` (so saved with the character).
@@ -26,6 +28,7 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 		c.max_health = mods.max_health
 		c.health = min(c.health, c.max_health)
 	}
+	if c.dead && c.world.rules.respawn_auto && s.tick >= respawn_due(c) {respawn(s, c)}
 	if c.dead {
 		c.airborne = false
 		health := game.Health{c.health, c.max_health, true}

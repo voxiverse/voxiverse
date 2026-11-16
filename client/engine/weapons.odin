@@ -48,6 +48,7 @@ weapon_tick :: proc(s: ^Session, actions: ^Actions, look: bool, dt: f32) {
 	s.recoil *= math.exp(-RECOIL_DECAY * dt)
 	s.marker = max(s.marker - dt, 0)
 	s.hurt_age += dt
+	s.death_age += dt
 	_, w, ok := weapon_in_hand(s)
 	want := look && ok && w.zoom > 0 && action_down(actions, .Use)
 	if ok && w.zoom > 0 {s.zoom_to = w.zoom}

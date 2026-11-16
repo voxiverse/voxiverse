@@ -30,7 +30,7 @@ Harm :: struct {
 
 Damage_Result :: enum u8 {
 	Ignored, // nothing to hurt (not playing, dead, no amount)
-	Blocked, // invulnerable, pvp off, or no health at all
+	Blocked, // invulnerable, just come back (spawn_protection), pvp off, or no health at all
 	Hurt,
 	Killed,
 }
@@ -38,6 +38,7 @@ Damage_Result :: enum u8 {
 // damage: hurt target by amount health points from source.
 damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) -> Damage_Result {
 	if !(amount > 0) || target.state != .Playing || target.dead {return .Ignored}
+	if s.tick < target.protected_until {return .Blocked}
 	abilities := game.derive_abilities(s.registry, target.mode, &target.inventory)
 	if .Invulnerable in abilities {return .Blocked}
 	if attacker, by_player := source.attacker.?; by_player {
@@ -128,17 +129,40 @@ die :: proc(s: ^Server, c: ^Client, source: Damage_Source) {
 	}
 	c.health = 0
 	c.dead = true
+	c.died_at = s.tick
 	c.airborne = false
 	c.open_chest = nil
 	disturb(s, c)
 }
 
+// respawn_due: the tick a dead c may come back at (the world's respawn_delay
+// after its death).
+respawn_due :: proc(c: ^Client) -> u64 {
+	return c.died_at + seconds_ticks(c.world.rules.respawn_delay)
+}
+
+// respawn_ask: c pressed Respawn: it comes back once the delay is over
+// (before then, nothing happens; the death screen counts it down).
+respawn_ask :: proc(s: ^Server, c: ^Client) -> bool {
+	if !c.dead || s.tick < respawn_due(c) {return false}
+	return respawn(s, c)
+}
+
+// seconds_ticks: seconds of a rule as whole ticks, rounded.
+@(private = "file")
+seconds_ticks :: proc(seconds: f32) -> u64 {
+	return u64(math.round(f64(max(seconds, 0)) * f64(game.TICK_RATE)))
+}
+
 // respawn: a dead c stands at the world's spawn with full health and the
-// mode's kit (the Respawn button; also what leaving while dead does), and
-// then the game's respawned hook may move it and change what it holds.
+// mode's kit (the Respawn button once the delay is over, or by itself under
+// respawn_auto; also what leaving while dead does), unhurt for the world's
+// spawn_protection, and then the game's respawned hook may move it and
+// change what it holds.
 respawn :: proc(s: ^Server, c: ^Client) -> bool {
 	if !c.dead {return false}
 	c.dead = false
+	c.protected_until = s.tick + seconds_ticks(c.world.rules.spawn_protection)
 	c.max_health = character_mods(s, c).max_health
 	c.health = c.max_health
 	c.airborne = false

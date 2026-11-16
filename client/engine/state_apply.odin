@@ -298,6 +298,7 @@ apply_event :: proc(s: ^Session, g: game.Received) {
 		hit_confirmed(s, (^game.Hit_Confirm)(g.value))
 	case .Player_Died:
 		s.died += 1
+		s.death_age = 0
 		d := (^game.Player_Died)(g.value)
 		kind, _ := game.damage_source_parse(d.cause)
 		line := game.death_text(kind, s.config.name, d.attacker, d.weapon, true)

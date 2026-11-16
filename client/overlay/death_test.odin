@@ -76,3 +76,63 @@ test_death_screen :: proc(t: ^testing.T) {
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Death))
 	free_all(context.temp_allocator)
 }
+
+// Under a respawn_delay the button's place counts the delay down from the death, and a
+// click there sends nothing; once it is over the button is back. Under respawn_auto the
+// count says the player comes back by itself.
+@(test)
+test_death_screen_waits_the_delay :: proc(t: ^testing.T) {
+	app := new(engine.App)
+	app.settings = engine.SETTINGS_DEFAULTS
+	defer free(app)
+	ok: bool
+	app.font, ok = font.load(engine.FONT_DATA)
+	testing.expect(t, ok)
+	testing.expect(t, ui.init(&app.ui, &app.font))
+	defer ui.destroy(&app.ui)
+	s := new(engine.Session)
+	defer free(s)
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	s.endpoint = {&pipe, .Client}
+	game.writer_init(&s.writer)
+	defer game.writer_destroy(&s.writer)
+	s.state = .Playing
+	s.reg = testkit.test_reg()
+	s.rules = game.RULES_DEFAULTS
+	s.rules.respawn_delay = 3
+	app.session = s
+	defer app.session = nil
+	app.screen = .Game
+	s.dead = true
+	s.death_age = 1.2
+	death_sync(app)
+
+	th := &app.ui.theme
+	box := ui.rect_center({0, 0, 1280, 720}, 420, 170)
+	inner := ui.rect_shrink(box, 2 * th.padding)
+	button := ui.cut_bottom(&inner, th.row_height)
+	at := ui.Vec2{button.x + button.w / 2, button.y + button.h / 2}
+	// click: a click on the button's place; what was drawn has text.
+	click :: proc(app: ^engine.App, at: ui.Vec2, text: string) -> (drawn: bool) {
+		for in_ in ([]ui.Input{{mouse = at}, {mouse = at, mouse_pressed = {.Left}, mouse_down = {.Left}}, {mouse = at, mouse_released = {.Left}}}) {
+			ui.begin_frame(&app.ui, in_, {1280, 720}, 1)
+			draw_overlays(app, &app.ui)
+			for x in app.ui.texts {drawn ||= x == text}
+			ui.end_frame(&app.ui)
+		}
+		return
+	}
+	testing.expect(t, click(app, at, "Respawn in 2"), "the delay is not counted down")
+	testing.expect_value(t, len(s.writer.buf), 0)
+	s.rules.respawn_auto = true
+	testing.expect(t, click(app, at, "Back in 2"), "the coming back is not counted down")
+	s.rules.respawn_auto = false
+	s.death_age = 3.01
+	testing.expect(t, click(app, at, "Respawn"), "the button did not come back")
+	m, decoded := game.decode_client(s.writer.buf[:], testkit.test_reg())
+	_, respawn := m.(game.Respawn)
+	testing.expect(t, decoded && respawn, "no Respawn sent once the delay was over")
+	free_all(context.temp_allocator)
+}

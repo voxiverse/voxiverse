@@ -107,6 +107,9 @@ local SCHEMA = {
     { name = "island_radius", t = "i32" },
     { name = "explosion_size", t = "f32" },
     { name = "explosion_throw", t = "f32" },
+    { name = "respawn_delay", t = "f32" },
+    { name = "respawn_auto", t = "bool" },
+    { name = "spawn_protection", t = "f32" },
   } },
   { id = 5, name = "clock", key = "none", lane = "reliable", fields = {
     { name = "time", t = "f64" },

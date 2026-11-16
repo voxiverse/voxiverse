@@ -35,6 +35,9 @@ Rules :: struct {
 	island_radius:        i32, // chunks around an observer simulated in detail (0: the view distance plus 2; docs/world.md)
 	explosion_size:       f32, // every explosion's radius, times this (a rocket's 4 blocks; what it carves and how far it reaches)
 	explosion_throw:      f32, // how hard an explosion throws what is near, times this
+	respawn_delay:        f32, // seconds from a death before the player may come back
+	respawn_auto:         bool, // a dead player comes back by itself once the delay is over (off: at the Respawn button)
+	spawn_protection:     f32, // seconds a player who came back cannot be hurt
 }
 
 @(rodata)
@@ -161,6 +164,21 @@ RULES_VARS := [?]base.Var {
 		min = 0,
 		max = 8,
 		step = 0.25,
+	},
+	{
+		field = "respawn_delay",
+		help = "seconds from a death before the player may come back",
+		min = 0,
+		max = 600,
+		step = 0.5,
+	},
+	{field = "respawn_auto", help = "a dead player comes back by itself once the delay is over"},
+	{
+		field = "spawn_protection",
+		help = "seconds a player who came back cannot be hurt",
+		min = 0,
+		max = 60,
+		step = 0.5,
 	},
 }
 

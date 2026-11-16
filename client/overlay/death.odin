@@ -1,5 +1,7 @@
 package overlay
 
+import "core:math"
+
 import "client:engine"
 import "client:ui"
 import "common:game"
@@ -8,7 +10,9 @@ import "common:game"
 // server says the player is dead (Health.dead) and closes when it says they
 // are not; only the button leaves it (Escape does not). The words come from
 // the server's death line for the source (game.death_text), so the chat and
-// the screen agree.
+// the screen agree. Until the world's respawn_delay is over, the button's
+// place counts it down (the server would refuse it); under respawn_auto the
+// server stands the player up itself when it is.
 
 // death_sync: the overlay follows the server's word.
 death_sync :: proc(app: ^engine.App) {
@@ -22,6 +26,11 @@ death_sync :: proc(app: ^engine.App) {
 // death_respawn: the button.
 death_respawn :: proc(app: ^engine.App) {
 	if s := app.session; s != nil && s.dead {engine.send_message(s, game.Respawn{})}
+}
+
+// death_wait: whole seconds until the player may come back (0: now).
+death_wait :: proc(s: ^engine.Session) -> int {
+	return int(math.ceil(max(s.rules.respawn_delay - s.death_age, 0)))
 }
 
 death_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
@@ -39,6 +48,11 @@ death_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.label(ctx, engine.tr(.Death_Title), ui.cut_top(&inner, t.row_height), .Center)
 	ui.label(ctx, string(s.death_line[:s.death_len]), ui.cut_top(&inner, t.row_height), .Center)
 	buttons := ui.cut_bottom(&inner, t.row_height)
+	if wait := death_wait(s); wait > 0 {
+		text := engine.tr(.Death_Coming_Back if s.rules.respawn_auto else .Death_Wait, wait)
+		ui.label(ctx, text, buttons, .Center, t.text_muted)
+		return
+	}
 	if ui.button(ctx, engine.tr(.Death_Respawn), buttons) {death_respawn(app)}
 	ui.default_focus(ctx)
 }

@@ -67,6 +67,8 @@ Text :: enum u16 {
 	Quit_Quit_Voxiverse,
 	Death_Title,
 	Death_Respawn,
+	Death_Wait, // the Respawn button's place until respawn_delay is over: {0} seconds
+	Death_Coming_Back, // ... under respawn_auto
 	Market_Hud,
 	Market_Title,
 	Market_Cash,
@@ -236,6 +238,8 @@ TEXT_EN := [Text]string {
 	.Quit_Quit_Voxiverse                    = "Quit Voxiverse?",
 	.Death_Title                            = "You died",
 	.Death_Respawn                          = "Respawn",
+	.Death_Wait                             = "Respawn in {0}",
+	.Death_Coming_Back                      = "Back in {0}",
 	.Market_Hud                             = "Market of {0} ({1})",
 	.Market_Title                           = "Market of {0}",
 	.Market_Cash                            = "Silver: {0}",

@@ -355,3 +355,49 @@ test_a_rocket_kill_is_the_shooters :: proc(t: ^testing.T) {
 	testing.expect_value(t, alice.death_attacker, "bob")
 	testing.expect_value(t, client_by_name(srv, "bob").stats["kills"] or_else 0, u64(1))
 }
+
+// The world's respawn rules: Respawn is refused until respawn_delay has passed since
+// the death; under respawn_auto the player comes back by itself then; one who came back
+// is not hurt for spawn_protection.
+@(test)
+test_respawn_rules :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.mode = "survival"
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, ok := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok, "the player never joined") {return}
+	harness_step(&sess.h, 10)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	r := &c.world.rules
+	r.respawn_delay, r.spawn_protection = 2, 1
+
+	// The delay: Respawn does nothing before it, and works after it.
+	testing.expect_value(t, damage(s, c, 100, {kind = .Command}), Damage_Result.Killed)
+	harness_step(&sess.h, 2 * game.TICK_RATE - 2)
+	mirror_send(&sess.mirror, game.Respawn{})
+	harness_step(&sess.h, 1)
+	testing.expect(t, c.dead, "came back before the delay")
+	harness_step(&sess.h, 2)
+	mirror_send(&sess.mirror, game.Respawn{})
+	harness_step(&sess.h, 1)
+	testing.expect(t, !c.dead, "Respawn after the delay did nothing")
+
+	// Spawn protection: nothing hurts for a second, then it does.
+	testing.expect_value(t, damage(s, c, 1, {kind = .Command}), Damage_Result.Blocked)
+	harness_step(&sess.h, game.TICK_RATE)
+	testing.expect_value(t, damage(s, c, 1, {kind = .Command}), Damage_Result.Hurt)
+
+	// respawn_auto: back by itself when the delay is over, not before.
+	r.respawn_auto = true
+	testing.expect_value(t, damage(s, c, 100, {kind = .Command}), Damage_Result.Killed)
+	harness_step(&sess.h, 2 * game.TICK_RATE - 1)
+	testing.expect(t, c.dead, "came back by itself before the delay")
+	harness_step(&sess.h, 2)
+	testing.expect(t, !c.dead, "did not come back by itself")
+	testing.expect_value(t, c.health, c.max_health)
+}
