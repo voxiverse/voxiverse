@@ -143,7 +143,7 @@ entities_sync_spatial :: proc(w: ^World) {
 
 // entity_looks: what clients are told about how an entity looks: bit i is its kind's i-th
 // look, as its game set it (entity_show), "striking" while its attack shows, and the
-// sheep's, computed from their components.
+// base pack's sheep's, computed from the components its kind has.
 entity_looks :: proc(w: ^World, reg: ^game.Registry, h: game.Entity_Handle) -> (bits: u16) {
 	info := game.kind_info(reg, entity_kind(w, h))
 	if info == nil {return}
@@ -152,16 +152,16 @@ entity_looks :: proc(w: ^World, reg: ^game.Registry, h: game.Entity_Handle) -> (
 	if info.striking != 0 && entity_striking(w, h) {bits |= info.striking}
 	for look, i in info.looks {
 		on: bool
-		switch look {
-		case "shorn":
+		switch {
+		case look == "shorn" && .Wool in info.with:
 			on = entity_wool(w, h).shorn
-		case "lamb":
+		case look == "lamb" && .Breeding in info.with:
 			on = entity_breeding(w, h).growth < game.LAMB_TICKS
-		case "black":
+		case look == "black" && .Genes in info.with:
 			on = game.genes_black(entity_genes(w, h).genes)
-		case "spotted":
+		case look == "spotted" && .Genes in info.with:
 			on = game.genes_spotted(entity_genes(w, h).genes)
-		case "in_love":
+		case look == "in_love" && .Breeding in info.with:
 			on = entity_breeding(w, h).love > 0
 		case:
 			continue
