@@ -54,7 +54,7 @@ test_horde_on_the_hud :: proc(t: ^testing.T) {
 		game.inventory_count(&s.inventory, v.round),
 		before + horde.ROUNDS_PACK,
 	)
-	testing.expect_value(t, mine(s).coins, r.coins)
+	testing.expect_value(t, int(mine(s).coins), r.coins)
 
 	// The first wave: its banner, the line, the creatures' count.
 	horde_server.wave_begin(srv)

@@ -1,8 +1,6 @@
 package horde_client
 
 import "core:fmt"
-import "core:slice"
-import "core:strings"
 
 import "client:engine"
 import "client:ui"
@@ -32,32 +30,19 @@ GAME :: engine.Game {
 // View: what the session knows of the run.
 View :: struct {
 	run:       horde.Run,
-	survivors: [game.MAX_PLAYERS]Seat, // by player id
+	survivors: engine.Seats(horde.Survivor), // by player id
 	flash:     engine.Flash, // a wave set out or held
 	kinds:     [horde.Foe]game.Kind_Id,
 	round:     game.Item,
 }
 
-// Seat: a survivor's purse and tally, as told.
-Seat :: struct {
-	known:    bool,
-	name:     [game.MAX_NAME_LENGTH]u8,
-	name_len: int,
-	coins:    int,
-	kills:    int,
-	downs:    int,
-	down:     bool,
-}
-
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
-seat_name :: proc(seat: ^Seat) -> string {return string(seat.name[:seat.name_len])}
-
 // mine: the player's own purse.
-mine :: proc(s: ^engine.Session) -> ^Seat {
-	v := view(s)
-	return &v.survivors[min(int(s.welcome.player), len(v.survivors) - 1)]
-}
+mine :: proc(s: ^engine.Session) -> ^horde.Survivor {return engine.seat_mine(
+		s,
+		&view(s).survivors,
+	)}
 
 // started: the pack's names, as this session's registry has them.
 started :: proc(s: ^engine.Session) {
@@ -73,21 +58,7 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	if run, ok := engine.game_value(s, r, horde.Run); ok && run != nil {
 		v.run = run^
 	}
-	if sv, ok := engine.game_value(s, r, horde.Survivor); ok && int(r.key.a) < len(v.survivors) {
-		seat := &v.survivors[r.key.a]
-		if sv == nil {
-			seat^ = {}
-		} else {
-			seat^ = {
-				known = true,
-				coins = int(sv.coins),
-				kills = int(sv.kills),
-				downs = int(sv.downs),
-				down  = sv.down,
-			}
-			seat.name_len = copy(seat.name[:], sv.name)
-		}
-	}
+	if engine.seats_received(s, &v.survivors, r) {return}
 	if news, ok := engine.game_value(s, r, horde.Wave_News); ok && news != nil {
 		switch {
 		case news.held:
@@ -215,21 +186,13 @@ shop_lines :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	engine.banner(ctx, 180, wares, 0.5, t.text)
 }
 
-// Ranked: a known survivor, by its player id.
-Ranked :: struct {
-	id:   int,
-	seat: ^Seat,
-}
-
-// ranked: the known survivors, the most kills first, then by name (temp memory).
-ranked :: proc(v: ^View) -> []Ranked {
-	all := make([dynamic]Ranked, context.temp_allocator)
-	for &seat, id in v.survivors {if seat.known {append(&all, Ranked{id, &seat})}}
-	slice.sort_by(all[:], proc(a, b: Ranked) -> bool {
-		if a.seat.kills != b.seat.kills {return a.seat.kills > b.seat.kills}
-		return strings.compare(seat_name(a.seat), seat_name(b.seat)) < 0
-	})
-	return all[:]
+// ranked: the known survivors, the most kills first, then by name, as player ids (temp
+// memory).
+ranked :: proc(v: ^View) -> []int {
+	return engine.seats_ranked(
+		&v.survivors,
+		proc(a, b: ^horde.Survivor) -> bool {return a.kills > b.kills},
+	)
 }
 
 // scoreboard: every survivor of the run, the most kills first; yours lit.
@@ -238,15 +201,16 @@ scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 	r := v.run
 	board.title = fmt.tprintf("Horde: run %d, wave %d, best %d", r.run, r.wave, r.best)
 	engine.scoreboard_columns(board, "Kills", "Coins", "Downs", "")
-	for b in ranked(v) {
+	for id in ranked(v) {
+		sv := &v.survivors.values[id]
 		engine.scoreboard_row(
 			board,
-			seat_name(b.seat),
-			fmt.tprint(b.seat.kills),
-			fmt.tprint(b.seat.coins),
-			fmt.tprint(b.seat.downs),
-			"down" if b.seat.down else "",
-			you = b.id == int(s.welcome.player),
+			sv.name,
+			fmt.tprint(sv.kills),
+			fmt.tprint(sv.coins),
+			fmt.tprint(sv.downs),
+			"down" if sv.down else "",
+			you = id == int(s.welcome.player),
 		)
 	}
 }
