@@ -140,9 +140,10 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 		if app.benchmark {autopilot.bench_begin(app, scenario, opts.smoke, bench_size)}
 		if opts.scene != "" &&
 		   !autopilot.scene_begin(app, opts.scene) {app.script_failed, app.quit = true, true}
-		// --game alone (no script, scene, check or benchmark of its own) goes straight
-		// into a scratch world playing it; else the title's launcher lists the games.
-		if opts.game != "" && exec == "" && opts.check == "" && !app.benchmark {
+		// --game goes straight into a scratch world playing it, a script (--exec) too, which
+		// then runs in that world (no scene, check or benchmark of its own: they choose
+		// their worlds); else the title's launcher lists the games.
+		if opts.game != "" && opts.scene == "" && opts.check == "" && !app.benchmark {
 			app.launch = app.game
 		}
 		script: engine.Script
