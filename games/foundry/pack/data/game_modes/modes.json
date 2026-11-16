@@ -1,0 +1,9 @@
+{
+	// Building a factory: no harm comes to a builder, who walks, mines by hand and carries
+	// what it makes; nothing to start with but a few planks for a first chest.
+	"builder": {
+		"abilities": ["invulnerable"],
+		"kit": [{"item": "voxiverse:planks", "count": 8, "slot": "hotbar"}],
+		"rules": {}
+	}
+}

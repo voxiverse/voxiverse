@@ -1,0 +1,30 @@
+{
+	// The furnace's: ores to bars, sand to lenses.
+	"smelt_ember": {"type": "process", "machine": "foundry:furnace", "time": 3.2, "inputs": [{"item": "foundry:ember_ore", "count": 1}], "output": {"item": "foundry:ember_bar", "count": 1}},
+	"smelt_tide": {"type": "process", "machine": "foundry:furnace", "time": 3.2, "inputs": [{"item": "foundry:tide_ore", "count": 1}], "output": {"item": "foundry:tide_bar", "count": 1}},
+	"melt_lens": {"type": "process", "machine": "foundry:furnace", "time": 4, "inputs": [{"item": "voxiverse:sand", "count": 2}], "output": {"item": "foundry:lens", "count": 1}},
+	// The assembler's: the parts, the science, the goal.
+	"gear": {"type": "process", "machine": "foundry:assembler", "time": 1, "inputs": [{"item": "foundry:ember_bar", "count": 2}], "output": {"item": "foundry:gear", "count": 1}},
+	"coil": {"type": "process", "machine": "foundry:assembler", "time": 1, "inputs": [{"item": "foundry:tide_bar", "count": 1}], "output": {"item": "foundry:coil", "count": 2}},
+	"circuit": {"type": "process", "machine": "foundry:assembler", "time": 2, "inputs": [{"item": "foundry:ember_bar", "count": 1}, {"item": "foundry:coil", "count": 3}], "output": {"item": "foundry:circuit", "count": 1}},
+	"frame": {"type": "process", "machine": "foundry:assembler", "time": 2, "inputs": [{"item": "foundry:ember_bar", "count": 2}, {"item": "foundry:gear", "count": 1}], "output": {"item": "foundry:frame", "count": 1}},
+	"rotor": {"type": "process", "machine": "foundry:assembler", "time": 3, "inputs": [{"item": "foundry:frame", "count": 1}, {"item": "foundry:gear", "count": 2}], "output": {"item": "foundry:rotor", "count": 1}},
+	"insight": {"type": "process", "machine": "foundry:assembler", "time": 5, "inputs": [{"item": "foundry:gear", "count": 1}, {"item": "foundry:tide_bar", "count": 1}], "output": {"item": "foundry:insight", "count": 1}},
+	"theory": {"type": "process", "machine": "foundry:assembler", "time": 6, "inputs": [{"item": "foundry:circuit", "count": 1}, {"item": "foundry:lens", "count": 1}], "output": {"item": "foundry:theory", "count": 1}},
+	"lodestar": {"type": "process", "machine": "foundry:assembler", "time": 10, "inputs": [{"item": "foundry:rotor", "count": 4}, {"item": "foundry:circuit", "count": 4}, {"item": "foundry:lens", "count": 2}], "output": {"item": "foundry:lodestar", "count": 1}},
+	// By hand: the machines, and the first parts while there is no assembler.
+	"hand_gear": {"type": "process", "machine": "foundry:hand", "time": 2, "inputs": [{"item": "foundry:ember_bar", "count": 2}], "output": {"item": "foundry:gear", "count": 1}},
+	"hand_coil": {"type": "process", "machine": "foundry:hand", "time": 2, "inputs": [{"item": "foundry:tide_bar", "count": 1}], "output": {"item": "foundry:coil", "count": 2}},
+	"hand_insight": {"type": "process", "machine": "foundry:hand", "time": 8, "inputs": [{"item": "foundry:gear", "count": 1}, {"item": "foundry:tide_bar", "count": 1}], "output": {"item": "foundry:insight", "count": 1}},
+	"crate": {"type": "process", "machine": "foundry:hand", "time": 1, "inputs": [{"item": "voxiverse:planks", "count": 8}], "output": {"item": "foundry:crate", "count": 1}},
+	"furnace": {"type": "process", "machine": "foundry:hand", "time": 1, "inputs": [{"item": "voxiverse:cobblestone", "count": 8}], "output": {"item": "foundry:furnace", "count": 1}},
+	"belt": {"type": "process", "machine": "foundry:hand", "time": 1, "inputs": [{"item": "foundry:gear", "count": 1}, {"item": "foundry:ember_bar", "count": 1}], "output": {"item": "foundry:belt", "count": 2}},
+	"arm": {"type": "process", "machine": "foundry:hand", "time": 1, "inputs": [{"item": "foundry:gear", "count": 1}, {"item": "foundry:coil", "count": 2}, {"item": "foundry:ember_bar", "count": 1}], "output": {"item": "foundry:arm", "count": 1}},
+	"miner": {"type": "process", "machine": "foundry:hand", "time": 2, "inputs": [{"item": "foundry:gear", "count": 3}, {"item": "foundry:furnace", "count": 1}, {"item": "foundry:ember_bar", "count": 3}], "output": {"item": "foundry:miner", "count": 1}},
+	"generator": {"type": "process", "machine": "foundry:hand", "time": 2, "inputs": [{"item": "foundry:furnace", "count": 1}, {"item": "foundry:ember_bar", "count": 5}, {"item": "foundry:coil", "count": 4}], "output": {"item": "foundry:generator", "count": 1}},
+	"pole": {"type": "process", "machine": "foundry:hand", "time": 1, "inputs": [{"item": "voxiverse:planks", "count": 2}, {"item": "foundry:coil", "count": 2}], "output": {"item": "foundry:pole", "count": 2}},
+	"assembler": {"type": "process", "machine": "foundry:hand", "time": 2, "inputs": [{"item": "foundry:circuit", "count": 3}, {"item": "foundry:gear", "count": 5}, {"item": "foundry:ember_bar", "count": 9}], "output": {"item": "foundry:assembler", "count": 1}},
+	"splitter": {"type": "process", "machine": "foundry:hand", "time": 2, "inputs": [{"item": "foundry:belt", "count": 4}, {"item": "foundry:circuit", "count": 2}], "output": {"item": "foundry:splitter", "count": 1}},
+	"lab": {"type": "process", "machine": "foundry:hand", "time": 2, "inputs": [{"item": "foundry:circuit", "count": 10}, {"item": "foundry:gear", "count": 10}, {"item": "foundry:belt", "count": 4}], "output": {"item": "foundry:lab", "count": 1}},
+	"planks": {"type": "process", "machine": "foundry:hand", "time": 0.5, "inputs": [{"item": "voxiverse:log", "count": 1}], "output": {"item": "voxiverse:planks", "count": 4}}
+}

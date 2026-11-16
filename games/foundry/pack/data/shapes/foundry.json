@@ -1,0 +1,4 @@
+{
+	// A conveyor, an arm and a splitter are half a block high: their items ride on top.
+	"low": {"boxes": [[0, 0, 0, 16, 8, 16]]}
+}

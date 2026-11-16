@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "foundry",
+	"version": "1.0.0",
+	"title": "Foundry",
+	"description": "Foundry's ores, its machines and conveyors, its parts and what its machines make of them, and the builder's mode.",
+	"requires": ["voxiverse"]
+}

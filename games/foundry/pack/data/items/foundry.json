@@ -1,0 +1,14 @@
+{
+	// The parts: what the furnaces and assemblers make, and the science the labs use.
+	"ember_bar": {"model": "foundry:bar_ember", "description": "Smelted from ember ore.", "stack": 50},
+	"tide_bar": {"model": "foundry:bar_tide", "description": "Smelted from tide ore.", "stack": 50},
+	"gear": {"model": "foundry:gear", "description": "Two ember bars, toothed.", "stack": 50},
+	"coil": {"model": "foundry:coil", "description": "Tide bar drawn into wire and wound.", "stack": 50},
+	"circuit": {"model": "foundry:circuit", "description": "Coils on an ember board.", "stack": 50},
+	"frame": {"model": "foundry:frame", "description": "A gear set in ember bars.", "stack": 50},
+	"rotor": {"model": "foundry:rotor", "description": "A frame that turns.", "stack": 50},
+	"lens": {"model": "foundry:lens", "description": "Sand, melted clear.", "stack": 50},
+	"insight": {"model": "foundry:insight", "description": "A lab's first science.", "stack": 50},
+	"theory": {"model": "foundry:theory", "description": "A lab's second science.", "stack": 50},
+	"lodestar": {"model": "foundry:lodestar", "description": "The goal: a star that points the way home.", "stack": 10}
+}
