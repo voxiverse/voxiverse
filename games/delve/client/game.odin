@@ -127,13 +127,13 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 		v.next = (v.next + 1) % MAX_NUMBERS
 	}
 	if up, ok := engine.game_value(s, r, delve.Level_Up); ok && up != nil {
-		engine.flash(&view(s).flash, s, fmt.tprintf("LEVEL %d", up.level), .Good)
+		engine.flash(&view(s).flash, s, delve.tr(.Level_Up, up.level), .Good)
 	}
 	if down, ok := engine.game_value(s, r, delve.Warden_Down); ok && down != nil {
-		engine.flash(&view(s).flash, s, "THE WARDEN FALLS: THE WAY DOWN IS OPEN", .Good)
+		engine.flash(&view(s).flash, s, delve.tr(.Warden_Falls), .Good)
 	}
 	if deeper, ok := engine.game_value(s, r, delve.Descended); ok && deeper != nil {
-		engine.flash(&view(s).flash, s, fmt.tprintf("DEPTH %d", deeper.depth), .Bad)
+		engine.flash(&view(s).flash, s, delve.tr(.Deeper, deeper.depth), .Bad)
 	}
 }
 
@@ -165,23 +165,25 @@ status :: proc(s: ^engine.Session) -> string {
 	v := view(s)
 	h := mine(s).hero
 	whirl :=
-		"ready" if h.whirl == 0 else fmt.tprintf("%ds", (int(h.whirl) + game.TICK_RATE - 1) / game.TICK_RATE)
+		delve.tr(.Whirl_Ready) if h.whirl == 0 else delve.tr(.Whirl_In, (int(h.whirl) + game.TICK_RATE - 1) / game.TICK_RATE)
 	where_: string
 	switch v.dungeon.phase {
 	case .Building:
-		where_ = "the dungeon rises"
+		where_ = delve.tr(.Rising)
 	case .Delving:
-		where_ = fmt.tprintf("%d creatures", v.dungeon.foes)
+		where_ = delve.tr(.Creatures, v.dungeon.foes)
 	case .Open:
-		where_ = "the way down is open"
+		where_ = delve.tr(.Way_Open)
 	}
-	return fmt.tprintf(
-		"DELVE  depth %d   %s   level %d   potions %d (X)   coins %d   whirl (Z) %s",
+	return delve.tr(
+		.Status,
 		v.dungeon.depth,
 		where_,
 		h.level,
 		h.potions,
+		engine.game_action_key(s, 1),
 		h.coins,
+		engine.game_action_key(s, 0),
 		whirl,
 	)
 }
@@ -202,9 +204,9 @@ loot_label :: proc(v: ^View, stack: game.Stack) -> string {
 	case game.NO_ITEM:
 		return ""
 	case v.coin:
-		return fmt.tprintf("%d coins", stack.count)
+		return delve.tr(.Coins, stack.count)
 	case v.potion:
-		return "potion"
+		return delve.tr(.Potion)
 	}
 	for item, w in v.items {if item == stack.item {return delve.loot_text(w, stack.data)}}
 	return ""
@@ -241,7 +243,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		engine.entity_bar(s, ctx, tag.id)
 		if tag.name_len > 0 {
 			name := string(tag.name[:tag.name_len])
-			if tag.foe != .Warden {name = fmt.tprintf("%s, %s", name, delve.FOES[tag.foe].label)}
+			if tag.foe != .Warden {name = delve.tr(.Elite, name, delve.FOES[tag.foe].label)}
 			engine.entity_label(s, ctx, tag.id, name, 1)
 		}
 	}
@@ -286,8 +288,14 @@ ranked :: proc(v: ^View) -> []Ranked {
 
 scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 	v := view(s)
-	board.title = fmt.tprintf("Delve: depth %d", v.dungeon.depth)
-	engine.scoreboard_columns(board, "Level", "Kills", "Deaths", "Deepest")
+	board.title = delve.tr(.Board_Title, v.dungeon.depth)
+	engine.scoreboard_columns(
+		board,
+		delve.tr(.Column_Level),
+		delve.tr(.Column_Kills),
+		delve.tr(.Column_Deaths),
+		delve.tr(.Column_Deepest),
+	)
 	for r in ranked(v) {
 		h := r.seat.hero
 		engine.scoreboard_row(
