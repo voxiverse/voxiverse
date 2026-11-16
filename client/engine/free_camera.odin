@@ -252,6 +252,28 @@ structure_ghost :: proc(
 	}
 }
 
+// ground_quad: a translucent quad of the world's (its corners in order), drawn this
+// frame with the ground marks (a fog's cell over its ground, a minimap's view): false when
+// the frame has MAX_FILL_VERTICES already.
+ground_quad :: proc(s: ^Session, a, b, c, d: [3]f64, color: [4]u8) -> bool {
+	if len(s.fills) + 6 > MAX_FILL_VERTICES {return false}
+	fill_quad(s, a, b, c, d, color)
+	return true
+}
+
+// ground_top: the highest solid block of column (x, z) from hi down to lo, as the
+// session holds the world: what it is and the y of its top; false when there is none
+// there, or the column is not loaded (a minimap's colour, a fog's height).
+ground_top :: proc(s: ^Session, x, z, lo, hi: i32) -> (block: game.Block, top: i32, ok: bool) {
+	q := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
+	for y := hi; y >= lo; y -= 1 {
+		b, loaded := world_block(&s.world, {x, y, z})
+		if !loaded {return}
+		if game.solid_at(q, {x, y, z}) {return b, y + 1, true}
+	}
+	return
+}
+
 @(private = "file")
 fill_quad :: proc(s: ^Session, a, b, c, d: [3]f64, color: [4]u8) {
 	append(

@@ -401,8 +401,7 @@ dropped_item :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View, stack: 
 	}
 }
 
-// block_colour: b's look in one colour (the average of its side).
-@(private = "file")
+// block_colour: b's look in one colour (the average of its side): a minimap's ground.
 block_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
 	side := mesh.block_texture(s.reg, b, .Pos_X)
 	sum: [3]u32
