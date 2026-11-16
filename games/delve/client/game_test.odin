@@ -5,10 +5,7 @@ import "core:strings"
 import "core:testing"
 
 import "client:engine"
-import "client:font"
-import "client:hud"
-import "client:testkit"
-import "client:ui"
+import "client:playtest"
 import "common:game"
 import "games:delve"
 import delve_server "games:delve/server"
@@ -20,69 +17,28 @@ import "server:core"
 // pressed reaching the server, a hit's number, a creature's tag and bar, loot's label,
 // the HUD's line, the delvers and the F3 line.
 
-Rig :: struct {
-	h:       core.Harness,
-	s:       ^engine.Session,
-	input:   engine.Input_State,
-	actions: engine.Actions,
-}
-
-rig_frame :: proc(data: rawptr) {
-	r := (^Rig)(data)
-	engine.session_update(
-		r.s,
-		&r.input,
-		&r.actions,
-		engine.SETTINGS_DEFAULTS,
-		{},
-		game.TICK_SECONDS,
-		true,
-	)
-}
-
 @(test)
 test_delve_from_above :: proc(t: ^testing.T) {
-	rig := new(Rig)
+	rig := new(playtest.Rig)
 	defer free(rig)
-	config := core.Config {
-		seed        = 41,
-		view_radius = 4,
-		view_height = 2,
-		max_players = 2,
-		listen      = true,
-		rules       = engine.still_rules(),
-		game        = delve_server.GAME,
-	}
-	if !testing.expect(t, core.harness_start(&rig.h, config)) {return}
-	defer core.harness_stop(&rig.h)
-	rig.s = new(engine.Session)
-	defer free(rig.s)
+	if !playtest.start(
+		t,
+		rig,
+		delve_server.GAME,
+		GAME,
+		{name = "delver", seed = 41, view_radius = 4},
+	) {return}
+	defer playtest.stop(rig)
 	s := rig.s
-	key: game.Account_Key
-	game.account_key_set(&key, {0 ..< 32 = 5})
-	engine.session_start(
-		s,
-		{
-			name = "delver",
-			key = key,
-			join = engine.Join{address = core.harness_address(&rig.h)},
-			view_radius = 4,
-			view_height = 2,
-			registry = testkit.test_reg(),
-			net = &rig.h.net,
-			games = {GAME},
-		},
+	playtest.until(
+		rig,
+		proc(rig: ^playtest.Rig) -> bool {return view(rig.s).dungeon.phase == .Delving},
+		60,
 	)
-	defer engine.session_end(s, nil, nil)
-	core.harness_add(&rig.h, rig_frame, rig)
-	core.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
-			r := (^Rig)(data)
-			return r.s.state == .Playing && view(r.s).dungeon.phase == .Delving
-		}, rig, 3000)
-	if !testing.expect_value(t, s.state, engine.Session_State.Playing) {return}
-	core.harness_step(&rig.h, 20)
+	if !testing.expect_value(t, view(s).dungeon.phase, delve.Phase.Delving) {return}
+	playtest.step(rig, 20)
 	v := view(s)
-	srv := &rig.h.srv
+	srv := playtest.srv(rig)
 	c := &srv.clients[0]
 	testing.expect_value(t, v.dungeon.depth, 1)
 	testing.expect(t, v.items[.Axe] != game.NO_ITEM, "the pack did not reach the client")
@@ -99,23 +55,9 @@ test_delve_from_above :: proc(t: ^testing.T) {
 
 	// The pointer: a frame's view, then the pointer to the right of the middle: the
 	// delver turns to face it (east: yaw -pi/2).
-	app := new(engine.App)
-	defer free(app)
-	engine.app_clock_fix(app)
-	app.settings = engine.SETTINGS_DEFAULTS
-	ok: bool
-	app.font, ok = font.load(engine.FONT_DATA)
-	testing.expect(t, ok)
-	testing.expect(t, ui.init(&app.ui, &app.font))
-	defer ui.destroy(&app.ui)
-	testing.expect(t, engine.item_icons_init(s.reg, &app.item_icons, &app.ui))
-	defer delete(app.item_icons)
-	app.session, app.screen = s, .Game
-	defer app.session = nil
-	app.window.width, app.window.height = 1280, 720
-	engine.screen_view_update(app)
+	engine.screen_view_update(rig.app)
 	rig.input.mouse = {1100, 360}
-	core.harness_step(&rig.h, 4)
+	playtest.step(rig, 4)
 	p, aimed := s.pointer.?
 	testing.expect(t, aimed, "the pointer aims at nothing")
 	testing.expectf(t, p.x > s.feet.x + 2, "the pointer's point %v is not east of %v", p, s.feet)
@@ -123,9 +65,9 @@ test_delve_from_above :: proc(t: ^testing.T) {
 
 	// The whirl (Z, the game's first action) reaches the server: its cooldown starts.
 	rig.actions.pressed += {.Game_1}
-	core.harness_step(&rig.h, 1)
+	playtest.step(rig, 1)
 	rig.actions.pressed -= {.Game_1}
-	core.harness_step(&rig.h, 3)
+	playtest.step(rig, 3)
 	testing.expect(
 		t,
 		delve_server.seat(srv, c).whirl_at > srv.tick,
@@ -143,9 +85,9 @@ test_delve_from_above :: proc(t: ^testing.T) {
 		c.player.position + {-2, 0.5, 0},
 		{v.items[.Axe], 1, 0, delve.loot_data(.Rare, 40)},
 	)
-	core.harness_step(&rig.h, 10)
+	playtest.step(rig, 10)
 	core.entity_harm(srv.home, h, {amount = 5, kind = .Hit, by = c})
-	core.harness_step(&rig.h, 10)
+	playtest.step(rig, 10)
 	tagged := false
 	elite: string
 	for &tag in v.tags {
@@ -156,21 +98,12 @@ test_delve_from_above :: proc(t: ^testing.T) {
 	testing.expect(t, tagged, "the elite's tag never came")
 	testing.expect(t, v.hits > 0, "no hit was told")
 
-	drawn :: proc(app: ^engine.App, prefix: string, scores := false) -> (found: bool) {
-		if scores {app.actions.down += {.Player_List}} else {app.actions.down -= {.Player_List}}
-		ui.begin_frame(&app.ui, {}, {1280, 720}, 1)
-		hud.hud_draw(app, &app.ui)
-		hud.player_list_draw(app, &app.ui)
-		for x in app.ui.texts {found ||= strings.has_prefix(x, prefix)}
-		ui.end_frame(&app.ui)
-		return
-	}
-	testing.expect(t, drawn(app, "DELVE  depth 1"), status(s))
-	testing.expect(t, drawn(app, "rare axe +40%"), "no loot label")
-	testing.expect(t, drawn(app, fmt.tprintf("%s, brute", elite)), "no elite's name")
+	testing.expect(t, playtest.drawn(rig, "DELVE  depth 1"), status(s))
+	testing.expect(t, playtest.drawn(rig, "rare axe +40%"), "no loot label")
+	testing.expect(t, playtest.drawn(rig, fmt.tprintf("%s, brute", elite)), "no elite's name")
 
 	// The delvers, and F3.
-	testing.expect(t, drawn(app, "Delve: depth 1", scores = true), "no scoreboard")
+	testing.expect(t, playtest.drawn(rig, "Delve: depth 1", scores = true), "no scoreboard")
 	board, has_board := engine.game_scoreboard(s)
 	if testing.expect(t, has_board && len(board.rows) == 1) {
 		testing.expect_value(t, board.rows[0].name, "delver")

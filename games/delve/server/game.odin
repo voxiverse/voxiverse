@@ -9,6 +9,7 @@ import "common:base"
 import "common:game"
 import "games:delve"
 import "server:core"
+import "server:play"
 
 // Delve's server part (the game: games/delve): it runs the dungeons in the home world.
 // A dungeon is built from its seed (dungeon.odin) and peopled with creatures and chests;
@@ -50,8 +51,7 @@ Run :: struct {
 	rng:         base.Rng, // seeds, spawns, loot, crits (from the universe's seed)
 	depth:       int,
 	seed:        u32,
-	phase:       delve.Phase,
-	phase_tick:  u64, // the server tick the phase began
+	phase:       play.Phase(delve.Phase),
 	plan:        delve.Dungeon,
 	foes:        [MAX_FOES]Foe_Slot,
 	foe_count:   int,
@@ -95,23 +95,17 @@ seat :: proc(s: ^core.Server, c: ^core.Client) -> ^Seat {return core.game_client
 NODE_ADMIN :: "delve.admin"
 
 configure :: proc(config: ^core.Config) {
-	config.generator = .Flat
-	config.no_natural_spawns = true
-	config.spawn = {4.5, 0, 4.5}
-	if config.mode == "" {config.mode = delve.DELVER_MODE}
+	play.configure_flat(config, {4.5, 0, 4.5}, delve.DELVER_MODE)
 }
 
 start :: proc(s: ^core.Server) -> bool {
 	d := state(s)
 	d.rng = base.rng_make(u64(s.config.seed) ~ 0xde17e)
 	w := s.home
-	core.game_rule(s, w, "daylight_cycle", "false")
-	core.game_rule(s, w, "drops", "false")
-	core.game_rule(s, w, "random_tick_speed", "0")
+	play.world_still(s, w, clock = 0.45)
 	core.game_rule(s, w, "pvp", "false")
 	core.game_rule(s, w, "keep_inventory", "true")
 	core.game_rule(s, w, "respawn_delay", "2")
-	w.clock = 0.45
 	reg := s.registry
 	ok := true
 	for &k, f in d.kinds {
@@ -139,22 +133,15 @@ stop :: proc(s: ^core.Server) {
 }
 
 // here: c is delving (playing in the home world, where the dungeon is).
-here :: proc(s: ^core.Server, c: ^core.Client) -> bool {
-	return c.state == .Playing && c.world == s.home
-}
+here :: play.here
 
-seconds :: proc(s: ^core.Server) -> f64 {
-	return f64(s.tick - state(s).phase_tick) / f64(game.TICK_RATE)
-}
+seconds :: proc(s: ^core.Server) -> f64 {return play.phase_seconds(s, &state(s).phase)}
 
-set_phase :: proc(s: ^core.Server, phase: delve.Phase) {
-	d := state(s)
-	d.phase, d.phase_tick = phase, s.tick
-}
+set_phase :: proc(s: ^core.Server, phase: delve.Phase) {play.phase_set(s, &state(s).phase, phase)}
 
 tick :: proc(s: ^core.Server) {
 	d := state(s)
-	switch d.phase {
+	switch d.phase.now {
 	case .Building:
 		if dungeon_build(s, force = seconds(s) >= BUILD_WAIT) {
 			set_phase(s, .Delving)
@@ -162,7 +149,7 @@ tick :: proc(s: ^core.Server) {
 		}
 	case .Delving, .Open:
 		foes_tick(s)
-		if d.phase == .Open {way_down(s)}
+		if d.phase.now == .Open {way_down(s)}
 	}
 	put_records(s)
 }
@@ -170,7 +157,7 @@ tick :: proc(s: ^core.Server) {
 joined :: proc(s: ^core.Server, c: ^core.Client) {
 	core.notice(s, c, "Delve: Z whirls, X drinks a potion; the warden's death opens the way down")
 	restore(s, c)
-	if state(s).phase != .Building {enter(s, c)}
+	if state(s).phase.now != .Building {enter(s, c)}
 }
 
 left :: proc(s: ^core.Server, c: ^core.Client) {
@@ -256,7 +243,7 @@ died :: proc(s: ^core.Server, c: ^core.Client, harm: core.Harm) {
 put_records :: proc(s: ^core.Server) {
 	d := state(s)
 	r := delve.Delve {
-		phase  = d.phase,
+		phase  = d.phase.now,
 		depth  = u8(clamp(d.depth, 0, 255)),
 		seed   = d.seed,
 		foes   = u16(foes_alive(s)),
@@ -309,7 +296,7 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 			fmt.tprintf(
 				"Delve depth %d, %v, seed %d: %d creatures, the warden %s",
 				d.depth,
-				d.phase,
+				d.phase.now,
 				d.seed,
 				foes_alive(s),
 				"alive" if d.warden != 0 else "dead",

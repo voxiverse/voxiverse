@@ -40,24 +40,20 @@ CAMERA :: engine.Game_Camera {
 	cut      = delve.WALL_HEIGHT,
 }
 
-BANNER_SECONDS :: 3.0
 NUMBER_SECONDS :: 1.0 // a hit's number floats this long
 MAX_NUMBERS :: 48
 
 View :: struct {
-	dungeon:  delve.Delve,
-	heroes:   [game.MAX_PLAYERS]Seat, // by player id
-	tags:     [delve.MAX_TAGS]Tag,
-	numbers:  [MAX_NUMBERS]Number,
-	next:     int, // the number slot to use next
-	banner:   [64]u8,
-	banner_n: int,
-	until:    f64, // when the banner goes (the session's frame_seconds)
-	good:     bool,
-	items:    [delve.Weapon]game.Item,
-	coin:     game.Item,
-	potion:   game.Item,
-	hits:     int, // seen (tests)
+	dungeon: delve.Delve,
+	heroes:  [game.MAX_PLAYERS]Seat, // by player id
+	tags:    [delve.MAX_TAGS]Tag,
+	numbers: [MAX_NUMBERS]Number,
+	next:    int, // the number slot to use next
+	flash:   engine.Flash, // a level gained, the warden's fall, a new depth
+	items:   [delve.Weapon]game.Item,
+	coin:    game.Item,
+	potion:  game.Item,
+	hits:    int, // seen (tests)
 }
 
 Seat :: struct {
@@ -130,13 +126,13 @@ received :: proc(s: ^engine.Session, r: game.Received) {
 		v.next = (v.next + 1) % MAX_NUMBERS
 	}
 	if up, ok := engine.game_value(s, r, delve.Level_Up); ok && up != nil {
-		say(s, fmt.tprintf("LEVEL %d", up.level), true)
+		engine.flash(&view(s).flash, s, fmt.tprintf("LEVEL %d", up.level), .Good)
 	}
 	if down, ok := engine.game_value(s, r, delve.Warden_Down); ok && down != nil {
-		say(s, "THE WARDEN FALLS: THE WAY DOWN IS OPEN", true)
+		engine.flash(&view(s).flash, s, "THE WARDEN FALLS: THE WAY DOWN IS OPEN", .Good)
 	}
 	if deeper, ok := engine.game_value(s, r, delve.Descended); ok && deeper != nil {
-		say(s, fmt.tprintf("DEPTH %d", deeper.depth), false)
+		engine.flash(&view(s).flash, s, fmt.tprintf("DEPTH %d", deeper.depth), .Bad)
 	}
 }
 
@@ -161,12 +157,6 @@ tag_fill :: proc(tag: ^Tag, id: u32, t: ^delve.Foe_Tag) {
 		level = t.level,
 	}
 	tag.name_len = copy(tag.name[:], t.name)
-}
-
-say :: proc(s: ^engine.Session, text: string, good: bool) {
-	v := view(s)
-	v.banner_n = copy(v.banner[:], text)
-	v.until, v.good = s.frame_seconds + BANNER_SECONDS, good
 }
 
 // status: the line at the top of the screen.
@@ -219,19 +209,11 @@ loot_label :: proc(v: ^View, stack: game.Stack) -> string {
 	return ""
 }
 
-banner :: proc(ctx: ^ui.Context, y: f32, text: string, size: f32, color: ui.Color) {
-	r := ui.Rect{ctx.screen.x, y - size, ctx.screen.w, size * 2}
-	ui.draw_text(ctx, {r.x + 3, r.y + 3, r.w, r.h}, text, size, ctx.theme.text_shadow, .Center)
-	ui.draw_text(ctx, r, text, size, color, .Center)
-}
-
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	v := view(s)
 	t := &ctx.theme
 	screen := ctx.screen
-	top := ui.cut_top(&screen, t.row_height + t.padding)
-	ui.fill_rect(ctx, top, t.hud_fill)
-	ui.draw_text(ctx, top, status(s), t.font_size, t.text, .Center)
+	engine.top_bar(ctx, &screen, status(s))
 	// The experience bar under it, and the weapon in hand.
 	h := mine(s).hero
 	bar := ui.cut_top(&screen, 6)
@@ -281,12 +263,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		ui.draw_text(ctx, r, text, size, color, .Center)
 	}
 
-	k := min(1, ctx.screen.h / 720)
-	mid := ctx.screen.y + ctx.screen.h / 2
-	if v.banner_n > 0 && s.frame_seconds < v.until {
-		color := t.success if v.good else t.warning
-		banner(ctx, mid - 160 * k, string(v.banner[:v.banner_n]), t.title_size * k, color)
-	}
+	engine.flash_draw(ctx, &v.flash, s, -160)
 }
 
 // ranked: the known delvers, the highest level first, then the most kills, then name.

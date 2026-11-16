@@ -7,56 +7,34 @@ import "core:testing"
 import "common:game"
 import "games:delve"
 import "server:core"
+import "server:playtest"
 
 // Delve on a stepped server: the host (the harness's mirror, on the local pipe, standing
 // still where it is put) and, for the test of two, a guest over the harness's network.
 // Creatures are made where a test wants them (foe_spawn), and blows are struck through
 // the engine's own swing, as a click's would be.
 
-Rig :: struct {
-	sess:  core.Session,
-	guest: core.Harness_Player,
-	with:  bool, // the guest joined
-}
+Rig :: playtest.Rig
 
+// rig_start: Delve on a stepped server (with a guest, for the test of two), the dungeon
+// built and the delvers in it. (The delver's kit is the mode's.)
 rig_start :: proc(t: ^testing.T, rig: ^Rig, guest := false, dir := "") -> bool {
-	config := core.harness_world()
-	config.game = GAME
-	config.listen = true
-	config.kit = ""
-	config.save_dir = dir
-	if !testing.expect(t, core.session_start(&rig.sess, {}, false, with = config)) {return false}
-	if guest {
-		core.harness_player_join(&rig.sess.h, &rig.guest, "guest")
-		rig.with = true
+	o := playtest.Options {
+		guests   = 1 if guest else 0,
+		listen   = true,
+		save_dir = dir,
 	}
-	ready :: proc(data: rawptr) -> bool {
-		rig := (^Rig)(data)
-		s := &rig.sess.h.srv
-		if !rig.sess.mirror.welcomed ||
-		   s.clients[0].state != .Playing ||
-		   state(s).phase == .Building {
-			return false
-		}
-		if rig.with {
-			g := core.harness_player_client(&rig.guest)
-			return g != nil && g.state == .Playing
-		}
-		return true
-	}
-	_, ok := core.harness_step_until(&rig.sess.h, ready, rig, 900)
+	if !playtest.start(t, rig, GAME, o) {return false}
+	built :: proc(data: rawptr) -> bool {return state((^core.Server)(data)).phase.now != .Building}
+	ok := playtest.until(rig, built, srv(rig), 30)
 	if ok {step(rig, 2)} 	// (the delvers placed: enter's teleport)
-	return testing.expect(t, ok, "the dungeon was never built, or the delvers never came")
+	return testing.expect(t, ok, "the dungeon was never built")
 }
 
-rig_stop :: proc(rig: ^Rig) {
-	core.session_stop(&rig.sess)
-	if rig.with {core.harness_player_free(&rig.guest)}
-}
-
-srv :: proc(rig: ^Rig) -> ^core.Server {return &rig.sess.h.srv}
-host :: proc(rig: ^Rig) -> ^core.Client {return &rig.sess.h.srv.clients[0]}
-step :: proc(rig: ^Rig, n := 1) {core.harness_step(&rig.sess.h, n)}
+rig_stop :: playtest.stop
+srv :: playtest.srv
+host :: playtest.host
+step :: playtest.step
 
 // clear_room: the start room with no creature in it but those the test makes (none is
 // made there; the corridors' may wander in, so all of them sleep far off: gone).
@@ -260,7 +238,7 @@ test_experience_levels_the_delver :: proc(t: ^testing.T) {
 	testing.expect_value(t, seat(s, c).level, 3)
 	testing.expect_value(t, seat(s, c).xp, 5)
 	testing.expect_value(t, c.max_health, most + delve.level_health(3))
-	hero := core.mirror_game_record(&rig.sess.mirror, delve.Hero, game.key_player(0))
+	hero := playtest.host_record(rig, delve.Hero, game.key_player(0))
 	if testing.expect(t, hero != nil) {testing.expect_value(t, hero.level, 3)}
 }
 
@@ -363,7 +341,7 @@ test_the_warden_opens_the_way_down :: proc(t: ^testing.T) {
 	if !testing.expect(t, there, "no warden") {return}
 	warden_health := core.entity_max_health(s.home, h)
 	core.entity_harm(s.home, h, {amount = 10000, kind = .Game, by = c})
-	testing.expect_value(t, d.phase, delve.Phase.Open)
+	testing.expect_value(t, d.phase.now, delve.Phase.Open)
 	e := exit_area(s)
 	b, _ := core.block_at(s.home, e.lo)
 	testing.expect_value(t, b, d.exit)
@@ -371,7 +349,7 @@ test_the_warden_opens_the_way_down :: proc(t: ^testing.T) {
 	_, down := core.harness_step_until(&rig.sess.h, proc(data: rawptr) -> bool {
 			return(
 				state(srv((^Rig)(data))).depth == 2 &&
-				state(srv((^Rig)(data))).phase == .Delving \
+				state(srv((^Rig)(data))).phase.now == .Delving \
 			)
 		}, rig, 900)
 	if !testing.expect(t, down, "never went down") {return}
@@ -406,7 +384,7 @@ test_two_delvers_share_it :: proc(t: ^testing.T) {
 	s := srv(rig)
 	clear_dungeon(s)
 	c := host(rig)
-	g := core.harness_player_client(&rig.guest)
+	g := playtest.guest(rig)
 	testing.expect(
 		t,
 		flat_distance(g.player.position, start_point(s)) < 1,
@@ -418,7 +396,7 @@ test_two_delvers_share_it :: proc(t: ^testing.T) {
 	testing.expect_value(t, seat(s, c).xp, delve.FOES[.Biter].xp)
 	testing.expect_value(t, seat(s, g).xp, delve.FOES[.Biter].xp)
 	testing.expect_value(t, seat(s, c).kills, 1)
-	theirs := core.harness_player_record(&rig.guest, delve.Hero, game.key_player(0))
+	theirs := playtest.guest_record(rig, delve.Hero, game.key_player(0))
 	if testing.expect(t, theirs != nil, "the guest was not told the host's progress") {
 		testing.expect_value(t, theirs.kills, 1)
 	}
