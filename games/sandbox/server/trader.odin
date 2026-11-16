@@ -2,6 +2,7 @@ package sandbox_server
 
 import "core:fmt"
 import "core:math"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
@@ -289,9 +290,50 @@ market_ask :: proc(s: ^core.Server, c: ^core.Client) {
 
 // TOWN_DROP: the height a player taken to a town is set down from (it lands on the ground).
 TOWN_DROP :: 200
+// LANDING_STEP: blocks between the columns a town's landing tries, ring by ring.
+LANDING_STEP :: 3
 
-// town_command: `/town` takes the player to the nearest town with a market, set down from
-// above it (the teleport permission; a planet world whose towns are known).
+// town_landing: where a player taken to a town is set down: the dry land nearest the town's
+// place (its climate cell's centre, which may be sea, a lake or a river) within its trade
+// radius, so they arrive in its market. False: the town has none (a town on an islet).
+town_landing :: proc(w: ^core.World, tw: sandbox.Town) -> (x, z: i32, ok: bool) {
+	cx, cz := worldgen.planet_block_of(f64(tw.lat), f64(tw.lon))
+	best := i32(max(i32))
+	for ring: i32 = 0;; ring += LANDING_STEP {
+		on_ring := false
+		for dz := -ring; dz <= ring; dz += LANDING_STEP {
+			for dx := -ring; dx <= ring; dx += LANDING_STEP {
+				if max(abs(dx), abs(dz)) != ring {continue}
+				lat, lon := worldgen.planet_lat_lon(cx + dx, cz + dz)
+				if sandbox.km_between(tw.lat, tw.lon, f32(lat), f32(lon)) >= TRADE_RADIUS_KM - 1 {
+					continue
+				}
+				on_ring = true
+				if d := dx * dx + dz * dz; d < best && dry_land(w, cx + dx, cz + dz) {
+					best, x, z, ok = d, cx + dx, cz + dz, true
+				}
+			}
+		}
+		if ok || !on_ring {return} 	// (the nearest ring with land, or past the radius)
+	}
+}
+
+// dry_land: block column (x, z) of a planet world is ground above the water: no sea, lake or
+// river covers it.
+dry_land :: proc(w: ^core.World, x, z: i32) -> bool {
+	params := w.params
+	c := worldgen.column_at(&params, w.seed, x, z)
+	#partial switch c.biome {
+	case .Ocean, .Frozen_Ocean, .River:
+		return false
+	}
+	lake, _ := worldgen.planet_lake_at(x, z)
+	return c.height >= f32(params.sea_level) + 1 && c.river < 0.5 && lake < 0.5
+}
+
+// town_command: `/town` takes the player to the nearest town with a market and dry land in
+// its radius, set down from above that land (the teleport permission; a planet world whose
+// towns are known).
 town_command :: proc(s: ^core.Server, c: ^core.Client) -> bool {
 	if !core.allowed(s, c, "teleport.tp") {
 		core.notice(s, c, "You may not teleport here")
@@ -308,19 +350,23 @@ town_command :: proc(s: ^core.Server, c: ^core.Client) -> bool {
 		return true
 	}
 	o := economy_observer(c)
-	best, nearest := f64(-1), -1
+	Near :: struct {
+		town: int,
+		km:   f64,
+	}
+	near := make([dynamic]Near, context.temp_allocator)
 	for tw, i in we.economy.towns {
 		if tw.market == {} {continue}
-		d := sandbox.km_between(tw.lat, tw.lon, f32(o.x), f32(o.y))
-		if nearest < 0 || d < best {best, nearest = d, i}
+		append(&near, Near{i, sandbox.km_between(tw.lat, tw.lon, f32(o.x), f32(o.y))})
 	}
-	if nearest < 0 {
-		core.notice(s, c, "No town here has a market")
+	slice.sort_by(near[:], proc(a, b: Near) -> bool {return a.km < b.km})
+	for n in near {
+		tw := we.economy.towns[n.town]
+		x, z := town_landing(w, tw) or_continue
+		core.teleport(s, c, {f64(x) + 0.5, TOWN_DROP, f64(z) + 0.5}, {0, 0})
+		core.notice(s, c, fmt.tprintf("To %s, %.0f km away", market_town_name(tw), n.km))
 		return true
 	}
-	tw := we.economy.towns[nearest]
-	x, z := worldgen.planet_block_of(f64(tw.lat), f64(tw.lon))
-	core.teleport(s, c, {f64(x) + 0.5, TOWN_DROP, f64(z) + 0.5}, {0, 0})
-	core.notice(s, c, fmt.tprintf("To %s, %.0f km away", market_town_name(tw), best))
+	core.notice(s, c, "No town here has a market on dry land")
 	return true
 }

@@ -61,7 +61,9 @@ town's need of each, so every stock reads the same until trade and droughts move
 you carry and how old the news behind the price is; pick a good and a quantity, buy or sell.
 Walking out of the town closes it. The
 server judges every trade (where you stand, your silver, your cargo, the stock). `/town` takes you to the nearest
-town with a market, set down from above it (the teleport permission, `teleport.tp`).
+town with a market, set down from above on the dry land nearest its place within its market's
+radius (a town's place is its climate cell's centre, which may be sea), so you arrive in its
+market (the teleport permission, `teleport.tp`).
 
 A world's interventions log (`sandbox.interventions.vxi`: what players did that its history
 carries forward; a settlement founded is a town of the history from then on) is listed by

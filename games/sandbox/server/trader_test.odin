@@ -1,5 +1,6 @@
 package sandbox_server
 
+import "core:math"
 import "core:os"
 import "core:strings"
 import "core:testing"
@@ -214,4 +215,34 @@ test_town_takes_a_player_to_a_market :: proc(t: ^testing.T) {
 	testing.expect(t, playtest.told(rig, "To Town "), "not told where")
 	_, there := trader_where(r.w, c)
 	testing.expect(t, there, "not in a town")
+}
+
+// /town sets a player down on dry land in the town's radius when the town's place (its
+// climate cell's centre) is water.
+@(test)
+test_town_sets_a_player_down_on_land :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, GAME) {return}
+	defer playtest.stop(rig)
+	r, ok := economy_rig(t, rig)
+	if !ok {return}
+	we := world_of(r.w).economy
+	wet := -1
+	for tw, i in we.economy.towns {
+		x, z := worldgen.planet_block_of(f64(tw.lat), f64(tw.lon))
+		if tw.market != {} && !dry_land(r.w, x, z) {
+			if _, _, land := town_landing(r.w, tw); land {wet = i; break}
+		}
+	}
+	if !testing.expect(t, wet >= 0, "no town whose place is water") {return}
+	tw := we.economy.towns[wet]
+	c := playtest.host(rig)
+	stand_at(c, tw.lat, tw.lon)
+	testing.expect(t, command(r.s, c, "town", nil))
+	x, z := i32(math.floor(c.player.position.x)), i32(math.floor(c.player.position.z))
+	testing.expect(t, dry_land(r.w, x, z), "set down in the water")
+	playtest.step(rig, playtest.ticks(3)) // (the market there in detail)
+	town, there := trader_where(r.w, c)
+	testing.expect(t, there && town == wet, "not set down in the town's market")
 }
