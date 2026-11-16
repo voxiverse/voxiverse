@@ -1,0 +1,20 @@
+{
+	// The start and the finish: a lit floor.
+	"pad": {
+		"textures": {"side": "voxiverse:stone_bricks", "top": "voxiverse:lamp", "bottom": "voxiverse:stone_bricks"},
+		"light": 10,
+		"sound": "voxiverse:stone"
+	},
+	// A checkpoint's gate: two glowing posts and a beam over the platform.
+	"gate": {
+		"textures": {"all": "voxiverse:gate_horizon"},
+		"light": 14,
+		"sound": "voxiverse:glass"
+	},
+	// A hazard: touch it and you are back at your last checkpoint.
+	"hazard": {
+		"textures": {"side": "voxiverse:clay", "top": "voxiverse:gate_ring", "bottom": "voxiverse:clay"},
+		"light": 6,
+		"sound": "voxiverse:stone"
+	}
+}

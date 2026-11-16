@@ -1,0 +1,19 @@
+{
+	// Racing: no health to lose (a fall or a hazard only sends you back), the hook and the
+	// launcher for the shortcuts, boots that double-jump.
+	"racer": {
+		"abilities": [],
+		"kit": [
+			{"item": "voxiverse:grappling_hook", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:rocket_launcher", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:jump_boots", "count": 1, "slot": "feet"}
+		],
+		"rules": {}
+	},
+	// Between races, or in during one: flying, unharmed, only watching.
+	"watcher": {
+		"abilities": ["fly", "invulnerable", "spectate"],
+		"kit": [],
+		"rules": {}
+	}
+}

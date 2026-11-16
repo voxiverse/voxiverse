@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "rally",
+	"version": "1.0.0",
+	"title": "Rally",
+	"description": "Rally's course blocks (the start, the checkpoints' gates, the hazards) and the racer's and the watcher's modes.",
+	"requires": ["voxiverse"]
+}
