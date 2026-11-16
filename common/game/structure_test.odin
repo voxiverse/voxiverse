@@ -53,3 +53,21 @@ test_templates :: proc(t: ^testing.T) {
 	_, ok = template_decode(test_reg(), w.buf[:len(w.buf) - 1])
 	testing.expect(t, !ok, "a short file")
 }
+
+// A template made in code: air, and a box that runs over its edges filled where it is
+// inside, nowhere else.
+@(test)
+test_template_fill :: proc(t: ^testing.T) {
+	tmpl := template_make({4, 3, 5})
+	defer delete(tmpl.cells)
+	testing.expect_value(t, len(tmpl.cells), 4 * 3 * 5)
+	testing.expect_value(t, Block(tmpl.cells[0]), Block.Air)
+	template_fill(&tmpl, {-2, 0, 3}, {1, 0, 9}, .Stone)
+	filled := 0
+	for c in tmpl.cells {if Block(c) == .Stone {filled += 1}}
+	testing.expect_value(t, filled, 2 * 2) // x 0..1, z 3..4
+	testing.expect_value(t, Block(tmpl.cells[template_index(&tmpl, {1, 0, 4})]), Block.Stone)
+	testing.expect_value(t, Block(tmpl.cells[template_index(&tmpl, {2, 0, 4})]), Block.Air)
+	template_fill(&tmpl, {5, 5, 5}, {9, 9, 9}, .Stone) // (all outside: nothing)
+	testing.expect_value(t, Block(tmpl.cells[len(tmpl.cells) - 1]), Block.Air)
+}

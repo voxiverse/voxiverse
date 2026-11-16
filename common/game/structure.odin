@@ -44,6 +44,25 @@ template_cell :: proc(t: ^Template, l: [3]i32, rotation: u8) -> u16 {
 	return t.cells[template_index(t, {x, l.y, z})]
 }
 
+// template_make: a template of size, every cell air, as a game lays out a seeded arena
+// in code (template_fill its boxes, then core.bulk_edit's .Paste puts it in the world).
+template_make :: proc(size: [3]i32, allocator := context.allocator) -> Template {
+	return {size = size, cells = make([]u16, int(size.x) * int(size.y) * int(size.z), allocator)}
+}
+
+// template_fill: every cell of the box lo..hi (inclusive) that is inside the template
+// becomes block; the rest of the box is ignored, so a game lays out boxes that run over
+// its edges without clipping them itself.
+template_fill :: proc(t: ^Template, lo, hi: [3]i32, block: Block) {
+	for y in max(lo.y, 0) ..= min(hi.y, t.size.y - 1) {
+		for z in max(lo.z, 0) ..= min(hi.z, t.size.z - 1) {
+			for x in max(lo.x, 0) ..= min(hi.x, t.size.x - 1) {
+				t.cells[template_index(t, {x, y, z})] = u16(block)
+			}
+		}
+	}
+}
+
 // template_build: a template from text, as a game writes its buildings in code: layers
 // from the bottom up, each its rows from -z to +z separated by '/', each row its cells
 // from -x to +x, one character each; key's i-th character stands for cells[i] (a
