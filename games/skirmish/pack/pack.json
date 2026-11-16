@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "skirmish",
+	"version": "1.0.0",
+	"title": "Skirmish",
+	"description": "Skirmish's commander (a camera with no body), its units, buildings and resources.",
+	"requires": ["voxiverse"]
+}

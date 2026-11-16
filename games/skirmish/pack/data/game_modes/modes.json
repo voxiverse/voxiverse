@@ -1,0 +1,9 @@
+{
+	// The commander: no body on the field (the camera's focus moves over it freely, is not
+	// drawn and is in nobody's way), nothing to lose.
+	"commander": {
+		"abilities": ["bodiless", "invulnerable"],
+		"kit": [],
+		"rules": {}
+	}
+}
