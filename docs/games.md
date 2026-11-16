@@ -119,6 +119,21 @@ through `game_rule` (`core.game_rule(s, w, "explosion_size", "1.75")`), never by
 the `import` lint refuses `w.rules.<name> = ...` in a game's code, as it refuses a name the
 list lacks.
 
+### What the games share: `server/play`
+
+What the server parts of several games did alike is `server/play` (`import
+"server:play"`), built on the list above alone (the `import` lint holds it to the list as it
+holds a game):
+
+| Name | What it is for |
+|---|---|
+| `Phase(P)`, `Clock`, `phase_set(s, &p, to)`, `phase_seconds(s, &p)`, `phase_left(s, &p, seconds)` | The game's phase (its own enum) and the tick it began: seconds into it, whole seconds left of a phase that lasts so long |
+| `configure_flat(config, spawn, mode)`, `world_still(s, w, clock)`, `world_rule(s, w, name, value)` | A flat world of the game's own with nothing wandering in, arriving at spawn in a mode; the time standing, nothing growing or dropping; a rule of any value |
+| `here(s, c)`, `present(s)` | A player playing in the home world; how many are |
+| `Arena`, `arena_area(a)`, `arena_inside(a)`, `arena_build(s, w, a, template, force)`, `arena_holds(a, p)` | A walled ground built whole from a template each round (stone under it, walls round it); the box to keep loaded; whether a point is inside |
+| `watch(s, c, mode, at, look)`, `look_at(from, to)`, `hold(s, c, item)` | A player watching (flying in a mode, at its seat's place along a line, facing a point); the look from one point to another; an item from the hotbar in hand |
+| `settings_command(s, c, table, &settings, node, args)`, `settings_usage`, `settings_text`, `settings_save`, `settings_load` | The admin's settings: a struct described by a `base.Var_Table` (each field's help and bounds), set by `/<game> <name> <value>` under a permission, kept with the universe |
+
 ### Walkers
 
 A game's creatures are entities of kinds its pack declares as data
