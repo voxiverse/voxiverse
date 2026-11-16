@@ -199,9 +199,27 @@ camera_third_person :: proc(
 	return
 }
 
+// camera_place puts the camera at a view for a picture (the console's `camera at`, a
+// development aid): it is drawn from there, whatever the game's camera and whatever the
+// player may do (fly or not), with the avatar shown and no hand or crosshair, while the
+// player stays where it is and the server is told nothing. The world drawn is what the
+// session holds, the chunks round the player: a view farther than the view radius from
+// it looks at nothing. camera_release gives the camera back.
+camera_place :: proc(s: ^Session, view: View) {
+	if s.placed == nil {s.placed_mode = s.camera_mode}
+	s.placed = view
+}
+
+// camera_release: the camera is the game's again (and the F5 mode the player's).
+camera_release :: proc(s: ^Session) {
+	if s.placed == nil {return}
+	s.placed = nil
+	s.camera_mode = s.placed_mode
+}
+
 // camera_update makes s.view from s.camera for this frame (session_update,
 // after the eyes are placed): the mode, the pull-in, the bobbing, the
-// sprint's widening.
+// sprint's widening; a camera placed (camera_place) stands where it was put.
 camera_update :: proc(
 	s: ^Session,
 	actions: ^Actions,
@@ -223,7 +241,10 @@ camera_update :: proc(
 
 	s.view = s.camera
 	s.view.roll = 0
-	if s.game_camera.kind == .Free {
+	if placed, is_placed := s.placed.?; is_placed {
+		s.camera_mode = .Third_Behind // (the avatar drawn, no hand)
+		s.view = placed
+	} else if s.game_camera.kind == .Free {
 		s.view = camera_free_view(s)
 	} else if s.game_camera.kind == .Top_Down {
 		s.view = camera_top_down(s.camera.position, s.game_camera)

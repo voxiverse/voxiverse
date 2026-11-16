@@ -123,6 +123,8 @@ Session :: struct {
 	view:             View, // what is drawn from: the eyes, or the third person camera, with the bobbing (view_camera.odin)
 	camera_mode:      Camera_Mode, // F5 (not saved); what the game's camera says, while it chooses
 	game_camera:      Game_Camera, // the game's choice this frame (view_camera.odin)
+	placed:           Maybe(View), // the camera put somewhere for a picture (camera_place: `camera at`)
+	placed_mode:      Camera_Mode, // ... and the F5 mode it gives back (camera_release)
 	pointer:          Maybe([3]f64), // the top-down camera: the point of the world under the pointer
 	pull:             f64, // the third person camera's distance now (pulled in against walls, easing back out)
 	fov_kick:         f32, // 0 ..= 1: how far the sprint widening has come

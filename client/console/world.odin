@@ -5,6 +5,7 @@ import "core:strconv"
 import "core:strings"
 
 import "client:engine"
+import "common:base"
 import "common:game"
 
 
@@ -81,8 +82,20 @@ register_world_commands :: proc(c: ^engine.Console) {
 		c,
 		{
 			"camera",
-			"camera <first|behind|facing> [degrees]: the camera's mode (F5 cycles them); the degrees turn a third person camera round the head, for a picture",
+			"camera <first|behind|facing> [degrees]: the camera's mode (F5 cycles them); the degrees turn a third person camera round the head, for a picture. A development build's: camera at <x> <y> <z> <yaw> <pitch>: the camera put there, whatever the game's camera and the player (who stays); camera reset: the game's again",
 			proc(app: ^engine.App, args: []string) {
+				if args[0] == "at" || args[0] == "reset" {
+					camera_place_command(app, args)
+					return
+				}
+				if len(args) > 2 {
+					engine.console_print(
+						&app.console,
+						"camera <first|behind|facing> [degrees]",
+						.Warning,
+					)
+					return
+				}
 				if len(args) > 1 {
 					degrees, ok := strconv.parse_f32(args[1])
 					if !ok {
@@ -109,7 +122,53 @@ register_world_commands :: proc(c: ^engine.Console) {
 				}
 			},
 		},
-		args = {1, 2},
+		args = {1, 6},
 		needs = {.World},
 	)
+}
+
+// camera_place_command: `camera at <x> <y> <z> <yaw> <pitch>` and `camera reset`, a
+// development build's (engine.camera_place).
+@(private)
+camera_place_command :: proc(app: ^engine.App, args: []string) {
+	if !base.DEV {
+		engine.console_print(&app.console, "camera at: a development build's", .Warning)
+		return
+	}
+	s := app.session
+	if args[0] == "reset" {
+		engine.camera_release(s)
+		return
+	}
+	view, ok := camera_at_parse(args[1:])
+	if !ok {
+		engine.console_print(
+			&app.console,
+			"camera at <x> <y> <z> <yaw> <pitch>: five numbers",
+			.Warning,
+		)
+		return
+	}
+	engine.camera_place(s, view)
+	// The session holds the chunks round the player alone.
+	far := f64(i32(s.welcome.view_radius) - 1) * game.CHUNK_SIZE
+	if d := view.position.xz - s.camera.position.xz; d.x * d.x + d.y * d.y > far * far {
+		engine.console_print(
+			&app.console,
+			"camera at: farther from the player than the world it is sent (/tp it nearer first)",
+			.Warning,
+		)
+	}
+}
+
+// camera_at_parse: the view `camera at` names, from its five numbers: where (blocks), the
+// yaw and the pitch (degrees, as `look` and /tp take them).
+camera_at_parse :: proc(args: []string) -> (view: engine.View, ok: bool) {
+	if len(args) != 5 {return}
+	n: [5]f64
+	for a, i in args {n[i] = strconv.parse_f64(a) or_return}
+	view.position = {n[0], n[1], n[2]}
+	view.yaw = math.to_radians(f32(n[3]))
+	view.pitch = math.to_radians(clamp(f32(n[4]), -89, 89))
+	return view, true
 }

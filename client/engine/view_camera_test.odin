@@ -3,9 +3,47 @@ package engine
 import "core:math"
 import "core:testing"
 
+import "client:testkit"
+import "common:game"
+
 // A game's top-down camera: it hangs over the head looking down along its heading, the
 // pointer's ray goes through what the frame shows under the pointer, and the movement
 // keys move the avatar across the screen whichever way it faces.
+
+// A camera placed for a picture (`camera at`) is drawn from where it was put, whatever
+// the game's camera, with the avatar shown (a third person mode); released, the game's
+// camera and the player's F5 mode are back.
+@(test)
+test_placed_camera_stands_where_it_was_put :: proc(t: ^testing.T) {
+	s := new(Session)
+	defer free(s)
+	s.state = .Playing
+	s.reg = testkit.test_reg()
+	s.camera = {
+		position = {1, 2, 3},
+	}
+	s.game_camera = {
+		kind     = .Top_Down,
+		distance = 20,
+		angle    = 60,
+	}
+	query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
+	actions: Actions
+	at := View {
+		position = {50, 30, -10},
+		yaw      = 1,
+		pitch    = -0.5,
+	}
+	camera_place(s, at)
+	camera_update(s, &actions, SETTINGS_DEFAULTS, query, 0.016, true)
+	testing.expect_value(t, s.view, at)
+	testing.expect_value(t, s.camera_mode, Camera_Mode.Third_Behind)
+	testing.expect_value(t, s.camera.position, [3]f64{1, 2, 3}) // (the player stays)
+	camera_release(s)
+	camera_update(s, &actions, SETTINGS_DEFAULTS, query, 0.016, true)
+	testing.expect_value(t, s.camera_mode, Camera_Mode.First)
+	testing.expect(t, s.view.position != at.position, "the game's camera is not back")
+}
 
 @(test)
 test_top_down_camera_hangs_over_the_head :: proc(t: ^testing.T) {
