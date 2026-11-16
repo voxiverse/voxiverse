@@ -193,12 +193,14 @@ apply_entity :: proc(s: ^Session, g: game.Received) {
 	}
 	v := (^game.Entity_Record)(g.value)
 	if e, known := &s.entities[id]; known && g.op == .Change {
-		e.kind, e.stack = v.kind, v.stack
+		e.kind, e.stack, e.health, e.max_health = v.kind, v.stack, v.health, v.max_health
 		return
 	}
 	s.entities[id] = {
-		kind  = v.kind,
-		stack = v.stack,
+		kind       = v.kind,
+		stack      = v.stack,
+		health     = v.health,
+		max_health = v.max_health,
 	}
 	if m := game.receiver_snapshot_get(&s.rx, int(game.State_Kind.Entity_Motion), g.key);
 	   m != nil {

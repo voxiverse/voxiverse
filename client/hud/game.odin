@@ -23,6 +23,7 @@ game_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			return
 		}
 	}
+	engine.screen_view_update(app)
 	engine.name_tags(app, ctx)
 	if engine.world_paused(app) {return}
 	overlay.chat_feed(app, ctx)

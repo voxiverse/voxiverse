@@ -27,13 +27,15 @@ Other_Player :: struct {
 
 // Other_Entity: an entity near us (entities.odin draws it).
 Other_Entity :: struct {
-	kind:      game.Kind_Id,
-	stack:     game.Stack, // a dropped item's
-	looks:     u16, // bit i: the kind's i-th look (game.kind_looks)
-	track:     Track,
-	hurt_at:   time.Tick, // when it was last hit (flash)
-	stride:    f32, // blocks walked, for its legs
-	last_seen: [3]f64, // where it was drawn last frame
+	kind:       game.Kind_Id,
+	stack:      game.Stack, // a dropped item's
+	health:     u16, // as the server last said (Entity_Record)
+	max_health: u16, // ... its most (0: none)
+	looks:      u16, // bit i: the kind's i-th look (game.kind_looks)
+	track:      Track,
+	hurt_at:    time.Tick, // when it was last hit (flash)
+	stride:     f32, // blocks walked, for its legs
+	last_seen:  [3]f64, // where it was drawn last frame
 }
 
 Track :: struct {

@@ -81,6 +81,9 @@ Session :: struct {
 	traffic:          [game.Side]game.Traffic, // counted here when remote (the pipe counts its own)
 	others:           map[u16]Other_Player, // the other players, by player id (players.odin)
 	entities:         map[u32]Other_Entity, // near us, by id (entities.odin)
+	screen_view:      Screen_View, // the frame's view, for a HUD's marks in the world (marks.odin)
+	world_boxes:      [MAX_WORLD_BOXES]World_Box, // outlines a game asked for this frame
+	world_box_count:  int,
 	puffs:            [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen:     bool,

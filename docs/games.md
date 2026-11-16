@@ -139,6 +139,15 @@ on the main thread, in the frame.
 | `scoreboard(s, board)` | Every frame the player list's key (<kbd>P</kbd>, `Player_List`) is held: the game fills `board` (an `engine.Scoreboard`: a title, `scoreboard_columns(board, "Frags", ...)`, at most `SCOREBOARD_COLUMNS`, and `scoreboard_row(board, name, cells..., you = mine)` per player, in the order to show), which the list shows in place of the engine's names, kills, deaths and pings |
 | `commands` | Console commands (`engine.Command_Spec`), there while a world plays the game: `help` lists them and Tab completes them |
 
+A game draws in the world from its `hud` hook (`client/engine/marks.odin`), through the
+view the frame is drawn with: `world_point(s, ctx, p)` is where a point of the world is on
+the screen (false behind the eyes or past `MARK_DISTANCE`), `world_label` puts text on a
+plate there and `world_bar` a bar, `entity_bars(s, ctx, kind)` a health bar over every
+entity of a kind that is hurt (an entity's health and its most come with it,
+`Entity_Record`), and `world_box(s, lo, hi, color)` outlines blocks in the world this frame
+(a placement's ghost, a footprint). `entity_place(s, id)` is where the session shows an
+entity now.
+
 The accessors are typed as the server's are: `engine.game_state(s, T)` checks `T` is the
 declared state type; `engine.game_value(s, r, T)` is `r`'s value as `^T` when `r` is of the
 game's kind whose value type is `T` (nil for a removal), so a hook reads a record with no

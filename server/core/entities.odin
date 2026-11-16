@@ -734,7 +734,11 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 		h, _ := entity_find(w, u32(id))
 		if h == 0 {continue}
 		key := game.key_entity(u32(id))
-		record := game.Entity_Record{entity_kind(w, h), entity_stack(w, h)^}
+		record := game.Entity_Record{entity_kind(w, h), entity_stack(w, h)^, 0, 0}
+		if hp := entity_health(w, h); hp != nil {
+			record.health = u16(clamp(hp.health, 0, 65535))
+			record.max_health = u16(clamp(hp.max, 0, 65535))
+		}
 		state_put(s, c, .Entity, &record, key)
 		motion := game.Entity_Motion {
 			entity_pos(w, h),

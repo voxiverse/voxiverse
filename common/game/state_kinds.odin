@@ -113,8 +113,10 @@ Player_Motion :: struct {
 }
 
 Entity_Record :: struct {
-	kind:  Kind_Id, // the registry's (a pack hash match makes it the same on both sides)
-	stack: Stack, // a dropped item's (else empty)
+	kind:       Kind_Id, // the registry's (a pack hash match makes it the same on both sides)
+	stack:      Stack, // a dropped item's (else empty)
+	health:     u16, // what it has left (a game draws it as a bar: engine.entity_bars)
+	max_health: u16, // its most (0: it has no health)
 }
 
 Entity_Motion :: struct {

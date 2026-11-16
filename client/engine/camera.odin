@@ -106,6 +106,7 @@ world_debug_lines :: proc(app: ^App) {
 		p := [3]f64{f64(b.x), f64(b.y), f64(b.z)}
 		render.debug_box(dd, p - 0.01, p + 1.01, {255, 150, 40, 255})
 	}
+	world_boxes_draw(app.session, dd)
 	if app.debug.chunk_borders {
 		c := game.chunk_origin(camera_chunk(&app.session.camera))
 		lo := [3]f64{f64(c.x), f64(c.y), f64(c.z)}

@@ -93,9 +93,14 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	motion := Player_Motion{{1.5, -60, 2e6}, 1, -0.5, true, true}
 	round_trip(t, &l, .Player_Motion, key_player(4), &motion)
 	// Entity_Spawn, Entities
-	sheep := Entity_Record{test_reg().engine.sheep, {}}
+	sheep := Entity_Record{test_reg().engine.sheep, {}, 3, 4}
 	round_trip(t, &l, .Entity, key_entity(77), &sheep)
-	dropped := Entity_Record{test_reg().engine.item, {item_of_block(test_reg(), .Sand), 12, 0}}
+	dropped := Entity_Record {
+		test_reg().engine.item,
+		{item_of_block(test_reg(), .Sand), 12, 0},
+		1,
+		1,
+	}
 	round_trip(t, &l, .Entity, key_entity(78), &dropped)
 	moving := Entity_Motion{{1, 2, 3}, 0.5, -0.2, 0b0110}
 	round_trip(t, &l, .Entity_Motion, key_entity(77), &moving)
@@ -215,7 +220,7 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 	refuse(t, &s, .Place, {}, &hot, "warmth 101")
 	boom := Explosion{{1, 2, 3}, 1000}
 	refuse_event(t, &s, .Explosion, &boom, "an explosion of radius 1000")
-	kind_gap := Entity_Record{Kind_Id(200), {}}
+	kind_gap := Entity_Record{Kind_Id(200), {}, 0, 0}
 	refuse(t, &s, .Entity, key_entity(1), &kind_gap, "an entity kind that does not exist")
 	// (Entity_Motion.looks holds 16 bits and a record cannot know its kind: every value is
 	// well formed, and the client drops a bit past its kind's looks.)
