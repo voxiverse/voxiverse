@@ -720,13 +720,16 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		c,
 		{
 			"universe",
-			"universe <name>: play the saved universe name (created if new)",
+			"universe [--earth] <name>: play the saved universe name (created if new; --earth: its home world Earth)",
 			proc(app: ^engine.App, args: []string) {
+				args := args
+				earth := len(args) > 1 && args[0] == "--earth"
+				if earth {args = args[1:]}
 				name := strings.join(args, " ", context.temp_allocator)
 				path :=
 					filepath.join({screen.saves_dir(), name}, context.temp_allocator) or_else name
 				if !os.exists(path) {
-					screen.world_create(app, name, "")
+					screen.world_create(app, name, "", earth)
 				} else if why := screen.universe_enter(app, path); why != "" {
 					engine.console_print(&app.console, why)
 				}

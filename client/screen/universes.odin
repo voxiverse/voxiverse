@@ -176,13 +176,19 @@ universe_plan :: proc(name: string, seed: u64, mode: string, earth := false) -> 
 
 // world_create makes a directory for a new universe named name (a free
 // variant of it) and enters it; seed_text may be a number, any text (hashed)
-// or empty (random). The creation screen does the same from its fields.
-world_create :: proc(app: ^engine.App, name, seed_text: string) {
+// or empty (random); earth: its home world is Earth (else one made from the
+// seed). The creation screen does the same from its fields.
+world_create :: proc(app: ^engine.App, name, seed_text: string, earth := false) {
 	seed, typed := starmap.seed_of_text(seed_text)
 	if !typed {seed = u64(time.now()._nsec) ~ 0x5eed_5eed}
-	plan := universe_plan(name, seed, "creative")
-	log.infof("saves creating name=%q seed=%d", filepath.base(plan.path), i64(plan.seed))
-	engine.enter_world(app, plan.path, i64(plan.seed), mode = plan.mode)
+	plan := universe_plan(name, seed, "creative", earth)
+	log.infof(
+		"saves creating name=%q seed=%d earth=%v",
+		filepath.base(plan.path),
+		i64(plan.seed),
+		earth,
+	)
+	engine.enter_world(app, plan.path, i64(plan.seed), mode = plan.mode, earth = plan.earth)
 }
 
 // last_played: when a save was last played, as people say it.

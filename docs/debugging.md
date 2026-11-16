@@ -197,7 +197,7 @@ commands are:
 | Command | Purpose |
 |---|---|
 | `singleplayer` | A scratch world, never saved. |
-| `universe <name>` | Plays the saved universe (created if new). Saves go to `VX_SAVES` if it is set. |
+| `universe [--earth] <name>` | Plays the saved universe (created if new: with `--earth` its home world is Earth, as the creation screen's default; else one made from the seed). Saves go to `VX_SAVES` if it is set. |
 | `join <host[:port]> [password]`, `leave`, `quit` | Session control. |
 | `screen <title\|game\|menu\|inventory [creative]\|stats\|options [tab]\|universes [create]\|multiplayer [direct]\|credits\|quit>` | Switches screens. |
 | `set`, `vars`, `reset` | Variables (see [Variables](#variables)). |
