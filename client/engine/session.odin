@@ -264,7 +264,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.fills = make([dynamic]render.Debug_Point, 0, 0) // heap: drawn and cleared every frame
 	s.world_lines = make([dynamic]render.Debug_Point, 0, 0) // heap: likewise
 	s.others = make(map[u16]Other_Player) // heap: players come and go (an arena would only grow)
-	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, game.MAX_KNOWN_ENTITIES)
+	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, 2 * game.MAX_KNOWN_ENTITIES) // (a message may create before it removes)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
 	session_texels(s)
 	s.config.name = strings.clone(config.name, arena)

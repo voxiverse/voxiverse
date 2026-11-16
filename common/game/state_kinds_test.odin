@@ -409,3 +409,34 @@ test_game_requests :: proc(t: ^testing.T) {
 	_, decoded = decode_client(over.buf[:])
 	testing.expect(t, !decoded, "a request past MAX_GAME_REQUEST")
 }
+
+// A kind at its cap may swap records in one message, creating before it removes (a
+// nearest-first view at its cap); a message that leaves the kind over its cap is refused.
+@(test)
+test_record_cap_holds_per_message :: proc(t: ^testing.T) {
+	Mark :: struct {
+		n: u32,
+	}
+	KINDS :: Game_Kinds {
+		states = {{name = "cap.mark", value = Mark, key = .Entity, max_records = 3}},
+	}
+	s := game_schema("cap", KINDS, context.temp_allocator)
+	kind, _ := game_kind(&s, Mark)
+	l: Link
+	link_init(&l, &s)
+	defer link_destroy(&l)
+	put :: proc(l: ^Link, kind: int, ids: []u32) {
+		for id in ids {
+			m := Mark{id}
+			sender_put(&l.tx, kind, key_entity(id), &m)
+		}
+		link_step(l)
+	}
+	put(&l, kind, {5, 6, 7})
+	testing.expect(t, !l.failed)
+	// 5 goes, 1 comes: by key, the create comes first.
+	put(&l, kind, {1, 6, 7})
+	testing.expect(t, !l.failed, "a swap at the cap was refused")
+	testing.expect(t, replica_get(&l.view, kind, key_entity(1)) != nil)
+	testing.expect(t, replica_get(&l.view, kind, key_entity(5)) == nil)
+}

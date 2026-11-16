@@ -2,6 +2,7 @@ package core
 
 import "core:testing"
 
+import "common:base"
 import "common:game"
 
 // A game's records keyed by entity (a creature's name and rank): put to a player for the
@@ -72,4 +73,40 @@ test_game_records_keyed_by_entity :: proc(t: ^testing.T) {
 		mirror_game_record(&sess.mirror, Tag, game.key_entity(id)) == nil,
 		"the tag stayed",
 	)
+}
+
+// Past MAX_KNOWN_ENTITIES a client is told of the nearest: a crowd far off (the lower
+// ids) gives way to the few beside it.
+@(test)
+test_entities_told_nearest_first :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	config := harness_world()
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	s := &h.srv
+	w := s.home
+	sheep := test_reg().engine.sheep
+	for i in 0 ..< game.MAX_KNOWN_ENTITIES {
+		a := f64(i) / game.MAX_KNOWN_ENTITIES * 6.28
+		entity_spawn(w, sheep, {50 * base.cos(a), 0, 50 * base.sin(a)}, false)
+	}
+	near: [10]u32
+	for &id, i in near {id = entity_id(w, entity_spawn(w, sheep, {f64(i) - 5, 0, 2}, false))}
+	game.store_apply(&w.entity_world.store)
+	entities_sync_spatial(w)
+	c := new(Client)
+	defer free(c)
+	c.state, c.world = .Playing, w
+	game.sender_init(&c.tx, &s.schema)
+	defer game.sender_destroy(&c.tx)
+	entities_put(s, c)
+	for id in near {
+		testing.expectf(
+			t,
+			game.replica_get(&c.tx.cur, int(game.State_Kind.Entity), game.key_entity(id)) != nil,
+			"the entity %d beside it was not told",
+			id,
+		)
+	}
 }

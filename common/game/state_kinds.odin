@@ -14,7 +14,7 @@ import "core:slice"
 // with a key (a player, an entity) are rebuilt every tick: what is not put is
 // removed. Values travel exactly.
 
-MAX_KNOWN_ENTITIES :: 256 // entities a client is told about at a time
+MAX_KNOWN_ENTITIES :: 1024 // entities a client is told about at a time (the nearest)
 
 State_Kind :: enum u8 {
 	Own_Player,

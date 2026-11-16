@@ -20,7 +20,7 @@ import "server:path"
 // when nobody is near; one whose ground is not loaded waits, frozen, until
 // it is. Saved kinds are kept with the world (save.odin: entities.cfg).
 
-MAX_ENTITIES :: 512
+MAX_ENTITIES :: 2048
 ENTITY_VIEW :: 64 // blocks: a client is told about entities this near (horizontally)
 SPAWN_EVERY :: game.TICK_RATE * 2 // ticks between spawning attempts
 SPAWN_CAP :: 6 // sheep near one player, at most
@@ -750,11 +750,10 @@ entity_find :: proc(w: ^World, id: u32) -> (game.Entity_Handle, bool) {
 entities_put :: proc(s: ^Server, c: ^Client) {
 	w := c.world
 	// The entities within ENTITY_VIEW horizontally (players are not told as
-	// entities), the lowest ids first, at most MAX_KNOWN_ENTITIES of them: the
-	// query answers in id order, which is the order the set was always
-	// cut in (a nearest-first cut changes the set every tick at the cap, and
-	// the receiver refuses a create past its record cap before it applies the
-	// removes of the same message).
+	// entities), the nearest first, at most MAX_KNOWN_ENTITIES of them (ties by
+	// id): past the cap a crowd far off gives way to what is near. (The receiver
+	// holds a kind's cap per whole message, so the set swapping its farthest for a
+	// nearer one in one message is no overflow.)
 	around := make([dynamic]game.Entity_Id, context.temp_allocator)
 	game.spatial_cylinder(
 		&w.entity_world.spatial,
@@ -764,6 +763,7 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 		{none = {.Player}},
 		&around,
 	)
+	if len(around) > game.MAX_KNOWN_ENTITIES {nearest_first(w, c.player.position, around[:])}
 	for id in around[:min(len(around), game.MAX_KNOWN_ENTITIES)] {
 		h, _ := entity_find(w, u32(id))
 		if h == 0 {continue}
@@ -782,6 +782,26 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 		}
 		state_put(s, c, .Entity_Motion, &motion, key)
 	}
+}
+
+// nearest_first sorts ids by their horizontal distance from p, the nearest first (ties
+// by id: the same order every tick for the same places).
+@(private = "file")
+nearest_first :: proc(w: ^World, p: [3]f64, ids: []game.Entity_Id) {
+	Near :: struct {
+		d:  f64,
+		id: game.Entity_Id,
+	}
+	near := make([]Near, len(ids), context.temp_allocator)
+	for id, i in ids {
+		near[i] = {1e18, id}
+		if h, ok := game.store_find(&w.entity_world.store, id); ok {
+			d := entity_pos(w, h) - p
+			near[i].d = d.x * d.x + d.z * d.z
+		}
+	}
+	slice.sort_by(near, proc(a, b: Near) -> bool {return a.d < b.d || (a.d == b.d && a.id < b.id)})
+	for n, i in near {ids[i] = n.id}
 }
 
 // entity_known: c has been told about entity id (it is in its view).

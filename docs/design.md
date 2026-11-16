@@ -124,7 +124,11 @@ its own kinds as data, which follow the engine's in the session's schema
   are deltas against the newest snapshot the client acknowledged (`SNAPSHOT_RING` = 32 kept
   baselines, sent as at most 8 unreliable packets).
 - Keyed kinds are rebuilt every tick: what the server does not put is removed. Values travel
-  exactly (no quantization).
+  exactly (no quantization). A kind's record cap (`max_records`) holds for each whole message
+  (a whole snapshot): a view at its cap may create before it removes.
+- A world holds at most `MAX_ENTITIES` (2048) entities; a client is told of the nearest
+  `MAX_KNOWN_ENTITIES` (1024) within `ENTITY_VIEW` of it, so a crowd far off gives way to
+  what is near.
 - The schema hash is checked when a client joins: the server checks the engine's kinds' in
   `Hello`, the client every kind's (the game's too) in `Welcome`. The handshake, answers to one
   client's requests and the bulk chunk streams stay plain messages; client-to-server messages

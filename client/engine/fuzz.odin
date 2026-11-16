@@ -65,7 +65,7 @@ fuzz_session_start :: proc(s: ^Session) {
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
 	s.notices = make([dynamic]string, 0, 16)
 	s.others = make(map[u16]Other_Player)
-	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, game.MAX_KNOWN_ENTITIES)
+	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, 2 * game.MAX_KNOWN_ENTITIES) // (a message may create before it removes)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena)
 }
 

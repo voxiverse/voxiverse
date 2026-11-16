@@ -1036,7 +1036,7 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 			i, found := replica_find(&rx.live, id, key)
 			switch op {
 			case .Create:
-				if found || len(rx.live.tables[id].records) >= k.max_records {return false}
+				if found || len(rx.live.tables[id].records) >= 2 * k.max_records {return false}
 				rec := replica_insert(&rx.live, id, i, key)
 				if !read_fields(&r, k, rec.value, true) || !valid_value(rx.reg, k, rec.value) {
 					replica_remove_at(&rx.live, id, i)
@@ -1070,7 +1070,22 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 			}
 		}
 	}
-	return r.ok
+	return r.ok && within_caps(rx.schema, &rx.live)
+}
+
+// within_caps: no kind of the replica holds more than its max_records. A message (a
+// whole snapshot) may create past a kind's cap before it removes others (its entries
+// go by key, not by op: a nearest-first set at its cap swaps its farthest for a nearer
+// one), so a create is let through up to twice the cap (memory stays bounded) and the
+// cap is held once the message, or the snapshot, is whole.
+@(private)
+within_caps :: proc(schema: ^Schema, r: ^Replica) -> bool {
+	for k, id in schema.kinds {
+		if id < len(r.tables) && k.max_records > 0 && len(r.tables[id].records) > k.max_records {
+			return false
+		}
+	}
+	return true
 }
 
 // receive_snapshot decodes one part of a Snapshot message into out. A part
@@ -1133,7 +1148,7 @@ receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> 
 			i, found := replica_find(&g.work, id, key)
 			switch op {
 			case .Create:
-				if found || len(g.work.tables[id].records) >= k.max_records {return false}
+				if found || len(g.work.tables[id].records) >= 2 * k.max_records {return false}
 				rec := replica_insert(&g.work, id, i, key)
 				if !read_fields(&r, k, rec.value, true) || !valid_value(rx.reg, k, rec.value) {
 					replica_remove_at(&g.work, id, i)
@@ -1170,6 +1185,7 @@ receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> 
 	if !r.ok {return false}
 	g.seen |= 1 << part
 	if u8(popcnt8(g.seen)) == g.parts {
+		if !within_caps(rx.schema, &g.work) {return false}
 		ring_put(&rx.ring, tick, g.work)
 		g.work = {}
 		g.active = false
