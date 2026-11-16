@@ -5,6 +5,7 @@ import "core:testing"
 
 import "client:console"
 import "client:engine"
+import "client:platform"
 import "client:testkit"
 import "common:game"
 
@@ -72,4 +73,31 @@ test_console_slash_is_the_servers :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(last_line(&f.app.console), "need a world"))
 	f.s.state = .Playing
 	free_all(context.temp_allocator)
+}
+
+// `key <key> down|up` (development builds, as `pad`) puts the key's press or release
+// among the frame's events, as the keyboard would (a script holds P for the player list
+// with it); a key there is none of, or a word that is neither, says so and adds nothing.
+@(test)
+test_console_key_holds_a_key :: proc(t: ^testing.T) {
+	app := new(engine.App)
+	defer free(app)
+	defer delete(app.injected)
+	_, ok := console.key_inject(app, {"p", "down"})
+	testing.expect(t, ok)
+	_, ok = console.key_inject(app, {"F3", "up"})
+	testing.expect(t, ok)
+	testing.expect_value(t, len(app.injected), 2)
+	if len(app.injected) == 2 {
+		first, _ := app.injected[0].(platform.Key_Event)
+		second, _ := app.injected[1].(platform.Key_Event)
+		testing.expect_value(t, first, platform.Key_Event{key = .P, symbol = .P, pressed = true})
+		testing.expect_value(t, second, platform.Key_Event{key = .F3, symbol = .F3})
+	}
+	message: string
+	message, ok = console.key_inject(app, {"nonesuch", "down"})
+	testing.expect(t, !ok && strings.contains(message, "no such key"))
+	message, ok = console.key_inject(app, {"p", "sideways"})
+	testing.expect(t, !ok && strings.contains(message, "down or up"))
+	testing.expect_value(t, len(app.injected), 2)
 }

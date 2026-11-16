@@ -662,6 +662,19 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		console_register(
 			c,
 			{
+				"key",
+				"key <key> down|up: a key held or let go, as the keyboard would (a script holding P for the player list)",
+				proc(app: ^engine.App, args: []string) {
+					if msg, ok := key_inject(app, args); !ok {
+						engine.console_print(&app.console, msg, .Warning)
+					}
+				},
+			},
+			args = {2, 2},
+		)
+		console_register(
+			c,
+			{
 				"crash",
 				"crash the game (tests the crash handler)",
 				proc(app: ^engine.App, args: []string) {
@@ -793,6 +806,24 @@ report_text :: proc(app: ^engine.App, note: string) -> string {
 		fmt.sbprintln(&b, c.lines[(c.first + i) % engine.CONSOLE_MAX_LINES].text)
 	}
 	return strings.to_string(b)
+}
+
+// key_inject: the `key` command: appends the key's press or release (its name as
+// platform.Key spells it, any case: p, f3, space) to app.injected.
+key_inject :: proc(app: ^engine.App, args: []string) -> (message: string, ok: bool) {
+	for k in platform.Key {
+		if !strings.equal_fold(fmt.tprint(k), args[0]) {continue}
+		switch args[1] {
+		case "down":
+			append(&app.injected, platform.Key_Event{key = k, symbol = k, pressed = true})
+		case "up":
+			append(&app.injected, platform.Key_Event{key = k, symbol = k, pressed = false})
+		case:
+			return "key: say down or up", false
+		}
+		return "", true
+	}
+	return "key: no such key (the names are platform.Key's: a, f3, space, left_shift...)", false
 }
 
 // pad_inject: the `pad` command: appends the event for slot 0 to
