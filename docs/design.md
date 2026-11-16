@@ -129,7 +129,8 @@ its own kinds as data, which follow the engine's in the session's schema
 - A world holds at most `MAX_ENTITIES` (2048) entities; a client is told of the nearest
   `MAX_KNOWN_ENTITIES` (1024) within `ENTITY_VIEW` of it, so a crowd far off gives way to
   what is near. In a world with fog a player on a team is told instead of what its team
-  sees, wherever it is ([games.md](games.md#sides)).
+  sees, wherever it is, players too, and a player on no team only of what is on none
+  ([games.md](games.md#sides)).
 - The schema hash is checked when a client joins: the server checks the engine's kinds' in
   `Hello`, the client every kind's (the game's too) in `Welcome`. The handshake, answers to one
   client's requests and the bulk chunk streams stay plain messages; client-to-server messages

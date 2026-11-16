@@ -293,9 +293,13 @@ it keeps them apart: no blow, shot or blast passes between two of a team (before
 its team's and hides the others', so an army's colours are its kinds' data. In a world with
 fog (`world_fog(w, true)`), a player on a team is told of its own side's entities wherever
 they stand and of any other entity only while one of its own sees it (`entity_set_vision`:
-blocks around it, horizontally; `team_sees` asks the same of a point): nothing its team
-does not see reaches its client, so the fog is the server's, not a picture drawn over what
-was sent. Its client knows each entity's team and vision from its record
+blocks around it, horizontally; `team_sees` asks the same of a point), and of another
+side's player (its place, its swings, its shots) by the same rule. A player on no team in a
+world with fog is on no side and sees for none: it is told only of what is on no team near
+it (neutral creatures, dropped stacks, players on no team), so a watcher between matches
+learns nothing a side has. Nothing its side does not see reaches its client, so the fog is
+the server's, not a picture drawn over what was sent. (Blocks are not fogged: a chunk goes
+to whoever is near it.) Its client knows each entity's team and vision from its record
 (`engine.Other_Entity`'s `team` and `vision`), from which it draws its own fog.
 
 ### Walkers

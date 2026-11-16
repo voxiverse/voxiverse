@@ -34,7 +34,7 @@ FIRE_EVERY :: game.TICK_RATE / 4
 @(private)
 swing_near :: proc(s: ^Server, c: ^Client) {
 	for &o in s.clients {
-		if &o == c || o.state != .Playing || o.world != c.world {continue}
+		if &o == c || o.state != .Playing || o.world != c.world || !player_seen(&o, c) {continue}
 		d := o.player.position - c.player.position
 		if d.x * d.x + d.y * d.y + d.z * d.z > SHOT_HEARD * SHOT_HEARD {continue}
 		swung := protocol.Swung {

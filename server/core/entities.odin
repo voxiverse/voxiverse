@@ -601,7 +601,7 @@ entity_find :: proc(w: ^World, id: u32) -> (game.Entity_Handle, bool) {
 }
 
 // entities_put tells a client about the entities near it (in a world with fog, a
-// player on a team: those its team sees, sides.odin): what each is and where (a view:
+// player on a team: those its team sees; on none: those on no team near it, sides.odin): what each is and where (a view:
 // an entity out of its area, or gone from the world, is removed by not being put).
 entities_put :: proc(s: ^Server, c: ^Client) {
 	w := c.world
@@ -627,6 +627,17 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 			{none = {.Player}},
 			&around,
 		)
+		if w.fog {
+			// On no side under fog: what is on no team near it, nothing a side has.
+			kept := 0
+			for id in around {
+				if h, ok := entity_find(w, u32(id)); ok && entity_team(w, h) == 0 {
+					around[kept] = id
+					kept += 1
+				}
+			}
+			resize(&around, kept)
+		}
 	}
 	if len(around) > protocol.MAX_KNOWN_ENTITIES {nearest_first(w, c.player.position, around[:])}
 	for id in around[:min(len(around), protocol.MAX_KNOWN_ENTITIES)] {

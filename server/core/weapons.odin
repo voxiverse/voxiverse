@@ -257,9 +257,9 @@ weapon_shoot :: proc(
 	}
 	record(s, c, .Shot_Fired, name, 1 if hit else 0)
 
-	// Everyone else near sees the tracers.
+	// Everyone else near sees the tracers (under fog, those whose side sees the shooter).
 	for &o in s.clients {
-		if &o == c || o.state != .Playing || o.world != c.world {continue}
+		if &o == c || o.state != .Playing || o.world != c.world || !player_seen(&o, c) {continue}
 		d := o.player.position - origin
 		if d.x * d.x + d.y * d.y + d.z * d.z > SHOT_HEARD * SHOT_HEARD {continue}
 		for i in 0 ..< rays {

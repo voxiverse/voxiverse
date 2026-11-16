@@ -223,7 +223,8 @@ tally_of :: proc(c: ^Client) -> protocol.Tally {
 }
 
 // players_put tells a client who else is in its world (their names and what
-// they wear) and where the ones near it are.
+// they wear) and where the ones near it are (under fog, those its side sees:
+// player_seen).
 @(private)
 players_put :: proc(s: ^Server, c: ^Client) {
 	near := f64((s.config.view_radius + 1) * game.CHUNK_SIZE)
@@ -242,6 +243,7 @@ players_put :: proc(s: ^Server, c: ^Client) {
 		state_put(s, c, .Player, &record, protocol.key_player(id))
 		d := other.player.position - c.player.position
 		if d.x * d.x + d.z * d.z > near * near || bodiless(s, &other) {continue}
+		if !player_seen(c, &other) {continue} 	// (under fog: where its side does not see)
 		motion := protocol.Player_Motion {
 			position = other.player.position,
 			yaw      = other.look[0],

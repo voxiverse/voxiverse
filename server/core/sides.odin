@@ -15,8 +15,12 @@ import "common:protocol"
 //    an army's colour is its kind's data (packs.md);
 //  - sight: in a world with fog (world_fog), a player on a team is told only of the
 //    entities its team sees: its own, and the others within the vision (entity_set_vision)
-//    of one of its own, wherever on the map they stand (entities_put). Nothing it does not
-//    see reaches its client: the fog is the server's, not a picture over what was sent.
+//    of one of its own, wherever on the map they stand (entities_put). Another player's
+//    place (its motion, its swings, its shots) is told by the same rule (player_seen). A
+//    player on no team in a world with fog is on no side and sees for none: it is told of
+//    what is on no team near it (neutral creatures, dropped stacks, other players on no
+//    team) and of nothing a side has. Nothing it does not see reaches its client: the fog
+//    is the server's, not a picture over what was sent.
 //
 // A team is not saved with the entity: a game whose sides outlive a restart keeps them in
 // its own record and sets them again.
@@ -165,4 +169,13 @@ team_sees :: proc(w: ^World, team: u8, p: [3]f64) -> bool {
 // own side's, or one its team sees.
 entity_seen :: proc(w: ^World, team: u8, h: game.Entity_Handle) -> bool {
 	return entity_team(w, h) == team || team_sees(w, team, entity_pos(w, h))
+}
+
+// player_seen: whether viewer is told where other is (its motion, its swings and shots):
+// always without fog; in a world with fog, when both are of one side (on no team: both on
+// none) or viewer's team sees it. A bodiless player has no place to tell (players_put).
+player_seen :: proc(viewer, other: ^Client) -> bool {
+	w := viewer.world
+	if !w.fog || viewer.team == other.team {return true}
+	return team_sees(w, viewer.team, other.player.position)
 }
