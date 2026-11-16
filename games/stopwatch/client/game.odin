@@ -55,11 +55,9 @@ clock :: proc(seconds: u32) -> string {
 
 // line: what the HUD and the command say.
 line :: proc(v: ^View) -> string {
-	if v.held == 0 {
-		return fmt.tprintf("Stopwatch  %s   record %s", clock(v.times.time), clock(v.times.record))
-	}
-	return fmt.tprintf(
-		"Stopwatch  %s   record %s (%s)",
+	if v.held == 0 {return stopwatch.tr(.Line, clock(v.times.time), clock(v.times.record))}
+	return stopwatch.tr(
+		.Line_Holder,
 		clock(v.times.time),
 		clock(v.times.record),
 		string(v.holder[:v.held]),
