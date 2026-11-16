@@ -225,7 +225,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			mid + 100 * k,
 			fmt.tprintf("next match in %d   (hold P for the scores)", m.left),
 			size * 0.6,
-			t.text_muted,
+			t.text,
 		)
 	}
 }

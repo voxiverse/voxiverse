@@ -180,12 +180,15 @@ place :: proc(s: ^core.Server, c: ^core.Client) {
 	core.teleport(s, c, at, {f32(math.atan2(-d.x, -d.y)), 0})
 }
 
-// watch: c floats above the courtyard between matches, unharmed, looking into it.
+// watch: c floats above the courtyard between matches, unharmed, looking at the keep.
 watch :: proc(s: ^core.Server, c: ^core.Client) {
 	core.game_mode(s, c, arena.WATCHING_MODE)
 	seat := f64(core.player_id(s, c) % 16)
-	along := (seat - 7.5) * OVERLOOK_SPACING // (16 seats fit the wall)
-	core.teleport(s, c, OVERLOOK + {along, 0, 0}, {math.PI, -0.6}, flying = true)
+	at := OVERLOOK + {(seat - 7.5) * OVERLOOK_SPACING, 0, 0} // (16 seats fit the wall)
+	d := [3]f64{arena.SIZE / 2, 2, arena.SIZE / 2} - at // (looking at the keep)
+	yaw := math.atan2(-d.x, -d.z)
+	pitch := math.atan2(d.y, math.sqrt(d.x * d.x + d.z * d.z))
+	core.teleport(s, c, at, {f32(yaw), f32(pitch)}, flying = true)
 }
 
 // countdown: the next match: a new courtyard, built while everyone watches.
