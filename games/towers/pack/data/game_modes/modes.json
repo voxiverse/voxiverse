@@ -1,0 +1,14 @@
+{
+	// Building and defending: flying over the field, unharmed; what is placed or broken
+	// costs nothing of the stacks (the coins pay: the game counts them).
+	"builder": {
+		"abilities": ["fly", "invulnerable", "infinite_items"],
+		"kit": [
+			{"item": "towers:wall", "count": 1, "slot": "hotbar"},
+			{"item": "towers:arrow_tower", "count": 1, "slot": "hotbar"},
+			{"item": "towers:cannon_tower", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:rifle", "count": 1, "slot": "hotbar"}
+		],
+		"rules": {}
+	}
+}

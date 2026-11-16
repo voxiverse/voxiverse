@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "towers",
+	"version": "1.0.0",
+	"title": "Towers",
+	"description": "Towers' walls, towers, core, gate and coins, its creeps and the builder's mode.",
+	"requires": ["voxiverse"]
+}

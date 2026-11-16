@@ -1,0 +1,31 @@
+{
+	// What players build: a wall (it only lengthens the creeps' way) and two towers.
+	"wall": {
+		"textures": {"all": "voxiverse:stone_bricks"},
+		"sound": "voxiverse:stone"
+	},
+	"arrow_tower": {
+		"textures": {"side": "voxiverse:planks", "top": "voxiverse:log_top", "bottom": "voxiverse:planks"},
+		"sound": "voxiverse:wood"
+	},
+	"cannon_tower": {
+		"textures": {"side": "voxiverse:cobblestone", "top": "voxiverse:coal_ore", "bottom": "voxiverse:cobblestone"},
+		"sound": "voxiverse:stone"
+	},
+	// The map's: what the creeps walk to, where they come from (never broken by a player).
+	"core": {
+		"textures": {"all": "voxiverse:lamp"},
+		"light": 15,
+		"sound": "voxiverse:glass"
+	},
+	"gate": {
+		"textures": {"all": "voxiverse:gate_ring"},
+		"light": 7,
+		"sound": "voxiverse:stone"
+	},
+	// A coin: carried, spent, never placed (the game refuses it).
+	"coin": {
+		"textures": {"side": "voxiverse:sand", "top": "voxiverse:lamp", "bottom": "voxiverse:sand"},
+		"sound": "voxiverse:glass"
+	}
+}
