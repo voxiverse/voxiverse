@@ -244,6 +244,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `MAX_TEAMS`, `client_set_team(c, team)`, `client_team(c)`, `entity_set_team(w, h, team)`, `entity_team(w, h)`, `entity_set_vision(w, h, blocks)`, `entity_vision(w, h)`, `world_fog(w, on)`, `team_sees(w, team, p)` | Sides ([below](#sides)): a player's and an entity's team (0: none; no harm passes between two of a team, and a kind's `team<n>` look shows its team's colour), how far an entity sees for its team, and a world whose players on a team are told only of the entities their team sees |
 | `Machines`, `machine_data(w, p, T)`, `machine_slots(w, p)`, `machine_kind(w, p)`, `machine_wake(w, p, ticks)`, `machine_sleep(w, p)`, `machine_show(w, p, &value)`, `items_made(s, w, item, count)`, `items_used(s, w, item, count)` | Machines ([below](#machines)): the game's record on one, its inventory, its block type, when it thinks next, what players are shown of it; what its machines make and use up, booked in the item ledger |
 | `belt_put(w, p, item)`, `belt_take(w, p)`, `belt_peek(w, p)` | Belts ([below](#belts)): an item onto a belt's start (false: no room), the front item off it, what it carries |
+| `grid_open(w, kinds)`, `grid_parts(w, g)`, `grid_part_at(w, g, p)`, `grid_node(w, g, p)` | Networks over blocks ([below](#grids)): a grid of the kinds given (`grid.Kind`s of `server:grid`), its parts, which part a block is in, whether it is a machine of it |
 | `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
 
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
@@ -350,6 +351,19 @@ only move: the client steps its copy of the belts with the same code, and draws 
 a cube of its colour riding the belt (at half a block: a belt is a slab). What belts carry is
 in the item ledger and spills when one is broken. (`./build.sh bench budgets`: 20 000 items
 on 8 560 belts with 5 000 machines, `the factory`.)
+
+### Grids
+
+A power line or a pipe is a grid (`server/grid`, `server/core/grids.odin`): the game opens one
+in a world (`grid_open(w, kinds)`, in its `world_opened`) naming the block types it is made of,
+each a `grid.Kind`: a conductor that joins what touches its faces (`reach` 0: a cable) or what
+lies within `reach` blocks each way (at most `grid.MAX_REACH`: a pole), or a `node` (a machine)
+that joins any conductor reaching it and never another node. The server keeps its connected
+parts as blocks change, a block at a time (one added joins the parts it touches; one removed
+splits its part only where it held it together), and as saved chunks come and go; the game
+reads the parts (`grid_parts`: each a number, kept while a part only grows, and its members)
+to balance what its generators give against what its machines ask. Grids are not saved: they
+are found again from the blocks.
 
 ### Walkers
 

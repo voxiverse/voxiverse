@@ -77,8 +77,10 @@ block_entities_all :: proc(w: ^World) -> []Entity_At {
 
 // entity_lifecycle: the block at p went from old to new, by cause: an entity
 // the new state has and the old one lacked is made, one the new state lacks
-// is removed (a container's stacks spill, those looking in are closed).
+// is removed (a container's stacks spill, those looking in are closed); the
+// world's grids follow the block.
 entity_lifecycle :: proc(w: ^World, p: game.Block_Pos, old, new: game.Block, cause: Act) {
+	if old != new {grids_block(w, p, old, new)}
 	t := &w.server.registry.blocks
 	was, now := game.block_entity_kind(t, old), game.block_entity_kind(t, new)
 	defer if was == .Belt || now == .Belt {belt_changed(w, p)} 	// (built, broken or turned)

@@ -61,7 +61,7 @@ Cap: `70` files per package.
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
 read from the line above. The largest packages are `client/engine` (69 files),
-`server/core` (68), `common/game` (57) and `common/base` (34); every other package has 31
+`server/core` (69), `common/game` (57) and `common/base` (34); every other package has 31
 or fewer (the `layout` lint holds these counts to the tree, so they are never stale). The
 cap leaves the largest no room beyond it, so a package that keeps growing splits into
 feature packages rather than get a bigger number. There is no per-folder allowance (that would
@@ -72,7 +72,8 @@ single package; what needs none of its state lives below it (`server/path`, `ser
 
 No package sits at the root of `client/` or `server/`; each feature has its own. `server/core`
 is the server's one package (its state is one cycle around `Server`, `Client` and `World`);
-below it, `server/path` finds ways through the blocks from a `game.Block_Query` alone, and
+below it, `server/path` finds ways through the blocks from a `game.Block_Query` alone,
+`server/grid` keeps a network's parts over the blocks it is told of, and
 `server/store` keeps a universe's files as files (the save transaction, backups, export,
 migrations, compaction), so neither knows a server and the server imports both;
 `client/engine` holds `App`, `Session`, and the state of every feature `App` holds, and the
@@ -198,6 +199,7 @@ package** is enforced by the `layout` lint (see above).
 | `server/core/creatures_pack/data/entities` | Its creatures | `*.json` |
 | `server/store` | A universe's files as files, whatever server runs: their names, the save transaction (a batch staged, committed, recovered), backups and restores, export and import, migrations, compacting region files, the packs a universe lists and the registry built from them | `*.odin` |
 | `server/path` | Pathfinding over the blocks for a body of a size: a walker's way from one block to another (A*), and fields: the way to one goal from every block of an area, which many walkers share | `*.odin` |
+| `server/grid` | Networks over blocks (power lines, pipes): the parts that blocks of a grid's kinds and the machines they reach form, kept as blocks change | `*.odin` |
 | `server/play` | What the server parts of games share, built on the game API alone (docs/games.md): phases and their clocks, a walled arena from a template, watchers, the admin's settings, what is kept of players by name, squads (shared routes, formations, fighting) | `*.odin` |
 | `server/playtest` | A game's server tests' rig: the game on a stepped server with its players, waiting for its phases, the host's commands and what each player was told; only tests import it | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |

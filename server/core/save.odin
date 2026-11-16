@@ -215,6 +215,7 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 		entities_reconcile(w, chunk)
 		machines_loaded(w, chunk)
 		belts_loaded(w, chunk)
+		grids_chunk(w, chunk, true)
 	}
 	sim_restore(w, pos, waiting[:]) // (what was waiting when it was saved, as due then)
 	sim_wake_box(w, origin, origin + game.CHUNK_SIZE - 1, 0) // flowing again where it was
@@ -235,6 +236,7 @@ chunk_load_saved :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 // keep_edits stores an edited chunk that is being unloaded.
 keep_edits :: proc(w: ^World, c: ^Chunk) {
 	if !c.modified {return}
+	grids_chunk(w, c, false)
 	ledger_entities(w, c.block_entities[:], .Scope_Out)
 	wr := &w.server.store.writer
 	clear(&wr.buf)
