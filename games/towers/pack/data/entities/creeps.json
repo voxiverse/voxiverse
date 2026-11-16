@@ -3,6 +3,7 @@
 	// single wall block turns them; they differ in size, health and speed, and in shape:
 	// a runner is all legs, a grunt squat with swinging arms, a brute a hulk with a crest.
 	"runner": {
+		"voice": "squeak",
 		"box": [0.6, 0.8],
 		"health": 6,
 		"hittable": true,
@@ -18,6 +19,7 @@
 		]}
 	},
 	"grunt": {
+		"voice": "grunt",
 		"box": [0.8, 1.2],
 		"health": 16,
 		"hittable": true,
@@ -34,6 +36,7 @@
 		]}
 	},
 	"brute": {
+		"voice": "growl",
 		"box": [0.95, 1.7],
 		"health": 45,
 		"hittable": true,
