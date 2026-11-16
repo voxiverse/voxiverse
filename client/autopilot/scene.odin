@@ -33,10 +33,14 @@ SCENE_SIZE :: [2]u32{640, 360}
 // it: the still rules, then, once whatever the scene asked for has arrived
 // from the server and the world round where it stands is loaded and meshed,
 // a few frames for the GPU before the picture.
-SCENE_BEFORE ::
-	"wait_world; set rules.daylight_cycle 0; set rules.random_tick_speed 0; set rules.gravity 0; /time set " +
+SCENE_STILL ::
+	"set rules.daylight_cycle 0; set rules.random_tick_speed 0; set rules.gravity 0; /time set " +
 	BENCH_TIME_OF_DAY +
 	"; sleep 1"
+SCENE_BEFORE :: "wait_world; " + SCENE_STILL
+// An Earth scene goes elsewhere at once (`/goto`): it waits only to have joined, not
+// for the land at the spawn, which it would load to leave (half its time).
+SCENE_EARTH_BEFORE :: "wait_joined; " + SCENE_STILL
 SCENE_MENU_AFTER :: "wait 10" // (a menu scene has no world to wait for)
 SCENE_AFTER :: "sleep 1; wait_world; wait 10"
 
@@ -115,7 +119,8 @@ scene_names :: proc(text: string, allocator := context.allocator) -> []string {
 // scene_exec: the whole script a scene runs (--exec's form).
 scene_exec :: proc(script: string, allocator := context.allocator) -> string {
 	if scene_is_menu(script) {return strings.join({script, SCENE_MENU_AFTER}, "; ", allocator)}
-	return strings.join({SCENE_BEFORE, scene_commands(script), SCENE_AFTER}, "; ", allocator)
+	before := SCENE_EARTH_BEFORE if scene_is_earth(script) else SCENE_BEFORE
+	return strings.join({before, scene_commands(script), SCENE_AFTER}, "; ", allocator)
 }
 
 // scene_begin starts the scene called name (after app_init): offscreen at

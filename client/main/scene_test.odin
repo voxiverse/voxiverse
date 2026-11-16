@@ -27,6 +27,13 @@ test_scene_sized_lines :: proc(t: ^testing.T) {
 	script, _, found, _ = autopilot.scene_find("e: earth /goto everest; look 0 0\n", "e")
 	testing.expect(t, found && autopilot.scene_is_earth(script))
 	testing.expect_value(t, autopilot.scene_commands(script), "/goto everest; look 0 0")
+	// An Earth scene waits to have joined, not for the spawn's land it leaves at once;
+	// any other waits for its world.
+	earth := autopilot.scene_exec(script, context.temp_allocator)
+	testing.expect(t, len(earth) > 12 && earth[:12] == "wait_joined;", earth)
+	testing.expect(t, !contains(earth[:40], "wait_world"))
+	plain := autopilot.scene_exec("look 0 0", context.temp_allocator)
+	testing.expect(t, len(plain) > 11 && plain[:11] == "wait_world;", plain)
 	_, _, found, err = autopilot.scene_find(text, "nope")
 	testing.expect(t, !found && err == "")
 	// Every scene of the real file parses.

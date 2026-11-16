@@ -15,6 +15,8 @@ import "core:time"
 //	sleep <seconds>  resume after that much time (frame counts vary with vsync)
 //	wait_world       resume once the world has loaded and finished meshing
 //	                 (no world, or it failed: the run fails and quits)
+//	wait_joined      resume once the session plays, its world perhaps still
+//	                 loading (no world, or it failed: as wait_world)
 //
 //	--exec "singleplayer; wait_world; screenshot world; wait 2; quit"
 //
@@ -32,7 +34,13 @@ script_destroy :: proc(s: ^engine.Script) {
 // script_run runs commands until the script waits or ends; once per frame.
 // script_done: every command has run and nothing is waited for.
 script_done :: proc(s: ^engine.Script) -> bool {
-	return s.next >= len(s.commands) && s.wait == 0 && s.until == {} && !s.wait_world
+	return(
+		s.next >= len(s.commands) &&
+		s.wait == 0 &&
+		s.until == {} &&
+		!s.wait_world &&
+		!s.wait_joined \
+	)
 }
 
 script_run :: proc(app: ^engine.App, s: ^engine.Script) {
@@ -44,15 +52,16 @@ script_run :: proc(app: ^engine.App, s: ^engine.Script) {
 		if time.tick_diff(time.tick_now(), s.until) > 0 {return}
 		s.until = {}
 	}
-	if s.wait_world {
-		if app.session == nil {
+	if s.wait_world || s.wait_joined {
+		if app.session == nil || app.session.state == .Failed {
 			log.error("script wait_world: no world to wait for (see above); quitting")
 			app.script_failed = true
 			app.quit = true
 			return
 		}
-		if !screen.world_settled(app) {return}
-		s.wait_world = false
+		if s.wait_world && !screen.world_settled(app) {return}
+		if s.wait_joined && app.session.state != .Playing {return}
+		s.wait_world, s.wait_joined = false, false
 	}
 	app.scripted = true
 	defer app.scripted = false
@@ -72,6 +81,9 @@ script_run :: proc(app: ^engine.App, s: ^engine.Script) {
 			return
 		case "wait_world":
 			s.wait_world = true
+			return
+		case "wait_joined":
+			s.wait_joined = true
 			return
 		case "sleep":
 			seconds, ok := strconv.parse_f64(args[1] if len(args) > 1 else "")

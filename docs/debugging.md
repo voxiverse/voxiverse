@@ -214,8 +214,9 @@ Nothing in the console duplicates a key, the UI or a server command.
 ### Scripts
 
 Scripts (`--exec "cmd; cmd"`) are console input typed at startup, with the additional
-commands `wait <frames>`, `sleep <seconds>` and `wait_world` (until the world has loaded and
-meshed; a missing or failed world fails the run). They exist to reproduce a state and capture
+commands `wait <frames>`, `sleep <seconds>`, `wait_world` (until the world has loaded and
+meshed; a missing or failed world fails the run) and `wait_joined` (until the session plays,
+its world perhaps still loading; likewise). They exist to reproduce a state and capture
 its picture:
 
 ```
@@ -365,7 +366,8 @@ next is fixed:
 
 A scene whose script starts with `earth` runs on an Earth planet world instead: the scratch
 world is made at Earth's address (built on the planet model, as a new universe's home world
-is), with the same fixed conditions (still clouds, no gravity, stopped time). The scene's
+is), with the same fixed conditions (still clouds, no gravity, stopped time). It waits only to
+have joined (`wait_joined`), not for the land at the spawn it is about to leave. The scene's
 script then stands on the surface with `/goto <place>` (a name of `PLANET_PLACES`, or a
 latitude and longitude) and frames it with `look`; `earth_everest`, `earth_sahara`, `earth_amazon`, `earth_alps`, `earth_greenland` and `earth_nile` do so.
 
