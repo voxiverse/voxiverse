@@ -4,6 +4,7 @@ import "core:os"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 
 // A game's creature survives a restart whole, without its game making it again: its
 // kind, place, health and most health, the way it was going and the game's own record on
@@ -190,4 +191,59 @@ test_a_game_decides_its_natural_spawns :: proc(t: ^testing.T) {
 	testing.expect(t, most >= 1, "none came")
 	testing.expectf(t, most <= 4, "%d came: the cap is 4", most)
 	testing.expect(t, game_state(s, Seen).calls > most, "none was refused")
+}
+
+// A player uses a creature: the game's entity_use hook is asked with what the player
+// holds, does the use or refuses it, and a refusal is told to the player.
+@(test)
+test_a_game_judges_the_use_of_its_creatures :: proc(t: ^testing.T) {
+	config := harness_world()
+	config.listen = true
+	config.game = harness_creatures()
+	config.game.entity_use = proc(
+		s: ^Server,
+		c: ^Client,
+		h: game.Entity_Handle,
+		stack: game.Stack,
+	) -> string {
+		if game.stack_empty(stack) {return "Hold something to give it"}
+		entity_data(c.world, h, Creature_Data).number = i32(stack.count)
+		return ""
+	}
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	c := new(Net_Client)
+	defer free(c)
+	net_connect(c, 0, "user", h = h)
+	defer net_close(c)
+	standing :: proc(cs: []^Net_Client) -> bool {return(
+			cs[0].welcomed &&
+			cs[0].update.state.on_ground \
+		)}
+	if !testing.expect(t, net_wait(t, {c}, standing), "never stood") {return}
+	s := &h.srv
+	player := client_by_name(s, "user")
+	kind, _ := game.registry_kind(s.registry, "creatures:walker")
+	e := entity_spawn(s.home, kind, player.player.position + {1.5, 0, 0}, false)
+	id := entity_id(s.home, e)
+	clear_slots :: proc(c: ^Client) {for &slot in c.inventory.slots {slot = {}}}
+	clear_slots(player)
+	net_send(c, protocol.Use_Entity{id, c.seq})
+	ok := net_wait(t, {c}, proc(cs: []^Net_Client) -> bool {
+		for n in cs[0].notices {if n == "Hold something to give it" {return true}}
+		return false
+	})
+	testing.expect(t, ok, "the refusal was not told")
+	testing.expect_value(t, entity_data(s.home, e, Creature_Data).number, 0)
+	player.inventory.slots[player.inventory.selected] = {
+		game.item_of_block(s.registry, .Stone),
+		5,
+		0,
+		0,
+	}
+	net_send(c, protocol.Use_Entity{id, c.seq})
+	net_for(t, {c}, 0.3)
+	testing.expect_value(t, entity_data(s.home, e, Creature_Data).number, 5)
 }

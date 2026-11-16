@@ -267,7 +267,7 @@ Attack :: struct {
 	after:  u32,
 }
 
-// Use_Entity uses an entity (right click on it: shear a sheep). Like an
+// Use_Entity uses an entity (right click on it: its game's entity_use says what it does). Like an
 // Attack it follows input `after`.
 Use_Entity :: struct {
 	entity: u32,

@@ -123,6 +123,14 @@ Game :: struct {
 	) -> (
 		refusal: string,
 	), // c would change the block at `at` (its rules and reach allow it): "" lets it, else the edit is refused and c is told why
+	entity_use:    proc(
+		s: ^Server,
+		c: ^Client,
+		h: game.Entity_Handle,
+		stack: game.Stack,
+	) -> (
+		refusal: string,
+	), // c uses (right-clicks) the entity h within its reach, holding stack: the game does what the use does for its kinds and says "", or refuses (nothing happens, c is told why); then the engine's own use of the kind, if any
 	block_changed: proc(s: ^Server, w: ^World, change: Block_Change), // blocks of w changed (by a player, the world, a command, the game): told once a tick, before the game's tick
 	entity_hurt:   proc(s: ^Server, w: ^World, h: game.Entity_Handle, harm: Entity_Harm), // an entity of w was hurt and lives (its health already less: entity_harm)
 	entity_died:   proc(s: ^Server, w: ^World, dead: Dead_Entity, harm: Entity_Harm), // an entity of w died of harm (gone already: dead says what and where it was)

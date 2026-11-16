@@ -273,11 +273,21 @@ breed :: proc(w: ^World, a, b: game.Entity_Handle) {
 	}
 }
 
-// use_entity: a player uses an entity, if it is within reach.
+// use_entity: a player uses an entity within its reach (a right click) with what it
+// holds: the game's entity_use hook judges it first, as editing judges a block's change
+// (it may do what the use does for its own kinds; a refusal stops it and is told), then
+// the engine does its own use of the kind, if it has one (a sheep's shearing, feeding).
 use_entity :: proc(s: ^Server, c: ^Client, id: u32) {
 	h, _ := entity_find(c.world, id)
 	if h == 0 || !entity_reachable(c, h) {return}
-	if entity_kind(c.world, h) == s.registry.engine.sheep {sheep_use(s, c, h)} 	// (the only kind a player uses)
+	if hook := s.config.game.entity_use; hook != nil {
+		if refusal := hook(s, c, h, game.inventory_held(&c.inventory)); refusal != "" {
+			notice(s, c, refusal)
+			return
+		}
+		if !entity_listed(c.world, h) {return} 	// (the game's use took it)
+	}
+	if entity_kind(c.world, h) == s.registry.engine.sheep {sheep_use(s, c, h)}
 }
 
 // entity_reachable: ent is within a player's reach from where the server
