@@ -287,8 +287,9 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 // explode: a blast at center. Everyone near is shown it, the sphere is
 // carved (where loaded), and what is near is thrown (sheep hurt). size is its
 // radius as the world's rules scale it: times explosion_size, the throw times
-// explosion_throw.
-explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id) {
+// explosion_throw. by: the player who set it off (a rocket's shooter), whom
+// the players it hurts are told of and whose kill one is (damage.odin).
+explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id, by: Maybe(u16) = nil) {
 	s := w.server
 	radius := size * f64(w.rules.explosion_size)
 	throw := w.rules.explosion_throw
@@ -329,7 +330,7 @@ explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id) {
 				s,
 				c,
 				f32(1 - distance / reach) * 12,
-				{kind = .Explosion, pos = center, placed = true},
+				{kind = .Explosion, attacker = by, pos = center, placed = true},
 			)
 		}
 	}
@@ -1686,6 +1687,7 @@ entities_clear :: proc(w: ^World) {
 Blast :: struct {
 	sphere: Sphere,
 	action: Action_Id,
+	by:     Maybe(u16), // the rocket's shooter
 }
 
 @(private = "file")
@@ -1714,7 +1716,7 @@ entities_tick :: proc(w: ^World) {
 	system_items(w)
 	system_rockets(w, &blasts)
 	// After the walk: explosions change the set.
-	for b in blasts {explode(w, b.sphere.center, b.sphere.radius, b.action)}
+	for b in blasts {explode(w, b.sphere.center, b.sphere.radius, b.action, b.by)}
 }
 
 // system_age: one tick older; a natural entity with nobody near goes.
@@ -1783,10 +1785,10 @@ system_rockets :: proc(w: ^World, blasts: ^[dynamic]Blast) {
 		info := kind_of(w, h)
 		if info.physics != .Projectile {continue}
 		if at, hit := rocket_step(w, h); hit {
-			append(
-				blasts,
-				Blast{{at, f64(info.projectile.explode)}, Action_Id(entity_owner(w, h).action)},
-			)
+			owner := entity_owner(w, h)
+			blast := Blast{{at, f64(info.projectile.explode)}, Action_Id(owner.action), nil}
+			if owner.client >= 0 {blast.by = u16(owner.client)}
+			append(blasts, blast)
 			entity_died(w, h) // its explosion is what players see
 		}
 	}

@@ -23,7 +23,7 @@ Rules :: struct {
 	day_length:           f32, // seconds from one midnight to the next (time.odin)
 	daylight_cycle:       bool, // time passes (false: it stands still)
 	drops:                bool, // a block a player breaks leaves its item
-	pvp:                  bool, // players may hurt each other (off: friendly fire off; falls and explosions still hurt)
+	pvp:                  bool, // players may hurt each other (off: friendly fire off, a rocket's blast too; falls and blasts nobody set off still hurt)
 	keep_inventory:       bool, // a player who dies keeps their inventory (off: it drops where they fell, for modes with drop_on_death)
 	natural_regeneration: bool, // health comes back by itself, for modes with regenerate
 	regen_delay:          f32, // seconds without damage before it does

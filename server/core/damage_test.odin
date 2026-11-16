@@ -1,5 +1,6 @@
 package core
 
+import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -264,4 +265,93 @@ test_death_messages_come_from_the_source :: proc(t: ^testing.T) {
 		back, found := game.damage_source_parse(game.damage_source_name(k))
 		testing.expect(t, found && back == k)
 	}
+}
+
+// A rocket's blast is its shooter's: the player it kills is told who, and the shooter
+// counts the kill; with pvp off, another's rocket does not hurt (a blast nobody set
+// off still does: test_the_damage_pipeline).
+@(private = "file")
+Rocket :: struct {
+	pvp:          bool,
+	health_after: f32,
+}
+
+@(private = "file")
+rocket_scenario :: proc(s: ^Server, data: rawptr) {
+	r := (^Rocket)(data)
+	alice, bob := client_by_name(s, "alice"), client_by_name(s, "bob")
+	if alice == nil || bob == nil {return}
+	w := alice.world
+	survival, _ := game.mode_find(s.registry, "survival")
+	for c in ([]^Client{alice, bob}) {
+		set_game_mode(s, c, survival, {"test", ""})
+		c.max_health, c.health, c.dead = 20, 20, false
+	}
+	alice.health = 5 // (less than the blast at her feet takes)
+	w.rules.pvp = r.pvp
+	// Open ground: bob eight blocks from alice, firing at her feet.
+	at := alice.player.position
+	p := game.Block_Pos{i32(math.floor(at.x)), i32(math.floor(at.y)), i32(math.floor(at.z))}
+	for dx in i32(-2) ..= 10 {
+		for dz in i32(-2) ..= 2 {
+			for dy in i32(0) ..= 3 {set_block(w, p + {dx, dy, dz}, .Air, test_act(w))}
+		}
+	}
+	bob.player.position = at + {8, 0, 0}
+	bob.player.velocity, alice.player.velocity = {}, {}
+	d := at + {0, 0.3, 0} - game.player_eye(bob.player)
+	yaw := f32(math.atan2(-d.x, -d.z))
+	pitch := f32(math.atan2(d.y, math.sqrt(d.x * d.x + d.z * d.z)))
+	fire(s, bob, yaw, pitch)
+}
+
+@(private = "file")
+rocket_health :: proc(s: ^Server, data: rawptr) {
+	if alice := client_by_name(s, "alice");
+	   alice != nil {(^Rocket)(data).health_after = alice.health}
+}
+
+@(test)
+test_a_rocket_kill_is_the_shooters :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	srv := &h.srv
+	config := harness_world()
+	config.mode, config.listen = "survival", true
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	alice := new(Net_Client)
+	defer free(alice)
+	bob := new(Net_Client)
+	defer free(bob)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	both := []^Net_Client{alice, bob}
+	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {
+		return cs[0].welcomed && cs[1].welcomed && cs[0].mode != "" && cs[1].mode != ""
+	})
+	if !testing.expect(t, ok, "never joined") {return}
+	net_for(t, both, 1)
+
+	// pvp off: bob's rocket blows up at alice's feet and she is not hurt.
+	r := Rocket {
+		pvp = false,
+	}
+	call(srv, rocket_scenario, &r)
+	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[0].explosions > 0})
+	if !testing.expect(t, ok, "the rocket did not go off") {return}
+	call(srv, rocket_health, &r) // (thrown up, before she lands)
+	testing.expect_value(t, r.health_after, f32(5))
+	testing.expect(t, !alice.health.dead, "a rocket hurt with pvp off")
+
+	// pvp on: it kills her, and the kill is bob's.
+	r.pvp = true
+	call(srv, rocket_scenario, &r)
+	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[0].health.dead})
+	if !testing.expect(t, ok, "the rocket did not kill") {return}
+	testing.expect_value(t, alice.death_cause, "explosion")
+	testing.expect_value(t, alice.death_attacker, "bob")
+	testing.expect_value(t, client_by_name(srv, "bob").stats["kills"] or_else 0, u64(1))
 }
