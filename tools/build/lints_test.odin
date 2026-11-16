@@ -287,3 +287,17 @@ test_game_api_lint :: proc(t: ^testing.T) {
 	testing.expect(t, err == nil)
 	testing.expect(t, slice.contains(parse_game_api(string(real)), "game_put"))
 }
+
+@(test)
+test_process_exec_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	call := "\tstate, out, _, err := os.process_exec(desc, context.allocator)\n"
+	testing.expect_value(t, len(lint_process_exec("tools/build/release.odin", call)), 1)
+	testing.expect_value(t, len(lint_process_exec("common/limited/limited.odin", call)), 0)
+	testing.expect_value(t, len(lint_process_exec("tools/x.odin", "// os.process_exec(\n")), 0)
+	testing.expect_value(
+		t,
+		len(lint_process_exec("tools/x.odin", "x := \"os.process_exec(\"\n")),
+		0,
+	)
+}

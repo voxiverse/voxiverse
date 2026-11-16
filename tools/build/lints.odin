@@ -176,6 +176,52 @@ lint_miniaudio :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
+// lint_process_exec: no `os.process_exec` outside common/limited: it stops reading a
+// child's output when poll says the child hung up, and Linux's lockless pipe poll can
+// say so before showing what the child wrote, so its output was lost now and then
+// (an empty `git tag --list`). limited.exec reads to the end.
+lint_process_exec :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	if strings.contains(path, "common/limited/") {return found[:]}
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		code, _, _ := strings.partition(line, "//")
+		if strings.contains(outside_strings(code), "os.process_exec(") {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: os.process_exec loses output now and then: use limited.exec",
+					path,
+					line_no,
+				),
+			)
+		}
+	}
+	return found[:]
+}
+
+// outside_strings: code with what its string literals hold blanked out.
+outside_strings :: proc(code: string) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	quoted, escaped := false, false
+	for c in code {
+		switch {
+		case quoted && escaped:
+			escaped = false
+		case quoted && c == '\\':
+			escaped = true
+		case c == '"':
+			quoted = !quoted
+			strings.write_rune(&b, c)
+		case !quoted:
+			strings.write_rune(&b, c)
+		}
+	}
+	return strings.to_string(b)
+}
+
 // lint_test_timing: no `*_test.odin` outside tests/ sleeps or reads a clock (time.sleep,
 // time.now, tick_now, tick_since): a unit test counts ticks and steps a harness; what
 // needs the real clock is a system test (tests/).
@@ -257,7 +303,7 @@ test_lint :: proc() -> bool {
 // source_lint runs the source lints over the first-party code.
 source_lint :: proc() -> bool {
 	ok := true
-	for dir in ([]string{"client", "server", "common", GAMES_DIR}) {
+	for dir in ([]string{"client", "server", "common", "tools", GAMES_DIR}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
@@ -271,6 +317,14 @@ source_lint :: proc() -> bool {
 			text := string(data)
 			path, _ := strings.replace_all(info.fullpath, "\\", "/")
 			msgs := make([dynamic]string)
+			append(&msgs, ..lint_process_exec(path, text))
+			if dir == "tools" {
+				for msg in msgs {
+					fmt.eprintln(msg)
+					ok = false
+				}
+				continue
+			}
 			append(&msgs, ..lint_miniaudio(path, text))
 			if strings.has_suffix(info.name, "_test.odin") {
 				for msg in msgs {
@@ -291,7 +345,7 @@ source_lint :: proc() -> bool {
 			}
 		}
 	}
-	if ok {fmt.println("lint   ui text, colours, mode names, miniaudio imports and the OS quarantine clean")}
+	if ok {fmt.println("lint   ui text, colours, mode names, miniaudio imports, process_exec and the OS quarantine clean")}
 	return ok
 }
 
