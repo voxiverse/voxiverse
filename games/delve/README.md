@@ -54,7 +54,7 @@ pick it up.
 
 ```sh
 ./build.sh run -- --game delve
-./build.sh run -- --game delve --exec "singleplayer; wait_world; /open_lan"
+./build.sh run -- --game delve --exec "wait_world; /open_lan"
 ./build.sh serve -- --game delve --universe build/delve-universe
 ```
 
