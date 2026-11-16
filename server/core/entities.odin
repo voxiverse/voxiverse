@@ -1900,15 +1900,24 @@ entities_tick :: proc(w: ^World) {
 // world loaded before its players arrive keeps its creatures).
 @(private = "file")
 system_age :: proc(w: ^World) {
-	peopled := false
-	for &c in w.server.clients {peopled ||= c.state == .Playing && c.world == w}
+	// (the players where their clients have them: a player's entity follows a tick late,
+	// and one just arrived has none yet)
+	players := make([dynamic][3]f64, context.temp_allocator)
+	for &c in w.server.clients {
+		if c.state == .Playing && c.world == w {append(&players, c.player.position)}
+	}
 	it := entities_each(w)
 	for h in entities_next(&it) {
 		entity_set_age(w, h, entity_age_of(w, h) + 1)
-		if !peopled || !entity_is_natural(w, h) {continue}
+		if len(players) == 0 || !entity_is_natural(w, h) {continue}
 		far := f64(game.SPAWN_DESPAWN)
 		if rule, has := kind_of(w, h).spawn.?; has {far = f64(rule.despawn)}
-		if !anyone_within(w, entity_pos(w, h), far) {entity_gone(w, h)}
+		near := false
+		for p in players {
+			d := p - entity_pos(w, h)
+			near ||= d.x * d.x + d.z * d.z <= far * far
+		}
+		if !near {entity_gone(w, h)}
 	}
 }
 
