@@ -6,7 +6,7 @@ import "client:platform"
 import "common:starmap"
 import "common:worldgen"
 
-// Sharing a place ("Copy place"): a code a friend pastes to land in the same
+// Sharing a place (the console's `share`): a code a friend pastes to land in the same
 // spot. On a planet world it names the position on Earth, on any other
 // world the address and the absolute position.
 

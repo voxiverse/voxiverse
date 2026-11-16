@@ -1070,3 +1070,89 @@ test_welcome_with_other_content_is_refused :: proc(t: ^testing.T) {
 		"this server uses content packs this game does not have: testpack@2.0.1",
 	)
 }
+
+// The game menu is strict (the owner's rule): exactly these buttons, in this order, for
+// each kind of player, under the name of the game. A button added to game_menu_entries
+// fails here first; one drawn outside it fails the walk through the drawn menu.
+@(test)
+test_game_menu_entries :: proc(t: ^testing.T) {
+	E :: menu.Game_Menu_Entry
+	same :: proc(t: ^testing.T, got, want: []E, what: string) {
+		testing.expectf(t, slice_equal(got, want), "%s: %v, not %v", what, got, want)
+	}
+	slice_equal :: proc(a, b: []E) -> bool {
+		if len(a) != len(b) {return false}
+		for x, i in a {if x != b[i] {return false}}
+		return true
+	}
+	same(
+		t,
+		menu.game_menu_entries(hosting = true, lan_open = false, saved = true),
+		{.Back_To_Game, .Options, .Open_To_LAN, .Save_And_Quit},
+		"singleplayer, a save",
+	)
+	same(
+		t,
+		menu.game_menu_entries(hosting = true, lan_open = false, saved = false),
+		{.Back_To_Game, .Options, .Open_To_LAN, .Quit_To_Title},
+		"singleplayer, nothing kept",
+	)
+	same(
+		t,
+		menu.game_menu_entries(hosting = true, lan_open = true, saved = true),
+		{.Back_To_Game, .Options, .Open_To_LAN, .Close_LAN, .Save_And_Quit},
+		"open to the LAN",
+	)
+	same(
+		t,
+		menu.game_menu_entries(hosting = true, lan_open = true, saved = false),
+		{.Back_To_Game, .Options, .Open_To_LAN, .Close_LAN, .Quit_To_Title},
+		"open to the LAN, nothing kept",
+	)
+	same(
+		t,
+		menu.game_menu_entries(hosting = false, lan_open = false, saved = false),
+		{.Back_To_Game, .Options, .Disconnect},
+		"joined someone's server",
+	)
+
+	// What is drawn is those and nothing else: Tab walks every button once.
+	r := rig_make(t)
+	defer rig_free(r)
+	app, s := r.app, r.s
+	app.session, app.screen, s.state = s, .Game, .Playing
+	s.game.name = "Sandbox"
+	walk :: proc(app: ^engine.App) -> []string {
+		frame :: proc(app: ^engine.App, input: ui.Input) {
+			ui.begin_frame(&app.ui, input, {1280, 720}, 1)
+			menu.game_menu(app, &app.ui)
+			ui.end_frame(&app.ui)
+		}
+		frame(app, {})
+		app.ui.focused = 0 // (Tab starts from the top)
+		labels := make([dynamic]string, context.temp_allocator)
+		for _ in 0 ..< 16 {
+			frame(app, {keys_pressed = {.Tab}})
+			label := ui.focused_label(&app.ui)
+			if len(labels) > 0 && label == labels[0] {break}
+			append(&labels, label)
+		}
+		return labels[:]
+	}
+	s.config.save_dir = "Home"
+	testing.expect_value(
+		t,
+		fmt.tprint(walk(app)),
+		fmt.tprint([]string{"Back to Game", "Options", "Open to LAN", "Save and Quit to Title"}),
+	)
+	found := false
+	for text in app.ui.texts {found ||= text == "Sandbox"}
+	testing.expect(t, found, "the menu is not headed by the game's name")
+	s.config.save_dir, s.remote = "", true
+	testing.expect_value(
+		t,
+		fmt.tprint(walk(app)),
+		fmt.tprint([]string{"Back to Game", "Options", "Disconnect"}),
+	)
+	free_all(context.temp_allocator)
+}

@@ -51,10 +51,18 @@ contains_part :: proc(texts: []string, part: string) -> bool {
 	return false
 }
 
-// Developer chat: no button while the setting is empty; with it, the title
-// screen opens the chat, a message written there is kept (waiting while it
-// is not sent), Close closes it, and a reply that arrives while it is closed
-// shows a toast once.
+// f9: the developer chat's key (rebindable), pressed.
+@(private = "file")
+f9 :: proc(app: ^engine.App) {
+	in_: ui.Input
+	app.input.pressed = {.F9}
+	engine.actions_sync(app)
+	handle_global_keys(app, &in_)
+}
+
+// Developer chat: F9 opens the chat, a message written there is kept (waiting while it
+// is not sent), Close closes it, and a reply that arrives while it is closed shows a
+// toast once.
 @(test)
 test_devchat_screen :: proc(t: ^testing.T) {
 	app := ui_app(t)
@@ -66,16 +74,13 @@ test_devchat_screen :: proc(t: ^testing.T) {
 	os.remove(file)
 	defer os.remove(file)
 
-	frame(app)
-	_, found := ui.find_widget(&app.ui, engine.tr(.Devchat_Title))
-	testing.expect(t, !found, "the chat's button shows with the setting empty")
-
 	// On (no thread here: nothing is sent; the conversation is the file's).
 	collector.chat_open(&app.devchat.chat, file, {}, access.account_key_make())
 	app.devchat.running = true
 	defer collector.chat_close(&app.devchat.chat)
 	frame(app)
-	if !press(t, app, engine.tr(.Devchat_Title)) {return}
+	f9(app)
+	frame(app)
 	testing.expect(t, engine.overlay_is_open(&app.overlays, .Devchat), "the chat did not open")
 	testing.expect(
 		t,
@@ -118,18 +123,10 @@ test_devchat_screen :: proc(t: ^testing.T) {
 	for toast in app.toasts.list {delete(toast.text)}
 	clear(&app.toasts.list)
 	defer delete(app.toasts.list)
-	press(t, app, engine.tr(.Devchat_Title))
-	press(t, app, engine.tr(.Devchat_Close))
-
-	// F9 (rebindable) opens it and closes it.
-	in_: ui.Input
-	app.input.pressed = {.F9}
-	engine.actions_sync(app)
-	handle_global_keys(app, &in_)
+	// F9 closes it too.
+	f9(app)
 	testing.expect(t, engine.overlay_is_open(&app.overlays, .Devchat), "F9 did not open the chat")
-	app.input.pressed = {.F9}
-	engine.actions_sync(app)
-	handle_global_keys(app, &in_)
+	f9(app)
 	testing.expect(
 		t,
 		!engine.overlay_is_open(&app.overlays, .Devchat),
@@ -161,12 +158,12 @@ game_press :: proc(t: ^testing.T, app: ^engine.App, label: string, loc := #calle
 	game_frame(app, {mouse = {-100, -100}})
 }
 
-// The chat from the pause menu against an in-process collector: a message
-// typed (a new line with Shift+Enter) and sent shows in the conversation and
-// reaches the collector's inbox with the context attached; a reply that
-// arrives is shown as a toast once the screen is closed.
+// The chat in a world (F9 over the pause menu, which has no button for it) against an
+// in-process collector: a message typed (a new line with Shift+Enter) and sent shows in
+// the conversation and reaches the collector's inbox with the context attached; a reply
+// that arrives is shown as a toast once the screen is closed.
 @(test)
-test_devchat_from_the_pause_menu :: proc(t: ^testing.T) {
+test_devchat_in_a_world :: proc(t: ^testing.T) {
 	app := ui_app(t)
 	defer ui_app_free(app)
 	engine.line_editor_init(&app.devchat_line)
@@ -218,7 +215,10 @@ test_devchat_from_the_pause_menu :: proc(t: ^testing.T) {
 
 	engine.overlay_open(&app.overlays, .Game_Menu)
 	game_frame(app)
-	game_press(t, app, engine.tr(.Devchat_Title))
+	_, found := ui.find_widget(&app.ui, engine.tr(.Devchat_Title))
+	testing.expect(t, !found, "the pause menu has a button for the chat")
+	f9(app)
+	game_frame(app)
 	if !testing.expect(t, engine.overlay_is_open(&app.overlays, .Devchat)) {return}
 
 	// Typed: "up", Shift+Enter, "down"; then Enter sends.

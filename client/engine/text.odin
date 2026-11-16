@@ -25,7 +25,6 @@ Text :: enum u16 {
 	Game_Menu_Open_To_LAN,
 	Game_Menu_Open_To_LAN_Port,
 	Game_Menu_Close_LAN,
-	Game_Menu_Copy_Place,
 	Share_Copied, // {0}: the code
 	Share_Failed,
 	Lan_Title,
@@ -177,7 +176,6 @@ TEXT_EN := [Text]string {
 	.Game_Menu_Open_To_LAN                  = "Open to LAN",
 	.Game_Menu_Open_To_LAN_Port             = "Open to LAN: port {0}",
 	.Game_Menu_Close_LAN                    = "Close LAN",
-	.Game_Menu_Copy_Place                   = "Copy place",
 	.Share_Copied                           = "Copied {0}",
 	.Share_Failed                           = "Couldn't reach the clipboard",
 	.Lan_Title                              = "Open to LAN",
