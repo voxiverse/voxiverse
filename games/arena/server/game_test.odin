@@ -127,7 +127,7 @@ test_arena_match :: proc(t: ^testing.T) {
 	playtest.step(rig, delay + 10 + int(arena.SPAWN_PROTECTION * game.TICK_RATE))
 
 	// The frag limit: the host reaches it and wins.
-	say(rig, "arena frags 2")
+	say(rig, "arena set frags 2")
 	testing.expect(t, told(rig, "Arena: frags = 2 (the first to this many frags wins)"))
 	testing.expect_value(t, kill(rig, g, h), core.Damage_Result.Killed)
 	testing.expect_value(t, a.phase.now, arena.Phase.Playing)
@@ -186,7 +186,7 @@ test_arena_alone_and_its_rules_kept :: proc(t: ^testing.T) {
 			return state(w.s).phase.now == w.phase
 		}, &wait, 20 * game.TICK_RATE)
 	testing.expect(t, ok, "alone, the match never started")
-	for text in ([]string{"arena frags 0", "arena time 10", "arena respawn 99", "arena frags 7", "arena time 120", "arena respawn 3.5"}) {
+	for text in ([]string{"arena set frags 0", "arena set time 10", "arena set respawn 99", "arena set frags 7", "arena set time 120", "arena set respawn 3.5"}) {
 		core.command(&sess.mirror, text)
 		core.harness_step(&sess.h, 2)
 	}

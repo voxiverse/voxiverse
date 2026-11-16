@@ -49,9 +49,9 @@ phase and the courtyard's seed.
 Server commands (the console, `~`):
 
 - `/arena`: the match, its phase, seed and rules.
-- `/arena frags <1..200>`: the frag limit (15).
-- `/arena time <30..3600>`: the time limit in seconds (300).
-- `/arena respawn <0..30>`: seconds from a death to coming back (2).
+- `/arena set frags <1..200>`: the frag limit (15).
+- `/arena set time <30..3600>`: the time limit in seconds (300).
+- `/arena set respawn <0..30>`: seconds from a death to coming back (2).
 - `/arena start`: end the warm-up now; `/arena restart`: a new match now.
 
 All but `/arena` need the permission `arena.admin` (the host has it). The rules are kept with

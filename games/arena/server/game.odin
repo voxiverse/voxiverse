@@ -378,7 +378,7 @@ match_put :: proc(s: ^core.Server, present, needed: int) {
 	}
 }
 
-// command: /arena shows the match and its settings; /arena <setting> <value> sets one
+// command: /arena shows the match and its settings; /arena set <setting> <value> sets one
 // (frags, time in seconds, respawn in seconds), /arena start begins a match now, /arena
 // restart begins a new one.
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
@@ -434,7 +434,8 @@ save :: proc(s: ^core.Server, out: ^strings.Builder) {
 // load: the settings the universe kept (a line Arena does not know, or a value out of
 // its bounds, is not Arena's).
 load :: proc(s: ^core.Server, text: string) -> bool {
-	play.settings_load(arena.settings_table(), &state(s).settings, text) or_return
+	own := play.settings_read(arena.settings_table(), &state(s).settings, text) or_return
+	if len(own) > 0 {return false}
 	rules_apply(s)
 	return true
 }
