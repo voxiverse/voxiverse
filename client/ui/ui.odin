@@ -168,6 +168,7 @@ Context :: struct {
 	tip_id:         Id, // the tooltip's widget: hovered since tip_since
 	tip_since:      f64,
 	tip_hit:        bool, // a tooltip's area was hovered this frame
+	pointer_over:   bool, // the last frame's pointer was over a widget or a panel (pointer_over)
 	errors:         int, // misuse so far (duplicate ids); checks fail on any
 	reported:       [16]Id, // each logged once, not every frame
 	frame_arena:    virtual.Arena,
@@ -185,6 +186,7 @@ Context :: struct {
 	layouts:        [MAX_LAYOUT_DEPTH]Layout,
 	layout_depth:   int,
 	widgets:        [dynamic]Widget, // every interactive widget this frame
+	panels:         [dynamic]Rect, // the areas drawn as the UI's this frame (panel, block_pointer)
 	texts:          [dynamic]string, // every text drawn this frame (tests: what a player reads)
 	modal_drawn:    bool,
 	keyboard_drawn: bool,
@@ -257,6 +259,7 @@ begin_frame :: proc(ctx: ^Context, input: Input, screen_pixels: Vec2, scale: f32
 	ctx.layer = .Base
 	ctx.id_depth, ctx.clip_depth, ctx.layout_depth = 0, 0, 0
 	ctx.widgets = make([dynamic]Widget, 0, 64, ctx.frame_alloc)
+	ctx.panels = make([dynamic]Rect, 0, 16, ctx.frame_alloc)
 	ctx.texts = make([dynamic]string, 0, 64, ctx.frame_alloc)
 	ctx.modal_drawn = false
 	ctx.keyboard_drawn = false
@@ -302,6 +305,9 @@ end_frame :: proc(ctx: ^Context) {
 	ctx.modal_open = ctx.modal_drawn
 	ctx.keyboard_open = ctx.keyboard_drawn
 	if !ctx.pointer_idle {resolve_hot(ctx, ctx.input.mouse)} else {ctx.hot = 0}
+	ctx.pointer_over = false
+	for w in ctx.widgets {ctx.pointer_over ||= rect_contains(w.rect, ctx.input.mouse)}
+	for r in ctx.panels {ctx.pointer_over ||= rect_contains(r, ctx.input.mouse)}
 	if ctx.focused != 0 && !widget_drawn(ctx, ctx.focused) {ctx.focused = 0}
 
 	// Focus belongs to the top interactive layer: a layer that appears takes
@@ -659,6 +665,22 @@ already_reported :: proc(ctx: ^Context, id: Id) -> bool {
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
+
+// Whose a click is, where the UI is drawn over the world (a game's toolbar under a free
+// pointer): the UI's when the pointer was over a widget or a panel the frame before
+// (the frame's own are drawn after the world reads the mouse), else the world's. A
+// widget takes its clicks as always; what decides for the world is pointer_over.
+
+// block_pointer: r is the UI's this frame: a click there is not the world's.
+block_pointer :: proc(ctx: ^Context, r: Rect) {
+	append(&ctx.panels, rect_intersect(r, current_clip(ctx)))
+}
+
+// pointer_over: the pointer is over the UI (a widget or a panel, as last drawn): a
+// click there is the UI's, not the world's.
+pointer_over :: proc(ctx: ^Context) -> bool {
+	return ctx.pointer_over && !ctx.pointer_idle
+}
 
 rect_contains :: proc(r: Rect, p: Vec2) -> bool {
 	return p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h

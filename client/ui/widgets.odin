@@ -53,10 +53,12 @@ title :: proc(ctx: ^Context, text: string, r: Rect, align := Align.Center) {
 	draw_text(ctx, r, text, ctx.theme.title_size, ctx.theme.text, align)
 }
 
-// panel draws a framed background.
+// panel draws a framed background, the UI's: a click on it is not the world's
+// (block_pointer).
 panel :: proc(ctx: ^Context, r: Rect) {
 	fill_rect(ctx, r, ctx.theme.background)
 	stroke_rect(ctx, r, ctx.theme.border_width, ctx.theme.border)
+	block_pointer(ctx, r)
 }
 
 // backdrop dims everything below the current layer (use on .Modal).

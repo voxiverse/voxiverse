@@ -962,3 +962,26 @@ test_layout_flow_and_anchors :: proc(t: ^testing.T) {
 
 	end_frame(ctx)
 }
+
+// Whose a click is under a free pointer: over a button or a panel drawn the frame
+// before, the UI's (pointer_over); over the rest of the screen, the world's.
+@(test)
+test_pointer_over_the_ui :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	draw :: proc(ctx: ^Context, input: Input) {
+		begin_frame(ctx, input, SCREEN, 1)
+		panel(ctx, {0, 500, 800, 100})
+		button(ctx, "Road", {300, 200, 100, 30})
+		end_frame(ctx)
+	}
+	draw(ctx, at({10, 10}))
+	testing.expect(t, !pointer_over(ctx), "the open screen is the world's")
+	draw(ctx, at({350, 210}))
+	testing.expect(t, pointer_over(ctx), "a button is the UI's")
+	draw(ctx, at({20, 550}))
+	testing.expect(t, pointer_over(ctx), "a panel is the UI's")
+	draw(ctx, at({20, 450}))
+	testing.expect(t, !pointer_over(ctx))
+}

@@ -147,6 +147,9 @@ its own kinds as data, which follow the engine's in the session's schema
 - Immediate mode, one hashed id system with an id stack.
 - Hover, keyboard focus and active are separate states; clicks fire on release over the same
   widget.
+- Over the world with a free pointer (a game's toolbar), a click is the UI's when the pointer
+  was over a widget or a panel (`panel`, `block_pointer`) the frame before, the world's
+  otherwise (`pointer_over`).
 - Layers (`Base`, `Popup`, `Modal`, `Keyboard`, `Tooltip`) decide input priority and draw
   order; while anything is drawn on `Modal`, lower layers are inert.
 - Per-command scissor clipping; a layout cursor (rows/columns) instead of hand-placed rects.
