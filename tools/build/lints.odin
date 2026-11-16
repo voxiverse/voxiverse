@@ -602,14 +602,20 @@ lint_game_package :: proc(path, text: string) -> []string {
 GAME_API_DOC :: "docs/games.md"
 GAME_API_HEADING :: "## What a game may call"
 
-// parse_game_api: the names the table under GAME_API_HEADING lists in its first column,
-// each backticked span's leading identifier (`teleport(s, c, ...)` is teleport).
+// GAME_KIT_DIR: what the server parts of games share (server/play), built on the list.
+GAME_KIT_DIR :: "server/play"
+
+// GAME_API_PACKAGE: the package the list names the declarations of.
+GAME_API_PACKAGE :: "server/core"
+
+// parse_game_api: the names the table under GAME_API_HEADING (up to the next heading)
+// lists in its first column, each backticked span's leading identifier (`teleport(s, c, ...)` is teleport).
 parse_game_api :: proc(text: string) -> []string {
 	names := make([dynamic]string)
 	_, _, section := strings.partition(text, GAME_API_HEADING)
 	rest := section
 	for line in strings.split_lines_iterator(&rest) {
-		if strings.has_prefix(line, "## ") {break}
+		if strings.has_prefix(line, "#") {break} 	// (the next heading, a sub-heading too)
 		if !strings.has_prefix(line, "| `") {continue}
 		cell, _, _ := strings.partition(line[1:], "|")
 		for {
@@ -634,15 +640,49 @@ is_ident_byte :: proc(b: u8) -> bool {
 	return false
 }
 
+// lint_game_api_declared: every name the list holds is declared at the top of a file of
+// server/core (decls: the names declared there): a name renamed or deleted in the
+// engine leaves no promise in the list. Each missing name is one message.
+lint_game_api_declared :: proc(api: []string, decls: []string) -> []string {
+	found := make([dynamic]string)
+	for name in api {
+		if slice.contains(decls, name) {continue}
+		append(
+			&found,
+			fmt.aprintf(
+				"%s: \"%s\" lists %s, which %s does not declare",
+				GAME_API_DOC,
+				GAME_API_HEADING[3:],
+				name,
+				GAME_API_PACKAGE,
+			),
+		)
+	}
+	return found[:]
+}
+
+// top_declarations: the names declared at the top level of Odin code (`name ::` at the
+// start of a line).
+top_declarations :: proc(text: string, out: ^[dynamic]string) {
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		n := 0
+		for n < len(line) && is_ident_byte(line[n]) {n += 1}
+		if n > 0 && strings.has_prefix(line[n:], " ::") {append(out, line[:n])}
+	}
+}
+
 // lint_game_api: a game's code names of server:core (imported as core) only what
 // GAME_API_DOC lists a game may call (api): much of server/core is visible to it, and
 // what a game reaches is the engine's to choose. Nor does it assign to a world's rules
 // (w.rules.drops = false): it changes one with core.game_rule, journalled as the game's.
-// Its tests, which drive the harness, may do either. path is relative to the
-// repository, with forward slashes.
+// Its tests, which drive the harness, may do either. What the games share
+// (GAME_KIT_DIR) is held to the same list: it is built on what a game may call. path is
+// relative to the repository, with forward slashes.
 lint_game_api :: proc(path, text: string, api: []string) -> []string {
 	found := make([dynamic]string)
-	if !strings.has_prefix(path, "games/") || strings.has_suffix(path, "_test.odin") {
+	held := strings.has_prefix(path, "games/") || strings.has_prefix(path, GAME_KIT_DIR + "/")
+	if !held || strings.has_suffix(path, "_test.odin") {
 		return found[:]
 	}
 	line_no := 0
@@ -723,6 +763,21 @@ import_lint :: proc() -> bool {
 		return false
 	}
 	api := parse_game_api(string(doc))
+	decls := make([dynamic]string)
+	if entries, err := os.read_all_directory_by_path(GAME_API_PACKAGE, context.allocator);
+	   err == nil {
+		for e in entries {
+			if filepath.ext(e.name) != ".odin" || strings.has_suffix(e.name, "_test.odin") {
+				continue
+			}
+			data, _ := os.read_entire_file_from_path(e.fullpath, context.allocator)
+			top_declarations(string(data), &decls)
+		}
+	}
+	for msg in lint_game_api_declared(api, decls[:]) {
+		fmt.eprintln(msg)
+		ok = false
+	}
 	for dir in ([]string{"tests", "common", "client", "server", "tools", GAMES_DIR}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
@@ -753,7 +808,7 @@ import_lint :: proc() -> bool {
 			}
 		}
 	}
-	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, games' packages are named for them, call what docs/games.md lists and write no rules")}
+	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, games' packages are named for them, call what docs/games.md lists (all of it declared) and write no rules")}
 	return ok
 }
 

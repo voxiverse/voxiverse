@@ -257,7 +257,7 @@ test_game_api_lint :: proc(t: ^testing.T) {
 	doc :=
 		"# Games\n\n## What a game may call\n\n| Name | For |\n|---|---|\n" +
 		"| `Game`, `notice(s, c, text)` | the game; telling |\n| `teleport(s, c, p)` | moving |\n\n" +
-		"## Next\n\n| `land(s, c)` | not listed |\n"
+		"### Below\n\n| `land(s, c)` | not listed |\n"
 	api := parse_game_api(doc)
 	testing.expect_value(t, len(api), 3)
 	testing.expect(t, slice.contains(api, "teleport") && !slice.contains(api, "land"))
@@ -267,6 +267,15 @@ test_game_api_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_game_api("games/tag/server/game.odin", bad, api)), 1)
 	testing.expect_value(t, len(lint_game_api("games/tag/server/game_test.odin", bad, api)), 0)
 	testing.expect_value(t, len(lint_game_api("server/core/x.odin", bad, api)), 0)
+	testing.expect_value(t, len(lint_game_api("server/play/x.odin", bad, api)), 1)
+	testing.expect_value(t, len(lint_game_api("server/play/x_test.odin", bad, api)), 0)
+	// Every listed name is declared in server/core.
+	decls := make([dynamic]string)
+	top_declarations("Game :: struct {}\nnotice :: proc() {}\n\tteleport :: 1\nx := 2\n", &decls)
+	testing.expect_value(t, len(decls), 2)
+	testing.expect_value(t, len(lint_game_api_declared(api, decls[:])), 1) // (teleport)
+	append(&decls, "teleport")
+	testing.expect_value(t, len(lint_game_api_declared(api, decls[:])), 0)
 	// A world's rules: read and compared, never assigned.
 	rules := "f :: proc() {\n\tw.rules.drops = false\n\ts.home.rules.size *= 2\n\tw.rules = r\n}\n"
 	testing.expect_value(t, len(lint_game_api("games/tag/server/game.odin", rules, api)), 3)
