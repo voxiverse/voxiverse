@@ -544,22 +544,22 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	stopped := false
 	defer if !stopped {harness_stop(h)}
 
-	alice, bob, impostor: Net_Client
-	net_connect(&alice, 0, "alice", h = h)
-	net_connect(&bob, 0, "bob", h = h)
-	defer net_close(&alice)
-	defer net_close(&bob)
-	ok := net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {
+	// (on the heap: three clients are more than a test thread's stack holds beside the server)
+	alice, bob, impostor := new(Net_Client), new(Net_Client), new(Net_Client)
+	defer free(alice)
+	defer free(bob)
+	defer free(impostor)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	ok := net_wait(t, {alice, bob}, proc(cs: []^Net_Client) -> bool {
 		return landed(cs[0]) && landed(cs[1])
 	})
 	if !testing.expect(t, ok, "the two players never landed") {return}
 	testing.expect(t, alice.welcome.player != bob.welcome.player)
 	// A remote player has the role default: they may build, not bulk edit.
-	ok = net_wait(
-		t,
-		{&alice, &bob},
-		proc(cs: []^Net_Client) -> bool {return len(cs[0].grants) > 0},
-	)
+	ok = net_wait(t, {alice, bob}, proc(cs: []^Net_Client) -> bool {return len(cs[0].grants) > 0})
 	testing.expect(t, ok, "no grants")
 	testing.expect(t, access.allowed(alice.grants[:], "world.edit"), "a player may not build")
 	testing.expect(
@@ -569,7 +569,7 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	)
 
 	// They know each other, and see each other (both spawn at the origin).
-	ok = net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {
+	ok = net_wait(t, {alice, bob}, proc(cs: []^Net_Client) -> bool {
 			return len(cs[0].seen) == 1 && len(cs[1].seen) == 1
 		})
 	testing.expect(t, ok, "the players do not see each other")
@@ -577,9 +577,9 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, bob.others[alice.welcome.player], "alice")
 
 	// The same name again is refused.
-	net_connect(&impostor, 0, "alice", h = h)
-	defer net_close(&impostor)
-	ok = net_wait(t, {&impostor, &alice, &bob}, proc(cs: []^Net_Client) -> bool {
+	net_connect(impostor, 0, "alice", h = h)
+	defer net_close(impostor)
+	ok = net_wait(t, {impostor, alice, bob}, proc(cs: []^Net_Client) -> bool {
 		return cs[0].rejected != ""
 	})
 	testing.expect_value(t, impostor.rejected, "someone with that name is playing")
@@ -591,10 +591,10 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)) - 1,
 		i32(math.floor(feet.z)),
 	}
-	net_send(&alice, protocol.edit_plain(1, alice.seq, below, .Air))
+	net_send(alice, protocol.edit_plain(1, alice.seq, below, .Air))
 	@(static) target: game.Block_Pos
 	target = below
-	ok = net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {
+	ok = net_wait(t, {alice, bob}, proc(cs: []^Net_Client) -> bool {
 		for ch in cs[1].changed {if ch.pos == target && ch.block == .Air {return true}}
 		return false
 	})
@@ -606,11 +606,11 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 
 	// Bob (standing where Alice dug: they spawn together) comes to rest,
 	// then leaves: Alice is told.
-	ok = net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {return at_rest(cs[1])})
+	ok = net_wait(t, {alice, bob}, proc(cs: []^Net_Client) -> bool {return at_rest(cs[1])})
 	testing.expect(t, ok, "bob never came to rest")
 	bob_at := bob.update.state.position
 	netcode.link_close(&bob.link, "bye")
-	ok = net_wait(t, {&alice}, proc(cs: []^Net_Client) -> bool {return len(cs[0].others) == 0})
+	ok = net_wait(t, {alice}, proc(cs: []^Net_Client) -> bool {return len(cs[0].others) == 0})
 	testing.expect(t, ok, "alice was not told bob left")
 
 	// Saved by name: after a restart, each comes back where they were.
