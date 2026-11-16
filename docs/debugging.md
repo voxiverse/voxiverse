@@ -397,7 +397,9 @@ the colour channels. A scene fails when the first is above 0.1% or the second ab
 the baseline in dim grey, the differing pixels in red. Each run's log is
 `build/images/<scene>.log`.
 
-Scenes render in parallel (about half the cores, at most six), each with its own X display and
+Scenes render in parallel (about half the cores, at most six), the slowest last time first,
+each under a limit of ten times its last rendering (`build/images/<scene>.seconds`), at least
+five minutes, as a test package's run is limited; each with its own X display and
 its own directory `build/images/<scene>.state/`, which `VX_SETTINGS` (settings, crash bundles)
 and `VX_STATE_DIR` (the game's log and pipeline cache, instead of the executable's) point to.
 

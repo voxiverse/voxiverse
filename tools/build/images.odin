@@ -46,8 +46,32 @@ images_width :: proc() -> int {
 	return clamp(os.get_processor_core_count() / 2, 1, IMAGE_MAX_PARALLEL)
 }
 
-// IMAGE_SCENE_LIMIT: a scene still running at this is killed and fails.
-IMAGE_SCENE_LIMIT :: 5 * time.Minute
+// A scene's time limit follows the rule of a test package's (test_timeout): ten
+// times its last rendering (build/images/<scene>.seconds, written when it renders),
+// at least IMAGE_SCENE_FLOOR. Its time is what the machine gives it with the others
+// beside it: an Earth scene, alone 75 s, takes three times that among three others,
+// so one fixed limit was either loose for most scenes or tight for those.
+IMAGE_SCENE_FLOOR :: 5 * time.Minute
+IMAGE_SCENE_FACTOR :: TEST_TIMEOUT_FACTOR
+
+// images_limit: the limit of a scene whose last rendering took seconds (0: never).
+images_limit :: proc(seconds: f64) -> time.Duration {
+	return max(
+		IMAGE_SCENE_FLOOR,
+		time.Duration(seconds * f64(IMAGE_SCENE_FACTOR) * f64(time.Second)),
+	)
+}
+
+// images_seconds: how long the scene's last rendering took (0: none is known).
+images_seconds :: proc(name: string) -> f64 {
+	path := path_join(
+		{IMAGES_OUT, strings.concatenate({name, ".seconds"}, context.temp_allocator)},
+	)
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {return 0}
+	seconds, _ := strconv.parse_f64(strings.trim_space(string(data)))
+	return seconds
+}
 
 // Image_Diff: how far two pictures of the same size are apart.
 Image_Diff :: struct {
@@ -316,6 +340,19 @@ images :: proc(args: []string) -> bool {
 		append(&chosen, name)
 	}
 	if len(chosen) == 0 {append(&chosen, ..all)}
+	// The slowest last time first, as the tests start (the slowest bounds the whole;
+	// a scene never timed first of all).
+	Timed :: struct {
+		name:    string,
+		seconds: f64,
+	}
+	timed := make([]Timed, len(chosen), context.temp_allocator)
+	for name, i in chosen {
+		seconds := images_seconds(name)
+		timed[i] = {name, seconds if seconds > 0 else 1e9}
+	}
+	slice.stable_sort_by(timed, proc(a, b: Timed) -> bool {return a.seconds > b.seconds})
+	for t, i in timed {chosen[i] = t.name}
 
 	icd := lavapipe_icd()
 	if icd == "" {
@@ -362,13 +399,22 @@ images :: proc(args: []string) -> bool {
 					name,
 				},
 			),
-			limit = IMAGE_SCENE_LIMIT,
+			limit = images_limit(images_seconds(name)),
 			log   = path_join({IMAGES_OUT, strings.concatenate({name, ".log"})}),
 			quiet = true,
 		}
 	}
 	fmt.printfln("images %d scene(s) on lavapipe (%s)", len(chosen), filepath.base(icd))
-	results := limited.run_parallel(jobs, images_width())
+	// Each scene that rendered keeps its time (its next limit).
+	rendered :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
+		if result != .Ok {return}
+		names := (^[dynamic]string)(data)
+		path := path_join(
+			{IMAGES_OUT, strings.concatenate({names[index], ".seconds"}, context.temp_allocator)},
+		)
+		_ = os.write_entire_file(path, transmute([]u8)fmt.tprintf("%.1f\n", seconds))
+	}
+	results := limited.run_parallel(jobs, images_width(), rendered, &chosen)
 
 	passed := 0
 	for name, i in chosen {

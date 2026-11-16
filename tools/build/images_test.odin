@@ -1,6 +1,7 @@
 package build
 
 import "core:testing"
+import "core:time"
 
 // The visual baselines' comparison on synthetic pictures: identical, one
 // pixel off, and the same picture shifted by a pixel (a camera a little off),
@@ -127,4 +128,13 @@ test_the_whole_suite_renders_the_images :: proc(t: ^testing.T) {
 	testing.expect(t, !test_renders_images({}, {optimization = "-o:speed"}))
 	testing.expect(t, !test_renders_images({}, {sanitizer = "address"}))
 	testing.expect(t, !test_renders_images({}, {names = {"test_x"}}))
+}
+
+// A scene's limit is ten times its last rendering, at least the floor: an Earth scene
+// that once took 240 s among three others gets 40 minutes, a quick one the floor.
+@(test)
+test_images_limit :: proc(t: ^testing.T) {
+	testing.expect_value(t, images_limit(0), IMAGE_SCENE_FLOOR)
+	testing.expect_value(t, images_limit(12), IMAGE_SCENE_FLOOR)
+	testing.expect_value(t, images_limit(240), 40 * time.Minute)
 }
