@@ -10,16 +10,17 @@ import "common:game"
 // or made by name, written to the universe's game.cfg as `<key> = <T's numbers> <name>`
 // lines (the game says how T is written and read: its numbers, in order) and read back
 // from the lines settings_read handed the game.
+By_Name :: struct($T: typeid, $N: int) {
+	rows:  [N]Named(T),
+	count: int,
+}
 
+// Named: one row of a By_Name: a player's name and the game's T for it (its fields are the
+// row's own, by `using`).
 Named :: struct($T: typeid) {
 	name:        [game.MAX_NAME_LENGTH]u8,
 	name_len:    int,
 	using value: T,
-}
-
-By_Name :: struct($T: typeid, $N: int) {
-	rows:  [N]Named(T),
-	count: int,
 }
 
 // named_name: whose a row is.
