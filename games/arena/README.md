@@ -34,7 +34,7 @@ Alone, to try it (a match starts at once):
 Host it open to the LAN, straight from the command line, and a friend joins:
 
 ```sh
-./build.sh run -- --game arena --exec "singleplayer; wait_world; /open_lan"
+./build.sh run -- --game arena --exec "wait_world; /open_lan"
 ./build.sh run -- --exec "join <host>"
 ```
 
