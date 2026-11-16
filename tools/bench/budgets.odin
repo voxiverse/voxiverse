@@ -58,7 +58,7 @@ BUDGET_LIMITS := [?]struct {
 	{.Fighters_Tick, 4000},
 	{.Gliders_Tick, 3000}, // 1000 citizens gliding their roads: measured at about 0.64 ms (200: 0.13 ms)
 	{.Gliders_View, 4000}, // ... one client's view of all 1000 and its snapshot's encoding: about 1.1 ms // 150 creatures hunting, looking, striking, pushed apart: measured at about 0.6 ms
-	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 0.8 s
+	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 1.2 s (rain 1 s)
 	{.Planet_Placement, 300}, // the issue's 300 ms for a world of 10 peoples
 	{.Planet_History, 200}, // the issue's 200 ms for 6 000 years; measured at about 20 ms
 }
