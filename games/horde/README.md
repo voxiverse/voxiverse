@@ -53,7 +53,7 @@ over a hurt creature its health. Hold P for the survivors (kills, coins, times d
 shows the run's seed and counts.
 
 Server commands: `/horde` (the run and its settings), and with the permission `horde.admin`
-(the host has it): `/horde <setting> <value>` (`coins` a survivor's at a run's start,
+(the host has it): `/horde set <setting> <value>` (`coins` a survivor's at a run's start,
 `break_for` the shop's seconds, the prices `rounds`, `medkit` and `gun`), `/horde wave` (the
 next wave now), `/horde restart`, `/horde shop` (stand at the counter), `/horde purse <n>`
 (coins for you). The best wave and the settings are kept with the universe (`game.cfg`).

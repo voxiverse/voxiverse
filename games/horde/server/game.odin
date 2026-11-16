@@ -454,7 +454,7 @@ put_records :: proc(s: ^core.Server) {
 	}
 }
 
-// command: /horde shows the run and its settings; /horde <setting> <value> sets one;
+// command: /horde shows the run and its settings; /horde set <setting> <value> sets one;
 // /horde wave sends the next wave now, /horde restart begins a new run, /horde purse
 // <n> gives you coins, /horde shop stands you at the counter (an admin's, for trying).
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
@@ -527,17 +527,12 @@ save :: proc(s: ^core.Server, out: ^strings.Builder) {
 // bounds, is not Horde's.
 load :: proc(s: ^core.Server, text: string) -> bool {
 	d := state(s)
-	rest := text
-	settings := strings.builder_make(context.temp_allocator)
-	for line in strings.split_lines_iterator(&rest) {
-		key, _, value := strings.partition(line, "=")
-		if strings.trim_space(key) != "best" {
-			fmt.sbprintln(&settings, line)
-			continue
-		}
-		best, ok := strconv.parse_int(strings.trim_space(value))
+	own := play.settings_read(horde.settings_table(), &d.settings, text) or_return
+	for l in own {
+		if l.key != "best" {return false}
+		best, ok := strconv.parse_int(l.value)
 		if !ok || best < 0 || best > 65535 {return false}
 		d.best = best
 	}
-	return play.settings_load(horde.settings_table(), &d.settings, strings.to_string(settings))
+	return true
 }

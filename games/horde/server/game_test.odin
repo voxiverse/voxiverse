@@ -218,9 +218,9 @@ test_horde_shop :: proc(t: ^testing.T) {
 	testing.expect_value(t, h.health, f32(3 + horde.MEDKIT_HEAL))
 
 	// The settings: an admin's, in their bounds.
-	playtest.say(rig, "horde rounds 5")
+	playtest.say(rig, "horde set rounds 5")
 	testing.expect_value(t, d.settings.rounds, 5)
-	playtest.say(rig, "horde rounds 5000")
+	playtest.say(rig, "horde set rounds 5000")
 	testing.expect_value(t, d.settings.rounds, 5)
 	// In a wave the shop is shut.
 	playtest.say(rig, "horde wave")
