@@ -18,6 +18,7 @@ import "client:screen"
 import "client:ui"
 import "common:base"
 import "common:protocol"
+@(require) import "common:starmap" // used only in development builds (the creation command)
 import "server:collector"
 
 // The developer console: the log as scrollback, plus a command line. Toggle
@@ -610,7 +611,7 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 				"creation seed <n|text>: set the creation screen's seed as if typed (open it with `screen universes create`)",
 				proc(app: ^engine.App, args: []string) {
 					c := &app.creation
-					seed, ok := game.seed_of_text(args[1] if len(args) > 1 else "")
+					seed, ok := starmap.seed_of_text(args[1] if len(args) > 1 else "")
 					if args[0] != "seed" || !ok || app.screen != .Creation {
 						engine.console_print(
 							&app.console,
