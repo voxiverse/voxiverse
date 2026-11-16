@@ -330,6 +330,7 @@ number and no cast.
 | `ground_fill(s, lo, hi, color)`, `ground_outline(s, lo, hi, color)`, `structure_ghost(s, t, at, rotation, color)` | A translucent cover over the tops of a rectangle's columns (a zone, a heat map), its edge on the ground, a template's blocks tinted (what a placement would build), `MAX_FILL_VERTICES` and `MAX_WORLD_LINES` a frame |
 | `puff_add(s, puff)` | A speck that drifts and fades (a tower's tracer, a blast's smoke) |
 | `game_request(s, &value)` | Send the server part one of the game's requests ([below](#requests)) |
+| `Seats(T)`, `seats_received(s, &seats, r)`, `seat_mine(s, &seats)`, `seats_ranked(&seats, before)` | What the game keeps of each player from a record of its keyed by the player (`key_player`, with a `name`): the last value by seat, its name copied out of the message, forgotten when the server stops putting it; the player's own; the seats told of in order (ties by name), a scoreboard's rows |
 
 Under a free pointer (a top-down or free camera) the HUD a game draws is clickable: a click
 goes to the UI when the pointer was over a widget or a panel (`ui.panel`,

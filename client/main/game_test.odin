@@ -29,8 +29,17 @@ Count :: struct {
 	ticks: u32,
 }
 
+// Counted: a player's own count, keyed by the player (what engine.Seats keeps).
+Counted :: struct {
+	name:  string `net:"max=16"`,
+	ticks: u32,
+}
+
 COUNTER_KINDS :: protocol.Game_Kinds {
-	states = {{name = "counter.count", value = Count}},
+	states = {
+		{name = "counter.count", value = Count},
+		{name = "counter.counted", value = Counted, key = .Player, max_records = game.MAX_PLAYERS},
+	},
 }
 
 COUNTER_INFO :: game.Game_Info {
@@ -49,7 +58,10 @@ COUNTER_SERVER :: core.Game {
 counter_tick :: proc(s: ^core.Server) {
 	count := Count{u32(s.tick)}
 	for &c in s.clients {
-		if c.state == .Playing {core.game_put(s, &c, &count)}
+		if c.state != .Playing {continue}
+		core.game_put(s, &c, &count)
+		counted := Counted{core.client_name(&c), u32(s.tick)}
+		core.game_put(s, &c, &counted, protocol.key_player(core.player_id(s, &c)))
 	}
 }
 
@@ -58,6 +70,7 @@ Counter_View :: struct {
 	started:  bool,
 	received: int,
 	count:    Count,
+	players:  engine.Seats(Counted),
 	screen:   ui.Rect, // what its HUD was last given
 }
 
@@ -86,6 +99,7 @@ COUNTER_CLIENT :: engine.Game {
 
 counter_received :: proc(s: ^engine.Session, r: protocol.Received) {
 	view := engine.game_state(s, Counter_View)
+	if engine.seats_received(s, &view.players, r) {return}
 	if count, ok := engine.game_value(s, r, Count); ok && count != nil {
 		view.count = count^
 		view.received += 1
@@ -157,6 +171,17 @@ test_world_plays_a_game :: proc(t: ^testing.T) {
 	for _ in 0 ..< 10 {rig_frame(rig, nil)}
 	testing.expect(t, view.received >= 5, "the game's records did not arrive")
 	testing.expect(t, view.count.ticks > 0 && u64(view.count.ticks) <= rig.h.srv.tick)
+	// A record keyed by the player, kept by engine.Seats: its name copied out of the
+	// message (good after the message is gone), ranked, the session's own.
+	mine := engine.seat_mine(s, &view.players)
+	testing.expect_value(t, mine.name, "counter")
+	testing.expect(t, mine.ticks > 0)
+	ids := engine.seats_ranked(
+		&view.players,
+		proc(a, b: ^Counted) -> bool {return a.ticks > b.ticks},
+	)
+	testing.expect_value(t, len(ids), 1)
+	if len(ids) == 1 {testing.expect_value(t, ids[0], int(s.welcome.player))}
 
 	// Its HUD with the engine's, its F3 line, its console command.
 	app := new(engine.App)

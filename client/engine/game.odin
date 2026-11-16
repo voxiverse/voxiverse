@@ -146,6 +146,54 @@ game_value :: proc(s: ^Session, r: protocol.Received, $T: typeid) -> (value: ^T,
 	return (^T)(r.value), true
 }
 
+// Seats: what a game's client part keeps of each player from a record of its kind T
+// keyed by the player (protocol.key_player), by seat: the last value told and its name
+// (T's `name`, copied out of the message it came in, so the value's name stays good),
+// forgotten when the server stops putting it. games/arena keeps its scores so.
+Seats :: struct($T: typeid) {
+	known:  [game.MAX_PLAYERS]bool,
+	values: [game.MAX_PLAYERS]T,
+	names:  [game.MAX_PLAYERS][game.MAX_NAME_LENGTH]u8,
+}
+
+// seats_received: r kept in seats when it is a record of T (its key a player's seat);
+// true when it was one.
+seats_received :: proc(s: ^Session, seats: ^Seats($T), r: protocol.Received) -> bool {
+	value, ok := game_value(s, r, T)
+	if !ok || int(r.key.a) >= game.MAX_PLAYERS {return ok}
+	id := int(r.key.a)
+	if value == nil {
+		seats.known[id], seats.values[id] = false, {}
+		return true
+	}
+	seats.known[id], seats.values[id] = true, value^
+	n := copy(seats.names[id][:], value.name)
+	seats.values[id].name = string(seats.names[id][:n])
+	return true
+}
+
+// seat_mine: the session's own player's value (zero until told).
+seat_mine :: proc(s: ^Session, seats: ^Seats($T)) -> ^T {
+	return &seats.values[min(int(s.welcome.player), game.MAX_PLAYERS - 1)]
+}
+
+// seats_ranked: the seats told of, ordered by before (ties by name), as player ids
+// (temp memory): a scoreboard's rows.
+seats_ranked :: proc(seats: ^Seats($T), before: proc(a, b: ^T) -> bool) -> []int {
+	ids := make([dynamic]int, context.temp_allocator)
+	for known, id in seats.known {
+		if !known {continue}
+		// (at most MAX_PLAYERS: an insertion keeps them in order)
+		append(&ids, id)
+		for i := len(ids) - 1; i > 0; i -= 1 {
+			x, y := &seats.values[ids[i]], &seats.values[ids[i - 1]]
+			if !before(x, y) && (before(y, x) || x.name >= y.name) {break}
+			ids[i], ids[i - 1] = ids[i - 1], ids[i]
+		}
+	}
+	return ids[:]
+}
+
 // session_game_begin: the server plays the game of that id (Welcome). The session
 // takes the client game of the same id, builds the schema with its kinds and makes
 // its state; false (with the reason) when this client has no such game.
