@@ -7,6 +7,7 @@ import "core:strings"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 import "games:rally"
 
 // Rally's client part (the game: games/rally): it keeps the race and every racer's
@@ -52,7 +53,7 @@ mine :: proc(s: ^engine.Session) -> ^Seat {
 	return &v.racers[min(int(s.welcome.player), len(v.racers) - 1)]
 }
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if race, ok := engine.game_value(s, r, rally.Race); ok && race != nil {
 		v.race = race^

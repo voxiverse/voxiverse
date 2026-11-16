@@ -7,6 +7,7 @@ import "core:strconv"
 import "core:strings"
 
 import "common:game"
+import "common:protocol"
 import "games:rally"
 import "server:core"
 import "server:play"
@@ -368,7 +369,7 @@ put_records :: proc(s: ^core.Server) {
 				resets = u16(min(r.resets, 65535)),
 			}
 			if b := kept(s, v.name); b != nil {v.best = b.ticks}
-			core.game_put(s, &c, &v, game.key_player(core.player_id(s, &o)))
+			core.game_put(s, &c, &v, protocol.key_player(core.player_id(s, &o)))
 		}
 	}
 }

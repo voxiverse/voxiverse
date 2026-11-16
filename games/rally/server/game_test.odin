@@ -4,6 +4,7 @@ import "core:os"
 import "core:testing"
 
 import "common:game"
+import "common:protocol"
 import "games:rally"
 import "server:core"
 import "server:playtest"
@@ -152,7 +153,7 @@ test_rally_race :: proc(t: ^testing.T) {
 	playtest.step(rig, 2)
 	race := playtest.guest_record(rig, rally.Race)
 	testing.expect(t, race != nil && race.record == r.time && race.finished == 1)
-	mine := playtest.host_record(rig, rally.Racer, game.key_player(core.player_id(s, h)))
+	mine := playtest.host_record(rig, rally.Racer, protocol.key_player(core.player_id(s, h)))
 	testing.expect(t, mine != nil && mine.best == r.time && mine.next == rally.CHECKPOINTS + 1)
 	// The guest finishes, slower: no record; the race is over.
 	for k in 1 ..= rally.CHECKPOINTS {go_to(rig, g, k)}

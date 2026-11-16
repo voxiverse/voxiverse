@@ -1,6 +1,7 @@
 package rally
 
 import "common:game"
+import "common:protocol"
 
 // What the game replicates besides the engine's kinds (docs/games.md): the race (a
 // singleton), every racer's progress (keyed by player id, put to every player: the
@@ -44,7 +45,7 @@ Finish :: struct {
 	record:   bool, // a course record
 }
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states = {
 		{name = "rally.race", value = Race},
 		{name = "rally.racer", value = Racer, key = .Player, max_records = game.MAX_PLAYERS},
