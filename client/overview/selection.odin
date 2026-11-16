@@ -194,3 +194,24 @@ ring_draw :: proc(s: ^engine.Session, id: u32, radius: f64, color: [4]u8) {
 		)
 	}
 }
+
+// SMALL_MARK: the side of the square marking a unit drawn too small to read, in UI units.
+SMALL_MARK :: 7
+
+// small_marks: a square of its team's colour (colors, by team) over every entity the
+// session knows whose body is drawn shorter than min_pixels on the screen (a soldier
+// at the overview's height), so the far ones read as units, not specks. Entities of a
+// team past colors, and those with no health (a dropped stack, a node), are left alone.
+small_marks :: proc(s: ^engine.Session, ctx: ^ui.Context, min_pixels: f32, colors: [][4]u8) {
+	for id, &e in s.entities {
+		if e.max_health == 0 || int(e.team) >= len(colors) || e.team == 0 {continue}
+		feet := engine.entity_place(s, id) or_continue
+		top := engine.entity_top(s, id) or_continue
+		a := engine.world_point(s, ctx, feet) or_continue
+		b := engine.world_point(s, ctx, top) or_continue
+		if abs(a.y - b.y) >= min_pixels {continue}
+		r := ui.Rect{b.x - SMALL_MARK / 2, b.y - SMALL_MARK / 2, SMALL_MARK, SMALL_MARK}
+		ui.fill_rect(ctx, ui.rect_expand(r, 1), ctx.theme.meter_back)
+		ui.fill_rect(ctx, r, ui.Color(colors[e.team]))
+	}
+}

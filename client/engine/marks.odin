@@ -1,5 +1,7 @@
 package engine
 
+import "core:slice"
+
 import "client:render"
 import "client:ui"
 import "common:game"
@@ -75,31 +77,65 @@ world_label :: proc(s: ^Session, ctx: ^ui.Context, p: [3]f64, text: string) -> b
 // world_bar: a bar over p, full to `fraction` (0..1), in the theme's health colours.
 world_bar :: proc(s: ^Session, ctx: ^ui.Context, p: [3]f64, fraction: f32) -> bool {
 	at := world_point(s, ctx, p) or_return
-	t := &ctx.theme
-	r := ui.Rect{at.x - BAR_WIDTH / 2, at.y - BAR_HEIGHT / 2, BAR_WIDTH, BAR_HEIGHT}
-	ui.fill_rect(ctx, ui.rect_expand(r, 1), t.meter_back)
-	ui.fill_rect(ctx, r, t.health_empty)
-	ui.fill_rect(ctx, {r.x, r.y, r.w * clamp(fraction, 0, 1), r.h}, t.health_full)
+	bar_draw(ctx, bar_rect(at), fraction)
 	return true
 }
 
+@(private = "file")
+bar_rect :: proc(at: ui.Vec2) -> ui.Rect {
+	return {at.x - BAR_WIDTH / 2, at.y - BAR_HEIGHT / 2, BAR_WIDTH, BAR_HEIGHT}
+}
+
+@(private = "file")
+bar_draw :: proc(ctx: ^ui.Context, r: ui.Rect, fraction: f32) {
+	t := &ctx.theme
+	ui.fill_rect(ctx, ui.rect_expand(r, 1), t.meter_back)
+	ui.fill_rect(ctx, r, t.health_empty)
+	ui.fill_rect(ctx, {r.x, r.y, r.w * clamp(fraction, 0, 1), r.h}, t.health_full)
+}
+
 // entity_bars: a health bar over every entity the session knows of a kind (0: any)
-// whose health is below its most (all of them with `always`), just over its box.
+// whose health is below its most (all of them with `always`), just over its box. In a
+// crowd the bars do not pile up: the most hurt are drawn first, and a bar that would
+// overlap one already drawn is left out, so what shows of a melee is its worst wounds and
+// a lone hurt unit always shows (a game draws the picked ones' own with entity_bar).
 entity_bars :: proc(s: ^Session, ctx: ^ui.Context, kind: game.Kind_Id = 0, always := false) {
 	now, live := session_others_now(s)
 	if !live {return}
+	Bar :: struct {
+		at:       ui.Vec2,
+		fraction: f32,
+	}
+	bars := make([dynamic]Bar, context.temp_allocator)
 	for _, &e in s.entities {
 		if e.max_health == 0 || (kind != 0 && e.kind != kind) {continue}
 		if !always && e.health >= e.max_health {continue}
 		v, ok := track_view(&e.track, now)
 		info := game.kind_info(s.reg, e.kind)
 		if !ok || info == nil {continue}
-		world_bar(
+		at := world_point(
 			s,
 			ctx,
-			v.position + {0, f64(info.box[1]) + 0.35, 0},
-			f32(e.health) / f32(e.max_health),
+			v.position + {0, f64(info.box[1]) + ENTITY_MARK_LIFT, 0},
+		) or_continue
+		append(&bars, Bar{at, f32(e.health) / f32(e.max_health)})
+	}
+	slice.sort_by(bars[:], proc(a, b: Bar) -> bool {
+		return(
+			a.fraction < b.fraction ||
+			(a.fraction == b.fraction &&
+					(a.at.y < b.at.y || (a.at.y == b.at.y && a.at.x < b.at.x))) \
 		)
+	})
+	drawn := make([dynamic]ui.Rect, context.temp_allocator)
+	next: for b in bars {
+		r := bar_rect(b.at)
+		for d in drawn {
+			o := ui.rect_intersect(ui.rect_expand(d, 1), r)
+			if o.w > 0 && o.h > 0 {continue next}
+		}
+		append(&drawn, r)
+		bar_draw(ctx, r, b.fraction)
 	}
 }
 
