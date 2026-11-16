@@ -12,6 +12,7 @@ import "client:ui"
 
 Input_State :: struct {
 	mouse:          [2]f32, // pixels
+	mouse_seen:     bool, // the pointer has moved or clicked over the window (input_pointer_middle)
 	mouse_down:     bit_set[ui.Mouse_Button],
 	mouse_pressed:  bit_set[ui.Mouse_Button],
 	mouse_released: bit_set[ui.Mouse_Button],
@@ -60,9 +61,9 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 		case platform.Text_Event:
 			if v.char != '`' {append(&s.text, v.char)} 	// the console key types nothing
 		case platform.Mouse_Move_Event:
-			s.mouse = {v.x, v.y}
+			s.mouse, s.mouse_seen = {v.x, v.y}, true
 		case platform.Mouse_Button_Event:
-			s.mouse = {v.x, v.y}
+			s.mouse, s.mouse_seen = {v.x, v.y}, true
 			key := platform.MOUSE_KEYS[v.button]
 			if v.pressed {
 				s.held += {key}
@@ -137,6 +138,14 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 		case platform.Resize_Event, platform.Fullscreen_Event:
 		}
 	}
+}
+
+// input_pointer_middle: until the pointer has moved over the window (a window opened
+// under no pointer; a script's run under xvfb, where nothing moves it but `pointer`), it
+// is at the window's middle (size: pixels), so it neither aims at a corner nor pans a
+// free camera at the window's edge.
+input_pointer_middle :: proc(s: ^Input_State, size: [2]f32) {
+	if !s.mouse_seen {s.mouse = size / 2}
 }
 
 input_destroy :: proc(s: ^Input_State) {

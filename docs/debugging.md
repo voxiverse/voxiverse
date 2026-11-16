@@ -232,6 +232,10 @@ reproduce a state and capture its picture:
 --exec "set debug.net_trace 1" --check fly
 ```
 
+Until the pointer has moved over the window it is the window's middle (in a script under
+`xvfb-run`, until `pointer` moves it), so a top-down or free camera neither aims at a corner
+nor pans at an edge.
+
 ### Checks
 
 `--check <name>` runs a check with the benchmarks' fixed settings (its own view), after any
