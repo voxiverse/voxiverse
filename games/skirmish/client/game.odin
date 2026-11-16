@@ -38,7 +38,7 @@ GAME :: engine.Game {
 
 CAMERA :: engine.Game_Camera {
 	kind     = .Free,
-	distance = 34,
+	distance = 26,
 	near     = 12,
 	far      = 80,
 	angle    = 58,
@@ -465,6 +465,7 @@ picked :: proc(s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect) {
 // Slot: one of the command panel's buttons.
 Slot :: struct {
 	label: string,
+	cost:  string,
 	act:   proc(s: ^engine.Session, arg: int),
 	arg:   int,
 	off:   bool,
@@ -486,16 +487,17 @@ commands :: proc(s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect) {
 		for b, i in ([4]skirmish.Building{.Barracks, .Workshop, .Tower, .Depot}) {
 			info := skirmish.BUILDINGS[b]
 			slots[i] = {
-				skirmish.tr(.Command_Build, skirmish.tr(info.name), cost_text(info.cost)),
+				skirmish.tr(info.name),
+				cost_text(info.cost),
 				place,
 				int(b),
 				!skirmish.can_afford(stock, info.cost),
 			}
 		}
-		slots[4] = {skirmish.tr(.Command_Stop), stop, 0, false}
+		slots[4] = {skirmish.tr(.Command_Stop), "", stop, 0, false}
 	case len(units) > 0:
-		slots[0] = {skirmish.tr(.Command_Attack_Move), attack_tool, 0, false}
-		slots[1] = {skirmish.tr(.Command_Stop), stop, 0, false}
+		slots[0] = {skirmish.tr(.Command_Attack_Move), "", attack_tool, 0, false}
+		slots[1] = {skirmish.tr(.Command_Stop), "", stop, 0, false}
 	case selected_building(v) != 0:
 		b := building_of(v, selected_building(v))
 		i := 0
@@ -503,7 +505,8 @@ commands :: proc(s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect) {
 			if u not_in skirmish.BUILDINGS[b.building].trains {continue}
 			info := skirmish.UNITS[u]
 			slots[i] = {
-				skirmish.tr(.Command_Train, skirmish.tr(info.name), cost_text(info.cost)),
+				skirmish.tr(info.name),
+				cost_text(info.cost),
 				train,
 				int(u),
 				b.built < 100 || !skirmish.can_afford(stock, info.cost),
@@ -516,8 +519,29 @@ commands :: proc(s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect) {
 		if slot.act == nil {continue}
 		cell := ui.Rect{r.x + f32(i) * w, r.y, w - 6, r.h - 24}
 		key := engine.game_key_label(s, SLOT_KEYS + i)
-		label := fmt.tprintf("%s\n[%s]", slot.label, key)
-		clicked := ui.button(ctx, label, cell, disabled = slot.off, id = fmt.tprintf("slot %d", i))
+		clicked := ui.button(ctx, "", cell, disabled = slot.off, id = fmt.tprintf("slot %d", i))
+		// (its name in the middle, its cost under it, its key in the corner)
+		t := &ctx.theme
+		color := t.text_muted if slot.off else t.text
+		size := t.font_size * 0.85
+		mid := ui.Rect{cell.x, cell.y + cell.h / 2 - t.row_height, cell.w, t.row_height}
+		ui.draw_text(ctx, mid, slot.label, size, color, .Center)
+		ui.draw_text(
+			ctx,
+			{mid.x, mid.y + t.row_height, mid.w, mid.h},
+			slot.cost,
+			size,
+			t.text_muted,
+			.Center,
+		)
+		ui.draw_text(
+			ctx,
+			{cell.x + 6, cell.y + 4, cell.w - 12, t.row_height},
+			key,
+			size,
+			t.focus_ring,
+			.Left,
+		)
 		if (clicked || engine.game_key_pressed(s, SLOT_KEYS + i)) &&
 		   !slot.off {slot.act(s, slot.arg)}
 	}

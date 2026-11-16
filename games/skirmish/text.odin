@@ -32,8 +32,6 @@ Text :: enum u8 {
 	Command_Attack_Move,
 	Command_Stop,
 	Command_Gather,
-	Command_Build, // {0}: the building, {1}: its cost
-	Command_Train, // {0}: the unit, {1}: its cost
 	Cost_Ore, // {0}: ore
 	Cost_Wood, // {0}: wood
 	Cost_Both, // {0}: ore, {1}: wood
@@ -81,8 +79,6 @@ TEXT_EN := [Text]string {
 	.Command_Attack_Move   = "Attack",
 	.Command_Stop          = "Stop",
 	.Command_Gather        = "Gather",
-	.Command_Build         = "{0} {1}",
-	.Command_Train         = "{0} {1}",
 	.Cost_Ore              = "({0})",
 	.Cost_Wood             = "({0}w)",
 	.Cost_Both             = "({0}/{1}w)",

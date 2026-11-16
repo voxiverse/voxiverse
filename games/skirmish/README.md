@@ -79,7 +79,8 @@ plays.
 the next match (`skirmish.admin`): `sides` (2 to 4: the players present take them in turn,
 the computer the rest), `wave` (the computer's first wave), `ore`, `wood`, `workers` (each
 side's at the start). `/skirmish restart` lays out a new match; `/skirmish give <ore> <wood>`
-fills your side's stock (for trying). The settings and every player's wins are kept with
+fills your side's stock and `/skirmish clash <n>` sets n soldiers and archers of each of the
+first two sides at each other by your camera (for trying, and for pictures). The settings and every player's wins are kept with
 the universe (`game.cfg`: the settings' lines and `wins = <n> <name>`); a match is not.
 
 ## Records and requests

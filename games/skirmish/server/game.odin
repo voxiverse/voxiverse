@@ -422,7 +422,9 @@ put_records :: proc(s: ^core.Server) {
 
 // command: /skirmish shows the match and its settings; /skirmish set <setting> <value>
 // sets one (from the next match); /skirmish restart lays out a new match; /skirmish give
-// <ore> <wood> fills the admin's side's stock (for trying).
+// <ore> <wood> fills the admin's side's stock, /skirmish clash <n> sets n soldiers and
+// archers of each of the first two sides at each other by the camera's focus (for trying,
+// a picture aid).
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
 	if name != "skirmish" {return false}
 	g := state(s)
@@ -454,6 +456,13 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 		g.built = false
 		play.phase_set(s, &g.phase, .Waiting)
 		core.notice(s, c, "Skirmish: a new match")
+	case len(args) == 2 && args[0] == "clash":
+		n, ok := strconv.parse_int(args[1])
+		if !ok || n < 1 || n > 100 || g.phase.now != .Playing {
+			core.notice(s, c, "Usage: skirmish clash <1..100> (while a match is played)")
+			return true
+		}
+		clash(s, c, n)
 	case len(args) == 3 && args[0] == "give":
 		side := side_of(s, c)
 		ore, ok1 := strconv.parse_int(args[1])
@@ -469,7 +478,7 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 			s,
 			c,
 			fmt.tprintf(
-				"Usage: skirmish [%s | restart | give <ore> <wood>]",
+				"Usage: skirmish [%s | restart | give <ore> <wood> | clash <n>]",
 				play.settings_usage(table),
 			),
 		)
@@ -501,4 +510,25 @@ load :: proc(s: ^core.Server, text: string) -> bool {
 		i += 1
 	}
 	return true
+}
+
+// clash: n units of each of the first two sides, a few blocks either side of the player's
+// focus, attack-moving at each other.
+clash :: proc(s: ^core.Server, c: ^core.Client, n: int) {
+	g := state(s)
+	at := [2]i32{i32(c.player.position.x), i32(c.player.position.z)}
+	for k in 0 ..< 2 {
+		side := &g.sides[k]
+		if side.team == 0 {continue}
+		side.computer.wave = 1000 // (the computer does not send them elsewhere)
+		dir := i32(-1 if k == 0 else 1)
+		units := make([dynamic]game.Entity_Handle, context.temp_allocator)
+		for i in 0 ..< n {
+			x, z := at.x + dir * (7 + i32(i / 6)), at.y - 3 + i32(i % 6)
+			y := floor_at(s, x, z) or_continue
+			u := skirmish.Unit.Archer if i % 3 == 2 else .Soldier
+			if h := unit_spawn(s, side, u, {x, y, z}); h != 0 {append(&units, h)}
+		}
+		group_send(s, units[:], .Attack_Move, {at.x - dir * 8, skirmish.GROUND, at.y})
+	}
 }
