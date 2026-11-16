@@ -18,16 +18,17 @@ import "games:hamlet"
 // reach or how happy each house is. Every change is a request its server part judges.
 
 GAME :: engine.Game {
-	info     = hamlet.INFO,
-	kinds    = hamlet.KINDS,
-	state    = View,
-	camera   = camera,
-	started  = started,
-	ended    = ended,
-	received = received,
-	hud      = hud,
-	debug    = debug,
-	commands = {
+	info      = hamlet.INFO,
+	kinds     = hamlet.KINDS,
+	state     = View,
+	camera    = camera,
+	started   = started,
+	ended     = ended,
+	received  = received,
+	hud       = hud,
+	debug     = debug,
+	no_hotbar = true, // (the planner is bodiless: nothing in hand)
+	commands  = {
 		{
 			"hamlet",
 			"hamlet tool <look|road|zone|woodcutter|quarry|farm|storehouse|well|market|demolish> [x z [x2 z2]] | overlay <none|roads|happiness> | camera <distance> <degrees>: the tool in hand (with tiles: held there, as if dragged from the first to the second: a picture aid), the overlay, the camera",
