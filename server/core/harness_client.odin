@@ -302,6 +302,7 @@ session_start :: proc(
 		max_players       = 1,
 		perturb           = perturb,
 		no_natural_spawns = no_natural_spawns,
+		kit               = HARNESS_KIT,
 	}
 	if c, given := with.?; given {config = c}
 	if !harness_start(&sess.h, config, local = true, conditions = conditions) {return false}

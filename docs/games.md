@@ -505,7 +505,9 @@ test_a_round :: proc(t: ^testing.T) {
 `start` puts the game in the harness's small flat world (its `configure` changes it as any)
 with the host (the harness's mirror client, on the local pipe) welcomed, and `guests` more
 players over the harness's network, each playing (`Options`: `listen`, `save_dir` for a
-universe kept on disk, `kit`, `seed`, `plain` for guests without the host's role). `step`,
+universe kept on disk, `kit`, `seed`, `plain` for guests without the host's role). The
+players hold what the game gives (its modes' kits, its configure's) and nothing else; `kit`
+names another (the engine's own tests' blocks are `core.HARNESS_KIT`). `step`,
 `until`, `until_phase` and `until_seconds` move time; `say` is the host's command, `told`
 and `guest_told` what a player was told, `host_record` and `guest_record` the game's records
 as each player holds them, `kill` a player killed through the engine's damage pipeline, and
@@ -528,7 +530,8 @@ stepped server, a session joining it over the harness's network with the client 
 	testing.expect(t, playtest.drawn_within(rig, 336))                  // kept below F3
 ```
 
-`rig.input` and `rig.actions` are the keys and pointer a test presses (a game action:
+Its `Options` are the player's `name`, `seed`, `view_radius`, `everyone_cheats`, `ui` and
+`kit`, as the server rig's. `rig.input` and `rig.actions` are the keys and pointer a test presses (a game action:
 `rig.actions.pressed += {.Game_1}`); `guest_join` brings a second player; `client` is the
 session's player on the server; `Options.ui` draws the HUD every frame for a game whose HUD
 is clicked. The game's own debug line is `engine.game_debug_line(s)`, its scoreboard

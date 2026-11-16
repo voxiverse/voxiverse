@@ -288,6 +288,7 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 		listen            = true,
 		no_natural_spawns = true,
 		rules             = engine.still_rules(),
+		kit               = core.HARNESS_KIT,
 	}
 	if !testing.expect(t, core.harness_start(&rig.h, config)) {return}
 	defer core.harness_stop(&rig.h)

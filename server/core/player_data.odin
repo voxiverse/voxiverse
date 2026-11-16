@@ -389,16 +389,6 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 // launcher); by default nothing. Items a player may not use (the launcher
 // without world.fire) are left out.
 
-// default_kit_override: the tests start worlds with a kit of blocks to place
-// (kit_test.odin sets it at start-up); a game never sets it. A world's own
-// kit or a Config's comes first either way.
-default_kit_override: string
-
-kit_default :: proc(reg: ^game.Registry, kit: ^[dynamic]game.Stack) {
-	clear(kit)
-	if stacks, ok := kit_parse(reg, default_kit_override); ok {append(kit, ..stacks)}
-}
-
 kit_text :: proc(reg: ^game.Registry, kit: []game.Stack) -> string {
 	b := strings.builder_make(context.temp_allocator)
 	for st, i in kit {

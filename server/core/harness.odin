@@ -81,8 +81,13 @@ harness_rules :: proc() -> game.Rules {
 // harness_world: the fixed small test world. Natural spawning, random ticks
 // and the daylight cycle are off; a test turns one on by changing the config
 // before harness_start, or the rule through /gamerule as a player would.
+// HARNESS_KIT: what the harness's worlds give their players, blocks to place and break
+// (the engine's own default is nothing; a game's rig gives the game's kit instead).
+HARNESS_KIT :: "stone 64, dirt 64, grass 64, sand 64, log 64, leaves 64, water 64, lamp 64, rocket_launcher 1"
+
 harness_world :: proc() -> Config {
 	return {
+		kit = HARNESS_KIT,
 		seed = HARNESS_SEED,
 		generator = .Flat,
 		view_radius = 2,

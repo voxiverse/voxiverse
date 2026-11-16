@@ -30,6 +30,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 		max_players = 4,
 		listen      = true,
 		generator   = .Classic,
+		kit         = HARNESS_KIT,
 	}
 	h := new(Harness)
 	defer free(h)

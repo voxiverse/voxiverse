@@ -7,28 +7,11 @@ import "core:testing"
 import "common:access"
 import "common:game"
 
-// The worlds the tests start give their players the blocks the old default
-// kit gave (the tests place and break them); the real default is nothing (a
-// game's configure names a kit: the sandbox's, the rocket launcher alone, is
-// what a Config's kit is tested with).
-TEST_KIT :: "stone 64, dirt 64, grass 64, sand 64, log 64, leaves 64, water 64, lamp 64, rocket_launcher 1"
-
-// (Odin compiles a _test.odin file into every build of the package: without
-// the `when`, the game and the server started everyone with these blocks.)
-when ODIN_TEST {
-	@(init)
-	test_kit_init :: proc "contextless" () {
-		default_kit_override = TEST_KIT
-	}
-}
-
 // The engine gives nothing by default: a kit is the game's (Config.kit) or the
-// universe's. (kit_default is the tests' override while they run.)
+// universe's. (The harness's worlds name a kit of blocks: HARNESS_KIT.)
 @(test)
 test_default_kit_is_nothing :: proc(t: ^testing.T) {
 	reg := game.test_reg()
-	kit: [dynamic]game.Stack
-	defer delete(kit)
 	stacks, parsed := kit_parse(reg, "")
 	testing.expect(t, parsed && len(stacks) == 0, "the engine's own kit is not empty")
 	launcher, ok := game.item_by_name(reg, "rocket_launcher")
@@ -37,8 +20,9 @@ test_default_kit_is_nothing :: proc(t: ^testing.T) {
 		testing.expect_value(t, len(stacks), 1)
 		testing.expect_value(t, stacks[0], game.Stack{launcher, 1, 0, 0})
 	}
-	kit_default(reg, &kit)
-	testing.expect(t, len(kit) > 1, "the tests' kit")
+	if stacks, parsed = kit_parse(reg, HARNESS_KIT); testing.expect(t, parsed) {
+		testing.expect(t, len(stacks) > 1, "the harness's kit")
+	}
 }
 
 // SANDBOX_KIT: games/sandbox's KIT (the engine's tests import no game).
@@ -105,5 +89,25 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 			cheats,
 		)
 		stopped = harness_stop(h)
+	}
+}
+
+// A world that names no kit gives nothing, also in a test: a game's tests start with
+// what the game gives and nothing else (the engine's tests' blocks once reached every
+// test build that linked the engine, the games' too).
+@(test)
+test_no_kit_gives_nothing_in_tests :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.kit = ""
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, ok := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok) {return}
+	harness_step(&sess.h, 4)
+	for st in sess.h.srv.clients[0].inventory.slots {
+		testing.expectf(t, game.stack_empty(st), "the host holds %v", st)
 	}
 }

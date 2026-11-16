@@ -309,7 +309,7 @@ start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 		teardown(s, world = false)
 		return false
 	}
-	kit_default(s.registry, &s.kit)
+	clear(&s.kit) // by default nothing: a kit is the universe's or the game's
 	if kit_text := s.store.kit_text if s.store.kit_text != "" else s.config.kit; kit_text != "" {
 		if kit, ok := kit_parse(s.registry, kit_text); ok {
 			clear(&s.kit)

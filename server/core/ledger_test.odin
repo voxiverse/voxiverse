@@ -29,6 +29,7 @@ config :: proc(dir: string, death_drops := false) -> Config {
 		save_dir = dir,
 		no_natural_spawns = true,
 		world_idle = 0.5,
+		kit = HARNESS_KIT,
 	}
 }
 

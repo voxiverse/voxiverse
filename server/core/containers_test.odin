@@ -26,6 +26,7 @@ config :: proc(dir: string) -> Config {
 		everyone_cheats = true,
 		save_dir = dir,
 		no_natural_spawns = true,
+		kit = HARNESS_KIT,
 	}
 }
 

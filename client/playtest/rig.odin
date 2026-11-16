@@ -47,6 +47,7 @@ Options :: struct {
 	view_radius:     i32, // (0: 3)
 	everyone_cheats: bool, // the joined player may do what the host may (/commands, settings)
 	ui:              bool, // draw the HUD every frame, as the game does (Rig.ui)
+	kit:             string, // the players' kit ("": the game's modes' own, as a game's world gives)
 }
 
 // start: the server part started, the session playing it, the App ready to draw; false
@@ -68,6 +69,7 @@ start :: proc(
 		no_natural_spawns = true, // (nothing wanders in by chance)
 		rules             = engine.still_rules(),
 		game              = server_game,
+		kit               = o.kit,
 		allow_cheats      = o.everyone_cheats,
 		everyone_cheats   = o.everyone_cheats,
 	}
