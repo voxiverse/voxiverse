@@ -498,6 +498,7 @@ sender_remove :: proc(s: ^Sender, kind: int, key: Key) {
 
 sender_event :: proc(s: ^Sender, kind: int, value: rawptr) {
 	k := &s.schema.kinds[kind]
+	assert(!k.is_request, "a request is the client's to send")
 	v := value_alloc(k, context.allocator)
 	value_copy(k, v, value)
 	append(&s.events, Pending_Event{kind, v})
@@ -1007,6 +1008,7 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 		   count > len(data) - r.pos {return false}
 		k := &rx.schema.kinds[id]
 		if k.lane == .Snapshot && !k.is_event {return false}
+		if k.is_request {return false} 	// (the client's to send, never the server's)
 		prev_key: Key
 		have := false
 		for _ in 0 ..< count {
@@ -1240,4 +1242,60 @@ scan_state :: proc(schema: ^Schema, data: []u8, bytes, entries: []int) -> bool {
 		if id < len(entries) {entries[id] += count}
 	}
 	return r.ok
+}
+
+// A game's requests: typed messages its client part sends its server part (build a
+// house here, lay a road along this rectangle, demolish that), each a value of a type
+// of the game's own, declared as data in its shared package (Game_Kinds.requests) and
+// encoded by the same codec as its records and events. The schema holds them, so a
+// client and a server with different requests refuse each other at the handshake as
+// they do for different records. The server decodes one only into a kind that is a
+// request, checks it (the kind's check, every enum in range, every string within its
+// limit) and hands the game a valid value; whether the player may do it is the game's
+// to judge.
+
+MAX_GAME_REQUEST :: 256 // bytes of a request's value on the wire
+
+// Game_Request: a request of the game's (kind: its schema id), after input `after` as
+// a Game_Action is.
+Game_Request :: struct {
+	kind:  u16,
+	after: u32,
+	data:  []u8, // the value, encoded (view into the message)
+}
+
+// request_kind: the schema id of the game's request kind whose value type is T.
+request_kind :: proc(s: ^Schema, value: typeid) -> (kind: int, found: bool) {
+	kind = game_kind(s, value) or_return
+	return kind, s.kinds[kind].is_request
+}
+
+// request_encode: value (of the request kind's type) as a Game_Request's data, in w.
+request_encode :: proc(w: ^Writer, s: ^Schema, kind: int, value: rawptr) {
+	k := &s.kinds[kind]
+	assert(k.is_request, "not a request kind")
+	for &f in k.fields {leaf_write(w, &f, leaf_at(&f, value))}
+}
+
+// request_decode: a Game_Request's value, in memory of its type from allocator; false
+// for a kind that is not a request, a value that does not decode whole, or one its
+// check refuses. Its strings are views into data.
+request_decode :: proc(
+	s: ^Schema,
+	reg: ^Registry,
+	r: Game_Request,
+	allocator := context.temp_allocator,
+) -> (
+	value: rawptr,
+	ok: bool,
+) {
+	if int(r.kind) >= len(s.kinds) || !s.kinds[r.kind].is_request {return nil, false}
+	k := &s.kinds[r.kind]
+	data, err := mem.alloc(max(k.size, 1), max(k.align, 1), allocator)
+	if err != nil {return nil, false}
+	rd := reader_make(r.data, reg)
+	if !read_fields(&rd, k, data, false) || !reader_finish(&rd) || !valid_value(reg, k, data) {
+		return nil, false
+	}
+	return data, true
 }

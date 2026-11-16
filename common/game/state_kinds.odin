@@ -287,6 +287,7 @@ EVENT_KINDS := [Event_Kind]Event_Kind_Info {
 game_schema :: proc(id := "", kinds := Game_Kinds{}, allocator := context.allocator) -> Schema {
 	for k in kinds.states {assert(game_kind_named(id, k.name), "a game's kind is named <id>.<name>")}
 	for k in kinds.events {assert(game_kind_named(id, k.name), "a game's kind is named <id>.<name>")}
+	for k in kinds.requests {assert(game_kind_named(id, k.name), "a game's kind is named <id>.<name>")}
 	s, err := schema_make(
 		slice.enumerated_array(&STATE_KINDS),
 		slice.enumerated_array(&EVENT_KINDS),

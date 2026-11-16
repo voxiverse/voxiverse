@@ -40,6 +40,28 @@ game_actions :: proc(s: ^Session, a: ^Actions) {
 	}
 }
 
+// game_request sends the game's server part one of its requests (Game_Kinds.requests:
+// value of the request kind's type), after the last input sent; the server checks it
+// and its request hook judges it. The type names the kind: no kind number.
+game_request :: proc(s: ^Session, value: ^$T) {
+	kind, found := game.request_kind(&s.schema, T)
+	assert(found, "not a request kind of the game's")
+	if s.state != .Playing {return}
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	game.request_encode(&w, &s.schema, kind, value)
+	if len(w.buf) > game.MAX_GAME_REQUEST {
+		log.errorf(
+			"game request %s: %d bytes, more than %d",
+			s.schema.kinds[kind].name,
+			len(w.buf),
+			game.MAX_GAME_REQUEST,
+		)
+		return
+	}
+	send_message(s, game.Game_Request{u16(kind), s.prediction.next_sequence - 1, w.buf[:]})
+}
+
 // SCOREBOARD_COLUMNS: the most columns a game's scoreboard has besides the name.
 SCOREBOARD_COLUMNS :: 4
 

@@ -80,8 +80,9 @@ Game_Info :: struct {
 // the game's id and a dot, and its value type is its own: the type names the kind
 // when the game puts a record or reads one.
 Game_Kinds :: struct {
-	states: []State_Kind_Info,
-	events: []Event_Kind_Info,
+	states:   []State_Kind_Info,
+	events:   []Event_Kind_Info,
+	requests: []Event_Kind_Info, // what its client part sends its server part (request.odin)
 }
 
 Field_Type :: enum u8 {
@@ -117,6 +118,7 @@ Schema_Kind :: struct {
 	using info:  State_Kind_Info, // (an event's: key None, Reliable, one record)
 	id:          int, // state kinds 0 .., then event kinds
 	is_event:    bool,
+	is_request:  bool, // a game's request: client to server, never sent as an event (request.odin)
 	size:        int, // of a value
 	align:       int,
 	fields:      []Field,
@@ -156,7 +158,11 @@ schema_make :: proc(
 ) {
 	s.allocator = allocator
 	s.engine = len(states) + len(events)
-	s.kinds = make([]Schema_Kind, s.engine + len(game.states) + len(game.events), allocator)
+	s.kinds = make(
+		[]Schema_Kind,
+		s.engine + len(game.states) + len(game.events) + len(game.requests),
+		allocator,
+	)
 	next := 0
 	add_states :: proc(s: ^Schema, next: ^int, infos: []State_Kind_Info) -> Schema_Error {
 		for info in infos {
@@ -167,7 +173,12 @@ schema_make :: proc(
 		}
 		return {}
 	}
-	add_events :: proc(s: ^Schema, next: ^int, infos: []Event_Kind_Info) -> Schema_Error {
+	add_events :: proc(
+		s: ^Schema,
+		next: ^int,
+		infos: []Event_Kind_Info,
+		requests := false,
+	) -> Schema_Error {
 		for e in infos {
 			k := &s.kinds[next^]
 			k.info = {
@@ -177,7 +188,7 @@ schema_make :: proc(
 				check       = e.check,
 				max_records = 1,
 			}
-			k.id, k.is_event = next^, true
+			k.id, k.is_event, k.is_request = next^, true, requests
 			next^ += 1
 			if err := kind_build(k, s.allocator); err.reason != "" {return err}
 		}
@@ -187,6 +198,7 @@ schema_make :: proc(
 	if err.reason == "" {err = add_events(&s, &next, events)}
 	if err.reason == "" {err = add_states(&s, &next, game.states)}
 	if err.reason == "" {err = add_events(&s, &next, game.events)}
+	if err.reason == "" {err = add_events(&s, &next, game.requests, requests = true)}
 	if err.reason != "" {
 		schema_destroy(&s)
 		return {}, err
@@ -556,7 +568,9 @@ schema_text :: proc(
 ) -> string {
 	sb := strings.builder_make(allocator)
 	for k in (kinds if kinds != nil else s.kinds) {
-		if k.is_event {
+		if k.is_request {
+			fmt.sbprintfln(&sb, "request %s %d", k.name, k.version)
+		} else if k.is_event {
 			fmt.sbprintfln(&sb, "event %s %d", k.name, k.version)
 		} else {
 			fmt.sbprintfln(

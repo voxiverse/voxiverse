@@ -116,6 +116,7 @@ Game :: struct {
 	entity_hurt:   proc(s: ^Server, w: ^World, h: game.Entity_Handle, harm: Entity_Harm), // an entity of w was hurt and lives (its health already less: entity_harm)
 	entity_died:   proc(s: ^Server, w: ^World, dead: Dead_Entity, harm: Entity_Harm), // an entity of w died of harm (gone already: dead says what and where it was)
 	action:        proc(s: ^Server, c: ^Client, index: int), // c pressed the game's action `index` (0 ..< game.MAX_GAME_ACTIONS; the client part's Game.actions names them); not while dead
+	request:       proc(s: ^Server, c: ^Client, r: Request), // c's client part sent one of the game's requests (Game_Kinds.requests), decoded and checked (request_value)
 	picking:       proc(s: ^Server, c: ^Client, stack: game.Stack) -> Pickup, // c walks over a dropped stack it may pick up: take it, leave it, or the game took it its own way
 	harming:       proc(s: ^Server, h: ^Harming), // any harm about to be done, to a player or an entity: may change h.amount (0 or less: none)
 	save:          proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
@@ -1085,6 +1086,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		market_trade(s, c, v)
 	case game.Game_Action:
 		if g := &s.config.game; g.action != nil && !c.dead {g.action(s, c, int(v.index))}
+	case game.Game_Request:
+		request_receive(s, c, v)
 	case game.Telemetry_Batch, game.Dev_Message, game.Dev_Fetch:
 		disconnect(s, c, "this is not a telemetry collector")
 	case game.Respawn:

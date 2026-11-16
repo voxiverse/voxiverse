@@ -16,7 +16,7 @@ import sc "common:steam"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 44
+PROTOCOL_VERSION :: 45
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -372,6 +372,7 @@ Client_Message :: union {
 	Reload,
 	Market_Trade,
 	Game_Action,
+	Game_Request,
 }
 
 // Server -> client.
@@ -698,6 +699,7 @@ Client_Kind :: enum u8 {
 	Dev_Fetch,
 	Market_Trade,
 	Game_Action,
+	Game_Request,
 }
 
 @(private = "file")
@@ -819,6 +821,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "market_trade"
 		case u8(Client_Kind.Game_Action):
 			return "game_action"
+		case u8(Client_Kind.Game_Request):
+			return "game_request"
 		case u8(Client_Kind.Choose):
 			return "choose"
 		case u8(Client_Kind.Dial):
@@ -926,6 +930,13 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Game_Action))
 		write_u8(w, v.index)
 		write_u32(w, v.after)
+	case Game_Request:
+		assert(len(v.data) <= MAX_GAME_REQUEST, "a game's request too big")
+		write_u8(w, u8(Client_Kind.Game_Request))
+		write_u16(w, v.kind)
+		write_u32(w, v.after)
+		write_varint(w, u32(len(v.data)))
+		append(&w.buf, ..v.data)
 	case Market_Trade:
 		write_u8(w, u8(Client_Kind.Market_Trade))
 		write_u8(w, v.good)
@@ -1228,6 +1239,14 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 		}
 		if int(a.index) >= MAX_GAME_ACTIONS {reader_fail(&r)}
 		m = a
+	case u8(Client_Kind.Game_Request):
+		q := Game_Request {
+			kind  = read_u16(&r),
+			after = read_u32(&r),
+		}
+		n := int(read_varint(&r))
+		if n > MAX_GAME_REQUEST {reader_fail(&r)} else {q.data = read_bytes(&r, n)}
+		m = q
 	case u8(Client_Kind.Market_Trade):
 		t := Market_Trade {
 			good     = read_u8(&r),

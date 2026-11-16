@@ -418,6 +418,14 @@ describe :: proc(
 			return "reload", true
 		case game.Game_Action:
 			return fmt.tprintf("game_action index=%d after=%d", v.index, v.after), true
+		case game.Game_Request:
+			return fmt.tprintf(
+					"game_request kind=%d after=%d bytes=%d",
+					v.kind,
+					v.after,
+					len(v.data),
+				),
+				true
 		case game.Market_Trade:
 			return fmt.tprintf(
 					"market_trade good=%d sell=%v quantity=%.2f",

@@ -104,3 +104,42 @@ send_bytes :: proc(s: ^Server, c: ^Client, data: []u8, reliable: bool) {
 		netcode.host_send(&s.host, l, data, reliable)
 	}
 }
+
+// Request: one of the game's requests from a player's client part (Game.request): its
+// kind and its value, valid for the hook's call; request_value reads it as its type.
+Request :: struct {
+	kind:  int,
+	value: rawptr,
+}
+
+// request_value: r's value as ^T when r is of the game's request kind whose value type
+// is T: a game's code holds no kind number and no cast.
+request_value :: proc(s: ^Server, r: Request, $T: typeid) -> (value: ^T, ok: bool) {
+	kind := game.request_kind(&s.schema, T) or_return
+	if r.kind != kind {return nil, false}
+	return (^T)(r.value), true
+}
+
+// request_receive: a Game_Request from c, decoded and checked, to the game's hook. One
+// that does not decode is the client's bug or an attack: c is refused.
+@(private)
+request_receive :: proc(s: ^Server, c: ^Client, r: game.Game_Request) {
+	g := &s.config.game
+	value, ok := game.request_decode(&s.schema, s.registry, r)
+	if !ok {
+		disconnect(s, c, "a game request that does not decode")
+		return
+	}
+	if g.request != nil {g.request(s, c, {int(r.kind), value})}
+}
+
+// harness_request: c sends the game's request value, through the wire's encoding and
+// the server's checks, as a client part's game_request does (tests).
+harness_request :: proc(s: ^Server, c: ^Client, value: ^$T) {
+	kind, found := game.request_kind(&s.schema, T)
+	assert(found, "not a request kind of the game's")
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	game.request_encode(&w, &s.schema, kind, value)
+	request_receive(s, c, {u16(kind), 0, w.buf[:]})
+}

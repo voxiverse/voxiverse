@@ -54,6 +54,7 @@ client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 | `entity_hurt(s, w, h, harm)` | An entity of world `w` was hurt and lives (its health already less): `harm` is a `core.Entity_Harm`, the amount, the kind of source (a blast, a player's shot or blow, `.Game` for the game's own `entity_harm`), `by` the player who did it (nil: nobody, or the game), `creature` the entity that did it (its id; 0: none) and the weapon's name for a shot | the server's |
 | `picking(s, c, stack) -> Pickup` | A player walks over a dropped stack it may pick up: `.Take` (into its inventory, as far as there is room), `.Leave` (it stays: not this player's, not now) or `.Taken` (the game took it its own way, a purse, a potion drunk: it is gone) | the server's |
 | `action(s, c, index)` | A player pressed one of the game's own actions (`index` into the client part's `actions`, below; a `Game_Action` message, after its last input): an ability, a potion. Not while dead | the server's |
+| `request(s, c, r)` | A player's client part sent one of the game's requests ([below](#requests)), decoded and checked: `core.request_value(s, r, T)` reads it as its type. Whether the player may (`allowed`), can afford it and where it goes is the hook's to judge | the server's |
 | `harming(s, h)` | Any harm is about to be done, to a player or an entity, whoever does it (a player's blow or shot, a creature's, a blast, a fall, the game's own `entity_harm`): `h` is a `core.Harming`, the amount, its kind, who does it (`by` a player, `creature` an entity), what the player holds (`stack`, its data too) and who takes it (`to` a player, `entity` an entity); the hook may change `h.amount` (stats, armour, a critical blow), 0 or less and nothing is done. An entity's health is whole: the amount is rounded after the hook | the server's |
 | `entity_died(s, w, dead, harm)` | An entity of `w` died of `harm`: everyone who knew it was shown it die, and it is gone (`dead`, a `core.Dead_Entity`, says its id, kind and where it was) | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
@@ -103,6 +104,7 @@ makes it for games, documented where it is declared.
 | `entity_harm(w, h, harm)` | Hurt an entity (a tower's shot: `kind = .Game`, `by` the player it is credited to), told to the entity hooks as any harm is; true: it died |
 | `entity_go(w, h, target)`, `entity_follow(w, h, route)`, `entity_stand(w, h)`, `entity_arrived(w, h)`, `entity_set_speed(w, h, speed)` | Steer a walker whose kind is `"brain": "steered"`: to a point by its own path, along a route, or still; whether it is there ([walkers](#walkers)) |
 | `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
+| `Request`, `request_value(s, r, T)` | One of the game's requests in its `request` hook, and its value as its type ([requests](#requests)) |
 | `entity_keep(w, h, target, near, far)`, `entity_sees(w, h, p)` | Steer a walker to keep within a band of distances from a point, facing it (chase: `0, reach`; keep distance; flee: `radius, radius + 1`); whether nothing solid lies between its eyes and a point |
 | `entity_strike(w, h, target)`, `entity_shoot(w, h, p)`, `entity_striking(w, h)`, `Target`, `Strike` | A creature's attack, its kind's `attack` data: a blow at a player or an entity within its reach, or its shot at a point, each when its cooldown allows, credited to it (`Harm.creature`, `Entity_Harm.creature`); whether it just attacked |
 
@@ -367,6 +369,21 @@ KINDS :: game.Game_Kinds {
   listens: `core.harness_player_join(&sess.h, &guest, "guest")`, a client over the
   harness's network that takes the packs, plays and stands still (the test moves it on the
   server's side), told its records and notices as any player (`harness_player_record`).
+
+## Requests
+
+What a game's client part asks of its server part beyond its actions (build this here, lay
+a road along that, demolish the other) it sends as **requests**: values of types of its own
+with a small payload (a position, a rectangle, an id; at most `game.MAX_GAME_REQUEST`
+bytes), declared as data beside its records (`Game_Kinds.requests`, `Event_Kind_Info`s
+named `<id>.<name>`) and encoded by the same codec. They are in the schema, so a client and
+a server with different requests refuse each other at the handshake. The client part
+sends one with `engine.game_request(s, &value)` (a `Game_Request` message after its last
+input); the server decodes it only into a kind that is a request, checks it (the kind's
+`check`, every enum in range, every string within its limit; one that does not decode
+gets its client refused, as any malformed message does) and calls the game's `request`
+hook, where `core.request_value(s, r, T)` reads it. A test sends one through the same
+encoding and checks with `core.harness_request(s, c, &value)`. `games/hamlet` is the model.
 
 `build schema` writes the engine's kinds into the Wireshark dissector; a game's kinds are not
 in it. `build netdump` decodes with the engine's schema alone: in a trace of a session with a

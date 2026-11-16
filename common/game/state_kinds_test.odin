@@ -321,3 +321,91 @@ test_game_kinds :: proc(t: ^testing.T) {
 	out := make([dynamic]Received, context.temp_allocator)
 	testing.expect(t, len(l.messages) == 1 && !receive_state(&bare, l.messages[0].data, &out))
 }
+
+// A game's requests: in the schema (and its hash) after its events, found by their value
+// type only as requests; a value goes through its encoding and back whole, checked; a
+// value that does not decode whole, or that its check refuses, or a kind that is not a
+// request, is refused; and a server never sends one.
+@(test)
+test_game_requests :: proc(t: ^testing.T) {
+	Build :: struct {
+		kind:     u8,
+		at:       [2]i16,
+		rotation: u8,
+	}
+	Shout :: struct {
+		text: string `net:"max=8"`,
+	}
+	Score :: struct {
+		points: u32,
+	}
+	check_build :: proc(reg: ^Registry, v: rawptr) -> bool {return (^Build)(v).rotation < 4}
+	KINDS :: Game_Kinds {
+		states   = {{name = "town.score", value = Score}},
+		requests = {
+			{name = "town.build", value = Build, check = check_build},
+			{name = "town.shout", value = Shout},
+		},
+	}
+	without := game_schema("town", {states = KINDS.states}, context.temp_allocator)
+	s := game_schema("town", KINDS, context.temp_allocator)
+	testing.expect(t, s.hash != without.hash, "the requests are not in the hash")
+	build, found := request_kind(&s, Build)
+	testing.expect(t, found && s.kinds[build].is_request && s.kinds[build].is_event)
+	_, found = request_kind(&s, Score)
+	testing.expect(t, !found, "a record found as a request")
+
+	w: Writer
+	writer_init(&w, context.temp_allocator)
+	b := Build{3, {-40, 95}, 2}
+	request_encode(&w, &s, build, &b)
+	got, ok := request_decode(&s, test_reg(), {u16(build), 0, w.buf[:]})
+	if testing.expect(t, ok) {testing.expect_value(t, (^Build)(got)^, b)}
+	// Refused: a byte short, a byte over, the check's, a kind that is no request.
+	_, ok = request_decode(&s, test_reg(), {u16(build), 0, w.buf[:len(w.buf) - 1]})
+	testing.expect(t, !ok)
+	long := make([]u8, len(w.buf) + 1, context.temp_allocator)
+	copy(long, w.buf[:])
+	_, ok = request_decode(&s, test_reg(), {u16(build), 0, long})
+	testing.expect(t, !ok)
+	clear(&w.buf)
+	bad := Build{3, {0, 0}, 9}
+	request_encode(&w, &s, build, &bad)
+	_, ok = request_decode(&s, test_reg(), {u16(build), 0, w.buf[:]})
+	testing.expect(t, !ok, "the kind's check let it through")
+	score, _ := game_kind(&s, Score)
+	_, ok = request_decode(&s, test_reg(), {u16(score), 0, w.buf[:]})
+	testing.expect(t, !ok, "a record's kind decoded as a request")
+	_, ok = request_decode(&s, test_reg(), {u16(len(s.kinds)), 0, w.buf[:]})
+	testing.expect(t, !ok)
+	shout, _ := request_kind(&s, Shout)
+	clear(&w.buf)
+	write_string(&w, "far too long a shout")
+	_, ok = request_decode(&s, test_reg(), {u16(shout), 0, w.buf[:]})
+	testing.expect(t, !ok, "a string past its limit")
+
+	// On the wire, as a message, within MAX_GAME_REQUEST.
+	clear(&w.buf)
+	request_encode(&w, &s, build, &b)
+	m := Game_Request{u16(build), 77, w.buf[:]}
+	enc: Writer
+	writer_init(&enc, context.temp_allocator)
+	encode_client(&enc, m)
+	back, decoded := decode_client(enc.buf[:])
+	if testing.expect(t, decoded) {
+		r := back.(Game_Request) or_else {}
+		testing.expect_value(t, r.kind, m.kind)
+		testing.expect_value(t, r.after, u32(77))
+		testing.expect_value(t, string(r.data), string(m.data))
+	}
+	// (the same message with its length past MAX_GAME_REQUEST: the kind's byte, the kind,
+	// after, then the length)
+	head := enc.buf[:1 + 2 + 4]
+	over: Writer
+	writer_init(&over, context.temp_allocator)
+	append(&over.buf, ..head)
+	write_varint(&over, MAX_GAME_REQUEST + 1)
+	for _ in 0 ..= MAX_GAME_REQUEST {write_u8(&over, 0)}
+	_, decoded = decode_client(over.buf[:])
+	testing.expect(t, !decoded, "a request past MAX_GAME_REQUEST")
+}
