@@ -203,7 +203,7 @@ commands are:
 | `screenshot [name]`, `renderdoc [title]`, `net_trace`, `audio_capture`, `crash` | Diagnostics (`crash`: development builds; `renderdoc`: queues a frame capture when attached). |
 | `look <yaw> <pitch>`, `camera <first\|behind\|facing> [degrees]` | Places the camera for a picture (<kbd>F5</kbd> cycles the camera modes). |
 | `use`, `hold <item>` | For scripts: presses the right button once on the target (a chest opens, a sheep is sheared); selects the hotbar slot that holds an item. |
-| `pad <button> down\|up`, `pad <axis> <value>`, `pad connect <family>`, `pad disconnect` | Development builds: a synthetic gamepad (slot 0). |
+| `pad <button> down\|up`, `pad <axis> <value>`, `pad connect <family>`, `pad disconnect` | Development builds: a synthetic gamepad (slot 0), connected by its first button or axis. A trigger is an axis, as a pad reports it: `pad right_trigger 0.7`, or `down` (pulled all the way) and `up`. |
 | `key <key> down\|up` | Development builds: a key held or let go as the keyboard would (`key p down` holds the player list open for a screenshot; the mouse's buttons are keys too: `key mouse_left down` holds the trigger). |
 | `export <save> [file]`, `import <file> [name]` | Writes a save as one `.vxu` file / makes a new save from one. |
 | `report <note>` | Sends the developer a note with the version and the last console lines (needs Share play data on, in a saved universe). |

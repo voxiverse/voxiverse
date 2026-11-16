@@ -101,3 +101,42 @@ test_console_key_holds_a_key :: proc(t: ^testing.T) {
 	testing.expect(t, !ok && strings.contains(message, "down or up"))
 	testing.expect_value(t, len(app.injected), 2)
 }
+
+// `pad right_trigger down` (or a value) pulls the trigger as a pad does, an axis, so a
+// script fires the weapon in hand as `key mouse_left down` does: the attack is held
+// frame after frame until `up`. Before, the name was taken for the button of the same
+// name, a value was refused, and `down` held a button no pad sends. The pad connects
+// with its first input (an unconnected pad's input counts for nothing).
+@(test)
+test_console_pad_pulls_the_trigger :: proc(t: ^testing.T) {
+	app := new(engine.App)
+	defer free(app)
+	defer delete(app.injected)
+	defer engine.input_destroy(&app.input)
+	app.settings = engine.SETTINGS_DEFAULTS
+	frame :: proc(app: ^engine.App) {
+		engine.input_update(&app.input, app.injected[:])
+		clear(&app.injected)
+		engine.actions_update(&app.actions, &app.input, &app.settings, .World, false, 1.0 / 60)
+	}
+	for pull in ([]string{"down", "0.8"}) {
+		_, ok := console.pad_inject(app, {"right_trigger", pull})
+		testing.expect(t, ok, pull)
+		frame(app)
+		testing.expect(t, engine.action_pressed(&app.actions, .Attack), pull)
+		for _ in 0 ..< 3 {
+			frame(app)
+			testing.expect(t, engine.action_down(&app.actions, .Attack), pull)
+		}
+		_, ok = console.pad_inject(app, {"right_trigger", "up"})
+		testing.expect(t, ok)
+		frame(app)
+		testing.expect(t, engine.action_released(&app.actions, .Attack), pull)
+	}
+	message, ok := console.pad_inject(app, {"right_trigger", "sideways"})
+	testing.expect(t, !ok && strings.contains(message, "trigger"))
+	_, ok = console.pad_inject(app, {"a", "down"})
+	testing.expect(t, ok)
+	frame(app)
+	testing.expect(t, engine.action_pressed(&app.actions, .Jump))
+}

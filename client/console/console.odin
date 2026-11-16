@@ -827,7 +827,11 @@ key_inject :: proc(app: ^engine.App, args: []string) -> (message: string, ok: bo
 }
 
 // pad_inject: the `pad` command: appends the event for slot 0 to
-// app.injected (false and why if the words mean nothing).
+// app.injected (false and why if the words mean nothing). A trigger is an axis,
+// as every pad's backend reports it (platform.pad_state_diff): `pad
+// right_trigger 0.7` moves it, `down` pulls it all the way and `up` lets it go.
+// A button or an axis moved before `pad connect` connects the pad first (an
+// unconnected pad's input counts for nothing).
 pad_inject :: proc(app: ^engine.App, args: []string) -> (message: string, ok: bool) {
 	usage :: "pad: pad <button> down|up, pad <axis> <value>, pad connect <family>, pad disconnect"
 	if len(args) == 0 {return usage, false}
@@ -851,35 +855,65 @@ pad_inject :: proc(app: ^engine.App, args: []string) -> (message: string, ok: bo
 		return "", true
 	}
 	if len(args) < 2 {return usage, false}
-	for b in platform.Pad_Button {
-		if b != .None && strings.equal_fold(fmt.tprint(b), args[0]) {
+	event: platform.Event
+	for a in platform.Pad_Axis {
+		if !strings.equal_fold(fmt.tprint(a), args[0]) {continue}
+		value, number := strconv.parse_f32(args[1])
+		trigger := a == .Left_Trigger || a == .Right_Trigger
+		switch {
+		case number:
+			event = platform.Pad_Axis_Event {
+				pad   = 0,
+				axis  = a,
+				value = clamp(value, -1, 1),
+			}
+		case trigger && (args[1] == "down" || args[1] == "up"):
+			event = platform.Pad_Axis_Event {
+				pad   = 0,
+				axis  = a,
+				value = 1 if args[1] == "down" else 0,
+			}
+		case trigger:
+			return "pad: a trigger is pulled to a value 0..1, or down or up", false
+		case:
+			return "pad: the axis value is a number", false
+		}
+	}
+	if event == nil {
+		for b in platform.Pad_Button {
+			if b == .None || !strings.equal_fold(fmt.tprint(b), args[0]) {continue}
 			switch args[1] {
-			case "down":
-				append(
-					&app.injected,
-					platform.Pad_Button_Event{pad = 0, button = b, pressed = true},
-				)
-			case "up":
-				append(
-					&app.injected,
-					platform.Pad_Button_Event{pad = 0, button = b, pressed = false},
-				)
+			case "down", "up":
+				event = platform.Pad_Button_Event {
+					pad     = 0,
+					button  = b,
+					pressed = args[1] == "down",
+				}
 			case:
 				return "pad: say down or up", false
 			}
-			return "", true
 		}
 	}
-	for a in platform.Pad_Axis {
-		if strings.equal_fold(fmt.tprint(a), args[0]) {
-			value, number := strconv.parse_f32(args[1])
-			if !number {return "pad: the axis value is a number", false}
-			append(
-				&app.injected,
-				platform.Pad_Axis_Event{pad = 0, axis = a, value = clamp(value, -1, 1)},
-			)
-			return "", true
+	if event == nil {return usage, false}
+	if !pad_connected(app) {
+		append(
+			&app.injected,
+			platform.Pad_Connect_Event{pad = 0, connected = true, family = .Xbox},
+		)
+	}
+	append(&app.injected, event)
+	return "", true
+}
+
+// pad_connected: slot 0 is connected, or its connection is among the events
+// waiting for the next frame.
+@(private = "file")
+pad_connected :: proc(app: ^engine.App) -> bool {
+	connected := app.input.pads[0].connected
+	for e in app.injected {
+		if c, is_connect := e.(platform.Pad_Connect_Event); is_connect && c.pad == 0 {
+			connected = c.connected
 		}
 	}
-	return usage, false
+	return connected
 }
