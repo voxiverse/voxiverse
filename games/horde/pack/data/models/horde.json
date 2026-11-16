@@ -1,0 +1,11 @@
+{
+	// A round: a brass case and its tip.
+	"round": {
+		"size": [1, 5, 1],
+		"palette": ["#8a6a20", "#d9b44a", "#b0b0b8"],
+		"slices": [
+			["3", "2", "2", "2", "1"]
+		],
+		"grip": [0, 1, 0]
+	}
+}

@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "horde",
+	"version": "1.0.0",
+	"title": "Horde",
+	"description": "Horde's creatures and their spit, its guns and the rounds they load, the shop's block, and the survivor's and the watcher's modes.",
+	"requires": ["voxiverse"]
+}

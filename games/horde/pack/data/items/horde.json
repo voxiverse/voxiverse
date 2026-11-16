@@ -1,0 +1,39 @@
+{
+	// The guns: the base pack's models and sounds, loading Horde's rounds (a reload takes
+	// them from the pockets; with none, the gun stays empty).
+	"pistol": {
+		"model": "voxiverse:pistol",
+		"description": "Twelve shots a magazine. Loads rounds.",
+		"stack": 1,
+		"weapon": {
+			"damage": 4, "magazine": 12, "fire_rate": 4.0, "automatic": false, "range": 80,
+			"headshot": 2.0, "zoom": 0.0, "reload_time": 1.2, "spread": 0.0, "sound": "pistol",
+			"ammo": "horde:round"
+		}
+	},
+	"rifle": {
+		"model": "voxiverse:rifle",
+		"description": "Automatic. Thirty shots a magazine. Loads rounds.",
+		"stack": 1,
+		"weapon": {
+			"damage": 3, "magazine": 30, "fire_rate": 9.0, "automatic": true, "range": 90,
+			"headshot": 2.0, "zoom": 0.0, "reload_time": 1.8, "spread": 0.012, "sound": "rifle",
+			"ammo": "horde:round"
+		}
+	},
+	"shotgun": {
+		"model": "voxiverse:shotgun",
+		"description": "Eight pellets a shot, six shots a magazine. Loads rounds.",
+		"stack": 1,
+		"weapon": {
+			"damage": 2, "magazine": 6, "fire_rate": 1.2, "automatic": false, "range": 40,
+			"headshot": 1.5, "zoom": 0.0, "reload_time": 2.2, "spread": 0.1, "pellets": 8,
+			"sound": "shotgun", "ammo": "horde:round"
+		}
+	},
+	"round": {
+		"model": "horde:round",
+		"description": "What every gun here loads. The shop sells them.",
+		"stack": 250
+	}
+}

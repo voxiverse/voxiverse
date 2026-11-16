@@ -1,0 +1,18 @@
+{
+	// Holding out: a body that can be hurt, nothing dropped at death, a pistol and a few
+	// magazines of rounds to start with (the shop sells more, and better guns).
+	"survivor": {
+		"abilities": ["health"],
+		"kit": [
+			{"item": "horde:pistol", "count": 1, "slot": "hotbar"},
+			{"item": "horde:round", "count": 36, "slot": "pockets"}
+		],
+		"rules": {}
+	},
+	// Down for this wave: flying, unharmed, only watching until it ends.
+	"watcher": {
+		"abilities": ["fly", "invulnerable", "spectate"],
+		"kit": [],
+		"rules": {}
+	}
+}

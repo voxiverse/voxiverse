@@ -1,0 +1,14 @@
+{
+	// The shop: a glowing counter in the middle of the arena, open between waves.
+	"shop": {
+		"textures": {"side": "voxiverse:planks", "top": "voxiverse:lamp", "bottom": "voxiverse:planks"},
+		"light": 12,
+		"sound": "voxiverse:wood"
+	},
+	// Where the creatures come from: a dark gate in each corner.
+	"lair": {
+		"textures": {"all": "voxiverse:gate_ring"},
+		"light": 5,
+		"sound": "voxiverse:stone"
+	}
+}
