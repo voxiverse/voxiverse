@@ -6,14 +6,14 @@ import "core:testing"
 
 import "common:game"
 
-@(private = "file")
+@(private)
 Blocks :: struct {
 	solid:  map[game.Block_Pos]bool,
 	floor:  i32, // solid at and below this y everywhere
 	region: [2]i32, // loaded for |x|, |z| <= region (else: unloaded)
 }
 
-@(private = "file")
+@(private)
 query :: proc(b: ^Blocks) -> game.Block_Query {
 	return {b, proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 			b := (^Blocks)(data)
@@ -23,7 +23,7 @@ query :: proc(b: ^Blocks) -> game.Block_Query {
 		}, &registry().blocks, {}}
 }
 
-@(private = "file")
+@(private)
 wall :: proc(b: ^Blocks, x: i32, z_from, z_to: i32, y_from, y_to: i32) {
 	for z in z_from ..= z_to {
 		for y in y_from ..= y_to {b.solid[{x, y, z}] = true}

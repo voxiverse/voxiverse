@@ -172,7 +172,7 @@ package** is enforced by the `layout` lint (see above).
 | `games/<game>/server` | A game's server part: its `core.Game` and its tests | `*.odin` |
 | `games/<game>/client` | A game's client part: its `engine.Game` and its tests | `*.odin` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
-| `server/path` | Pathfinding over the blocks: a walker's way from one block to another (A*) | `*.odin` |
+| `server/path` | Pathfinding over the blocks for a body of a size: a walker's way from one block to another (A*), and fields: the way to one goal from every block of an area, which many walkers share | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |
 | `server/steam` | The dedicated server's Steam: auth sessions over the game server flat API and a fake | `*.odin` |
