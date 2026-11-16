@@ -1,6 +1,9 @@
 package sandbox_client
 
+import "core:fmt"
 import "core:testing"
+
+import "client:ui"
 
 import "client:engine"
 import "client:playtest"
@@ -39,6 +42,8 @@ test_market_in_a_town :: proc(t: ^testing.T) {
 	in_town :: proc(rig: ^playtest.Rig) -> bool {return view(rig.s).market.town_len > 0}
 	if !testing.expect(t, playtest.until(rig, in_town, 5), "no market in the town") {return}
 	testing.expect(t, playtest.drawn(rig, "Market of Town "), "no HUD line in a town")
+	line := fmt.tprintf("Market of %s   Z: trade", market_town(&view(rig.s).market))
+	testing.expect(t, playtest.drawn(rig, line), "the HUD does not say the market's key")
 
 	// The action opens the screen.
 	rig.actions.pressed += {.Game_1}
@@ -47,6 +52,7 @@ test_market_in_a_town :: proc(t: ^testing.T) {
 	testing.expect(t, playtest.drawn(rig, "Silver: 10000000.00"), "no silver")
 	testing.expect(t, playtest.drawn(rig, "Grain"), "no grain")
 	testing.expect(t, playtest.drawn(rig, "news 0 days old"), "no news's age")
+	testing.expect(t, market_fits(rig), "the market's panel does not fit 720 high")
 
 	// A buy: the cargo comes back with the market.
 	m := &view(rig.s).market
@@ -68,9 +74,34 @@ test_market_in_a_town :: proc(t: ^testing.T) {
 		"the refusal is not said",
 	)
 
+	// The action's key pressed again (the screen has the keyboard) closes it; over the
+	// world again it opens it.
+	rig.actions.pressed -= {.Game_1}
+	rig.app.actions.key_pressed += {.Game_1}
+	playtest.draw(rig)
+	ui.end_frame(&rig.app.ui)
+	rig.app.actions.key_pressed -= {.Game_1}
+	testing.expect(t, !engine.game_screen_shown(rig.s), "the action did not close the market")
+	rig.actions.pressed += {.Game_1}
+	testing.expect(t, playtest.until(rig, open, 5), "the action did not open it again")
+	rig.actions.pressed -= {.Game_1}
+	closed :: proc(rig: ^playtest.Rig) -> bool {return !engine.game_screen_shown(rig.s)}
+
 	// Walking out of the town closes it.
 	sandbox_server.stand_at(c, tw.lat + 1, tw.lon)
-	closed :: proc(rig: ^playtest.Rig) -> bool {return !engine.game_screen_shown(rig.s)}
 	testing.expect(t, playtest.until(rig, closed, 5), "the market stayed open away from the town")
 	testing.expect(t, !playtest.drawn(rig, "Market of "), "the HUD line stayed")
+}
+
+// market_fits: the market's screen drawn at 1280x720 keeps a margin above and below (all
+// but the backdrop over the whole screen, its first quad).
+@(private = "file")
+market_fits :: proc(rig: ^playtest.Rig) -> bool {
+	playtest.draw(rig)
+	defer ui.end_frame(&rig.app.ui)
+	low, high: f32 = 1e9, -1e9
+	for v in rig.app.ui.output.layers[.Modal].vertices[4:] {
+		low, high = min(low, v.pos.y), max(high, v.pos.y)
+	}
+	return low >= 8 && high <= playtest.HEIGHT - 8
 }

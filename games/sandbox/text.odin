@@ -7,7 +7,7 @@ import "common:base"
 // shared file changes. tr formats one ({0}, {1}...: base.text_format).
 
 Text :: enum u8 {
-	Market_Hud, // {0}: the town
+	Market_Hud, // {0}: the town, {1}: the key that opens its market
 	Market_Title, // {0}: the town
 	Market_Cash, // {0}: silver
 	Market_Good,
@@ -32,7 +32,7 @@ Text :: enum u8 {
 }
 
 TEXT_EN := [Text]string {
-	.Market_Hud                  = "Market of {0}",
+	.Market_Hud                  = "Market of {0}   {1}: trade",
 	.Market_Title                = "Market of {0}",
 	.Market_Cash                 = "Silver: {0}",
 	.Market_Good                 = "Good",

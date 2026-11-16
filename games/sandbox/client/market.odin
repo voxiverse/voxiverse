@@ -10,12 +10,13 @@ import "games:sandbox"
 // The market of the town the player stands in, as the server last put it (sandbox.Town_Market;
 // the server is the authority, this only shows and asks). While the player stands in a
 // town the HUD says so (`Market of <town>`); the game's action opens the market's screen
-// there, as the server's answer (sandbox.Market_Open). Each good has its price, the stock
+// there, as the server's answer (sandbox.Market_Open), and pressed again closes it. Each good has its price, the stock
 // and what the player carries, and how old the news behind the price is; the player picks a
 // good and a quantity and buys or sells (a sandbox.Trade request). Walking out of the town
 // closes it.
 
 MARKET_WIDTH :: 760
+MARKET_TITLE :: 60 // the title's height
 QUANTITY_STEP :: 0.5 // units a click adds or takes off the quantity (a person's month of the good)
 QUANTITY_MIN :: 0.5
 QUANTITY_MAX :: 1000
@@ -52,13 +53,15 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	}
 }
 
-// hud: `Market of <town>`, near the top, while in a town and the screen is closed.
+// hud: `Market of <town>` and the key that opens it, near the top, while in a town and the
+// screen is closed.
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	m := &view(s).market
 	if m.town_len == 0 || engine.game_screen_shown(s) {return}
 	t := &ctx.theme
 	r := ui.Rect{ctx.screen.x, ctx.screen.y + 2 * t.spacing, ctx.screen.w, t.row_height}
-	ui.label(ctx, sandbox.tr(.Market_Hud, market_town(m)), r, .Center, t.text)
+	key := engine.game_action_key(s, MARKET_ACTION)
+	ui.label(ctx, sandbox.tr(.Market_Hud, market_town(m), key), r, .Center, t.text)
 }
 
 // market_trade asks the server to buy or sell the chosen quantity of the chosen good.
@@ -104,16 +107,28 @@ news_line :: proc(age: f32) -> string {
 // market_screen: the game's screen (engine.Game.screen), the market of the town.
 market_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	m := &view(s).market
+	if top && engine.game_action_pressed(s, MARKET_ACTION) { 	// (the key that opened it)
+		engine.game_screen_close(s)
+		return
+	}
 	t := &ctx.theme
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
+	// As tall as what it holds (the title, silver, the heads, a row a good with half a gap
+	// between, the quantity, the refusal's line and the buttons), so it fits 720 high.
 	rows := f32(len(sandbox.Good))
-	height := (rows + 6) * (t.row_height + t.spacing) + 80
-	box := ui.rect_center(ctx.screen, MARKET_WIDTH, height)
+	gap := t.spacing / 2
+	height :=
+		4 * t.padding +
+		MARKET_TITLE +
+		5 * t.row_height +
+		4 * t.spacing +
+		rows * (t.row_height + gap)
+	box := ui.rect_center(ctx.screen, MARKET_WIDTH, min(height, ctx.screen.h))
 	ui.panel(ctx, box)
 	area := ui.rect_shrink(box, 2 * t.padding)
-	ui.title(ctx, sandbox.tr(.Market_Title, market_town(m)), ui.cut_top(&area, 60))
+	ui.title(ctx, sandbox.tr(.Market_Title, market_town(m)), ui.cut_top(&area, MARKET_TITLE))
 	ui.label(ctx, sandbox.tr(.Market_Cash, number(m.cash, 2)), ui.cut_top(&area, t.row_height))
 	ui.cut_top(&area, t.spacing)
 
@@ -128,7 +143,7 @@ market_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	for good in sandbox.Good {
 		g := m.goods[good]
 		row := ui.cut_top(&area, t.row_height)
-		ui.cut_top(&area, t.spacing)
+		ui.cut_top(&area, gap)
 		name := ui.cut_left(&row, col[0] * area.w)
 		ui.push_id_int(ctx, int(good))
 		if good == m.good {

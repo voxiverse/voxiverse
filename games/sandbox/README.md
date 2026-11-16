@@ -54,9 +54,12 @@ lazy towns remember) is kept with the world, `sandbox.economy.vxe`.
 
 Each character is a trader (its record, kept in its character file): silver (20 to start),
 cargo of each good, and the prices it saw where it stood. Standing in a town (within 15 km of
-it) the HUD says `Market of <town>`; the game's action (`Market`, Z by default) opens the
-market's screen there: each good's price, stock, what you carry and how old the news behind
-the price is; pick a good and a quantity, buy or sell. Walking out of the town closes it. The
+it) the HUD says `Market of <town>` and the key that opens it; the game's action (`Market`,
+Z by default) opens the market's screen there and pressed again closes it: each good's
+price, stock (units of a person's month of the good: a fresh market holds one month of the
+town's need of each, so every stock reads the same until trade and droughts move them), what
+you carry and how old the news behind the price is; pick a good and a quantity, buy or sell.
+Walking out of the town closes it. The
 server judges every trade (where you stand, your silver, your cargo, the stock). `/town` takes you to the nearest
 town with a market, set down from above it (the teleport permission, `teleport.tp`).
 

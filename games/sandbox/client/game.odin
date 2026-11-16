@@ -11,7 +11,7 @@ GAME :: engine.Game {
 	info     = sandbox.INFO,
 	kinds    = sandbox.KINDS,
 	state    = View,
-	actions  = {"Market"},
+	actions  = {"Market"}, // (MARKET_ACTION)
 	received = received,
 	hud      = hud,
 	screen   = market_screen,
@@ -22,5 +22,7 @@ GAME :: engine.Game {
 View :: struct {
 	market: Market_Screen,
 }
+
+MARKET_ACTION :: 0 // the market's action: its index in GAME.actions
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
