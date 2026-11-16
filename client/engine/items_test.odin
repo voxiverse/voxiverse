@@ -134,3 +134,25 @@ test_right_click_uses_the_aimed_entity :: proc(t: ^testing.T) {
 	testing.expect_value(t, uses, 0)
 	free_all(context.temp_allocator)
 }
+
+// A pack's item with a voxel model gets its icon from the model, seen along its
+// thinnest side: a blade (long and one wide) from the side, its front on the left.
+@(test)
+test_model_icon_shows_the_model :: proc(t: ^testing.T) {
+	voxels := make([]u8, 4 * 1 * 1, context.temp_allocator)
+	voxels[0], voxels[3] = 1, 2 // (x 0 + z * width: the front's, then the back's)
+	m := game.Model_Def {
+		size    = {4, 1, 1}, // length, height, width
+		colors  = 3,
+		palette = {{200, 0, 0, 255}, {0, 0, 200, 255}, {0, 200, 0, 255}, {}},
+		voxels  = voxels,
+	}
+	pixels := new([ICON_SIZE * ICON_SIZE][4]u8)
+	defer free(pixels)
+	model_icon(&m, pixels)
+	mid := ICON_SIZE / 2
+	left, right := pixels[mid * ICON_SIZE + 12], pixels[mid * ICON_SIZE + ICON_SIZE - 12]
+	testing.expectf(t, left.r > 150 && left.b == 0, "the front (left) is %v", left)
+	testing.expectf(t, right.b > 150 && right.r == 0, "the back (right) is %v", right)
+	testing.expect_value(t, pixels[4][3], 0) // (round it: clear)
+}

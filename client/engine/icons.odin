@@ -29,7 +29,11 @@ item_icons_init :: proc(reg: ^game.Registry, icons: ^Item_Icons, ctx: ^ui.Contex
 	for item in game.every_item(reg) {
 		if item in icons {continue} 	// (made at start-up: the session of a universe with packs adds its own)
 		info, _ := game.item_info(reg, item)
-		if !item_sprite(item, info, pixels) {
+		if model, has := info.model.?; has && !game_item_of_base(reg, item) {
+			// A pack's item with a voxel model: the model, seen from its broad side
+			// (the engine's own items keep their drawn art).
+			model_icon(&reg.models[model], pixels)
+		} else if !item_sprite(item, info, pixels) {
 			if reg.blocks.defs[info.block].render == .Cross {
 				block_flat(reg, info.block, layers, pixels) // (plants are crossed planes, not cubes)
 			} else if info.block != .Air {
@@ -67,6 +71,47 @@ item_sprite :: proc(
 		return false
 	}
 	return true
+}
+
+// game_item_of_base: the item is the base pack's (its id is voxiverse's).
+@(private = "file")
+game_item_of_base :: proc(reg: ^game.Registry, item: game.Item) -> bool {
+	id := game.item_id(reg, item)
+	return len(id) > 10 && id[:10] == "voxiverse:"
+}
+
+// model_icon: a voxel model flat on the icon, seen along its thinnest horizontal axis
+// (a blade from the side, a coin from the front), the nearest voxel of each column
+// and row, the far ones a little darker; scaled to fit, its pixels square.
+model_icon :: proc(m: ^game.Model_Def, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
+	size := game.model_size(m)
+	side := size.z >= size.x // (seen from the side: across its length; else from the front)
+	cols := size.z if side else size.x
+	rows := size.y
+	depth := size.x if side else size.z
+	scale := f32(ICON_SIZE - 16) / f32(max(cols, rows))
+	ox := (f32(ICON_SIZE) - f32(cols) * scale) / 2
+	oy := (f32(ICON_SIZE) - f32(rows) * scale) / 2
+	for y in 0 ..< ICON_SIZE {
+		for x in 0 ..< ICON_SIZE {
+			c: [4]u8
+			col := int((f32(x) - ox) / scale)
+			row := int((f32(y) - oy) / scale)
+			if f32(x) >= ox && f32(y) >= oy && col < cols && row < rows {
+				for d in 0 ..< depth {
+					// (rows from the top: the model's y counts up)
+					v :=
+						game.model_voxel(m, d, rows - 1 - row, col) if side else game.model_voxel(m, col, rows - 1 - row, d)
+					if v == 0 {continue}
+					c = m.palette[v - 1]
+					k := 1 - 0.15 * f32(d) / f32(max(depth, 1))
+					c.rgb = {u8(f32(c.r) * k), u8(f32(c.g) * k), u8(f32(c.b) * k)}
+					break
+				}
+			}
+			pixels[y * ICON_SIZE + x] = c
+		}
+	}
 }
 
 @(private = "file")
