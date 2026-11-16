@@ -7,15 +7,16 @@ import "core:time/timezone"
 
 // The holidays the title screen celebrates, picked from the player's local
 // date. Dates (the player's local date):
-//   New Year      Dec 31 to Jan 2        (greeting on Jan 1)
-//   Valentines    Feb 14                 (greeting that day)
-//   St Patrick    Mar 17                 (greeting that day)
+//   New Year      Dec 31 to Jan 2
+//   Valentines    Feb 14
+//   St Patrick    Mar 17
 //   Easter        Good Friday to Easter Monday, Western Easter by the
-//                 Gregorian computus (greeting on Easter Sunday)
-//   Halloween     Oct 25 to Oct 31       (greeting on Oct 31)
-//   Christmas     Dec 20 to Dec 26       (greeting on Dec 25)
-// A holiday's texts live in assets/splashes.txt under its section line,
-// [<holiday>] (see screen/holiday.odin).
+//                 Gregorian computus
+//   Halloween     Oct 25 to Oct 31
+//   Christmas     Dec 20 to Dec 26
+// On every day of a holiday's dates the splash is its one line, which lives in
+// assets/splashes.txt under its section line, [<holiday>] (HOLIDAY_SECTION; see
+// screen/holiday.odin): the file is the greeting's only place.
 
 Holiday :: enum u8 {
 	None,
@@ -27,23 +28,16 @@ Holiday :: enum u8 {
 	Christmas,
 }
 
-HOLIDAY_GREETING :: [Holiday]string {
+// HOLIDAY_SECTION: each holiday's section in the splashes file.
+@(rodata)
+HOLIDAY_SECTION := [Holiday]string {
 	.None        = "",
-	.New_Year    = "Happy New Year!",
-	.Valentines  = "Happy Valentine's Day!",
-	.St_Patricks = "Happy St Patrick's Day!",
-	.Easter      = "Happy Easter!",
-	.Halloween   = "Happy Halloween!",
-	.Christmas   = "Merry Christmas!",
-}
-
-HOLIDAY_SECTIONS :: [?]Holiday {
-	.New_Year,
-	.Valentines,
-	.St_Patricks,
-	.Easter,
-	.Halloween,
-	.Christmas,
+	.New_Year    = "new_year",
+	.Valentines  = "valentines",
+	.St_Patricks = "st_patricks",
+	.Easter      = "easter",
+	.Halloween   = "halloween",
+	.Christmas   = "christmas",
 }
 
 // The holidays' colours (interface colours come from the theme, these are
@@ -97,23 +91,19 @@ easter_date :: proc(year: int) -> (month, day: int) {
 	return
 }
 
-// holiday_for: the holiday whose window contains (year, month, day), and
-// whether it is the greeting day itself.
-holiday_for :: proc(year, month, day: int) -> (holiday: Holiday, greeting_day: bool) {
-	if month == 12 && day == 31 {return .New_Year, false}
-	if month == 1 && day == 1 {return .New_Year, true}
-	if month == 1 && day == 2 {return .New_Year, false}
-	if month == 2 && day == 14 {return .Valentines, true}
-	if month == 3 && day == 17 {return .St_Patricks, true}
-	if month == 10 && day >= 25 && day <= 31 {return .Halloween, day == 31}
-	if month == 12 && day >= 20 && day <= 26 {return .Christmas, day == 25}
+// holiday_for: the holiday whose dates hold (year, month, day) (.None: none).
+holiday_for :: proc(year, month, day: int) -> Holiday {
+	if month == 12 && day == 31 {return .New_Year}
+	if month == 1 && day <= 2 {return .New_Year}
+	if month == 2 && day == 14 {return .Valentines}
+	if month == 3 && day == 17 {return .St_Patricks}
+	if month == 10 && day >= 25 && day <= 31 {return .Halloween}
+	if month == 12 && day >= 20 && day <= 26 {return .Christmas}
 	em, ed := easter_date(year)
 	easter_yd := day_of_year(year, em, ed)
 	today_yd := day_of_year(year, month, day)
-	if today_yd >= easter_yd - 2 && today_yd <= easter_yd + 1 {
-		return .Easter, today_yd == easter_yd
-	}
-	return .None, false
+	if today_yd >= easter_yd - 2 && today_yd <= easter_yd + 1 {return .Easter}
+	return .None
 }
 
 // day_of_year: days since January 1 (0-based).

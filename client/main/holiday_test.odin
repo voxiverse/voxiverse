@@ -1,5 +1,6 @@
 package main
 
+import "core:fmt"
 import "core:slice"
 import "core:testing"
 
@@ -35,133 +36,121 @@ test_easter_computus :: proc(t: ^testing.T) {
 
 @(test)
 test_holiday_windows :: proc(t: ^testing.T) {
-	check :: proc(t: ^testing.T, y, m, d: int, want_holiday: engine.Holiday, want_greeting: bool) {
-		h, g := engine.holiday_for(y, m, d)
-		testing.expectf(
-			t,
-			h == want_holiday && g == want_greeting,
-			"%d-%d-%d: got (%v, %v)",
-			y,
-			m,
-			d,
-			h,
-			g,
-		)
+	check :: proc(t: ^testing.T, y, m, d: int, want: engine.Holiday) {
+		got := engine.holiday_for(y, m, d)
+		testing.expectf(t, got == want, "%d-%d-%d: got %v", y, m, d, got)
 	}
-	check(t, 2026, 12, 31, .New_Year, false)
-	check(t, 2027, 1, 1, .New_Year, true)
-	check(t, 2027, 1, 2, .New_Year, false)
-	check(t, 2027, 1, 3, .None, false)
-	check(t, 2027, 2, 14, .Valentines, true)
-	check(t, 2027, 2, 15, .None, false)
-	check(t, 2027, 3, 17, .St_Patricks, true)
-	check(t, 2027, 10, 25, .Halloween, false)
-	check(t, 2027, 10, 31, .Halloween, true)
-	check(t, 2027, 11, 1, .None, false)
-	check(t, 2027, 12, 20, .Christmas, false)
-	check(t, 2027, 12, 25, .Christmas, true)
-	check(t, 2027, 12, 26, .Christmas, false)
-	check(t, 2027, 12, 27, .None, false)
+	check(t, 2026, 12, 31, .New_Year)
+	check(t, 2027, 1, 1, .New_Year)
+	check(t, 2027, 1, 2, .New_Year)
+	check(t, 2027, 1, 3, .None)
+	check(t, 2027, 2, 14, .Valentines)
+	check(t, 2027, 2, 15, .None)
+	check(t, 2027, 3, 17, .St_Patricks)
+	check(t, 2027, 10, 24, .None)
+	check(t, 2027, 10, 25, .Halloween)
+	check(t, 2027, 10, 31, .Halloween)
+	check(t, 2027, 11, 1, .None)
+	check(t, 2027, 12, 19, .None)
+	check(t, 2027, 12, 20, .Christmas)
+	check(t, 2027, 12, 26, .Christmas)
+	check(t, 2027, 12, 27, .None)
 	// Easter 2026 (April 5): Good Friday to Easter Monday.
-	check(t, 2026, 4, 3, .Easter, false)
-	check(t, 2026, 4, 4, .Easter, false)
-	check(t, 2026, 4, 5, .Easter, true)
-	check(t, 2026, 4, 6, .Easter, false)
-	check(t, 2026, 4, 7, .None, false)
-	// Easter 2027 (March 28): Good Friday to Easter Monday.
-	check(t, 2027, 3, 26, .Easter, false)
-	check(t, 2027, 3, 28, .Easter, true)
-	check(t, 2027, 3, 29, .Easter, false)
-	check(t, 2027, 3, 30, .None, false)
+	check(t, 2026, 4, 2, .None)
+	check(t, 2026, 4, 3, .Easter)
+	check(t, 2026, 4, 6, .Easter)
+	check(t, 2026, 4, 7, .None)
+	// Easter 2027 (March 28).
+	check(t, 2027, 3, 26, .Easter)
+	check(t, 2027, 3, 29, .Easter)
+	check(t, 2027, 3, 30, .None)
 }
 
+// The file's sections: a game's lines join the everyday ones, a holiday's are its own, an
+// unknown section's are skipped. The shipped file gives each holiday exactly one line
+// (the greeting is written there and nowhere else) and has everyday lines.
 @(test)
 test_splashes_parse_sections :: proc(t: ^testing.T) {
 	text :=
 		"# everyday first\n" +
 		"Day one\nDay two\n\n" +
+		"[game flood]\nWet\n\n" +
 		"[christmas]\n" +
-		"Merry Christmas!\nMerry Christmas! Reindeers\n\n" +
+		"Merry Christmas!\n\n" +
 		"[not_a_holiday]\n" +
 		"Skipped text\n\n" +
-		"[halloween]\n" +
-		"Happy Halloween!\nHappy Halloween! Something\n"
+		"[Halloween]\n" +
+		"Happy Halloween!\n"
 	got := screen.splashes_parse_file(text)
-	testing.expect_value(t, len(got.all), 6)
-	testing.expect_value(t, got.sets[.None][0], "Day one")
-	testing.expect_value(t, got.sets[.None][1], "Day two")
-	testing.expect_value(t, got.sets[.Christmas][0], "Merry Christmas!")
-	testing.expect_value(t, got.sets[.Halloween][1], "Happy Halloween! Something")
-	// The unknown section's texts are skipped, not everyday.
-	for entry in got.all {
-		testing.expect(t, entry != "Skipped text")
-	}
-	// The shipped file parses and every holiday has its texts.
+	testing.expect_value(t, len(got.all), 5)
+	testing.expect_value(
+		t,
+		fmt.tprint(got.everyday),
+		fmt.tprint([]string{"Day one", "Day two", "Wet"}),
+	)
+	testing.expect_value(t, fmt.tprint(got.games), fmt.tprint([]string{"flood"}))
+	testing.expect_value(
+		t,
+		fmt.tprint(got.holidays[.Christmas]),
+		fmt.tprint([]string{"Merry Christmas!"}),
+	)
+	testing.expect_value(
+		t,
+		fmt.tprint(got.holidays[.Halloween]),
+		fmt.tprint([]string{"Happy Halloween!"}),
+	)
+	testing.expect(
+		t,
+		!slice.contains(got.all, "Skipped text"),
+		"an unknown section's line was kept",
+	)
+
 	shipped := screen.splashes_parse_file(screen.SPLASHES)
-	greeting_texts := engine.HOLIDAY_GREETING
-	testing.expect(t, len(shipped.all) >= 12 + 6 * 8)
-	for h in ([]engine.Holiday{engine.Holiday.New_Year, engine.Holiday.Valentines, engine.Holiday.St_Patricks, engine.Holiday.Easter, engine.Holiday.Halloween, engine.Holiday.Christmas}) {
+	testing.expect(t, len(shipped.everyday) >= 12)
+	testing.expect(t, len(shipped.games) >= 1, "no game's lines")
+	for h in engine.Holiday {
+		if h == .None {continue}
 		testing.expectf(
 			t,
-			len(shipped.sets[h]) >= 8,
-			"holiday %v: %d texts",
-			h,
-			len(shipped.sets[h]),
+			len(shipped.holidays[h]) == 1,
+			"[%s] has %d lines: a holiday has exactly one",
+			engine.HOLIDAY_SECTION[h],
+			len(shipped.holidays[h]),
 		)
-		testing.expect_value(t, shipped.sets[h][0], greeting_texts[h])
 	}
 }
 
+// Every day of a holiday's dates shows its one line, whatever the second; any other
+// day an everyday line (a game's among them), picked by the second.
 @(test)
 test_splash_for :: proc(t: ^testing.T) {
 	parsed := screen.splashes_parse_file(screen.SPLASHES)
-	greeting_texts := engine.HOLIDAY_GREETING
-	greeting_cases := []Holiday_Date {
+	days := []Holiday_Date {
+		{2026, 12, 31, .New_Year},
 		{2027, 1, 1, .New_Year},
+		{2027, 1, 2, .New_Year},
 		{2027, 2, 14, .Valentines},
 		{2027, 3, 17, .St_Patricks},
-		{2026, 4, 5, .Easter},
-		{2027, 10, 31, .Halloween},
-		{2026, 12, 25, .Christmas},
-	}
-	// On the greeting day itself the greeting shows, whatever the second.
-	for c in greeting_cases {
-		for s in SECONDS {
-			got := screen.splash_for(parsed, c.y, c.m, c.d, s)
-			testing.expectf(
-				t,
-				got == greeting_texts[c.holiday],
-				"greeting day splash for %v: %q",
-				c,
-				got,
-			)
-		}
-	}
-	// On a holiday's other days the splash comes from its set.
-	window_cases := []Holiday_Date {
-		{2026, 12, 31, .New_Year},
-		{2027, 10, 25, .Halloween},
-		{2026, 12, 20, .Christmas},
 		{2026, 4, 3, .Easter},
+		{2026, 4, 5, .Easter},
+		{2026, 4, 6, .Easter},
+		{2027, 10, 25, .Halloween},
+		{2027, 10, 31, .Halloween},
+		{2026, 12, 20, .Christmas},
+		{2026, 12, 25, .Christmas},
+		{2026, 12, 26, .Christmas},
 	}
-	for c in window_cases {
+	for c in days {
 		for s in SECONDS {
 			got := screen.splash_for(parsed, c.y, c.m, c.d, s)
-			testing.expectf(
-				t,
-				slice.contains(parsed.sets[c.holiday], got),
-				"window day splash for %v: %q",
-				c,
-				got,
-			)
+			testing.expectf(t, got == parsed.holidays[c.holiday][0], "%v: %q", c, got)
 		}
 	}
-	// Any other day: an everyday entry, picked by the second.
-	got := screen.splash_for(parsed, 2027, 6, 15, 0)
-	testing.expect(t, slice.contains(parsed.sets[.None], got))
-	got = screen.splash_for(parsed, 2027, 6, 15, 12345)
-	testing.expect(t, slice.contains(parsed.sets[.None], got))
-	// The greeting is stable for a given second.
+	testing.expect_value(t, screen.splash_for(parsed, 2026, 12, 20, 0), "Merry Christmas!")
+	for s in SECONDS {
+		got := screen.splash_for(parsed, 2027, 6, 15, s)
+		testing.expectf(t, slice.contains(parsed.everyday, got), "an ordinary day: %q", got)
+	}
 	testing.expect_value(
 		t,
 		screen.splash_for(parsed, 2027, 6, 15, 777),

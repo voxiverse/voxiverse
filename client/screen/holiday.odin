@@ -7,55 +7,36 @@ import "client:engine"
 import "client:ui"
 
 // The title screen's holiday themes (docs/polish.md, #300): on a holiday's
-// dates the splash is picked from that holiday's texts, its greeting first on
-// the holiday itself; the backdrop gets a small touch (snow, bats,
-// fireworks), respecting reduce motion. Both are dev-fakable with the
-// console's `title_date`.
+// dates the splash is that holiday's one line (assets/splashes.txt is where the
+// greeting is written), every day of them alike; the backdrop gets a small touch
+// (snow, bats, fireworks), respecting reduce motion. Both are dev-fakable with
+// the console's `title_date`.
 
+// Splashes: the splashes file, read. Its sections: [game <id>], a game's lines, which
+// join the everyday pool; [<holiday>], that holiday's one line. Any other section is an
+// authoring mistake, its lines skipped (a [game] section naming no game in games/ is
+// `check`'s to refuse).
 Splashes :: struct {
-	all:  []string, // every text in file order (everyday first, then sections)
-	sets: [engine.Holiday][]string, // .None: the everyday set; the rest their sections
-}
-
-@(private = "file")
-section_eq :: proc(s, lower: string) -> bool {
-	if len(s) != len(lower) {return false}
-	for i in 0 ..< len(s) {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {c += 32}
-		if c != lower[i] {return false}
-	}
-	return true
+	all:      []string, // every line in file order
+	everyday: []string, // the lines outside the holidays: the everyday ones and every game's
+	holidays: [engine.Holiday][]string, // each holiday's lines (one, as the file must have it)
+	games:    []string, // the ids the [game <id>] sections name, in file order
 }
 
 holiday_from_section :: proc(s: string) -> (holiday: engine.Holiday, ok: bool) {
-	switch {
-	case section_eq(s, "new_year"):
-		return .New_Year, true
-	case section_eq(s, "valentines"):
-		return .Valentines, true
-	case section_eq(s, "st_patricks"):
-		return .St_Patricks, true
-	case section_eq(s, "easter"):
-		return .Easter, true
-	case section_eq(s, "halloween"):
-		return .Halloween, true
-	case section_eq(s, "christmas"):
-		return .Christmas, true
+	for h in engine.Holiday {
+		if h != .None && strings.equal_fold(s, engine.HOLIDAY_SECTION[h]) {return h, true}
 	}
 	return .None, false
 }
 
-// splashes_parse_file: the splashes file as a struct (everyday texts, then
-// one set per holiday). An unknown section name is an authoring mistake:
-// its texts are skipped, not filed with the everyday set.
+// splashes_parse_file: the splashes file as a struct (Splashes).
 splashes_parse_file :: proc(text: string, allocator := context.temp_allocator) -> Splashes {
 	all := make([dynamic]string, allocator)
-	sets: [engine.Holiday][dynamic]string
-	for h in engine.HOLIDAY_SECTIONS {
-		sets[h] = make([dynamic]string, allocator)
-	}
-	sets[.None] = make([dynamic]string, allocator)
+	everyday := make([dynamic]string, allocator)
+	games := make([dynamic]string, allocator)
+	holidays: [engine.Holiday][dynamic]string
+	for h in engine.Holiday {holidays[h] = make([dynamic]string, allocator)}
 	current := engine.Holiday.None
 	skipping := false
 	rest := text
@@ -63,39 +44,38 @@ splashes_parse_file :: proc(text: string, allocator := context.temp_allocator) -
 		l := strings.trim_space(line)
 		if l == "" || strings.has_prefix(l, "#") {continue}
 		if strings.has_prefix(l, "[") && strings.has_suffix(l, "]") {
-			if h, ok := holiday_from_section(l[1:len(l) - 1]); ok {
+			section := strings.trim_space(l[1:len(l) - 1])
+			current, skipping = .None, false
+			if strings.has_prefix(section, "game ") {
+				append(&games, strings.trim_space(section[len("game "):]))
+			} else if h, ok := holiday_from_section(section); ok {
 				current = h
-				skipping = false
-				continue
+			} else {
+				skipping = true
 			}
-			current = engine.Holiday.None
-			skipping = true
 			continue
 		}
 		if skipping {continue}
 		append(&all, l)
-		append(&sets[current], l)
+		if current != .None {append(&holidays[current], l)} else {append(&everyday, l)}
 	}
-	out: Splashes
-	out.all = all[:]
-	out.sets[.None] = sets[.None][:]
-	for h in engine.HOLIDAY_SECTIONS {
-		out.sets[h] = sets[h][:]
+	out := Splashes {
+		all      = all[:],
+		everyday = everyday[:],
+		games    = games[:],
 	}
+	for h in engine.Holiday {out.holidays[h] = holidays[h][:]}
 	return out
 }
 
-// splash_for: the splash for a date. On a holiday's dates the splash comes
-// from its set; on the greeting day itself it is the greeting; otherwise the
-// everyday set. second picks within the set (the clock the title uses).
+// splash_for: the splash for a date: on a holiday's dates its line, whatever the second;
+// any other day an everyday line (a game's among them), second picking it (the clock
+// the title uses).
 splash_for :: proc(parsed: Splashes, year, month, day: int, second: i64) -> string {
-	greeting_texts := engine.HOLIDAY_GREETING
-	holiday, greeting := engine.holiday_for(year, month, day)
-	if greeting {return greeting_texts[holiday]}
-	set := parsed.sets[holiday] if holiday != .None else parsed.sets[.None]
-	if len(set) == 0 {set = parsed.sets[.None]}
-	if len(set) == 0 {return ""}
-	return set[int(second % i64(len(set)))]
+	holiday := engine.holiday_for(year, month, day)
+	if lines := parsed.holidays[holiday]; holiday != .None && len(lines) > 0 {return lines[0]}
+	if len(parsed.everyday) == 0 {return ""}
+	return parsed.everyday[int(second % i64(len(parsed.everyday)))]
 }
 
 // today_holiday: which holiday it is right now (the dev override wins).
@@ -103,8 +83,7 @@ today_holiday :: proc(app: ^engine.App) -> engine.Holiday {
 	y, m, d := 1970, 1, 1
 	if o, ok := app.title_date_override.?;
 	   ok {y, m, d = o[0], o[1], o[2]} else if ly, lm, ld, ok2 := engine.local_date_of(engine.app_wall(app)); ok2 {y, m, d = ly, lm, ld}
-	holiday, _ := engine.holiday_for(y, m, d)
-	return holiday
+	return engine.holiday_for(y, m, d)
 }
 
 // ---- the backdrop fx ----

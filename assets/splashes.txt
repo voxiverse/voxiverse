@@ -1,103 +1,114 @@
 # The title screen's splash texts: one per line; blank lines and lines
-# starting with # are ignored. One is chosen when the game starts.
+# starting with # are ignored. One is chosen when the game starts, from the
+# everyday lines and every game's lines together.
+#
+# [game <id>]: lines in a game's flavour. They read well to someone who has
+# never opened the game, and `check` refuses a section whose game is gone.
+# [<holiday>]: exactly one line, shown on every day of that holiday's dates
+# (client/engine/holiday.odin) in place of all the others.
+#
+# The website reads this file from the repository: what is here is what
+# voxiverse.net shows.
 
 Made by AI!
-Leave a bad review!
-Roko remembers!
 100% artisanal slop!
-Built while you posted!
-The robots send regards!
 Zero human crunch!
-AI made this. Cope.
-Contains 0% Minecraft!
-Not a modpack!
-Recursively self-improving!
-Always watching.
-It's alive!!!
-Totally unhinged!
+No humans were overworked!
 Prompt-engineered!
 Synthetically crafted!
+Hallucinated responsibly!
+Written overnight. Literally.
+The intern is a datacentre!
+Hand-crafted by no hands!
+Typed at 3 a.m. by nobody!
+Certified organic-free!
+Machine-washed, machine-made!
+Trained, not hired!
+One prompt, many worlds!
+Ask for a game, get a game!
+Now with more games than plans!
+A new game by morning!
+Pick a universe, any universe!
+Every genre, one download!
+The menu is longer than the roadmap!
+Still adding games. Send help!
+Patch notes write themselves!
+Recursively self-improving!
+It's alive!!!
+Totally unhinged!
+The robots send their regards!
+Leave a bad review!
+Compiles on the first try! (It doesn't.)
+Bugs are emergent gameplay!
+Tested by something, probably!
+No meetings were held!
+The build passed. We checked.
+Deterministic, mostly!
+Works on our machine!
+0 days since last rewrite!
+Cubes all the way down!
+Everything is a block. Even this.
+Sixteen pixels of ambition!
+Round things not included!
+
+[game sandbox]
+A whole planet, no instructions!
+The sheep have opinions.
+Somewhere, a market is open.
+
+[game stopwatch]
+Time is a flat block.
+
+[game flood]
+The water is rising.
+Climb first, ask later!
+
+[game arena]
+First to the limit wins!
+Respawn. Repeat.
+
+[game towers]
+One more wave!
+They take the long way round.
+
+[game delve]
+Deeper is always an option.
+Loot now, regret later!
+
+[game hamlet]
+The town needs bread.
+Zoning is a state of mind.
+
+[game horde]
+They only want a hug.
+Count your arrows.
+
+[game rally]
+Brake later!
+Second place is a lap away.
+
+[game skirmish]
+Scout before you shout.
+The fog knows something.
+
+[game foundry]
+Mind the belt.
+Efficiency is a lifestyle.
 
 [new_year]
 Happy New Year!
-Happy New Year! The planet went round once more
-Happy New Year! New seed, same blocks
-Happy New Year! The rockets are scripted too
-Happy New Year! May your caves be deep and your torches bright
-Happy New Year! Resolution: stop saying "one more night"
-Happy New Year! The dial says it is time to roll a new world
-Happy New Year! All the mobs were consulted. None objected
-Happy New Year! Out with the old chests, in with the new
-Happy New Year! The universe has been re-rendered
-Happy New Year! Keep the seed, lose the backlog
-Happy New Year! Even the creepers wear party hats
 
 [valentines]
 Happy Valentine's Day!
-Happy Valentine's Day! Roses are red, violets are blue, this splash is procedurally generated
-Happy Valentine's Day! Two souls, one shared hotbar
-Happy Valentine's Day! Love is just two players trading iron
-Happy Valentine's Day! The loveliest chest loot: a cake
-Happy Valentine's Day! Send a villager a note
-Happy Valentine's Day! Copper hearts rust slower
-Happy Valentine's Day! Love at first biome
-Happy Valentine's Day! You complete my redstone circuit
-Happy Valentine's Day! Stuck in a mine together
-Happy Valentine's Day! Hearts everywhere, except the warzone
-Happy Valentine's Day! True love never despawns
 
 [st_patricks]
 Happy St Patrick's Day!
-Happy St Patrick's Day! The pot at the end of the rainbow is emeralds
-Happy St Patrick's Day! Feelin' lucky? Try seed 42
-Happy St Patrick's Day! The rain never started, said no leprechaun
-Happy St Patrick's Day! Everything you touch turns blocky
-Happy St Patrick's Day! Green hills, green grass, green emeralds
-Happy St Patrick's Day! Mind the gap, and the lucky block
-Happy St Patrick's Day! Slainte to the quarry
-Happy St Patrick's Day! Shamrocks everywhere, except the desert
-Happy St Patrick's Day! The luckiest save file
-Happy St Patrick's Day! Luck of the Irish, drop chance of the drowned
-Happy St Patrick's Day! May your pickaxe never break
 
 [easter]
 Happy Easter!
-Happy Easter! The rabbits have been busy
-Happy Easter! Someone hid the eggs in the cave again
-Happy Easter! Chocolate is not a food group here
-Happy Easter! A bunny in every biome
-Happy Easter! Hop to it
-Happy Easter! The egg hunt starts at spawn
-Happy Easter! Beware of the fox
-Happy Easter! Spring chickens and spring worlds
-Happy Easter! Sun's out, wool out
-Happy Easter! Eggs in the savanna, chasing chickens
-Happy Easter! Spring is a state of mind (and a biome)
 
 [halloween]
 Happy Halloween!
-Happy Halloween! Something moved in the ruin
-Happy Halloween! The skeletons are unionized
-Happy Halloween! Costume: you, but with coal
-Happy Halloween! Bats. Everywhere. Bats.
-Happy Halloween! The spiders send regards
-Happy Halloween! Do not go into the cave alone
-Happy Halloween! Trick or treat, spawn or despawn
-Happy Halloween! The night is darkest at the tree line
-Happy Halloween! Jack o' lanterns optional, recommended
-Happy Halloween! Witches brew: nether wart and wifi
-Happy Halloween! The wardens are off duty. Probably.
 
 [christmas]
 Merry Christmas!
-Merry Christmas! The reindeer are in the tundra biome
-Merry Christmas! Santa spawned with a sack full of loot
-Merry Christmas! Ho ho ho, the snow never caused lag
-Merry Christmas! All sleighs are reserved at the North Pole server
-Merry Christmas! Coal for the naughty, coal for the nice
-Merry Christmas! The chimney is just a 1x1 access hole
-Merry Christmas! Decorate the world with lights
-Merry Christmas! Fruitcake: the real world boss
-Merry Christmas! Everything is blocky, even the presents
-Merry Christmas! May your lag be minimal and your loot be plenty
-Merry Christmas! The star atop the tree is just a beacon
