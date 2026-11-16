@@ -3,6 +3,7 @@ package build
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
@@ -221,6 +222,70 @@ lint_cap :: proc(cap: int, tracked: []string) -> []string {
 	return found[:]
 }
 
+// lint_cap_counts: the counts the manifest's cap section states are the packages' own:
+// each "`dir` (N files)" or "`dir` (N)" there, and "every other package has M or
+// fewer" for every package it does not name. A count that has gone stale fails.
+lint_cap_counts :: proc(text: string, tracked: []string) -> []string {
+	found := make([dynamic]string)
+	counts := make(map[string]int, allocator = context.temp_allocator)
+	for path in tracked {
+		if !strings.has_suffix(path, ".odin") || strings.has_suffix(path, "_test.odin") {continue}
+		counts[filepath.dir(path)] += 1
+	}
+	_, _, section := strings.partition(text, "## The cap")
+	section, _, _ = strings.partition(section, "\n## ")
+	named := make([dynamic]string, context.temp_allocator)
+	rest := section
+	for {
+		_, tick, after := strings.partition(rest, "`")
+		if tick == "" {break}
+		dir, closed, more := strings.partition(after, "`")
+		if closed == "" {break}
+		rest = more
+		gap := strings.trim_left_space(more) // (a line may break before the count)
+		if len(gap) == len(more) || !strings.has_prefix(gap, "(") {continue}
+		digits := gap[1:]
+		n := 0
+		for n < len(digits) && digits[n] >= '0' && digits[n] <= '9' {n += 1}
+		if n == 0 {continue}
+		stated, _ := strconv.parse_int(digits[:n])
+		append(&named, dir)
+		if counts[dir] != stated {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s: says %s has %d files; it has %d",
+					LAYOUT_MANIFEST,
+					dir,
+					stated,
+					counts[dir],
+				),
+			)
+		}
+	}
+	if at := strings.index(section, "every other package has "); at >= 0 {
+		digits := section[at + len("every other package has "):]
+		n := 0
+		for n < len(digits) && digits[n] >= '0' && digits[n] <= '9' {n += 1}
+		bound, _ := strconv.parse_int(digits[:n])
+		for dir, c in counts {
+			if c > bound && !slice.contains(named[:], dir) {
+				append(
+					&found,
+					fmt.aprintf(
+						"%s: says every other package has %d files or fewer; %s has %d",
+						LAYOUT_MANIFEST,
+						bound,
+						dir,
+						c,
+					),
+				)
+			}
+		}
+	}
+	return found[:]
+}
+
 layout_lint :: proc() -> bool {
 	data, err := os.read_entire_file_from_path(LAYOUT_MANIFEST, context.allocator)
 	if err != nil {
@@ -246,7 +311,11 @@ layout_lint :: proc() -> bool {
 		fmt.eprintln(msg)
 		ok = false
 	}
-	if ok {fmt.println("lint   every file is in a folder docs/layout.md lists, under a pattern it allows, and no package is over the cap")}
+	for msg in lint_cap_counts(string(data), kept[:]) {
+		fmt.eprintln(msg)
+		ok = false
+	}
+	if ok {fmt.println("lint   every file is in a folder docs/layout.md lists, under a pattern it allows, no package is over the cap and the counts it states are true")}
 	return ok
 }
 

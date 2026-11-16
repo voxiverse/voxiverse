@@ -153,4 +153,18 @@ test_cap_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_cap(2, tracked)), 0)
 	testing.expect_value(t, len(lint_cap(1, tracked)), 1)
 	testing.expect_value(t, len(lint_cap(0, tracked)), 1)
+	// The counts the cap section states are checked: a named one exactly, the rest by
+	// the bound.
+	counted := []string {
+		"a/x.odin",
+		"a/y.odin",
+		"a/y_test.odin",
+		"b/z.odin",
+		"c/w.odin",
+		"c/v.odin",
+	}
+	doc :: "## The cap\n\nThe largest is `a`\n(2 files); every other package has 1 or fewer.\n\n## Next\n`c` (9)\n"
+	testing.expect_value(t, len(lint_cap_counts(doc, counted[:1])), 1) // (a has 1)
+	testing.expect_value(t, len(lint_cap_counts(doc, counted[:5])), 0) // (c's 9 is past the section)
+	testing.expect_value(t, len(lint_cap_counts(doc, counted)), 1) // (c has 2: over the bound)
 }
