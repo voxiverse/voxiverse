@@ -15,6 +15,8 @@ import "client:ui"
 
 MINIMAP_ROWS_A_FRAME :: 4 // rows of cells whose colour is read again each frame
 
+// Minimap: a game's map from above in a corner of the HUD, its ground read from the world a
+// few rows a frame (minimap_init, minimap_ground, minimap_draw).
 Minimap :: struct {
 	lo, hi:   [2]i32, // the map's blocks (x, z), inclusive
 	y_lo:     i32, // the heights its ground lies between

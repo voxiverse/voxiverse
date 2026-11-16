@@ -18,6 +18,7 @@ FOG_CELL :: 2 // blocks a side of a cell
 FOG_ROWS_A_FRAME :: 4 // rows of cells whose ground is read again each frame
 NO_GROUND :: min(f32) // a cell whose ground is not read yet
 
+// Fog: the fog of war over a game's map as one side sees it (fog_init, fog_update, fog_draw).
 Fog :: struct {
 	lo, hi:   [2]i32, // the map's blocks (x, z), inclusive
 	y_lo:     i32, // the heights its ground lies between

@@ -25,6 +25,8 @@ MAX_SELECTED :: 256 // entities picked at once
 MAX_GROUPS :: 10 // control groups (0 to 9)
 DOUBLE_CLICK :: 0.4 // seconds between the clicks of a double click
 
+// Selection: the entities of its side a player has picked, its control groups, and the
+// click or drag in progress.
 Selection :: struct {
 	ids:        [MAX_SELECTED]u32,
 	count:      int,
@@ -49,6 +51,7 @@ is_selected :: proc(sel: ^Selection, id: u32) -> bool {
 	return false
 }
 
+// selection_clear: nothing picked (the groups are kept).
 selection_clear :: proc(sel: ^Selection) {sel.count = 0}
 
 // selection_add: id picked (nothing when it is already, or the set is full).

@@ -69,6 +69,8 @@ Session_State :: enum u8 {
 	Failed, // see failure; the caller ends the session
 }
 
+// Session: the client playing on one server, its own or another's: the connection, the
+// world as it was told it, the player, and the game's client part and its state.
 Session :: struct {
 	state:            Session_State,
 	loading:          Maybe(Loading), // the loading screen is up (screen_loading.odin)
