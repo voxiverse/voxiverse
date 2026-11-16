@@ -41,6 +41,7 @@ APPLY := [protocol.State_Kind]Apply_Proc {
 	.Channel       = apply_channel,
 	.Island        = apply_island,
 	.Machine       = apply_machine,
+	.Belt          = apply_belt,
 }
 
 // apply_received does what a message's records and events say, in order.

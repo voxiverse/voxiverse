@@ -299,6 +299,8 @@ test_a_games_keys_are_saved_for_it :: proc(t: ^testing.T) {
 	shop_fixture(t, &f)
 	defer shop_fixture_destroy(&f)
 	app, s := f.app, f.s
+	// (a game of its own: the other tests' shop, playing meanwhile, reads no file of this one)
+	s.game.id = "kept"
 	s.game.actions = {"Shop"}
 	s.game.keys = {{"Group 1", .Num_1}, {"Stop", .S}}
 	shop_frame(app)

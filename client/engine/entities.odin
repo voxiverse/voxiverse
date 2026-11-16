@@ -379,9 +379,7 @@ turn_yaw :: proc(p: [3]f32, yaw: f32) -> [3]f64 {
 // (more of them stacked for a bigger stack).
 @(private = "file")
 dropped_item :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View, stack: game.Stack) {
-	info, _ := game.item_info(s.reg, stack.item)
-	colour := [4]u8{60, 60, 64, 255} // a tool
-	if info.block != .Air {colour = block_colour(s, info.block)}
+	colour := item_colour(s, stack.item)
 	t := f32(time.duration_seconds(time.tick_since({}))) // (any steady clock)
 	spin := t * 1.5
 	bob := f64(math.sin(t * 2.5) * 0.06 + 0.06)
@@ -399,6 +397,13 @@ dropped_item :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View, stack: 
 			.Body,
 		)
 	}
+}
+
+// item_colour: an item's look in one colour: its block's, or a tool's grey.
+item_colour :: proc(s: ^Session, item: game.Item) -> [4]u8 {
+	info, _ := game.item_info(s.reg, item)
+	if info.block != .Air {return block_colour(s, info.block)}
+	return {60, 60, 64, 255}
 }
 
 // block_colour: b's look in one colour (the average of its side): a minimap's ground.

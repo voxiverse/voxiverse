@@ -45,6 +45,7 @@ World :: struct {
 	command_rng:       base.Rng, // @r (commands_world.odin)
 	updates:           Updates, // scheduled block updates: flowing water (liquids.odin)
 	machines:          Machines, // the game's machines waiting to think (machines.odin; heap)
+	belts:             Belt_Set, // the conveyors awake (belts.odin; heap)
 	saved:             map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
 	regions:           map[game.Region_Pos]bool, // read from disk; true = changed since written
 	started:           bool, // world_start ran (its chunks and the rest exist)
@@ -172,6 +173,7 @@ world_close :: proc(w: ^World) {
 	}
 	sight_destroy(&w.sight)
 	machines_destroy(&w.machines)
+	belts_destroy(&w.belts)
 	delete(w.tops)
 	delete(w.noted_changes)
 	delete(w.gates)

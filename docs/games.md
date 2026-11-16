@@ -243,6 +243,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `entity_glide(w, h, points)` | Send a steered walker along points in straight legs, with no physics, at a fraction of a walker's cost (a town's citizens on its roads); `entity_arrived` at the last |
 | `MAX_TEAMS`, `client_set_team(c, team)`, `client_team(c)`, `entity_set_team(w, h, team)`, `entity_team(w, h)`, `entity_set_vision(w, h, blocks)`, `entity_vision(w, h)`, `world_fog(w, on)`, `team_sees(w, team, p)` | Sides ([below](#sides)): a player's and an entity's team (0: none; no harm passes between two of a team, and a kind's `team<n>` look shows its team's colour), how far an entity sees for its team, and a world whose players on a team are told only of the entities their team sees |
 | `Machines`, `machine_data(w, p, T)`, `machine_slots(w, p)`, `machine_kind(w, p)`, `machine_wake(w, p, ticks)`, `machine_sleep(w, p)`, `machine_show(w, p, &value)`, `items_made(s, w, item, count)`, `items_used(s, w, item, count)` | Machines ([below](#machines)): the game's record on one, its inventory, its block type, when it thinks next, what players are shown of it; what its machines make and use up, booked in the item ledger |
+| `belt_put(w, p, item)`, `belt_take(w, p)`, `belt_peek(w, p)` | Belts ([below](#belts)): an item onto a belt's start (false: no room), the front item off it, what it carries |
 | `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
 
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
@@ -324,6 +325,23 @@ machine whose time has come, one call per block type, lowest position first, so 
 thousands of machines cost what the due ones cost, not a scan of all. The time is the server's
 age (its persistent tick), so a machine thinks on after a restart where it left off. What a
 machine makes or uses up is booked with `items_made` and `items_used`.
+
+### Belts
+
+A block declared `"entity": {"kind": "belt", "speed": 1.5}` (blocks a second, at most 7.5,
+with a `facing` property; `"place": "facing"` turns it the way its builder looks) is a
+conveyor (`common/game/belt.odin`, `server/core/belts.odin`): it carries up to four items
+the way it faces, each a quarter of a block behind the one in front, in the order they came,
+and hands its front item to the belt it faces when that one has room at its start (a corner
+is a belt facing another way); with no belt in front, or none with room, the item waits at
+its end. The game puts items on (`belt_put`: a mine's output, an arm's drop) and takes them
+off (`belt_take`: an arm feeding a furnace); `belt_peek` reads what one carries. Items in
+transit are no entities: only the belts on which something moves are stepped, and players
+are told a belt's items with its chunk and when one is put on or taken off, never as they
+only move: the client steps its copy of the belts with the same code, and draws each item as
+a cube of its colour riding the belt (at half a block: a belt is a slab). What belts carry is
+in the item ledger and spills when one is broken. (`./build.sh bench budgets`: 20 000 items
+on 8 560 belts with 5 000 machines, `the factory`.)
 
 ### Walkers
 

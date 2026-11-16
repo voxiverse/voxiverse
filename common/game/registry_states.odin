@@ -423,7 +423,7 @@ read_block_behaviour :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def
 		}
 		if f := field_of(m, "entity"); f != nil {
 			ok := f.value.kind == .Object
-			kind, slots := "", i64(0)
+			kind, slots, speed := "", i64(0), f64(0)
 			if ok {
 				for em in f.value.members {
 					switch {
@@ -431,6 +431,8 @@ read_block_behaviour :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def
 						kind = em.value.s
 					case em.key == "slots" && em.value.kind == .Int:
 						slots = em.value.i
+					case em.key == "speed" && (em.value.kind == .Int || em.value.kind == .Float):
+						speed = em.value.f
 					case:
 						ok = false
 					}
@@ -448,6 +450,25 @@ read_block_behaviour :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def
 				)
 			case kind == "machine":
 				def.entity, def.slots = .Machine, u8(slots)
+			case kind == "belt" && !(speed > 0 && speed <= 7.5):
+				fail_field(
+					b,
+					f,
+					f.value,
+					fmt.aprintf(
+						"a belt's speed is above 0 and at most 7.5 blocks a second; got %v",
+						speed,
+					),
+				)
+			case kind == "belt" && !prop_has_values(def, "facing", ROTATE_VALUES[:]):
+				fail_field(
+					b,
+					f,
+					f.value,
+					"a belt needs the property facing: north, east, south, west",
+				)
+			case kind == "belt":
+				def.entity, def.belt_step = .Belt, lane_step_of(f32(speed))
 			case kind != "container":
 				fail_field(
 					b,

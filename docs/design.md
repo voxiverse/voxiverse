@@ -137,6 +137,9 @@ its own kinds as data, which follow the engine's in the session's schema
   are not state.
 - Remote entities and players are drawn `INTERPOLATION_TICKS` (3) behind the newest update,
   interpolated, not predicted.
+- Items on a game's belts are no entities: a belt's items are sent with its chunk and when the
+  game puts one on or takes one off, and both sides step the belts with the same code
+  (`common/game/belt.odin`) in between ([games.md](games.md#belts)).
 
 ### Renderer
 - Chunk meshes are sub-allocated in one device-local buffer and uploaded per chunk through

@@ -81,6 +81,8 @@ Metric :: enum u8 {
 	Battle_View, // CPU us per tick of one side's client's view of that battle under fog: entities_put and the encoding
 	Gliders_Tick, // CPU us per entities' tick of 1000 steered walkers gliding (server/core/walkers.odin, entity_glide)
 	Gliders_View, // CPU us per tick of one client's view of them: entities_put and the snapshot's encoding
+	Factory_Tick, // CPU us per tick of 5 000 machines thinking every second and 20 000 items riding belts (server/core/budgets.odin)
+	Factory_View, // CPU us per tick of one client's view of that factory: what its machines show, and the encoding
 	Planet_Build, // building the home world's climate from its relief (common/planet), ms
 	Planet_History, // the peoples of that planet over 6 000 years (common/planet), ms
 	Planet_Placement, // their settlements, roads and ruins on that planet (common/planet), ms
@@ -176,6 +178,8 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Battle_View          = {"battle_view", "us", false},
 	.Gliders_Tick         = {"gliders_tick", "us", false},
 	.Gliders_View         = {"gliders_view", "us", false},
+	.Factory_Tick         = {"factory_tick", "us", false},
+	.Factory_View         = {"factory_view", "us", false},
 	.Planet_Build         = {"planet_build", "ms", false},
 	.Planet_History       = {"planet_history", "ms", false},
 	.Planet_Placement     = {"planet_placement", "ms", false},

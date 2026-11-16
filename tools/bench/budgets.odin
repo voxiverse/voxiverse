@@ -58,6 +58,8 @@ BUDGET_LIMITS := [?]struct {
 	{.Fighters_Tick, 4000},
 	{.Battle_Tick, 8000}, // 300 soldiers on two sides fighting, a quarter of the tick
 	{.Battle_View, 2000}, // ... one side's client's view of them under fog
+	{.Factory_Tick, 8000}, // 5 000 machines and 20 000 items on 8 560 belts, a quarter of the tick
+	{.Factory_View, 2000}, // ... one client's view of it: about 170 machines showing a tick
 	{.Gliders_Tick, 3000}, // 1000 citizens gliding their roads: measured at about 0.64 ms (200: 0.13 ms)
 	{.Gliders_View, 4000}, // ... one client's view of all 1000 and its snapshot's encoding: about 1.1 ms // 150 creatures hunting, looking, striking, pushed apart: measured at about 0.6 ms
 	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 1.2 s (rain 1 s)
@@ -237,6 +239,28 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) 
 	)
 	base.metric_add(.Battle_Tick, f32(battle.mean_us))
 	base.metric_add(.Battle_View, f32(battle.view_us))
+
+	fmt.printfln("scene: %s", "the factory")
+	factory, built := core.budget_factory()
+	if !built ||
+	   factory.thinks == 0 ||
+	   factory.moved == 0 ||
+	   factory.items != core.BUDGET_FACTORY_ITEMS {
+		append(broken, fmt.aprintf("the factory: %v", factory))
+	}
+	fmt.printfln(
+		"  %.0f us a tick (worst %d: belts %.0f, machines %.0f), the view %.0f us (%.1f records), %d thinks, %d items",
+		factory.mean_us,
+		factory.worst_us,
+		factory.belts_us,
+		factory.machines_us,
+		factory.view_us,
+		factory.records,
+		factory.thinks,
+		factory.items,
+	)
+	base.metric_add(.Factory_Tick, f32(factory.mean_us))
+	base.metric_add(.Factory_View, f32(factory.view_us))
 }
 
 // budget_planet builds the planet from the committed relief, then its peoples' 6 000

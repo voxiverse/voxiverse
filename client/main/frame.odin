@@ -409,6 +409,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 				app.debug.swing_at,
 			)
 			engine.entities_draw(s, &app.entity_draw, app.last_frame_ms / 1000)
+			engine.belts_draw(s, &app.entity_draw, f32(s.tick_time / game.TICK_SECONDS))
 			autopilot.bench_avatars_draw(app, s)
 			view_scene = engine.view_model_frame(app, s, width, height)
 		}

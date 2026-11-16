@@ -193,6 +193,7 @@ section :: proc(s: ^Server, sec: Hash_Section, k: ^Sink) {
 				path := wpath(i, fmt.tprintf("containers[%v]", at.pos))
 				fold(k, path, at.pos)
 				fold(k, path, at.e.slots)
+				if at.e.kind == .Belt {fold(k, path, at.e.lane)}
 				if at.e.kind == .Machine {
 					fold(k, path, at.e.data)
 					fold(k, path, at.e.shown)

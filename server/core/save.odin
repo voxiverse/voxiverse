@@ -214,6 +214,7 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 		ledger_entities(w, chunk.block_entities[:], .Scope_In)
 		entities_reconcile(w, chunk)
 		machines_loaded(w, chunk)
+		belts_loaded(w, chunk)
 	}
 	sim_restore(w, pos, waiting[:]) // (what was waiting when it was saved, as due then)
 	sim_wake_box(w, origin, origin + game.CHUNK_SIZE - 1, 0) // flowing again where it was

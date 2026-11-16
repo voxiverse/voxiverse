@@ -38,6 +38,7 @@ State_Kind :: enum u8 {
 	Channel,
 	Island,
 	Machine,
+	Belt,
 }
 
 Event_Kind :: enum u8 {
@@ -141,6 +142,13 @@ Block_Record :: struct {
 // (server/core/machines.odin): sent when it changes and with its chunk.
 Machine_Record :: struct {
 	shown: [game.MAX_MACHINE_SHOWN]u8,
+}
+
+// Belt_Record: a belt's items (key: its block), when the game or a player put or took one,
+// and with its chunk; between them the client moves them as the server does
+// (common/game/belt.odin).
+Belt_Record :: struct {
+	lane: game.Lane,
 }
 
 // Channel_Record: a replicated channel's value at a cell (key: the cell and the channel).
@@ -275,6 +283,13 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 	.Channel = {name = "channel", value = Channel_Record, key = .Cell, write_through = true},
 	.Island = {name = "island", value = Island},
 	.Machine = {name = "machine", value = Machine_Record, key = .Block, write_through = true},
+	.Belt = {
+		name = "belt",
+		value = Belt_Record,
+		key = .Block,
+		write_through = true,
+		check = check_belt_record,
+	},
 }
 
 @(rodata)
@@ -428,6 +443,20 @@ check_explosion :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 @(private = "file")
 check_block_record :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	return game.block_valid(&reg.blocks, (^Block_Record)(v).block)
+}
+
+@(private = "file")
+check_belt_record :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	l := &(^Belt_Record)(v).lane
+	if l.count > game.LANE_ITEMS {return false}
+	last := u32(game.LANE_END)
+	for it in l.items[:l.count] {
+		if !game.item_valid(reg, it.item) ||
+		   it.item == game.NO_ITEM ||
+		   u32(it.at) > last {return false}
+		last = u32(it.at)
+	}
+	return true
 }
 
 @(private = "file")

@@ -82,6 +82,7 @@ ledger_world_scope :: proc(w: ^World, reason: game.Reason) {
 	sign := 1 if reason == .Scope_In else -1
 	for at in block_entities_all(w) {
 		for st in at.e.slots {ledger_stack(s, w, reason, st, sign)}
+		for st in game.lane_stacks(&at.e.lane) {ledger_stack(s, w, reason, st, sign)}
 	}
 	it := entities_each(w)
 	for e in entities_next(&it) {
@@ -91,7 +92,7 @@ ledger_world_scope :: proc(w: ^World, reason: game.Reason) {
 }
 
 // held_sums: everything held in memory, per item: online players'
-// inventories, and the chests and item entities of loaded worlds.
+// inventories, and the chests, machines, belts and item entities of loaded worlds.
 @(private = "file")
 held_sums :: proc(s: ^Server) -> map[game.Item]i64 {
 	held := make(map[game.Item]i64, context.temp_allocator)
@@ -107,6 +108,7 @@ held_sums :: proc(s: ^Server) -> map[game.Item]i64 {
 	for w in s.worlds {
 		for at in block_entities_all(w) {
 			for st in at.e.slots {add(&held, st)}
+			for st in game.lane_stacks(&at.e.lane) {add(&held, st)}
 		}
 		it := entities_each(w)
 		for e in entities_next(&it) {

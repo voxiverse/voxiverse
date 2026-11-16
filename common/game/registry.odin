@@ -214,6 +214,7 @@ Block_Entity_Kind :: enum u8 {
 	None,
 	Container,
 	Machine, // a game's: its record, what it shows, its slots, when it thinks next (block_entity.odin)
+	Belt, // a conveyor: the items it carries along (belt.odin)
 }
 
 
@@ -232,6 +233,7 @@ Type_Def :: struct {
 	use:         Use_Rule,
 	entity:      Block_Entity_Kind,
 	slots:       u8, // a machine's slots (its inventory: 0 to CHEST_SLOTS); a container's are CHEST_SLOTS
+	belt_step:   u16, // a belt's step a tick (lane units: lane_step_of)
 }
 
 // Box: a box in sixteenths of a block, 0 <= lo < hi <= 16 (collision boxes

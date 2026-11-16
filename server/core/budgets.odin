@@ -1176,3 +1176,174 @@ budget_world_tick_after :: proc(s: ^Server, w: ^World) {
 	journal_tick(w)
 	free_all(context.temp_allocator)
 }
+
+// ---- the factory ----
+
+Budget_Factory :: struct {
+	mean_us:     f64, // the belts' and machines' tick, mean
+	worst_us:    i64, // ... and the slowest
+	belts_us:    f64, // the belts alone, mean
+	machines_us: f64, // the machines alone (the game's hook included), mean
+	view_us:     f64, // one client's view (what the machines showed, and its encoding), mean a tick
+	records:     f64, // machine records that client was sent a tick, mean
+	thinks:      u64, // machine thinks run
+	moved:       u64, // lane steps run
+	items:       int, // on the belts at the end
+}
+
+BUDGET_FACTORY_MACHINES :: 5000
+BUDGET_FACTORY_ITEMS :: 20_000
+BUDGET_FACTORY_TICKS :: 150
+BUDGET_FACTORY_THINK :: 30 // ticks between a machine's thinks
+
+@(private = "file")
+BUDGET_FACTORY_BLOCKS :: `{
+	"belt": {"states": {"facing": ["north", "east", "south", "west"]}, "default": {"facing": "east"},
+	         "textures": {"all": "voxiverse:stone"}, "place": "facing", "entity": {"kind": "belt", "speed": 2}},
+	"works": {"textures": {"all": "voxiverse:planks"}, "entity": {"kind": "machine", "slots": 2}}
+}`
+
+@(private = "file")
+Budget_Machine :: struct {
+	made:     u32,
+	progress: f32,
+}
+
+@(private = "file")
+Budget_Shown :: struct {
+	made: u32,
+}
+
+// budget_factory_think: the scene's machines: each counts, shows it, and sleeps a second.
+@(private = "file")
+budget_factory_think :: proc(s: ^Server, w: ^World, kind: game.Block_Type, at: []game.Block_Pos) {
+	for p in at {
+		m := machine_data(w, p, Budget_Machine)
+		m.made += 1
+		m.progress = 0
+		shown := Budget_Shown{m.made}
+		machine_show(w, p, &shown)
+		machine_wake(w, p, BUDGET_FACTORY_THINK)
+	}
+}
+
+// budget_factory: a factory at scale: 5 000 machines, each thinking once a second
+// (staggered) and showing what it made, and 20 000 items riding 8 560 belts in twenty
+// square loops on five floors, never stopping (two or three to a belt of four); and what
+// one client who has every chunk is told of it each tick. The work of a factory game's
+// world: the belts' step, the machines' batches, the game's hook.
+budget_factory :: proc() -> (r: Budget_Factory, ok: bool) {
+	h := new(Harness)
+	defer free(h)
+	files := [2]game.Pack_File {
+		{"pack.json", transmute([]u8)string(BUDGET_WALKER_PACK)},
+		{"data/blocks/factory.json", transmute([]u8)string(BUDGET_FACTORY_BLOCKS)},
+	}
+	config := harness_world()
+	config.game = {
+		info = {id = "budget", name = "Budget"},
+		pack = {"budget", files[:]},
+		machine_data = Budget_Machine,
+		machine_shown = Budget_Shown,
+		machines = budget_factory_think,
+	}
+	config.journal_timed = true
+	config.view_radius, config.view_height = 7, 2
+	if !harness_start(h, config) {return}
+	defer harness_stop(h)
+	s := &h.srv
+	w := s.home
+	for y in i32(0) ..< 5 {
+		for z in i32(-4) ..< 4 {
+			for x in i32(-4) ..< 4 {chunks_insert(&w.chunks, {x, y, z}, .Air, nil)}
+		}
+	}
+	t := &s.registry.blocks
+	belt := game.registry_block(s.registry, "budget:belt") or_return
+	works := game.registry_block(s.registry, "budget:works") or_return
+	facing := [4]game.Block{}
+	for name, i in game.ROTATE_VALUES {facing[i] = game.state_set(t, belt, "facing", name) or_return}
+	act := world_act(w, .Command)
+	// The loops: a square of side n round the origin goes east along its north edge,
+	// south along its east, west along its south, north along its west.
+	stone := game.item_of_block(s.registry, .Stone)
+	placed := 0
+	lanes := make([dynamic]game.Block_Pos)
+	defer delete(lanes)
+	for y := i32(64); y <= 72; y += 2 {
+		for side := i32(120); side >= 96; side -= 8 {
+			lo, hi := -side / 2, side / 2 - 1
+			for x in lo ..< hi {append(&lanes, game.Block_Pos{x, y, lo}); set_block(w, {x, y, lo}, facing[1], act)}
+			for z in lo ..< hi {append(&lanes, game.Block_Pos{hi, y, z}); set_block(w, {hi, y, z}, facing[2], act)}
+			for x := hi;
+			    x > lo;
+			    x -= 1 {append(&lanes, game.Block_Pos{x, y, hi}); set_block(w, {x, y, hi}, facing[3], act)}
+			for z := hi;
+			    z > lo;
+			    z -= 1 {append(&lanes, game.Block_Pos{lo, y, z}); set_block(w, {lo, y, z}, facing[0], act)}
+		}
+	}
+	for p, i in lanes {
+		e := block_entity_at(w, p)
+		if e == nil || e.kind != .Belt {return}
+		n := 2 + i % 2 if placed < BUDGET_FACTORY_ITEMS else 0
+		n = min(n, BUDGET_FACTORY_ITEMS - placed)
+		for k in 0 ..< n {e.lane.items[k] = {stone, u16(0xA000 - 0x5000 * k)}}
+		e.lane.count = u8(n)
+		placed += n
+		belt_changed(w, p)
+	}
+	if placed != BUDGET_FACTORY_ITEMS {return}
+	// The machines: a 50 x 100 block of them over the loops, each first due at its turn.
+	for i in 0 ..< BUDGET_FACTORY_MACHINES {
+		p := game.Block_Pos{i32(i % 100) - 50, 76 + i32(i / 5000), i32(i / 100) - 25}
+		set_block(w, p, works, act)
+		machine_wake(w, p, 1 + i % BUDGET_FACTORY_THINK)
+	}
+	changes_flush(w)
+	journal_tick(w)
+	free_all(context.temp_allocator)
+	// One client with every chunk, told what the machines show.
+	c := &s.clients[0]
+	c.state, c.world = .Playing, w
+	c.has = make(map[game.Chunk_Pos]struct{})
+	defer delete(c.has)
+	for y in i32(0) ..< 5 {
+		for z in i32(-4) ..< 4 {
+			for x in i32(-4) ..< 4 {c.has[{x, y, z}] = {}}
+		}
+	}
+	protocol.sender_init(&c.tx, &s.schema)
+	defer {
+		protocol.sender_destroy(&c.tx)
+		c^ = {}
+	}
+	total, belts, machines, view, records: i64
+	for _ in 0 ..< BUDGET_FACTORY_TICKS {
+		s.tick += 1
+		start := base.thread_cpu_us()
+		belts_tick(w)
+		mid := base.thread_cpu_us()
+		machines_tick(w)
+		took := base.thread_cpu_us() - start
+		belts += mid - start
+		machines += took - (mid - start)
+		total += took
+		r.worst_us = max(r.worst_us, took)
+		start = base.thread_cpu_us()
+		records += i64(len(c.tx.cur.tables[int(protocol.State_Kind.Machine)].records))
+		out := make([dynamic]protocol.Outgoing, context.temp_allocator)
+		protocol.sender_flush(&c.tx, u32(s.tick), {}, &out)
+		view += base.thread_cpu_us() - start
+		protocol.sender_ack(&c.tx, u32(s.tick))
+		budget_world_tick_after(s, w)
+	}
+	r.mean_us = f64(total) / BUDGET_FACTORY_TICKS
+	r.belts_us = f64(belts) / BUDGET_FACTORY_TICKS
+	r.machines_us = f64(machines) / BUDGET_FACTORY_TICKS
+	r.view_us = f64(view) / BUDGET_FACTORY_TICKS
+	r.records = f64(records) / BUDGET_FACTORY_TICKS
+	r.thinks, r.moved = w.machines.thinks, w.belts.moves
+	for p in lanes {r.items += len(belt_peek(w, p))}
+	return r, true
+}

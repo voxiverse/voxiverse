@@ -24,6 +24,7 @@ Block_Entity :: struct {
 	data:  [MAX_MACHINE_DATA]u8, // a machine's record (the game's type)
 	shown: [MAX_MACHINE_SHOWN]u8, // what a machine shows (the game's type)
 	due:   u64, // a machine's next think, in server age (0: none)
+	lane:  Lane, // a belt's items (belt.odin)
 }
 
 // (a game's record is read in place as its type: aligned as any plain type may need)
@@ -99,6 +100,12 @@ write_block_entity_value :: proc(w: ^Writer, e: ^Block_Entity) {
 		}
 		write_varint(w, u32(e.due & 0xFFFF_FFFF))
 		write_varint(w, u32(e.due >> 32))
+	case .Belt:
+		write_varint(w, u32(e.lane.count))
+		for it in e.lane.items[:e.lane.count] {
+			write_varint(w, u32(it.item))
+			write_u16(w, it.at)
+		}
 	}
 }
 
@@ -112,6 +119,10 @@ read_block_entity_value :: proc(r: ^Reader, e: ^Block_Entity) {
 		return
 	}
 	e.kind = Block_Entity_Kind(kind)
+	if e.kind == .Belt {
+		read_lane(r, &e.lane)
+		return
+	}
 	n := read_varint(r)
 	if !r.ok || n > CHEST_SLOTS {
 		reader_fail(r)
@@ -146,6 +157,30 @@ read_block_entity_value :: proc(r: ^Reader, e: ^Block_Entity) {
 	low := read_varint(r)
 	high := read_varint(r)
 	e.due = u64(high) << 32 | u64(low)
+}
+
+// read_lane reads a belt's items: at most LANE_ITEMS, each an item here, front first (each
+// no further along than the one before it).
+@(private = "file")
+read_lane :: proc(r: ^Reader, l: ^Lane) {
+	n := read_varint(r)
+	if !r.ok || n > LANE_ITEMS {
+		reader_fail(r)
+		return
+	}
+	last := u32(LANE_END)
+	for i in 0 ..< int(n) {
+		number := read_varint(r)
+		at := read_u16(r)
+		item, valid := reader_item(r, u16(min(number, 0xFFFF)))
+		if !r.ok || number > 0xFFFF || !valid || item == NO_ITEM || u32(at) > last {
+			reader_fail(r)
+			return
+		}
+		l.items[i] = {item, at}
+		last = u32(at)
+	}
+	l.count = u8(n)
 }
 
 // reader_item: the item a saved number means here.
@@ -268,16 +303,16 @@ block_entity_pack :: proc(
 	writer_init(&w, allocator)
 	table := make([dynamic]Item, context.temp_allocator)
 	packed := e^
+	number :: proc(table: ^[dynamic]Item, item: Item) -> Item {
+		for x, k in table {if x == item {return Item(k + 1)}}
+		append(table, item)
+		return Item(len(table)) // (0 is no item: a stack of it is empty)
+	}
 	for st, i in e.slots {
 		if stack_empty(st) {continue}
-		at := -1
-		for item, k in table {if item == st.item {at = k}}
-		if at < 0 {
-			at = len(table)
-			append(&table, st.item)
-		}
-		packed.slots[i].item = Item(at + 1) // (0 is no item: a stack of it is empty)
+		packed.slots[i].item = number(&table, st.item)
 	}
+	for &it in packed.lane.items[:packed.lane.count] {it.item = number(&table, it.item)}
 	write_varint(&w, u32(len(table)))
 	for item in table {write_string(&w, item_id(reg, item))}
 	write_block_entity_value(&w, &packed)

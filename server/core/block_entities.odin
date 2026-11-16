@@ -81,6 +81,7 @@ block_entities_all :: proc(w: ^World) -> []Entity_At {
 entity_lifecycle :: proc(w: ^World, p: game.Block_Pos, old, new: game.Block, cause: Act) {
 	t := &w.server.registry.blocks
 	was, now := game.block_entity_kind(t, old), game.block_entity_kind(t, new)
+	defer if was == .Belt || now == .Belt {belt_changed(w, p)} 	// (built, broken or turned)
 	if was == now {return}
 	if was != .None {entity_removed(w, p, cause)}
 	if now != .None {entity_made(w, p, now)}
@@ -109,7 +110,13 @@ entity_removed :: proc(w: ^World, p: game.Block_Pos, cause: Act) {
 	c := chunks_get(&w.chunks, game.chunk_of(p))
 	at, _ := game.block_entity_find(c.block_entities[:], value.local)
 	ordered_remove(&c.block_entities, at)
-	if value.kind == .Container || value.kind == .Machine {container_gone(w, p, &value, cause)}
+	if value.kind == .Belt {
+		// (what it carried spills as a chest's stacks)
+		stacks := game.lane_stacks(&value.lane)
+		copy(value.slots[:], stacks[:])
+		value.lane = {}
+	}
+	if value.kind != .None {container_gone(w, p, &value, cause)}
 }
 
 // journal_entity keeps the value of an entity a journal entry removed: in
@@ -200,8 +207,9 @@ entities_reconcile :: proc(w: ^World, c: ^Chunk) {
 // ledger_entities: what the entities hold comes into memory or leaves it.
 ledger_entities :: proc(w: ^World, list: []game.Block_Entity, reason: game.Reason) {
 	sign := 1 if reason == .Scope_In else -1
-	for e in list {
+	for &e in list {
 		for st in e.slots {ledger_stack(w.server, w, reason, st, sign)}
+		for st in game.lane_stacks(&e.lane) {ledger_stack(w.server, w, reason, st, sign)}
 	}
 }
 

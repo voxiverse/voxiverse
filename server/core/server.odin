@@ -876,8 +876,11 @@ tick :: proc(s: ^Server) {
 	}
 	tick_mark(s, "entities")
 	if s.sim_steps > 0 {
-		base.profile_scope("machines")
-		for w in s.worlds {machines_tick(w)}
+		base.profile_scope("belts and machines")
+		for w in s.worlds {
+			belts_tick(w)
+			machines_tick(w)
+		}
 		tick_mark(s, "machines")
 	}
 	for w in s.worlds {block_changes_tell(w)}
