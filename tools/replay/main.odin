@@ -31,11 +31,12 @@ Options :: struct {
 	linger: f64 `usage:"seconds to keep the server running after the last message"`,
 }
 
-// base_registry: what block and item numbers in a recording mean.
-base_registry: ^game.Registry
+// registry: what block and item numbers in a recording mean: the base pack's, and the
+// traced session's game's pack's (trace_registry).
+registry: ^game.Registry
 
 main :: proc() {
-	base_registry = game.registry_base()
+	registry = game.registry_base()
 	host: base.Host
 	platform.boot(&host)
 	dbg: base.Debug
@@ -60,6 +61,7 @@ run :: proc(opts: Options) -> bool {
 	}
 	defer delete(data)
 	header, records, complete := protocol.trace_read(data)
+	registry = trace_registry(records[:])
 	defer delete(records)
 	if !complete {log.warnf("replay trace damaged or cut short; replaying what precedes it path=%s", opts.file)}
 	if header.protocol != protocol.PROTOCOL_VERSION {
@@ -108,7 +110,7 @@ run :: proc(opts: Options) -> bool {
 	) -> int {
 		n := protocol.receive(client, incoming)
 		for p in incoming {
-			if m, ok := protocol.decode_server(p, scratch, base_registry); ok {
+			if m, ok := protocol.decode_server(p, scratch, registry); ok {
 				if c, is := m.(protocol.Challenge); is {challenge^ = c.nonce}
 			}
 			protocol.packet_free(client, p)
@@ -127,7 +129,7 @@ run :: proc(opts: Options) -> bool {
 			time.sleep(time.Millisecond)
 		}
 		message := r.data
-		if m, ok := protocol.decode_client(r.data, base_registry); ok {
+		if m, ok := protocol.decode_client(r.data, registry); ok {
 			#partial switch v in m {
 			case protocol.Hello:
 				h := v
@@ -181,7 +183,7 @@ run :: proc(opts: Options) -> bool {
 trace_game :: proc(records: []protocol.Trace_Record) -> core.Game {
 	scratch := new(game.Block_Array)
 	defer free(scratch)
-	played := protocol.trace_game(records, scratch, base_registry)
+	played := protocol.trace_game(records, scratch, registry)
 	fallback := core.Game{}
 	for g in games.SERVER {
 		if g.id == played {return g}
@@ -190,4 +192,20 @@ trace_game :: proc(records: []protocol.Trace_Record) -> core.Game {
 	if played !=
 	   "" {log.warnf("replay trace plays %s, a game this build lacks; replaying %s", played, fallback.id)}
 	return fallback
+}
+
+// trace_registry: the registry the traced session played with, as far as the trace says:
+// the base pack and the pack of the game its Welcome named (a game this build has), so a
+// game's blocks and items read by their names. The base pack's alone for any other.
+trace_registry :: proc(records: []protocol.Trace_Record) -> ^game.Registry {
+	scratch := new(game.Block_Array)
+	defer free(scratch)
+	played := protocol.trace_game(records, scratch, registry)
+	for g in games.SERVER {
+		if g.id != played || len(g.pack.files) == 0 {continue}
+		reg, errs := game.registry_build({game.base_pack_source(context.temp_allocator), g.pack})
+		if reg != nil && len(errs) == 0 {return reg}
+		log.warnf("replay the pack of %s does not build; reading with the base pack's", played)
+	}
+	return registry
 }

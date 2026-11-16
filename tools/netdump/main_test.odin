@@ -31,8 +31,8 @@ welcome_trace :: proc(played: string) -> []protocol.Trace_Record {
 // one that does not decode).
 @(test)
 test_netdump_reads_the_games_kinds :: proc(t: ^testing.T) {
-	base_registry = game.registry_base(context.temp_allocator)
-	defer base_registry = nil
+	registry = game.registry_base(context.temp_allocator)
+	defer registry = nil
 	scratch := new(game.Block_Array)
 	defer free(scratch)
 	flood := trace_schema(welcome_trace("flood"), scratch)
@@ -47,4 +47,18 @@ test_netdump_reads_the_games_kinds :: proc(t: ^testing.T) {
 		len(none.kinds),
 		len(protocol.game_schema(allocator = context.temp_allocator).kinds),
 	)
+}
+
+// A trace of a session that played a game with a pack reads its blocks and items by the
+// game's pack too (before, by the base pack's alone: a game's block read as a number);
+// a game this build lacks reads by the base pack's.
+@(test)
+test_netdump_reads_the_games_blocks :: proc(t: ^testing.T) {
+	registry = game.registry_base(context.temp_allocator)
+	defer registry = nil
+	horde := trace_registry(welcome_trace("horde"))
+	defer if horde != registry {game.registry_destroy(horde)}
+	_, found := game.registry_block(horde, "horde:shop")
+	testing.expect(t, found, "the game's block is not in the registry")
+	testing.expect(t, trace_registry(welcome_trace("nonesuch")) == registry)
 }

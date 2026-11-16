@@ -33,11 +33,12 @@ Options :: struct {
 	limit:   int `usage:"stop after this many messages"`,
 }
 
-// base_registry: what block and item numbers in a capture mean (the base pack's).
-base_registry: ^game.Registry
+// registry: what block and item numbers in a capture mean: the base pack's, and the
+// traced session's game's pack's (trace_registry).
+registry: ^game.Registry
 
 main :: proc() {
-	base_registry = game.registry_base()
+	registry = game.registry_base()
 	opts := Options {
 		file = "build/net.trace",
 	}
@@ -60,6 +61,7 @@ main :: proc() {
 		os.exit(1)
 	}
 	header, records, ok := protocol.trace_read(data)
+	registry = trace_registry(records[:])
 	fmt.printfln(
 		"trace %s: protocol %d, seed %d, view %dx%d, %d messages",
 		opts.file,
@@ -354,7 +356,7 @@ describe :: proc(
 	bool,
 ) {
 	if r.sender == .Client {
-		m, ok := protocol.decode_client(r.data, base_registry)
+		m, ok := protocol.decode_client(r.data, registry)
 		if !ok {return "INVALID client message", false}
 		switch v in m {
 		case protocol.Hello:
@@ -485,7 +487,7 @@ describe :: proc(
 			return fmt.tprintf("ping id=%d", v.id), true
 		}
 	} else {
-		m, ok := protocol.decode_server(r.data, scratch, base_registry)
+		m, ok := protocol.decode_server(r.data, scratch, registry)
 		if !ok {return "INVALID server message", false}
 		switch v in m {
 		case protocol.Welcome:
@@ -580,9 +582,29 @@ trace_schema :: proc(
 	records: []protocol.Trace_Record,
 	scratch: ^game.Block_Array,
 ) -> protocol.Schema {
-	played := protocol.trace_game(records, scratch, base_registry)
+	played := protocol.trace_game(records, scratch, registry)
 	for g in games.SERVER {
 		if g.id == played {return protocol.game_schema(g.id, g.kinds)}
 	}
 	return protocol.game_schema()
+}
+
+// trace_registry: the registry the traced session played with, as far as the trace says:
+// the base pack and the pack of the game its Welcome named (a game this build has), so a
+// game's blocks and items read by their names. The base pack's alone for any other.
+trace_registry :: proc(records: []protocol.Trace_Record) -> ^game.Registry {
+	scratch := new(game.Block_Array)
+	defer free(scratch)
+	played := protocol.trace_game(records, scratch, registry)
+	for g in games.SERVER {
+		if g.id != played || len(g.pack.files) == 0 {continue}
+		reg, errs := game.registry_build({game.base_pack_source(context.temp_allocator), g.pack})
+		if reg != nil && len(errs) == 0 {return reg}
+		fmt.eprintfln(
+			"%s: the pack of %s does not build; reading with the base pack's",
+			"netdump",
+			played,
+		)
+	}
+	return registry
 }

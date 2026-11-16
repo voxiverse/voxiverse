@@ -507,8 +507,9 @@ in it. A trace knows its game (its Welcome names it, `game.trace_game`): `build 
 it with that game's kinds and `build replay` replays it with that game's rules, both finding
 the game among the server parts' list (`generated:games`); a game this build lacks is read
 with the engine's kinds alone (its records do not decode) and replayed as the default game.
-Both still decode blocks and items by the base pack's registry, not the session's, so a
-game's pack content in a trace reads as numbers.
+Both decode blocks and items by the base pack and the game's pack (`trace_registry`), so a
+game's blocks and items in a trace read by their names (a game this build lacks: the base
+pack's alone; a pack the session took from its universe is not in the trace).
 
 ## Requests
 
