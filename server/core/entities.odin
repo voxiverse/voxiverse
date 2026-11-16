@@ -18,17 +18,12 @@ import "server:path"
 // about the ones near it: an Entity record (what it is) and an Entity_Motion
 // record (where) while it is near (the records go when it leaves), and an
 // Entity_Died event when it dies. Sheep appear by day on grass around players and go
-// when nobody is near; one whose ground is not loaded waits, frozen, until
-// it is. Saved kinds are kept with the world (save.odin: entities.cfg).
+// when nobody is near (any kind with a spawn rule in its pack does: spawn_natural); one
+// whose ground is not loaded waits, frozen, until it is. Saved kinds are kept with the world (save.odin: entities.cfg).
 
 MAX_ENTITIES :: 2048
 ENTITY_VIEW :: 64 // blocks: a client is told about entities this near (horizontally)
-SPAWN_EVERY :: game.TICK_RATE * 2 // ticks between spawning attempts
-SPAWN_CAP :: 6 // sheep near one player, at most
-SPAWN_NEAR :: 48 // blocks: what counts as near a player, for the cap
-SPAWN_HEIGHT :: 4096 // half the cylinder's height: no vertical limit
-SPAWN_MIN, SPAWN_MAX :: 16, 40 // blocks from a player where sheep appear
-DESPAWN_DISTANCE :: 80 // natural sheep this far from everyone go
+ANY_HEIGHT :: 4096 // half a cylinder's height: no vertical limit
 PATH_BUDGET_PER_TICK :: 1500 // A* nodes for all entities in one tick
 PATH_BUDGET_EACH :: 400
 HURT_TICKS :: game.TICK_RATE / 3 // how long a hit stuns (no steering)
@@ -330,7 +325,7 @@ explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id, by: May
 	radius := size * f64(w.rules.explosion_size)
 	throw := w.rules.explosion_throw
 	record_world(s, w, .Explosion, n0 = i64(radius))
-	for i in players_near(w, center, 160 + PLAYER_MARGIN, SPAWN_HEIGHT) {
+	for i in players_near(w, center, 160 + PLAYER_MARGIN, ANY_HEIGHT) {
 		c := &s.clients[i]
 		d := c.player.position - center
 		if d.x * d.x + d.z * d.z < 160 * 160 {
@@ -788,7 +783,7 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 		&w.entity_world.spatial,
 		c.player.position,
 		ENTITY_VIEW,
-		SPAWN_HEIGHT,
+		ANY_HEIGHT,
 		{none = {.Player}},
 		&around,
 	)
@@ -900,7 +895,7 @@ entity_watchers :: proc(w: ^World, p: [3]f64) -> []int {
 		&ew.spatial,
 		p,
 		ENTITY_VIEW + 4,
-		SPAWN_HEIGHT + 4,
+		ANY_HEIGHT + 4,
 		{all = {.Player}},
 		&near,
 	)
@@ -1163,51 +1158,72 @@ steer :: proc(w: ^World, h: game.Entity_Handle) -> (wish: [2]f32, jump: bool) {
 	return
 }
 
-// spawn_natural: by day, sheep appear on grass around players with
-// room for more, out of sight distance from everyone (but not far).
+// spawn_natural: the creatures of every kind with a spawn rule (its pack's `spawn`)
+// appear by themselves around the players of the world: every `every` ticks within its
+// hours, near each player with fewer than `cap` of the kind within `within` blocks, on a
+// draw of `chance`, a group of `group` at a place `distance` blocks away whose ground is
+// `on` (under the open sky, for a rule that says `sky`) and no player is nearer than its
+// least distance. Each is natural (it goes when nobody is near: system_age) and is told to
+// the game's `spawned` hook, which may make it what it is or refuse it (it goes again).
 spawn_natural :: proc(w: ^World) {
 	s := w.server
 	if s.config.no_natural_spawns {return}
 	day := game.time_of_day(w.clock)
-	if day < 0.27 || day > 0.73 {return}
 	r := &w.entities.rng
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
-	for &c in s.clients {
-		if c.state != .Playing || c.world != w {continue}
-		// Every entity near, of any kind but the players (who were never counted).
-		// The cylinder has no vertical limit, as the old count had none.
-		around := make([dynamic]game.Entity_Id, context.temp_allocator)
-		game.spatial_cylinder(
-			&w.entity_world.spatial,
-			c.player.position,
-			SPAWN_NEAR,
-			SPAWN_HEIGHT,
-			{none = {.Player}},
-			&around,
-		)
-		near := len(around)
-		if near >= SPAWN_CAP || base.rng_f32(r) > 0.5 {continue}
-		angle := base.rng_f64_range(r, 0, math.TAU)
-		distance := base.rng_f64_range(r, SPAWN_MIN, SPAWN_MAX)
-		x := i32(math.floor(c.player.position.x + base.cos(angle) * distance))
-		z := i32(math.floor(c.player.position.z + base.sin(angle) * distance))
-		top := column_top(w, x, z)
-		ground, loaded := chunks_block(&w.chunks, {x, top, z})
-		at := game.Block_Pos{x, top + 1, z}
-		if !loaded || ground != .Grass || !path.standable(query, at) {continue}
-		center := [3]f64{f64(x) + 0.5, f64(at.y), f64(z) + 0.5}
-		if anyone_within(w, center, SPAWN_MIN) {continue}
-		herd := base.rng_int_range(r, 1, 4)
-		for _ in 0 ..< herd {
-			jitter := [3]f64{base.rng_f64_range(r, -1.5, 1.5), 0, base.rng_f64_range(r, -1.5, 1.5)}
-			p := center + jitter
-			b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
-			if path.standable(query, b) {
-				if sheep := entity_spawn(w, w.server.registry.engine.sheep, p, true);
-				   sheep != 0 {entity_genes(w, sheep).genes = game.genes_wild(r)}
+	for &info, i in s.registry.kinds {
+		rule, has := info.spawn.?
+		kind := game.Kind_Id(i + 1)
+		if !has || s.tick % u64(rule.every) != 0 {continue}
+		if day < f64(rule.day[0]) || day > f64(rule.day[1]) {continue}
+		for &c in s.clients {
+			if c.state != .Playing || c.world != w {continue}
+			around := make([dynamic]game.Entity_Id, context.temp_allocator)
+			game.spatial_cylinder(
+				&w.entity_world.spatial,
+				c.player.position,
+				f64(rule.within),
+				ANY_HEIGHT,
+				{kind = u16(kind)},
+				&around,
+			)
+			if len(around) >= rule.cap || base.rng_f32(r) > rule.chance {continue}
+			angle := base.rng_f64_range(r, 0, math.TAU)
+			distance := base.rng_f64_range(r, f64(rule.distance[0]), f64(rule.distance[1]))
+			x := i32(math.floor(c.player.position.x + base.cos(angle) * distance))
+			z := i32(math.floor(c.player.position.z + base.sin(angle) * distance))
+			top := column_top(w, x, z)
+			ground, loaded := chunks_block(&w.chunks, {x, top, z})
+			at := game.Block_Pos{x, top + 1, z}
+			if !loaded ||
+			   !game.rule_matcher_has(&rule.on, ground) ||
+			   !path.standable(query, at) {continue}
+			center := [3]f64{f64(x) + 0.5, f64(at.y), f64(z) + 0.5}
+			if anyone_within(w, center, f64(rule.distance[0])) {continue}
+			group := base.rng_int_range(r, rule.group[0], rule.group[1] + 1)
+			for _ in 0 ..< group {
+				jitter := [3]f64 {
+					base.rng_f64_range(r, -1.5, 1.5),
+					0,
+					base.rng_f64_range(r, -1.5, 1.5),
+				}
+				p := center + jitter
+				b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
+				if !path.standable(query, b) || (rule.sky && !under_sky(w, b)) {continue}
+				h := entity_spawn(w, kind, p, true)
+				if h == 0 {continue}
+				if .Genes in info.with {entity_genes(w, h).genes = game.genes_wild(r)}
+				if s.config.game.spawned != nil && !s.config.game.spawned(s, w, h) {
+					entity_gone(w, h)
+				}
 			}
 		}
 	}
+}
+
+// under_sky: nothing stands above the block p (the sky's light reaches it).
+under_sky :: proc(w: ^World, p: game.Block_Pos) -> bool {
+	return p.y > column_top(w, p.x, p.z)
 }
 
 anyone_within :: proc(w: ^World, p: [3]f64, distance: f64) -> bool {
@@ -1859,14 +1875,13 @@ Wish :: struct {
 // entities_tick: spawning, despawning, thinking and moving, every tick.
 entities_tick :: proc(w: ^World) {
 	base.profile_scope("entities")
-	s := w.server
 	w.entities.budget = PATH_BUDGET_PER_TICK
 	entity_world_begin_tick(w.entity_world)
 	defer {
 		game.store_apply(&w.entity_world.store)
 		entities_sync_spatial(w)
 	}
-	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
+	spawn_natural(w)
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	blasts := make([dynamic]Blast, context.temp_allocator)
 	wishes := make(map[game.Entity_Handle]Wish, context.temp_allocator)
@@ -1880,15 +1895,20 @@ entities_tick :: proc(w: ^World) {
 	for b in blasts {explode(w, b.sphere.center, b.sphere.radius, b.action, b.by)}
 }
 
-// system_age: one tick older; a natural entity with nobody near goes.
+// system_age: one tick older; a natural entity with no player of its world within its
+// kind's despawn distance goes (with no player in the world at all, nothing goes: a
+// world loaded before its players arrive keeps its creatures).
 @(private = "file")
 system_age :: proc(w: ^World) {
+	peopled := false
+	for &c in w.server.clients {peopled ||= c.state == .Playing && c.world == w}
 	it := entities_each(w)
 	for h in entities_next(&it) {
 		entity_set_age(w, h, entity_age_of(w, h) + 1)
-		if entity_is_natural(w, h) && !anyone_within(w, entity_pos(w, h), DESPAWN_DISTANCE) {
-			entity_gone(w, h)
-		}
+		if !peopled || !entity_is_natural(w, h) {continue}
+		far := f64(game.SPAWN_DESPAWN)
+		if rule, has := kind_of(w, h).spawn.?; has {far = f64(rule.despawn)}
+		if !anyone_within(w, entity_pos(w, h), far) {entity_gone(w, h)}
 	}
 }
 

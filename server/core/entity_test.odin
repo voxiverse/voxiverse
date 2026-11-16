@@ -198,12 +198,13 @@ test_sheep_spawn_and_despawn :: proc(t: ^testing.T) {
 		most = max(most, len(c.entities))
 		harness_step(h)
 	}
+	cap := game.kind_info(test_reg(), test_reg().engine.sheep).spawn.?.cap
 	testing.expectf(
 		t,
-		most <= SPAWN_CAP + 2,
+		most <= cap + 2,
 		"%d sheep: the cap is %d (a herd may top it by 2)",
 		most,
-		SPAWN_CAP,
+		cap,
 	)
 
 	// Night, and away: they go, and the watcher is told.

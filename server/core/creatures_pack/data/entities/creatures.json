@@ -22,5 +22,27 @@
 		"walker": {"walk_speed": 1.4, "run_speed": 4.2, "jump": 1.2, "step": 0},
 		"brain": "game",
 		"model": {"box": [120, 200, 120]}
+	},
+	// One that comes by itself, on grass under the sky, by day and by night.
+	"wild": {
+		"box": [0.8, 0.9],
+		"health": 4,
+		"saved": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.4, "run_speed": 4.2, "jump": 1.2, "step": 0},
+		"brain": "steered",
+		"model": {"box": [90, 160, 90]},
+		"spawn": {
+			"on": "voxiverse:grass",
+			"day": [0, 1],
+			"every": 30,
+			"chance": 1,
+			"cap": 4,
+			"within": 48,
+			"distance": [16, 40],
+			"group": [1, 1],
+			"sky": true,
+			"despawn": 64
+		}
 	}
 }

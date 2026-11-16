@@ -129,3 +129,65 @@ test_a_games_brain_thinks_for_its_creatures :: proc(t: ^testing.T) {
 		st.path.count,
 	)
 }
+
+// A game decides its natural creatures: a kind's spawn rule (its pack's) brings them near
+// the players, no more than its cap, and the game's spawned hook makes each what it is or
+// refuses it.
+@(test)
+test_a_game_decides_its_natural_spawns :: proc(t: ^testing.T) {
+	Seen :: struct {
+		calls: int,
+	}
+	config := Config {
+		seed            = 21,
+		generator       = .Classic, // grass near the spawn
+		view_radius     = 4,
+		view_height     = 2,
+		max_players     = 2,
+		listen          = true,
+		everyone_cheats = true,
+	}
+	config.game = harness_creatures()
+	config.game.server_state = Seen
+	config.game.spawned = proc(s: ^Server, w: ^World, h: game.Entity_Handle) -> bool {
+		d := entity_data(w, h, Creature_Data)
+		if d == nil {return true} 	// (the base pack's sheep: not the game's)
+		seen := game_state(s, Seen)
+		seen.calls += 1
+		d.number = 7
+		return seen.calls % 2 == 1 // (every other one refused)
+	}
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	c := new(Net_Client)
+	defer free(c)
+	net_connect(c, 0, "watcher", h = h)
+	defer net_close(c)
+	ok := net_wait(
+		t,
+		{c},
+		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && len(cs[0].chunks) > 200},
+	)
+	if !testing.expect(t, ok, "never landed") {return}
+	s := &h.srv
+	wild, _ := game.registry_kind(s.registry, "creatures:wild")
+	most := 0
+	for _ in 0 ..< 60 * game.TICK_RATE {
+		net_pump(t, c)
+		harness_step(h)
+		n := 0
+		it := entities_each(s.home)
+		for e in entities_next(&it) {
+			if entity_kind(s.home, e) != wild {continue}
+			n += 1
+			testing.expect(t, entity_is_natural(s.home, e))
+			testing.expect_value(t, entity_data(s.home, e, Creature_Data).number, 7)
+		}
+		most = max(most, n)
+	}
+	testing.expect(t, most >= 1, "none came")
+	testing.expectf(t, most <= 4, "%d came: the cap is 4", most)
+	testing.expect(t, game_state(s, Seen).calls > most, "none was refused")
+}

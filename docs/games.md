@@ -171,6 +171,7 @@ world, its configure choosing the Earth generator); the engine's own tests play
 | `configure(^Config)` | First thing in `start`, before the config is checked: change the world's generator, mode, spawn... | the caller's |
 | `start(s) -> bool` | The session is set up (worlds, seats, the game's state), before the first tick; false: `start` fails and frees the session | the caller's |
 | `tick(s)` | Every tick, after the entities' (also while the world is frozen) | the server's |
+| `spawned(s, w, h) -> bool` | A creature of a kind with a spawn rule (its pack's `spawn`) appeared by itself near a player (natural): the game makes it what it is (its record, its looks) or refuses it (false: it goes again). Every natural spawn is told, the base pack's kinds' too | the server's |
 | `think(s, w, kind, entities)` | Every tick, for each of its kinds whose `brain` is `game`, with all of that kind's creatures in `w` whose ground is loaded (lowest id first), before they are steered: their minds, in one call for a crowd ([walkers](#walkers)) | the server's |
 | `joined(s, c)` | A player is playing: welcomed, in its world | the server's |
 | `left(s, c)` | A playing player leaves (still seated, its state still there); not called for those still playing when the server stops | the server's |
@@ -218,6 +219,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `game_rule(s, w, name, value)` | Change a world's rule (as the `rule` command names it; the value as text), journalled as the game's and told to the world's players |
 | `sim_speed_set(s, speed)`, `MAX_SIM_SPEED` | The world's life steps `speed` times a tick (0: paused); the game steps its own simulation `s.sim_steps` times in its tick. Players are not sped, so prediction holds |
 | `world_keep(w, area)`, `world_ready(w, area)`, `world_release(w)` | Keep an area loaded with nobody near; whether all of it is there; let it go |
+| `under_sky(w, p)` | Nothing stands above a block (the sky's light reaches it); with `block_at` and the time of day (`game.time_of_day(w.clock)`) what a spawn or a brain asks of the place |
 | `block_at(w, p)`, `game_act(s, w, system)`, `Act`, `set_block(w, p, block, act)`, `bulk_edit(w, edit, act)`, `Bulk_Edit`, `Box`, `Sphere` | Read a block (false: not loaded); a cause for the game's block changes (one per cause), and changes through the edit journal ([journal.md](journal.md)): one block, or a box or sphere set, replaced or pasted from a template |
 | `structure_fit(w, t, at, rotation, max_step)`, `structure_place(w, t, at, rotation, act)`, `structure_remove(w, t, at, rotation, act)` | A building as itself: whether a template fits at a place turned a number of quarter turns (every cell air or giving way, the ground at most `max_step` under its floor), placed or taken down in one bulk edit |
 | `entity_spawn(w, kind, position, natural)`, `entity_gone(w, h)` | An entity of a kind (the game's pack's, `<game>:<name>`) at a place, its handle (0: the world is full); gone again, with no death to show |

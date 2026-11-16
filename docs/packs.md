@@ -77,14 +77,19 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   other leg the other way; `strike`, forward while the kind shows `striking`, else as `walk`).
   A part turns about the middle of its top (a hip, a shoulder). The client draws it
   (`shaped` in `client/engine/entities.odin`); nothing about it is sent.
-- `spawn`: natural spawning (`on` a block matcher, `day` fractions, `every` ticks, `chance`, `cap`,
-  `within`, `distance`, `group`), all required.
+- `spawn`: natural spawning (`on` a block matcher, `day` fractions, `every` ticks, `chance`, `cap`
+  of the kind within `within` blocks of a player, `distance` from it, `group`), all required, and
+  optional `sky` (only under the open sky) and `despawn` (blocks from every player of its world
+  at which a natural one goes; 80). The engine's spawner (`spawn_natural`) is the same for every
+  kind; its game's `spawned` hook makes each one what it is or refuses it
+  ([games.md](games.md)).
 
 What a kind does each tick follows from these fields, not from its name: the server's entity
 systems (`entities_tick` in `server/core/entities.odin`) each run over the entities whose kind
 has their data, in this fixed order:
 
-1. age: every entity gets a tick older; a natural one with nobody within 80 blocks goes.
+1. age: every entity gets a tick older; a natural one with no player of its world within its
+   kind's `despawn` distance goes (in a world with no player in it, none goes).
 2. brains: each kind's brain over its creatures, once a tick for the whole kind (the kinds in
    id order, the creatures lowest id first; one born during it gets its turn in the same tick).
    The engine's own are the default: `brain: grazer`, the clocks of a kind with `breeding`,

@@ -102,6 +102,7 @@ Game :: struct {
 	start:         proc(s: ^Server) -> bool, // the session is set up, no tick has run (false: start fails)
 	stop:          proc(s: ^Server), // after the last tick, before the last save
 	tick:          proc(s: ^Server), // every tick, after the entities' (also while frozen)
+	spawned:       proc(s: ^Server, w: ^World, h: game.Entity_Handle) -> (keep: bool), // a creature of a kind with a spawn rule appeared by itself (natural): the game makes it what it is (its record, its looks) or refuses it (false: it goes)
 	think:         proc(
 		s: ^Server,
 		w: ^World,

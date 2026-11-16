@@ -175,18 +175,24 @@ Kind_Item_Info :: struct {
 	throw:        f32, // blocks/s: a stack a player drops flies ahead
 }
 
-// Kind_Spawn_Rule: natural spawning, today's rule (server/core/spawn.odin) as data.
+// Kind_Spawn_Rule: natural spawning (server/core: spawn_natural), as data. The game's
+// `spawned` hook may refuse each one or make it what it is (its record, its looks).
 Kind_Spawn_Rule :: struct {
 	on:       Matcher, // the block the spawn stands on
 	on_text:  string,
 	day:      [2]f32, // the fractions of the day it spawns between
 	every:    int, // ticks
 	chance:   f32, // a draw above it skips
-	cap:      int, // entities near the player before it stops
+	cap:      int, // creatures of the kind near the player before it stops
 	within:   int, // blocks, horizontally, the cap counts over
 	distance: [2]f32, // from the player
 	group:    [2]int, // size, inclusive
+	sky:      bool, // only under the open sky (nothing above its feet); optional
+	despawn:  int, // blocks: a natural one this far from every player of its world goes; optional (80)
 }
+
+// SPAWN_DESPAWN: a spawn rule's despawn distance when it names none.
+SPAWN_DESPAWN :: 80
 
 // Kind_Attack_Info: how a creature fights (its "attack"), all of it data: a blow at
 // what is within its reach, or a shot of a projectile kind; then it waits its cooldown.
@@ -283,7 +289,20 @@ ITEM_KEYS := []string{"pickup_delay", "owner_delay", "range", "merge", "life", "
 @(private)
 ATTACK_KEYS := []string{"damage", "reach", "cooldown"}
 @(private)
-SPAWN_KEYS := []string{"on", "day", "every", "chance", "cap", "within", "distance", "group"}
+SPAWN_KEYS := []string {
+	"on",
+	"day",
+	"every",
+	"chance",
+	"cap",
+	"within",
+	"distance",
+	"group",
+	"sky",
+	"despawn",
+}
+@(private)
+SPAWN_OPTIONAL := []string{"sky", "despawn"}
 
 @(private)
 json_number :: proc(v: Json_Value) -> (f64, bool) {
@@ -917,7 +936,8 @@ read_spawn_rule :: proc(
 		return
 	}
 	ok = true
-	seen: [8]bool
+	seen: [10]bool
+	rule.despawn = SPAWN_DESPAWN
 	for m in v.members {
 		at := -1
 		for n, i in SPAWN_KEYS {if n == m.key {at = i}}
@@ -972,7 +992,12 @@ read_spawn_rule :: proc(
 				fail_field(b, f, m.value, "chance is a number 0..1")
 				good = false
 			} else {rule.chance = f32(x)}
-		case "every", "cap", "within":
+		case "sky":
+			if m.value.kind != .Bool {
+				fail_field(b, f, m.value, "sky is true or false")
+				good = false
+			} else {rule.sky = m.value.b}
+		case "every", "cap", "within", "despawn":
 			lo, hi := 1, 256
 			switch m.key {
 			case "every":
@@ -996,13 +1021,15 @@ read_spawn_rule :: proc(
 					rule.cap = int(m.value.i)
 				case "within":
 					rule.within = int(m.value.i)
+				case "despawn":
+					rule.despawn = int(m.value.i)
 				}
 			}
 		}
 		ok &&= good
 	}
 	for n, i in SPAWN_KEYS {
-		if !seen[i] {
+		if !seen[i] && !slice.contains(SPAWN_OPTIONAL, n) {
 			fail_field(b, f, v, fmt.aprintf("spawn needs \"%s\"; add it", n))
 			ok = false
 		}
