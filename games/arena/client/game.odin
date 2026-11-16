@@ -71,8 +71,8 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 // feed_text: a kill as the feed says it: "killer [how] victim", or "[how] victim" for
 // a death by one's own hand or the world's.
 feed_text :: proc(k: arena.Kill) -> string {
-	if k.by == "" {return fmt.tprintf("[%s] %s", arena.how(k), k.victim)}
-	return fmt.tprintf("%s [%s] %s", k.by, arena.how(k), k.victim)
+	if k.by == "" {return arena.tr(.Feed_Self, arena.how(k), k.victim)}
+	return arena.tr(.Feed_Kill, k.by, arena.how(k), k.victim)
 }
 
 // ranked: the known fighters, the most frags first, then the fewest deaths, then by
@@ -84,6 +84,9 @@ ranked :: proc(v: ^View) -> []int {
 	})
 }
 
+// clock: whole seconds as minutes and seconds.
+clock :: proc(seconds: int) -> string {return fmt.tprintf("%d:%02d", seconds / 60, seconds % 60)}
+
 // status: the line at the top of the screen.
 status :: proc(s: ^engine.Session) -> string {
 	v := view(s)
@@ -91,36 +94,27 @@ status :: proc(s: ^engine.Session) -> string {
 	switch m.phase {
 	case .Warmup:
 		if m.players < m.needed {
-			return fmt.tprintf(
-				"ARENA  warm-up: waiting for players (%d of %d)",
-				m.players,
-				m.needed,
-			)
+			return arena.tr(.Status_Waiting, m.players, m.needed)
 		}
-		return "ARENA  warm-up"
+		return arena.tr(.Status_Warmup)
 	case .Countdown:
-		return fmt.tprintf("ARENA  match %d  starting", m.match)
+		return arena.tr(.Status_Starting, m.match)
 	case .Playing:
 		mine := engine.seat_mine(s, &v.scores)
 		leader := "-"
 		if all := ranked(v); len(all) > 0 {
-			leader = fmt.tprintf(
-				"%s %d",
-				v.scores.values[all[0]].name,
-				v.scores.values[all[0]].frags,
-			)
+			leader = arena.tr(.Leader, v.scores.values[all[0]].name, v.scores.values[all[0]].frags)
 		}
-		return fmt.tprintf(
-			"ARENA  match %d   %d:%02d left   you %d   leader %s   first to %d",
+		return arena.tr(
+			.Status_Playing,
 			m.match,
-			m.left / 60,
-			m.left % 60,
+			clock(int(m.left)),
 			mine.frags,
 			leader,
 			m.frag_limit,
 		)
 	case .Results:
-		return fmt.tprintf("ARENA  match %d over", m.match)
+		return arena.tr(.Status_Over, m.match)
 	}
 	return ""
 }
@@ -154,22 +148,19 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 
 	#partial switch m.phase {
 	case .Countdown:
-		engine.banner(ctx, -140, fmt.tprintf("MATCH %d", m.match), 1.5, t.focus_ring)
+		engine.banner(ctx, -140, arena.tr(.Match_Title, m.match), 1.5, t.focus_ring)
 		engine.banner(ctx, -60, fmt.tprintf("%d", m.left), 1.5, t.text)
-		rules := fmt.tprintf(
-			"First to %d frags. Every kill counts; your own death costs one.",
-			m.frag_limit,
-		)
+		rules := arena.tr(.Rules, m.frag_limit)
 		engine.banner(ctx, 40, rules, 0.6, t.text)
 	case .Results:
-		head, color := "DRAW", t.log_warn
+		head, color := arena.tr(.Draw), t.log_warn
 		if m.winner != "" {
-			head = strings.to_upper(fmt.tprintf("%s wins", m.winner), context.temp_allocator)
+			head = arena.tr(.Wins, strings.to_upper(m.winner, context.temp_allocator))
 			color = t.success if engine.seat_mine(s, &v.scores).name == m.winner else t.log_warn
 		}
 		engine.banner(ctx, -160, head, 1.5, color)
 		engine.banner(ctx, -80, arena.frags_text(int(m.top_frags)), 0.8, t.text)
-		next := fmt.tprintf("next match in %d   (hold P for the scores)", m.left)
+		next := arena.tr(.Next_Match, m.left)
 		engine.banner(ctx, 100, next, 0.6, t.text)
 	}
 }
@@ -180,19 +171,13 @@ scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 	m := v.match
 	switch m.phase {
 	case .Warmup:
-		board.title = "Arena: warm-up (nothing counts)"
+		board.title = arena.tr(.Board_Warmup)
 	case .Countdown, .Playing:
-		board.title = fmt.tprintf(
-			"Arena: match %d, first to %d, %d:%02d left",
-			m.match,
-			m.frag_limit,
-			m.left / 60,
-			m.left % 60,
-		)
+		board.title = arena.tr(.Board_Playing, m.match, m.frag_limit, clock(int(m.left)))
 	case .Results:
-		board.title = fmt.tprintf("Arena: match %d is over", m.match)
+		board.title = arena.tr(.Board_Over, m.match)
 	}
-	engine.scoreboard_columns(board, "Frags", "Deaths")
+	engine.scoreboard_columns(board, arena.tr(.Column_Frags), arena.tr(.Column_Deaths))
 	for id in ranked(v) {
 		score := &v.scores.values[id]
 		engine.scoreboard_row(
