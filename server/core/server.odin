@@ -793,7 +793,7 @@ tick :: proc(s: ^Server) {
 	for _ in 0 ..< s.sim_steps {
 		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
 	}
-	tick_mark(s, "economy")
+	tick_mark(s, "clock")
 	Move :: struct {
 		world:    ^World,
 		from, to: game.Chunk_Pos,
