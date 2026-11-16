@@ -25,8 +25,9 @@ copy_dir :: proc(from, to: string) {
 }
 
 // A sandbox universe saved by an older build (assets/fixtures/save-v6: save format 6)
-// opens, brought up to date, with its sheep as they were: the shorn black one and the
-// lamb; and the stack of wool that lay on the ground.
+// opens, brought up to date, with its sheep as they were: the shorn black one, the
+// spotted one in love (one that came by itself: it does not go before a player is
+// there to be far from), the lamb; and the stack of wool that lay on the ground.
 @(test)
 test_a_format_6_universe_keeps_its_sheep :: proc(t: ^testing.T) {
 	dir :: "build/tmp/sandbox_save_v6"
@@ -40,8 +41,8 @@ test_a_format_6_universe_keeps_its_sheep :: proc(t: ^testing.T) {
 	s := playtest.srv(rig)
 	w := s.home
 	Seen :: struct {
-		shorn_black, lamb: bool,
-		wool:              int,
+		shorn_black, in_love, lamb: bool,
+		wool:                       int,
 	}
 	seen: Seen
 	it := core.entities_each(w)
@@ -51,10 +52,11 @@ test_a_format_6_universe_keeps_its_sheep :: proc(t: ^testing.T) {
 			genes := core.entity_genes(w, h).genes
 			br := core.entity_breeding(w, h)
 			seen.shorn_black ||= core.entity_wool(w, h).shorn && game.genes_black(genes)
+			seen.in_love ||= br.love > 0 && genes == {.Coat_A} && core.entity_is_natural(w, h)
 			seen.lamb ||= br.growth < game.LAMB_TICKS && game.genes_spotted(genes) && br.wait > 0
 		case s.registry.engine.item:
 			seen.wool += core.entity_stack(w, h).count
 		}
 	}
-	testing.expect_value(t, seen, Seen{true, true, 2})
+	testing.expect_value(t, seen, Seen{true, true, true, 2})
 }
