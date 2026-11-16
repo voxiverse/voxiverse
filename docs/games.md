@@ -3,40 +3,160 @@
 The engine (`client/`, `common/`, `server/`) runs worlds; a **game** is the rules played in
 one: a round, a goal, a score. Each game is native Odin in its own folder, `games/<game>/`,
 compiled against the engine. The engine never imports a game, and adding a game edits no file
-outside its folder ([layout.md](layout.md), rule 6, and the `import` lint).
+outside its folder ([layout.md](layout.md), rule 6, and the `import` lint). This is the
+reference for writing one: its shape, a walk-through, every hook and call by task, how to
+test it and take its pictures, and the rules.
 
-A game's folder holds its packages as the engine's sides are split: `games/<game>` is its
-shared package (`package <game>`: the rules, constants and record types both sides use; only
-`common:` and `core:`), `games/<game>/server` its server part (`package <game>_server`) and
-`games/<game>/client` its client part (`package <game>_client`).
+## The shape of a game
+
+```
+games/<game>/
+  README.md        what it is, how it plays, its commands; how to start it
+  rules.odin       package <game>: INFO, its constants and rules (both sides')
+  records.odin     package <game>: what the server tells the players (KINDS)
+  pack.odin        package <game>: PACK, its pack's files #load'ed (if it has a pack)
+  pack/            its pack: entities, items, blocks, modes as data (packs.md)
+  server/          package <game>_server: GAME :: core.Game{...}, its hooks; *_test.odin
+  client/          package <game>_client: GAME :: engine.Game{...}, its hooks; *_test.odin
+```
+
+Three packages, as the engine's sides are split: the shared package (`package <game>`:
+only `common:` and `core:`), the server part (`package <game>_server`: no `client:`) and
+the client part (`package <game>_client`). A part imports no other part of its game but the
+shared package, but for the client part's tests, which play the game against its server
+part. A game imports no other game: what two share belongs in the engine. A proc of the
+game's must not take the name of a package it imports (`play`, `hud`, `engine`).
 
 What names a game is declared once, in its shared package, and both parts take it: a
 `game.Game_Info` holding its id (the folder's name), the name players read and a line saying
-what it is (plain English for now: the launcher lists the games by them, and a game has no
-translation table yet). The description is one line in the launcher's small text, at most the
-title's column wide (`screen.TITLE_WIDTH`; a `client/main` test measures every game's). `core.Game` and `engine.Game` hold it by `using`, so `g.id` reads as
-before:
+what it is. The launcher lists the games by them; the description is one line in the
+launcher's small text, at most the title's column wide (`screen.TITLE_WIDTH`; a
+`client/main` test measures every game's). `core.Game` and `engine.Game` hold it by
+`using`, so `g.id` reads as a field of either.
+
+No file lists the games. The build driver writes two before every `odin` it runs, from the
+folders in `games/` (the collection `generated` is `build/generated`): `generated:games`,
+whose `SERVER` holds every server part's `GAME`, and `generated:games/client`, whose
+`CLIENT` holds every client part's. Both are sorted by folder, an `#assert` keeps each
+game's id its folder's name, and only the executables' main packages import them
+(`client/main` the client's list alone, so the dedicated server links no client code).
+
+## A walk-through
+
+A small game, from nothing: every player in a walled arena, a round counted down, played,
+and shown. (`games/flood` is this game grown; `games/stopwatch` is the smallest that uses
+every server hook but harm's.)
 
 ```odin
-// games/flood/rules.odin (package flood)
-INFO :: game.Game_Info {
-	id          = "flood",
-	name        = "Flood",
-	description = "Climb to the glowing platform before the rising water gets you.",
+// games/tag/rules.odin
+package tag
+
+import "common:game"
+
+INFO :: game.Game_Info{id = "tag", name = "Tag", description = "One is it; touch another."}
+Phase :: enum u8 {Waiting, Countdown, Playing, Over}
+COUNTDOWN :: 4.0
+ROUND :: 120.0
+```
+
+```odin
+// games/tag/records.odin
+package tag
+
+import "common:game"
+
+Round :: struct {phase: Phase, left: u16, it: string `net:"max=16"`}
+KINDS :: game.Game_Kinds{states = {{name = "tag.round", value = Round}}}
+```
+
+```odin
+// games/tag/server/game.odin
+package tag_server
+
+import "common:game"
+import "games:tag"
+import "server:core"
+import "server:play"
+
+GAME :: core.Game {
+	info = tag.INFO, kinds = tag.KINDS, server_state = Tag,
+	configure = configure, start = start, tick = tick,
+}
+
+Tag :: struct {phase: play.Phase(tag.Phase), built: bool}
+state :: proc(s: ^core.Server) -> ^Tag {return core.game_state(s, Tag)}
+
+GROUND :: play.Arena{size = {24, 8, 24}, wall_top = 15, depth = 2}
+
+configure :: proc(config: ^core.Config) {play.configure_flat(config, {12, 1, 12}, "survival")}
+
+start :: proc(s: ^core.Server) -> bool {
+	play.world_still(s, s.home)
+	core.world_keep(s.home, play.arena_area(GROUND))
+	return true
+}
+
+tick :: proc(s: ^core.Server) {
+	g := state(s)
+	switch g.phase.now {
+	case .Waiting:
+		if play.present(s) > 0 {play.phase_set(s, &g.phase, .Countdown)}
+	case .Countdown:
+		if !g.built {
+			t := game.template_make(GROUND.size, context.temp_allocator)
+			game.template_fill(&t, {0, 0, 0}, {23, 0, 23}, .Stone) // the floor
+			g.built, _ = play.arena_build(s, s.home, GROUND, &t, force = false)
+		} else if play.phase_seconds(s, &g.phase) >= tag.COUNTDOWN {
+			play.phase_set(s, &g.phase, .Playing)
+		}
+	case .Playing, .Over:
+	}
+	round := tag.Round{g.phase.now, play.phase_left(s, &g.phase, tag.ROUND), ""}
+	for &c in s.clients {if play.here(s, &c) {core.game_put(s, &c, &round)}}
 }
 ```
 
+```odin
+// games/tag/client/game.odin
+package tag_client
+
+import "core:fmt"
+
+import "client:engine"
+import "client:ui"
+import "common:game"
+import "games:tag"
+
+GAME :: engine.Game {
+	info = tag.INFO, kinds = tag.KINDS, state = View, received = received, hud = hud,
+}
+
+View :: struct {round: tag.Round}
+view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
+
+received :: proc(s: ^engine.Session, r: game.Received) {
+	if round, ok := engine.game_value(s, r, tag.Round); ok && round != nil {view(s).round = round^}
+}
+
+hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
+	rest := ctx.screen
+	engine.top_bar(ctx, &rest, fmt.tprintf("TAG  %d s left", view(s).round.left))
+	if view(s).round.phase == .Countdown {engine.banner(ctx, -140, "GET READY", 1.5, ctx.theme.text)}
+}
+```
+
+Then the tests beside each part ([Testing a game](#testing-a-game)), a README, and
+`./build.sh run -- --game tag`. Nothing else: the driver finds the folder.
+
 ## The server's side: `core.Game`
 
-A game's server part (`games/<game>/server`) exports one constant `core.Game` value: its
-`info` (its shared package's `INFO`), the types of its state, its pack (below), and the hooks
-the server calls (`Game` in `server/core/server.odin`). Whoever starts the server puts it in
-`Config.game`. Every session plays exactly one game: `start` refuses a config whose game has no
-valid id. When nobody names one, the executables play `game.DEFAULT_GAME`, `sandbox`
-(`games/sandbox`: the engine's open world, its configure choosing the Earth generator); the
-engine's own tests play `core.HARNESS_GAME`, which the harness gives a config that names none
-(a game with no hooks, so the tests run the engine as it is; a session that joins one has its
-client part, `engine.HARNESS_GAMES`). Every hook may be nil.
+A game's server part exports one constant `core.Game` value: its `info`, its `kinds`, its
+pack, the types of its state and the hooks the server calls (`Game` in
+`server/core/server.odin`). Whoever starts the server puts it in `Config.game`. Every
+session plays exactly one game: `start` refuses a config whose game has no valid id. When
+nobody names one, the executables play `game.DEFAULT_GAME`, `sandbox` (the engine's open
+world, its configure choosing the Earth generator); the engine's own tests play
+`core.HARNESS_GAME`, which has no hooks. Every hook may be nil.
 
 | Hook | When | Thread |
 |---|---|---|
@@ -49,90 +169,87 @@ client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 | `hurt(s, c, harm)` | A player was hurt and lives (its health already less): `harm` is a `core.Harm`, the amount, the kind of source (`game.Source_Kind`: a fall, an explosion, a weapon...), `by` the player who did it (the one hurt, for its own rocket; nil for nobody), `creature` the entity that did it (its id; 0 for none) and the weapon's name for a shot | the server's |
 | `died(s, c, harm)` | A player died of `harm`, after the engine's death: the line told, `kills` and `deaths` counted, its things dropped (by its mode and the world's rules) | the server's |
 | `respawned(s, c)` | A dead player stands again, after the engine stood it at the world's spawn with full health and its mode's kit: the game may move it (`teleport`) and change what it holds. Also for a dead player who leaves, after `left` | the server's |
-| `editing(s, c, at, old, new) -> string` | A player would change the block at `at` from `old` to `new` (`.Air` for a break) and the engine's rules allow it (reach, what it holds, protection still to come): `""` lets it, anything else refuses it, the block stays and the player is told that text | the server's |
-| `block_changed(s, w, change)` | Blocks of world `w` changed since the game's last tick, each told once, in order, before its next one: `change` is a `core.Block_Change`, one block (what it was and is) or a bulk edit's box (`bulk`), and `by` the player whose edit it was (nil: the world, a command, the game; one who has left by then is nil). At most `MAX_NOTED_CHANGES` a tick (more are dropped, and logged) | the server's |
-| `entity_hurt(s, w, h, harm)` | An entity of world `w` was hurt and lives (its health already less): `harm` is a `core.Entity_Harm`, the amount, the kind of source (a blast, a player's shot or blow, `.Game` for the game's own `entity_harm`), `by` the player who did it (nil: nobody, or the game), `creature` the entity that did it (its id; 0: none) and the weapon's name for a shot | the server's |
-| `picking(s, c, stack) -> Pickup` | A player walks over a dropped stack it may pick up: `.Take` (into its inventory, as far as there is room), `.Leave` (it stays: not this player's, not now) or `.Taken` (the game took it its own way, a purse, a potion drunk: it is gone) | the server's |
-| `action(s, c, index)` | A player pressed one of the game's own actions (`index` into the client part's `actions`, below; a `Game_Action` message, after its last input): an ability, a potion. Not while dead | the server's |
-| `request(s, c, r)` | A player's client part sent one of the game's requests ([below](#requests)), decoded and checked: `core.request_value(s, r, T)` reads it as its type. Whether the player may (`allowed`), can afford it and where it goes is the hook's to judge | the server's |
-| `harming(s, h)` | Any harm is about to be done, to a player or an entity, whoever does it (a player's blow or shot, a creature's, a blast, a fall, the game's own `entity_harm`): `h` is a `core.Harming`, the amount, its kind, who does it (`by` a player, `creature` an entity), what the player holds (`stack`, its data too) and who takes it (`to` a player, `entity` an entity); the hook may change `h.amount` (stats, armour, a critical blow), 0 or less and nothing is done. An entity's health is whole: the amount is rounded after the hook | the server's |
+| `editing(s, c, at, old, new) -> string` | A player would change the block at `at` from `old` to `new` (`.Air` for a break) and the engine's rules allow it: `""` lets it, anything else refuses it, the block stays and the player is told that text | the server's |
+| `block_changed(s, w, change)` | Blocks of world `w` changed since the game's last tick, each told once, in order, before its next one: one block (what it was and is) or a bulk edit's box (`bulk`), and `by` the player whose edit it was (nil: the world, a command, the game). At most `MAX_NOTED_CHANGES` a tick (more are dropped, and logged) | the server's |
+| `entity_hurt(s, w, h, harm)` | An entity of world `w` was hurt and lives (its health already less): `harm` is a `core.Entity_Harm`, the amount, the kind of source (a blast, a player's shot or blow, `.Game` for the game's own `entity_harm`), `by` the player who did it, `creature` the entity that did it and the weapon's name for a shot | the server's |
 | `entity_died(s, w, dead, harm)` | An entity of `w` died of `harm`: everyone who knew it was shown it die, and it is gone (`dead`, a `core.Dead_Entity`, says its id, kind and where it was) | the server's |
+| `harming(s, h)` | Any harm is about to be done, to a player or an entity, whoever does it: `h` is a `core.Harming`, the amount, its kind, who does it, what the player holds (`stack`, its data too) and who takes it; the hook may change `h.amount` (stats, armour, a critical blow), 0 or less and nothing is done. An entity's health is whole: the amount is rounded after the hook | the server's |
+| `picking(s, c, stack) -> Pickup` | A player walks over a dropped stack it may pick up: `.Take` (into its inventory, as far as there is room), `.Leave` (it stays) or `.Taken` (the game took it its own way, a purse, a potion drunk: it is gone) | the server's |
+| `action(s, c, index)` | A player pressed one of the game's own actions (`index` into the client part's `actions`): an ability, a potion. Not while dead | the server's |
+| `request(s, c, r)` | A player's client part sent one of the game's requests ([below](#requests)), decoded and checked: `core.request_value(s, r, T)` reads it. Whether the player may, can afford it and where it goes is the hook's to judge | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
 | `save(s, out)` | A save captures this tick (an autosave, `/save`, the last one): the game writes what it keeps to the `strings.Builder` as text, saved with the universe as `game.cfg` in the same transaction ([saves.md](saves.md)) | the server's (the last save: the caller's) |
-| `load(s, text) -> bool` | Right after `start`, in a universe that has a `game.cfg`: its text; false: the game does not understand it, and the universe is refused (`stop` is called, `start` fails) | the caller's |
-
-A game reaches the server through the procedures and types listed below and the fields of
-`Server`, `Client` and `World`. Much of `server/core` is visible to Odin code outside it; a game
-names only what the list holds, which the `import` lint checks.
+| `load(s, text) -> bool` | Right after `start`, in a universe that has a `game.cfg`: its text; false: the game does not understand it, and the universe is refused | the caller's |
 
 A game's tick runs inside the server's, so the stepped server (and its tests) run it too, and
-it follows [determinism.md](determinism.md): no clock, no unseeded randomness.
+it follows [determinism.md](determinism.md): no clock, no unseeded randomness
+(`base.rng_make` from the universe's seed, `s.config.seed`).
 
 ## What a game may call
 
-A game's code (not its tests, which drive the harness: `session_start`, `harness_*`,
-`mirror_*`...) names of `server:core` only these; the `import` lint reads this table and
-refuses any other `core.<name>` in a game. A name joins the list with the engine commit that
-makes it for games, documented where it is declared.
+A game's code (not its tests, which drive the harness) names of `server:core` only these;
+the `import` lint reads this table and refuses any other `core.<name>` in a game, and fails
+when the table names something `server/core` does not declare. A name joins the list with
+the engine commit that makes it for games, documented where it is declared.
 
 | Name | What it is for |
 |---|---|
-| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change` | The game itself, the config `configure` changes, the session, a player, a world, what hurt a player or an entity, an entity that died, blocks that changed (its hooks') |
-| `game_state(s, T)`, `game_client_state(s, c, T)` | The game's state, for the session and for a seat |
+| `Game`, `Config`, `Server`, `Client`, `World`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change`, `Pickup`, `Request` | The game itself, the config `configure` changes, the session, a player, a world, and what its hooks are told |
+| `game_state(s, T)`, `game_client_state(s, c, T)` | The game's state, for the session and for a seat ([below](#the-games-state)) |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
+| `request_value(s, r, T)` | One of its requests, in its `request` hook, as its type ([below](#requests)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
-| `client_name(c)`, `allowed(s, c, node)` | A player's name; whether it holds a permission |
-| `player_id(s, c)` | A player's id (its seat): the key of a record of the game's about it (`game.key_player`), the same on every side |
-| `player_ref(s, c)`, `player_of(s, ref)`, `Player_Ref` | A player held past the moment (who built a tower, whose kill a shot is): its seat and the seat's generation; `player_of` gives the player still playing in it, or nil once it left, whoever sits there now |
+| `client_name(c)`, `allowed(s, c, node)`, `player_id(s, c)` | A player's name; whether it holds a permission; its id (its seat): the key of a record about it (`game.key_player`), the same on every side |
+| `player_ref(s, c)`, `player_of(s, ref)`, `Player_Ref` | A player held past the moment (who built a tower, whose kill a shot is): `player_of` gives the player still playing in that seat, or nil once it left |
 | `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |
-| `game_mode(s, c, id)` | Put a player in a mode by id (a pack's too: `flood:out`); journalled as the game's |
-| `kit_give(s, c)` | Give a player what its mode's kit has that it lacks, weapons full |
-| `item_drop(s, w, position, stack)`, `Pickup` | Drop a stack into the world (loot, a chest's spill) with its game data: `game.Stack.data`, a `u32` of the game's own (a rolled damage, a rarity), kept with the stack in the inventory, sent to its player and saved with it, and only stacks with the same data stack together; the first player to walk over it picks it up, as the `picking` hook decides |
-| `item_count(c, item)`, `item_give(s, c, item, count)`, `item_take(s, c, item, count)`, `item_clear(s, c, item)` | A player's slots as a game's store: how many of an item it carries, give some (what fits: the number given), take some (the number taken), take all; booked in the item ledger as the game's |
-| `hotbar_select(s, c, slot)` | Put a hotbar slot (0 ..< `game.HOTBAR_SLOTS`) in a player's hand, as if it chose it; false for a slot out of range |
-| `head_in_water(s, c)` | A player's eyes are in water |
-| `player_health_bonus(s, c, bonus)`, `heal_player(c, amount)` | Add to a player's most health (a level's; it stays with the seat until changed, and a respawn fills it); heal a living player up to its most (a potion) |
-| `game_rule(s, w, name, value)` | Change a world's rule (`explosion_size`, as the `rule` command names it; the value as text), journalled as the game's and told to the world's players |
+| `game_mode(s, c, id)`, `kit_give(s, c)` | Put a player in a mode by id (a pack's too: `flood:out`), journalled as the game's; give it what its mode's kit has that it lacks, weapons full |
+| `item_count(c, item)`, `item_give(s, c, item, count)`, `item_take(s, c, item, count)`, `item_clear(s, c, item)`, `hotbar_select(s, c, slot)` | A player's slots as the game's store: how many of an item it carries, give (what fits), take, take all, booked in the item ledger as the game's; a hotbar slot put in its hand |
+| `item_drop(s, w, position, stack)` | Drop a stack into the world with its game data (`game.Stack.data`, a `u32` of the game's own: a rolled damage, a rarity, kept with the stack); the first player to walk over it picks it up, as the `picking` hook decides |
+| `head_in_water(s, c)`, `player_health_bonus(s, c, bonus)`, `heal_player(c, amount)` | A player's eyes are in water; add to its most health (it stays with the seat until changed, a respawn fills it); heal a living player up to its most |
+| `game_rule(s, w, name, value)` | Change a world's rule (as the `rule` command names it; the value as text), journalled as the game's and told to the world's players |
+| `sim_speed_set(s, speed)`, `MAX_SIM_SPEED` | The world's life steps `speed` times a tick (0: paused); the game steps its own simulation `s.sim_steps` times in its tick. Players are not sped, so prediction holds |
 | `world_keep(w, area)`, `world_ready(w, area)`, `world_release(w)` | Keep an area loaded with nobody near; whether all of it is there; let it go |
-| `block_at(w, p)` | Read a block (false: not loaded) |
-| `game_act(s, w, system)`, `Act` | A cause for the game's block changes, its actor the game: one per cause |
-| `set_block(w, p, block, act)`, `bulk_edit(w, edit, act)`, `Bulk_Edit`, `Box`, `Sphere` | Change blocks through the edit journal ([journal.md](journal.md)) |
+| `block_at(w, p)`, `game_act(s, w, system)`, `Act`, `set_block(w, p, block, act)`, `bulk_edit(w, edit, act)`, `Bulk_Edit`, `Box`, `Sphere` | Read a block (false: not loaded); a cause for the game's block changes (one per cause), and changes through the edit journal ([journal.md](journal.md)): one block, or a box or sphere set, replaced or pasted from a template |
+| `structure_fit(w, t, at, rotation, max_step)`, `structure_place(w, t, at, rotation, act)`, `structure_remove(w, t, at, rotation, act)` | A building as itself: whether a template fits at a place turned a number of quarter turns (every cell air or giving way, the ground at most `max_step` under its floor), placed or taken down in one bulk edit |
 | `entity_spawn(w, kind, position, natural)`, `entity_gone(w, h)` | An entity of a kind (the game's pack's, `<game>:<name>`) at a place, its handle (0: the world is full); gone again, with no death to show |
-| `entity_find(w, id)`, `entity_listed(w, h)`, `entities_of(w, kind, center, radius)`, `entities_each(w)`, `entities_next(&it)`, `Entity_Iter` | An entity by its id; whether a handle is one still there; the entities of a kind near a point, nearest first; every entity, lowest id first |
-| `entity_known(c, id)` | Whether a player has been told of an entity (it is near it): put a record of the game's keyed by the entity (`game.key_entity(id)`: its name, its rank) to the players who know it, and it goes with it |
+| `entity_find(w, id)`, `entities_of(w, kind, center, radius)`, `entities_each(w)`, `entities_next(&it)` | An entity by its id; the entities of a kind near a point, nearest first; every entity, lowest id first |
 | `entity_id(w, h)`, `entity_kind(w, h)`, `entity_pos(w, h)`, `entity_health_of(w, h)`, `entity_max_health(w, h)`, `entity_set_max_health(w, h, health)` | What an entity is, where it stands, its health; its most health set (and its health with it) |
-| `entity_harm(w, h, harm)` | Hurt an entity (a tower's shot: `kind = .Game`, `by` the player it is credited to), told to the entity hooks as any harm is; true: it died |
+| `entity_known(c, id)` | Whether a player has been told of an entity (it is near it): a record of the game's keyed by the entity (`game.key_entity(id)`) goes to the players who know it |
+| `entity_harm(w, h, harm)` | Hurt an entity (a tower's shot: `kind = .Game`, `by` the player it is credited to), told to the hooks as any harm is; true: it died |
 | `entity_go(w, h, target)`, `entity_follow(w, h, route)`, `entity_stand(w, h)`, `entity_arrived(w, h)`, `entity_set_speed(w, h, speed)` | Steer a walker whose kind is `"brain": "steered"`: to a point by its own path, along a route, or still; whether it is there ([walkers](#walkers)) |
+| `entity_keep(w, h, target, near, far)`, `entity_sees(w, h, p)` | Keep a walker within a band of distances from a point, facing it (chase: `0, reach`; keep distance; flee); whether nothing solid lies between its eyes and a point |
+| `entity_strike(w, h, target)`, `entity_shoot(w, h, p)` | A creature's attack, its kind's `attack` data: a blow at a player or entity within its reach, or its shot at a point, each when its cooldown allows, credited to it |
+| `entity_glide(w, h, points)` | Send a steered walker along points in straight legs, with no physics, at a fraction of a walker's cost (a town's citizens on its roads); `entity_arrived` at the last |
 | `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
-| `entity_glide(w, h, points)` | Send a steered walker along points (the blocks it stands in, at most `path.MAX_PATH`) in straight legs, with no physics, at a fraction of a walker's cost: for the many walkers of a game that knows its ground is walkable (a town's citizens on its roads). Its players are told where it is every `GLIDE_SEND_TICKS`; `entity_arrived` at the last point ([walkers](#walkers)) |
-| `Request`, `request_value(s, r, T)` | One of the game's requests in its `request` hook, and its value as its type ([requests](#requests)) |
-| `Structure_Fit`, `structure_fit(w, t, at, rotation, max_step)`, `structure_place(w, t, at, rotation, act)`, `structure_remove(w, t, at, rotation, act)` | A building as itself: whether a template (`game.Template`, built in code with `game.template_build` or a pack's) fits at a place turned a number of quarter turns (every cell it builds air or giving way, the ground under each column at most `max_step` below its floor), and it placed or taken down (its blocks still as it made them) in one bulk edit through the journal |
-| `sim_speed_set(s, speed)`, `MAX_SIM_SPEED` | The world's life (its time, block updates, random ticks, entities) steps `speed` times a tick (0: paused; at most `MAX_SIM_SPEED`); the game steps its own simulation `s.sim_steps` times in its tick, which still comes once a tick. Players are not sped (each moves by its inputs, one a tick), so prediction holds, and the server stays deterministic |
-| `entity_keep(w, h, target, near, far)`, `entity_sees(w, h, p)` | Steer a walker to keep within a band of distances from a point, facing it (chase: `0, reach`; keep distance; flee: `radius, radius + 1`); whether nothing solid lies between its eyes and a point |
-| `entity_strike(w, h, target)`, `entity_shoot(w, h, p)`, `entity_striking(w, h)`, `Target`, `Strike` | A creature's attack, its kind's `attack` data: a blow at a player or an entity within its reach, or its shot at a point, each when its cooldown allows, credited to it (`Harm.creature`, `Entity_Harm.creature`); whether it just attacked |
 
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
-`registry`, `sim_speed`, `sim_steps` (the world's steps this tick: its speed, 0 while paused or frozen) and `listening` (others can join: opened to the LAN, or a dedicated server); `Client`'s `state`, `world`, `player` (its position, velocity, flying), `mode`
-and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's state is, in
-`start`, a world's clock; everything else goes through the list. A world's rules change
-through `game_rule` (`core.game_rule(s, w, "explosion_size", "1.75")`), never by assignment:
-the `import` lint refuses `w.rules.<name> = ...` in a game's code, as it refuses a name the
-list lacks.
+`registry`, `sim_speed`, `sim_steps` and `listening` (others can join: opened to the LAN, or
+a dedicated server); `Client`'s `state`, `world`, `player` (its position, velocity, flying),
+`dead`, `mode` and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's
+state is, in `start`, a world's clock; everything else goes through the list. A world's rules
+change through `game_rule`, never by assignment: the lint refuses `w.rules.<name> = ...` in a
+game's code. Types a call returns (`Mode_Result`, `Strike`, `Structure_Fit`,
+`Entity_Iter`...) are used without being named.
 
-### What the games share: `server/play`
+## What the games share: `server:play`
 
-What the server parts of several games did alike is `server/play` (`import
-"server:play"`), built on the list above alone (the `import` lint holds it to the list as it
-holds a game):
+What the server parts of several games did alike is `server/play`, built on the list
+above alone (the lint holds it to the list as it holds a game). A game reaches for it first;
+it is where the next shared piece goes.
 
 | Name | What it is for |
 |---|---|
-| `Phase(P)`, `Clock`, `phase_set(s, &p, to)`, `phase_seconds(s, &p)`, `phase_left(s, &p, seconds)` | The game's phase (its own enum) and the tick it began: seconds into it, whole seconds left of a phase that lasts so long |
-| `configure_flat(config, spawn, mode)`, `world_still(s, w, clock)`, `world_rule(s, w, name, value)` | A flat world of the game's own with nothing wandering in, arriving at spawn in a mode; the time standing, nothing growing or dropping; a rule of any value |
-| `here(s, c)`, `present(s)` | A player playing in the home world; how many are |
-| `Arena`, `arena_area(a)`, `arena_inside(a)`, `arena_build(s, w, a, template, force)`, `arena_holds(a, p)` | A walled ground built whole from a template each round (stone under it, walls round it); the box to keep loaded; whether a point is inside |
-| `watch(s, c, mode, at, look)`, `look_at(from, to)`, `hold(s, c, item)` | A player watching (flying in a mode, at its seat's place along a line, facing a point); the look from one point to another; an item from the hotbar in hand |
-| `settings_command(s, c, table, &settings, node, args)`, `settings_usage`, `settings_text`, `settings_save`, `settings_load` | The admin's settings: a struct described by a `base.Var_Table` (each field's help and bounds), set by `/<game> <name> <value>` under a permission, kept with the universe |
+| `Phase(P)`, `Clock`, `phase_set(s, &p, to)`, `phase_seconds(s, &p)`, `phase_left(s, &p, seconds)` | The game's phase (its own enum: Waiting, Playing, Results...) and the tick it began: seconds into it, whole seconds left of a phase that lasts so long (a countdown on the screen) |
+| `configure_flat(config, spawn, mode)` | A flat world of the game's own with nothing wandering in, arriving at spawn, in mode unless the universe asks for another |
+| `world_still(s, w, clock)`, `world_rule(s, w, name, value)` | The time standing (noon), nothing growing or dropping; a rule set to a value of any type |
+| `here(s, c)`, `present(s)` | A player playing in the home world, where a game stages its rounds; how many are |
+| `Arena`, `arena_area(a)`, `arena_inside(a)`, `arena_build(s, w, a, template, force)`, `arena_holds(a, p, above, below)` | A walled ground built whole from a template each round (stone under it, walls round it, so blasts find stone); the box to keep loaded; its inside; whether a point is within its walls |
+| `watch(s, c, mode, at, look)`, `look_at(from, to)`, `hold(s, c, item)` | A player watching rather than playing (out, arrived during a round, between matches): flying in a mode at its seat's place along a line, facing a point; the look from one point to another; an item from the hotbar in hand |
+| `settings_command(s, c, table, &settings, node, args)`, `settings_usage(table)`, `settings_text(table, &settings)`, `settings_save`, `settings_load` | The admin's settings: a struct of the game's described by a `base.Var_Table` (each field's help and bounds), set by `/<game> <name> <value>` under a permission (out of bounds: refused, with the usage), shown, kept with the universe and read back |
+
+A seeded layout is a template made in code: `game.template_make(size)`, then
+`game.template_fill(&t, lo, hi, block)` for each box (clipped to the template), pasted by
+`arena_build` (or `bulk_edit`'s `.Paste`).
 
 ### Walkers
 
@@ -146,167 +263,103 @@ names: the cost of the way to its goal from every block of it (`server/path`), s
 for every walker that follows it, and again before its next use after a block in its area
 changes. Its body is its kind's: as wide and tall as its box, climbing a step only if it
 jumps a block high. `route_would_shut` asks, before a block is placed, whether it would
-leave the route's start or a walker following it with no way: a maze a player builds stays
-a maze, not a wall.
+leave the route's start or a walker following it with no way.
 
-A player's weapons are items with their numbers as data in the game's pack
-(`data/items`): a hitscan weapon's `weapon` (its `damage` hurts players and creatures alike, a
-creature's rounded to whole health), and a melee weapon's `melee`, `{"damage": n, "reach":
-blocks, "arc": degrees, "cooldown": seconds}`: with one in hand the attack button swings it
-(no block breaks), and the server strikes every hittable entity and player whose box is
-within reach of the eyes and inside the arc about where the player faces, in sight, each for
-the damage (players as the `pvp` rule allows). Every one of those harms, and every other,
-passes the game's `harming` hook first.
+A walker that fights is the same steered walker with an `attack` in its kind. `entity_keep`
+holds it within a band of distances from a point the game gives each tick (a player's
+feet): it walks straight at the point when it sees it on its own level, by its own path
+when it does not, backs straight away when too near, and stands facing it inside the band.
+What it attacks and when is the game's: `entity_strike` lands a blow when the target's box is
+within its reach and its cooldown has run, `entity_shoot` sends its kind's shot at a point;
+the damage is its kind's, credited to the creature (a player killed by one reads "was
+beaten by <kind>"). Walkers that overlap each other or a player are pushed apart as they
+steer (players are not pushed: their clients move them). `games/delve` is the model.
 
-A walker that fights is the same steered walker with an `attack` in its kind
-([packs.md](packs.md)). `entity_keep` holds it within a band of distances from a point the
-game gives each tick (a player's feet): it walks straight at the point when it sees it on
-its own level, by its own path when it does not (planned again when the point moves off its
-end), backs straight away when too near, and stands facing it inside the band. What it
-attacks and when is the game's: `entity_strike` lands a blow when the target's box is within
-its reach and its cooldown has run, `entity_shoot` sends its kind's shot at a point; the
-damage is its kind's, the harm is credited to the creature (a player killed by one reads
-"was beaten by <kind>"). Walkers that overlap each other or a player are pushed apart as
-they steer, so a pack does not stand in one place (players are not pushed: their clients
-move them). `games/delve` is the model.
+A player's weapons are items with their numbers as data in a pack (`data/items`): a hitscan
+weapon's `weapon` (its `damage` hurts players and creatures alike), and a melee weapon's
+`melee`, `{"damage": n, "reach": blocks, "arc": degrees, "cooldown": seconds}`: the attack
+button swings it, striking every hittable entity and player within reach and inside the
+arc, each for the damage (players as the `pvp` rule allows). The base pack's rifle, rocket
+launcher and grappling hook are any game's. Every harm passes the game's `harming` hook.
 
 ## The client's side: `engine.Game`
 
-A game's client part (`games/<game>/client`) exports one constant `engine.Game` value
-(`client/engine/game.odin`): its `info` (the same `INFO` as the server part's), its kinds (the same `KINDS` of its shared package as the
-server part's), the type of its state, its console commands and the hooks the client calls.
-A `Session` holds the game it plays and its state (ground rule 1: the session's arena, freed
-with it; the App only holds the list of games, constant data). Every hook may be nil; all run
-on the main thread, in the frame.
+A game's client part exports one constant `engine.Game` value (`client/engine/game.odin`):
+its `info` and `kinds` (the same as the server part's), the type of its state, its console
+commands and the hooks the client calls. A `Session` holds the game it plays and its state
+(the session's arena, freed with it). Every hook may be nil; all run on the main thread, in
+the frame.
 
 | Hook or field | When |
 |---|---|
-| `started(s)` | The session plays the game: welcomed, its state zero |
+| `started(s)` | The session plays the game: welcomed, its state zero (look up the pack's names in `s.reg` here) |
 | `ended(s)` | The session ends (only after `started`; its state still there) |
-| `received(s, r)` | A record of the game's kinds came, changed or went, or one of its events came, in the order sent |
-| `hud(s, ctx)` | Every frame in the world, after the engine's HUD (`client/hud`'s `hud_draw`; F1 hides both), with the `ui.Context`; while F3 is open, its `ctx.screen` is the screen below the overlay (`App.debug_bottom`), so a bar at its top moves down rather than under the overlay |
+| `received(s, r)` | A record of the game's kinds came, changed or went, or one of its events came, in the order sent: `engine.game_value(s, r, T)` is its value as `^T` when it is of the kind whose type is `T` (nil for a removal) |
+| `hud(s, ctx)` | Every frame in the world, after the engine's HUD (F1 hides both), with the `ui.Context`; while F3 is open, `ctx.screen` is the screen below the overlay |
 | `debug(s) -> string` | Every frame with F3 open: one line of the overlay, shown as `game <id>: <line>` ("": none) |
-| `scoreboard(s, board)` | Every frame the player list's key (<kbd>P</kbd>, `Player_List`) is held: the game fills `board` (an `engine.Scoreboard`: a title, `scoreboard_columns(board, "Frags", ...)`, at most `SCOREBOARD_COLUMNS`, and `scoreboard_row(board, name, cells..., you = mine)` per player, in the order to show), which the list shows in place of the engine's names, kills, deaths and pings |
+| `scoreboard(s, board)` | Every frame the player list's key (<kbd>P</kbd>) is held: the game fills `board` (`scoreboard_columns(board, "Frags", ...)`, at most `SCOREBOARD_COLUMNS`, and `scoreboard_row(board, name, cells..., you = mine)` per player, in order), shown in place of the engine's |
 | `commands` | Console commands (`engine.Command_Spec`), there while a world plays the game: `help` lists them and Tab completes them |
-| `actions` | The names of the game's own actions, at most `game.MAX_GAME_ACTIONS` (`{"Use ability", "Drink potion"}`): the keys of `Game_1`.. (Z, X, B by default, rebindable) press them, and the server part's `action` hook hears them. The controls list shows them by the game's names while it plays |
-| `camera(s) -> Game_Camera` | Every frame: the camera the game wants (`.Player`: the player's own, <kbd>F5</kbd>; `.First`, `.Third`; `.Top_Down`: over the head, `distance` blocks away, looking `angle` degrees down along `heading`, the world cut `cut` blocks above the feet so a roof does not hide the avatar). Under a top-down camera the mouse is free: the pointer aims (`s.aim`, `s.aim_entity`, and the point under it, `s.pointer`), the avatar faces it, and the movement keys move across the screen; the input sent is an ordinary one, so the server stays the judge and prediction holds |
-| `camera(s) -> Game_Camera` (`.Free`) | A camera with no avatar, for a game whose players have no body in the world (`game.Ability.Bodiless` in their mode: they move freely, are not drawn, hit, pushed or in the way, and pick nothing up). It looks at the player's focus (its feet) from `distance` at first, zoomed by the wheel between `near` and `far`, `angle` degrees down, turned by F5 (a quarter) and Shift with the wheel; the movement keys, the pointer at a window's edge and the middle button dragged pan it, as the player's ordinary input along the camera's heading at the world's fly speed, so the server, which streams the world round the focus, stays the judge. The pointer and its buttons are the game's: `pointer_tool(s)` says what it is over (the ground's top block, an entity, the UI) and each button's press, drag and release with the block it went down on (a press over the UI is the UI's and starts none). The engine's own clicks (breaking, placing) and the hotbar are off |
-
-Under a free pointer, the HUD a game draws is clickable: a click goes to the UI when the
-pointer was over a widget or a panel (`ui.panel`, a framed backing, or `ui.block_pointer`)
-when the UI was last drawn (`ui.pointer_over`), and to the world (the
-game's `pointer_tool`) otherwise.
-
-A game's HUD is made of a few pieces the engine draws alike for every game
-(`client/engine/marks.odin`): `top_bar(ctx, &rest, text)` a line of status across the top,
-cut from the screen, `banner(ctx, at, text, scale, color)` big text across the middle (`at`
-pixels from it, laid out for 720 high and shrunk with a smaller screen, as under F3), and a
-`Flash` (`flash(&f, s, text, tone)`, `flash_draw(ctx, &f, s)`): a banner that stands a few
-seconds after the news that brought it.
-
-A game marks the ground from its `hud` hook (`client/engine/free_camera.odin`):
-`ground_fill(s, lo, hi, color)` lays a translucent cover over the top of each column of a
-rectangle (its highest solid block between `lo.y` and `hi.y`; a zone, a heat map),
-`ground_outline(s, lo, hi, color)` draws the rectangle's edge on the ground, and
-`structure_ghost(s, t, at, rotation, color)` a template's blocks, tinted (what a placement
-would build: green where it may go, red where not). They are drawn by the debug pass, the
-covers as translucent triangles, `MAX_FILL_VERTICES` of them and `MAX_WORLD_LINES` line ends a
-frame: a whole map's overlay is one frame's work, not 64 outlines.
-
-A game draws in the world from its `hud` hook (`client/engine/marks.odin`), through the
-view the frame is drawn with: `world_point(s, ctx, p)` is where a point of the world is on
-the screen (false behind the eyes or past `MARK_DISTANCE`), `world_label` puts text on a
-plate there and `world_bar` a bar, `entity_bars(s, ctx, kind)` a health bar over every
-entity of a kind that is hurt (an entity's health and its most come with it,
-`Entity_Record`), and `world_box(s, lo, hi, color)` outlines blocks in the world this frame
-(a placement's ghost, a footprint). `entity_place(s, id)` is where the session shows an
-entity now, `entity_top(s, id)` the point just over it, and `entity_label(s, ctx, id, text,
-rows)` and `entity_bar(s, ctx, id)` a plate of text (a name the game keeps in a record keyed
-by the entity) and a health bar there.
+| `actions` | The names of the game's own actions, at most `game.MAX_GAME_ACTIONS`: the keys of `Game_1`.. (Z, X, B by default, rebindable) press them, the server part's `action` hook hears them, the controls list shows them by these names |
+| `camera(s) -> Game_Camera` | Every frame: the camera the game wants. `.Player` (the player's own, <kbd>F5</kbd>), `.First`, `.Third`; `.Top_Down` (over the head, `distance` away, `angle` degrees down along `heading`, the world cut `cut` blocks above the feet): the pointer aims (`s.aim`, `s.aim_entity`, `s.pointer`), the avatar faces it, the movement keys move across the screen; `.Free` (no avatar, for a mode with `game.Ability.Bodiless`): looks at the player's focus from `distance`, zoomed between `near` and `far`, panned by the movement keys, the screen's edge and the middle button; `pointer_tool(s)` says what the pointer is over and each button's press, drag and release |
 
 The accessors are typed as the server's are: `engine.game_state(s, T)` checks `T` is the
-declared state type; `engine.game_value(s, r, T)` is `r`'s value as `^T` when `r` is of the
-game's kind whose value type is `T` (nil for a removal), so a hook reads a record with no
-kind number and no cast:
+declared state type, `engine.game_value(s, r, T)` checks the kind, so a hook holds no kind
+number and no cast.
 
-```odin
-received :: proc(s: ^engine.Session, r: game.Received) {
-	if times, ok := engine.game_value(s, r, stopwatch.Times); ok && times != nil {
-		view(s).times = times^
-	}
-}
-```
+### What a game's HUD is made of
+
+| Name | What it is for |
+|---|---|
+| `top_bar(ctx, &rest, text)` | A line of status across the top of the screen, on the HUD's backing, cut from `rest` |
+| `banner(ctx, at, text, scale, color)` | Big text across the screen with a shadow, its middle `at` pixels from the screen's (laid out for 720 high and shrunk with a smaller screen, as under F3), `scale` times the title's size |
+| `Flash`, `flash(&f, s, text, tone, seconds)`, `flash_draw(ctx, &f, s, at, scale)`, `Tone` | A banner that stands a few seconds after the news that brought it (a wave set out, a level gained), kept in the game's view, coloured by its tone (`.Good`, `.Warn`, `.Bad`) |
+| `world_point(s, ctx, p)`, `world_label(s, ctx, p, text)`, `world_bar(s, ctx, p, fraction)` | Where a point of the world is on the screen (false behind the eyes or past `MARK_DISTANCE`); a plate of text there; a bar |
+| `entity_place(s, id)`, `entity_top(s, id)`, `entity_label(s, ctx, id, text, rows)`, `entity_bar(s, ctx, id)`, `entity_bars(s, ctx, kind)` | Where the session shows an entity, the point over it, a plate of text there (a name the game keeps in a record keyed by the entity), its health bar; a bar over every hurt entity of a kind |
+| `world_box(s, lo, hi, color)` | An outline of blocks in the world this frame (a placement's ghost, a footprint) |
+| `ground_fill(s, lo, hi, color)`, `ground_outline(s, lo, hi, color)`, `structure_ghost(s, t, at, rotation, color)` | A translucent cover over the tops of a rectangle's columns (a zone, a heat map), its edge on the ground, a template's blocks tinted (what a placement would build), `MAX_FILL_VERTICES` and `MAX_WORLD_LINES` a frame |
+| `puff_add(s, puff)` | A speck that drifts and fades (a tower's tracer, a blast's smoke) |
+| `game_request(s, &value)` | Send the server part one of the game's requests ([below](#requests)) |
+
+Under a free pointer (a top-down or free camera) the HUD a game draws is clickable: a click
+goes to the UI when the pointer was over a widget or a panel (`ui.panel`,
+`ui.block_pointer`) when the UI was last drawn, and to the world (`pointer_tool`) otherwise.
+A game's HUD writes its English in place; it has no table of its own yet.
 
 ## Which game a session plays
 
-The server names its game in the handshake: `Welcome.game` (its id; never empty: a Welcome
-without one does not decode). The client
+The server names its game in the handshake: `Welcome.game` (its id; never empty). The client
 looks for the client part of that id among the games it has (`App.games`); with it, the
 session's schema gains the game's kinds, its state is made and `Welcome.schema` must match
 (else the session fails: "the server runs a different version (its state schema is not
 ours)"). A client without that game fails the session before playing with "the server plays
-<id>, a game this version does not have", which the player reads on the screen a failed
-session shows; nothing is half-applied. The server is told nothing: the client leaves.
+<id>, a game this version does not have"; nothing is half-applied.
 
 A world of our own plays the game `voxiverse --game <id>` names (default: `sandbox`), but a
 saved universe plays the game it records (`universe.cfg`'s `game`, [saves.md](saves.md)): the
-universes screen and the `universe` command open it with that game, its card names it, and a
-universe of a game this build lacks is not opened ("This universe plays <id>, a game this
-version does not have"). The client starts its embedded server with that game's server part
-(`App.server_games`), whose Welcome then names it like any server's. The id must be a game
-with both parts; any other is refused at startup with the list of those there are.
+universes screen and the `universe` command open it with that game, and a universe of a game
+this build lacks is not opened. The client starts its embedded server with that game's
+server part (`App.server_games`). The dedicated server runs one with `voxiverse-server --game
+<id>`.
 
 ### The launcher
 
-The title screen lists the games the client was built with (`App.games`, the driver's
-`CLIENT` list), the default first and the rest by folder: each its name on a button, its
-description under it, before Singleplayer (the saved universes), Multiplayer, Options and
-Quit. When the games do not all fit the screen, the launcher shows as many as fit, a page at
-a time, with Previous games and More games under them (`launcher_page`, `App.launcher_page`). The mouse, the keyboard and a pad move through it as through the rest of the menu (the
-default game is lit at once). Picking a game sets `App.launch`; once the frame's UI is drawn,
-`play_game` starts a scratch world (nothing saved) playing it with the embedded server, the
-same path as `--game <id>` and `singleplayer`. `--game <id>` with no `--exec`, `--scene`,
-`--check` or `--benchmark` skips the title and goes straight into that world. Saved universes
-open with the game they record (above); a new universe, made from Singleplayer, plays the
-command line's game.
-
-## The lists of games
-
-No file lists the games. The build driver writes two before every `odin` it runs, from the
-folders in `games/` (the collection `generated` is `build/generated`):
-
-- `build/generated/games/games.odin`, the package `generated:games`, whose `SERVER` holds
-  every `games/<game>/server` package's `GAME`;
-- `build/generated/games/client/games.odin`, the package `generated:games/client`, whose
-  `CLIENT` holds every `games/<game>/client` package's `GAME`.
-
-Both are sorted by folder, and an `#assert` keeps each game's id its folder's name. Only the
-executables' main packages import them (the `import` lint), the client's list `client/main`
-alone, so the dedicated server links no client code. The dedicated server runs one with
-`voxiverse-server --game <id>` (default: `sandbox`); the client gives both lists to the App.
-
-Adding a game is a folder `games/<game>/` holding its shared package, a `server` package
-that exports `GAME :: core.Game{...}` and a `client` package that exports `GAME ::
-engine.Game{...}`, with their tests beside them: nothing else. `games/stopwatch` is the
-model: the smallest game that uses every hook of the server's but those of harm (`hurt`,
-`died`, `respawned`: `games/arena`, a deathmatch, is the model of those and of a game for
-several players, its tests joining a second with `core.harness_player_join`), its record kept
-with the universe (`save`, `load`), a client part with its state,
-records, HUD, F3 line and command, and a record and an event of its own. Its server part's
-tests run it on a stepped server with the harness's mirror client; its client part's tests
-play it whole, a session joining the server part over the harness's network and drawing its
-HUD, the one place a part imports another (the `import` lint lets a client part's tests
-import its server part). `voxiverse --game stopwatch` plays it in a world of our own.
+The title screen lists the games the client was built with, the default first and the rest
+by folder: each its name on a button, its description under it, before Singleplayer,
+Multiplayer, Options and Quit. When they do not all fit the screen, the launcher shows as
+many as fit, a page at a time, with Previous games and More games under them
+(`launcher_page`, `App.launcher_page`). Picking a game starts a scratch world (nothing saved)
+playing it with the embedded server, the same path as `--game <id>`. `--game <id>` with no
+`--exec`, `--scene`, `--check` or `--benchmark` skips the title and goes straight into that
+world. The title's image baselines show the launcher's pages: a new game changes them, and
+its commit re-accepts them.
 
 ## The game's pack
 
 A game may bring content as data, a pack of its own ([packs.md](packs.md)) in
-`games/<game>/pack/`, named for the game (`pack.json`'s namespace and the `Pack_Source`'s,
-though its folder is `pack`: its ids read `<game>:<name>`), laid out as any pack
-([layout.md](layout.md), rule 6). `./build.sh packs` checks a pack folder named for its
-namespace, so a copy of it named `<game>`. Its shared package
-names the files in a constant `game.Pack_Source`, each `#load`ed (the executable carries it, as
-it carries the base pack), and its server part puts it in `core.Game.pack`:
+`games/<game>/pack/`, named for the game (`pack.json`'s namespace: its ids read
+`<game>:<name>`), laid out as any pack. Its shared package names the files in a constant
+`game.Pack_Source`, each `#load`ed (the executable carries it, as it carries the base pack),
+and its server part puts it in `core.Game.pack`:
 
 ```odin
 // games/flood/pack.odin (package flood)
@@ -319,40 +372,36 @@ PACK :: game.Pack_Source {
 }
 ```
 
-The server loads it after the universe's packs only in a session that plays the game
-(`core.game_packs`); a pack not named for its game is refused at start. It is hashed into the
-registry and sent to joining players as any pack is, so a client without the game still builds
-the same content; a client hosting the game builds it in from the same constant.
+The server loads it after the universe's packs only in a session that plays the game; a pack
+not named for its game is refused at start. It is hashed into the registry and sent to
+joining players as any pack is. `./build.sh packs` checks a pack folder named for its
+namespace, so a copy of it named `<game>`. A game's modes are where its rules for players
+live: a mode that flies and takes no harm for those watching, one with the kit for those
+playing.
 
 ## The game's state
 
-A game declares two types and the server owns their memory (ground rule 1: the session's
-arena, freed by `stop`; no globals, ground rule 4):
+A game declares two types and the server owns their memory (the session's arena, freed by
+`stop`; no globals):
 
 - `server_state`: one per session, zero when `start` is called: `core.game_state(s, T)`.
 - `client_state`: one per seat, zero for each player who joins (the seat's block is zeroed
   when it is freed): `core.game_client_state(s, c, T)`.
 
-The accessors are typed: they check that `T` is the type the game declared and return `^T`,
-so game code holds no casts. A game names them once:
-
-```odin
-state :: proc(s: ^core.Server) -> ^Round {return core.game_state(s, Round)}
-```
-
-Anything a game keeps beyond these blocks it frees in its own hooks. Both live as long as the
-session: what a game keeps across sessions (a record, a ladder, its admin's settings) it
-writes with its `save` hook, as text of its own choosing, and reads back with `load` after
-`start` (`game.cfg` in the universe, [saves.md](saves.md)). A scratch world (no universe
-directory) saves nothing.
+A game names them once (`state :: proc(s: ^core.Server) -> ^Round {return
+core.game_state(s, Round)}`). Anything it keeps beyond these blocks it frees in its own
+hooks. Both live as long as the session: what a game keeps across sessions (a record, a
+ladder, its admin's settings) it writes with its `save` hook as text of its own choosing and
+reads back with `load` (`game.cfg` in the universe, [saves.md](saves.md)); a scratch world
+saves nothing.
 
 ## Records and events
 
 What a game tells its players beyond the engine's records (a score, a round, a timer) it
 replicates as the engine does ([design.md](design.md), State replication): **records** of
 typed state kinds and one-off **events**, by the same codec. It declares its kinds as data in
-its shared package, a `game.Game_Kinds` of `game.State_Kind_Info` and `game.Event_Kind_Info`
-(name, value type, key, lane, check...), and puts the value in `core.Game.kinds`:
+its shared package, a `game.Game_Kinds`, and puts it in `core.Game.kinds` and
+`engine.Game.kinds`:
 
 ```odin
 // games/stopwatch/records.odin (package stopwatch)
@@ -372,45 +421,114 @@ KINDS :: game.Game_Kinds {
 }
 ```
 
-- A kind's name is `<id>.<name>` (`game_schema` asserts it), and each of a game's kinds has a
-  value type of its own (`schema_make` refuses two alike): the type names the kind, so game
-  code holds no kind number and no cast.
-- The schema is a run-time value (`game.game_schema(id, kinds)`): the engine's kinds, then the
-  game's, the engine's keeping their ids whatever the game. No engine table (`State_Kind`,
-  `STATE_KINDS`, `Event_Kind`) knows a game; in a session without the game its kinds do not
-  exist, and a message that names one is malformed.
-- The server puts a record with `core.game_put(s, c, &times)` (a keyed kind: `key =
-  game.key_player(id)`), the counterpart of the engine's `state_put`, and sends an event with
-  `core.game_event(s, c, &broken)`. Puts coalesce, keyed kinds are views and singletons
-  persist, as for the engine's kinds.
-- The client hands each of them to the client part's `received` hook, which reads it with
-  `engine.game_value(s, r, stopwatch.Times)`; the engine applies none of them itself.
-- The hashes: `Hello` carries the hash of the engine's kinds, which the server checks as
-  before; `Welcome` names the game (`game`, its id) and carries the hash of every
-  kind (`schema`), which the client checks once it has the same game's kinds. A client and
-  server with different records of a game refuse each other as they do for the engine's.
-- The harness's mirror client builds its schema with the server's game, so a game's test
-  reads what its players were told: `core.mirror_game_record(&sess.mirror, stopwatch.Times)`.
-  A test of a game for several players joins more beside the mirror, on a server that
-  listens: `core.harness_player_join(&sess.h, &guest, "guest")`, a client over the
-  harness's network that takes the packs, plays and stands still (the test moves it on the
-  server's side), told its records and notices as any player (`harness_player_record`).
-
-## Requests
-
-What a game's client part asks of its server part beyond its actions (build this here, lay
-a road along that, demolish the other) it sends as **requests**: values of types of its own
-with a small payload (a position, a rectangle, an id; at most `game.MAX_GAME_REQUEST`
-bytes), declared as data beside its records (`Game_Kinds.requests`, `Event_Kind_Info`s
-named `<id>.<name>`) and encoded by the same codec. They are in the schema, so a client and
-a server with different requests refuse each other at the handshake. The client part
-sends one with `engine.game_request(s, &value)` (a `Game_Request` message after its last
-input); the server decodes it only into a kind that is a request, checks it (the kind's
-`check`, every enum in range, every string within its limit; one that does not decode
-gets its client refused, as any malformed message does) and calls the game's `request`
-hook, where `core.request_value(s, r, T)` reads it. A test sends one through the same
-encoding and checks with `core.harness_request(s, c, &value)`. `games/hamlet` is the model.
+- A kind's name is `<id>.<name>`, and each of a game's kinds has a value type of its own: the
+  type names the kind, so game code holds no kind number and no cast.
+- A keyed kind (`key = .Player`, `.Entity`, with its `max_records`) is a view: rebuilt every
+  tick, what the server does not put is removed. A singleton persists. Puts coalesce: put
+  every tick, and only changes are sent.
+- The server puts a record with `core.game_put(s, c, &value)` (a keyed kind: `key =
+  game.key_player(id)` or `game.key_entity(id)`) and sends an event with
+  `core.game_event(s, c, &value)`.
+- The schema (the engine's kinds, then the game's) is checked when a client joins: a client
+  and server with different records of a game refuse each other.
 
 `build schema` writes the engine's kinds into the Wireshark dissector; a game's kinds are not
 in it. `build netdump` decodes with the engine's schema alone: in a trace of a session with a
 game, a State message that carries the game's records counts as one that does not decode.
+
+## Requests
+
+What a game's client part asks of its server part beyond its actions (build this here, lay
+a road along that) it sends as **requests**: values of types of its own with a small payload
+(at most `game.MAX_GAME_REQUEST` bytes), declared beside its records
+(`Game_Kinds.requests`, named `<id>.<name>`). The client part sends one with
+`engine.game_request(s, &value)`; the server decodes it only into a kind that is a request,
+checks it (every enum in range, every string within its limit; one that does not decode gets
+its client refused) and calls the game's `request` hook, where `core.request_value(s, r, T)`
+reads it. `games/hamlet` is the model.
+
+## Testing a game
+
+Each part has its tests beside it, and `./build.sh test games/<game>/server
+games/<game>/client` runs them (`./build.sh test` runs every game's with the rest).
+
+**The server part** plays on a stepped server, tick by tick, with the rig of
+`server/playtest` (only tests import it):
+
+```odin
+@(test)
+test_a_round :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig) // (the heap: a test thread's stack is small)
+	defer free(rig)
+	if !playtest.start(t, rig, GAME, {guests = 1}) {return}
+	defer playtest.stop(rig)
+	testing.expect(t, playtest.until_phase(rig, &state(playtest.srv(rig)).phase, .Playing))
+	playtest.kill(rig, playtest.guest(rig), playtest.host(rig))
+	playtest.say(rig, "tag restart")
+	testing.expect(t, playtest.told(rig, "Tag: a new round"))
+	round := playtest.guest_record(rig, tag.Round)
+}
+```
+
+`start` puts the game in the harness's small flat world (its `configure` changes it as any)
+with the host (the harness's mirror client, on the local pipe) welcomed, and `guests` more
+players over the harness's network, each playing (`Options`: `listen`, `save_dir` for a
+universe kept on disk, `kit`, `seed`, `plain` for guests without the host's role). `step`,
+`until`, `until_phase` and `until_seconds` move time; `say` is the host's command, `told`
+and `guest_told` what a player was told, `host_record` and `guest_record` the game's records
+as each player holds them, `kill` a player killed through the engine's damage pipeline, and
+`srv`, `host`, `guest` reach the server's side to move a player or set what a test needs.
+`core.harness_request(s, c, &value)` sends a request as a client would.
+
+**The client part** plays whole with the rig of `client/playtest`: the server part on a
+stepped server, a session joining it over the harness's network with the client part
+(fetching the game's pack as any pack), a frame each tick, and an App that draws the HUD at
+1280x720:
+
+```odin
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, tag_server.GAME, GAME, {name = "runner"}) {return}
+	defer playtest.stop(rig)
+	playtest.until(rig, proc(rig: ^playtest.Rig) -> bool {return view(rig.s).round.phase == .Playing})
+	testing.expect(t, playtest.drawn(rig, "TAG  "))                     // the HUD drew it
+	testing.expect(t, playtest.drawn(rig, "Tag: round", scores = true)) // the scoreboard
+	testing.expect(t, playtest.drawn_within(rig, 336))                  // kept below F3
+```
+
+`rig.input` and `rig.actions` are the keys and pointer a test presses (a game action:
+`rig.actions.pressed += {.Game_1}`); `guest_join` brings a second player; `client` is the
+session's player on the server; `Options.ui` draws the HUD every frame for a game whose HUD
+is clicked. The game's own debug line is `engine.game_debug_line(s)`, its scoreboard
+`engine.game_scoreboard(s)`.
+
+## Screenshots
+
+`./build.sh shot <name> [--game <id>] -- <script>` plays a console script headless on
+lavapipe under `xvfb-run` at 1280x720 ([debugging.md](debugging.md)): the script is what
+`--exec` takes, its lines separated by `;`, with `wait_world` (the world is there),
+`wait <frames>`, `sleep <seconds>`, any console command (`/tp x y z yaw pitch`, `/<game>
+...` for the game's own, `hold <item>`, `key <key> down|up`, `pointer <x> <y>`, `set
+<variable> <value>`) and `screenshot <file>`, which writes `build/screenshots/<file>.png`; it
+ends with `quit`. A game's screenshot, with the round where it should be:
+
+```sh
+./build.sh shot flood_water --game flood -- "wait_world; /flood rule baseline; sleep 20; screenshot flood_water; quit"
+./build.sh shot launcher -- "wait 60; screenshot launcher; quit"
+```
+
+Look at each picture before saying what it shows.
+
+## The rules
+
+- A game's folder is its whole: nothing outside `games/<game>/` changes for it, and its
+  commits touch only its folder. What it needs of the engine is an engine commit of its own,
+  first, with its docs.
+- It calls only what the list above holds (and `server:play`, `client:engine`, `client:ui`,
+  `common:`), never writes a world's rules but through `game_rule`, keeps no globals, uses no
+  clock or unseeded randomness in its server part.
+- Its rules, commands and records are documented in its README; its server part's rules are
+  tested on the stepped harness (with a second player where it is for several), its client
+  part's HUD by the client rig.
+- Its ideas may come from anywhere; its code is its own. A game is original, never a
+  recreation of an existing title.
