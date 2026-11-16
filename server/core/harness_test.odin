@@ -118,3 +118,47 @@ test_harness_player_joins :: proc(t: ^testing.T) {
 		"the guest is still playing",
 	)
 }
+
+// The mirror reads blocks and modes by the server's registry, as a client that took the
+// server's packs does: it stands on a block of the game's pack and knows the game's mode
+// (by the base registry alone it read past the end of its block table).
+@(test)
+test_mirror_stands_on_a_games_blocks :: proc(t: ^testing.T) {
+	PACK :: `{"format": 1, "namespace": "floors", "version": "1.0.0", "title": "Floors", "requires": ["voxiverse"]}`
+	BLOCKS :: `{"tile": {"textures": {"all": "voxiverse:cobblestone"}, "sound": "voxiverse:stone"}}`
+	MODES :: `{"walker": {"abilities": ["health"], "kit": [], "rules": {}}}`
+	files := [3]game.Pack_File {
+		{"pack.json", transmute([]u8)string(PACK)},
+		{"data/blocks/floors.json", transmute([]u8)string(BLOCKS)},
+		{"data/game_modes/modes.json", transmute([]u8)string(MODES)},
+	}
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.mode = "floors:walker"
+	config.game = {
+		info = {id = "floors", name = "Floors"},
+		pack = {"floors", files[:]},
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {
+		session_stop(sess)
+		return
+	}
+	defer session_stop(sess)
+	s := &sess.h.srv
+	tile, _ := game.registry_block(s.registry, "floors:tile")
+	testing.expect(t, int(tile) >= len(test_blocks().collision), "the tile is the base registry's")
+	bulk_edit(
+		s.home,
+		{shape = Box{{-4, -1, -4}, {4, -1, 4}}, op = .Set, block = tile, partial = true},
+		world_act(s.home, .Structure),
+	)
+	_, ok := harness_step_until(&sess.h, proc(data: rawptr) -> bool {
+			sess := (^Session)(data)
+			return sess.mirror.welcomed && sess.h.srv.clients[0].state == .Playing
+		}, sess, 600)
+	if !testing.expect(t, ok) {return}
+	harness_step(&sess.h, 30)
+	testing.expect(t, sess.mirror.mode_known, "the mirror does not know the game's mode")
+	testing.expect_value(t, sess.mirror.mismatches, 0)
+}

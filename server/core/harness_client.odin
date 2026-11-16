@@ -54,13 +54,20 @@ Mirror :: struct {
 	mode_known:    bool,
 	sent:          ^[dynamic][]u8, // when set, every message sent is also kept here (a copy, heap)
 	heard:         ^[dynamic][]u8, // when set, every packet the server sent is kept here (a copy, heap), as it arrived
+	reg:           ^game.Registry, // the server's (its game's pack's blocks and modes too); nil: the base registry
+}
+
+// mirror_reg: the registry the mirror reads blocks and modes by, as a client that took
+// the server's packs does.
+mirror_reg :: proc(m: ^Mirror) -> ^game.Registry {
+	return m.reg if m.reg != nil else test_reg()
 }
 
 // mirror_mods: what the real client moves with: the mode and inventory the server told
 // (derive_character), as the server's step does.
 mirror_mods :: proc(m: ^Mirror) -> game.Mods {
 	if !m.mode_known {return game.MODS_NONE}
-	return game.derive_character(test_reg(), m.mode, &m.inventory)
+	return game.derive_character(mirror_reg(m), m.mode, &m.inventory)
 }
 
 Session :: struct {
@@ -89,7 +96,7 @@ block_of :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 }
 
 query :: proc(m: ^Mirror) -> game.Block_Query {
-	return {m, block_of, test_blocks(), {}}
+	return {m, block_of, &mirror_reg(m).blocks, {}}
 }
 
 mirror_set :: proc(m: ^Mirror, p: game.Block_Pos, b: game.Block) {
@@ -255,7 +262,7 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 		case .Entity:
 			if g.op == .Create {append(&m.entities, u32(g.key.a))}
 		case .Mode:
-			if mode, found := game.mode_find(test_reg(), (^game.Mode_Record)(g.value).mode);
+			if mode, found := game.mode_find(mirror_reg(m), (^game.Mode_Record)(g.value).mode);
 			   found {
 				m.mode, m.mode_known = mode, true
 			}
@@ -301,6 +308,7 @@ session_start :: proc(
 	}
 	m := &sess.mirror
 	m.endpoint = harness_local(&sess.h)
+	m.reg = sess.h.srv.registry
 	m.scratch = new(game.Block_Array)
 	game.block_arrays_init(&m.arrays, 2048)
 	game.layer_pools_init(&m.pools, 2048 * game.registry_replicated_channels(sess.h.srv.registry))
