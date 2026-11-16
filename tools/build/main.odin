@@ -1858,24 +1858,31 @@ run_tool :: proc(name: string, args: []string, release := false) -> bool {
 	return run(slice.concatenate([][]string{{exe}, args}))
 }
 
-// build_tool builds tools/<name> into build/.
-build_tool :: proc(name: string) -> (exe: string, ok: bool) {
-	exe = path_join({"build", strings.concatenate({name, exe_suffix()})})
-	dir := path_join({"tools", name})
+// tool_stale: exe is missing, or a file under one of dirs is newer than it.
+tool_stale :: proc(exe: string, dirs: []string) -> bool {
 	exe_info, exe_err := os.stat(exe, context.temp_allocator)
-	if exe_err == nil {
+	if exe_err != nil {return true}
+	for dir in dirs {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
-		newer := false
 		for info in os.walker_walk(&w) {
 			if info.type == .Regular &&
 			   info.modification_time._nsec > exe_info.modification_time._nsec {
-				newer = true
-				break
+				return true
 			}
 		}
-		if !newer {return exe, true}
 	}
+	return false
+}
+
+// build_tool builds tools/<name> into build/ when it is stale (tool_stale).
+build_tool :: proc(name: string) -> (exe: string, ok: bool) {
+	exe = path_join({"build", strings.concatenate({name, exe_suffix()})})
+	// (a tool is built from what it imports too: the engine's and the games' code, not only
+	// its folder; `bench budgets` times server/core, and judged a stale build when only
+	// the engine had changed)
+	dirs := []string{path_join({"tools", name}), "common", "server", "client", "games"}
+	if !tool_stale(exe, dirs) {return exe, true}
 	cmd := slice.concatenate(
 	[][]string {
 		{"odin", "build", path_join({"tools", name}), strings.concatenate({"-out:", exe})},
