@@ -99,6 +99,8 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 				{info.color[0], info.color[1], info.color[2], 255},
 				.Body,
 			)
+		case .Parts:
+			shaped(d, v, info, e.stride, hurt, game.kind_looks(info, e.looks))
 		case .Player: // (players are drawn as players, not from here)
 		}
 	}
@@ -115,6 +117,53 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 		size := p.size * (1 - p.age / p.life * 0.6)
 		render.entity_box(d, p.position, 0, 0, -size, size, p.color, .Body)
 		i += 1
+	}
+}
+
+// STRIKE_RAISE: radians a striking part swings forward (a raised arm, a lunging head).
+STRIKE_RAISE :: 1.5
+
+// shaped: a kind's own boxes (its model's parts), turned with it; a part that swings
+// turns about the middle of its top: to and fro with the stride, forward while it
+// strikes. Red while hurt.
+@(private)
+shaped :: proc(
+	d: ^render.Entity_Draw,
+	v: Other_View,
+	info: ^game.Kind_Info,
+	stride: f32,
+	hurt: bool,
+	looks: game.Entity_Looks,
+) {
+	walk := math.sin(stride * 4) * 0.7
+	for part in info.parts {
+		hinge := [3]f32{(part.lo.x + part.hi.x) / 2, part.hi.y, (part.lo.z + part.hi.z) / 2}
+		angle: f32
+		switch part.swing {
+		case .None:
+		case .Walk:
+			angle = walk
+		case .Walk_Back:
+			angle = -walk
+		case .Strike:
+			angle = STRIKE_RAISE if .Striking in looks else walk
+		}
+		color := [4]u8{part.color[0], part.color[1], part.color[2], 255}
+		skin := [game.Part_Skin]render.Entity_Part {
+			.Body = .Body,
+			.Legs = .Legs,
+			.Head = .Head,
+		}
+		render.entity_box(
+			d,
+			v.position + turn_yaw(hinge, v.yaw),
+			v.yaw,
+			angle,
+			part.lo - hinge,
+			part.hi - hinge,
+			HURT if hurt else color,
+			skin[part.skin],
+		)
 	}
 }
 

@@ -103,6 +103,37 @@ Entity_Model :: enum u8 {
 	Item,
 	Player,
 	Box, // a box the kind's size in Kind_Info.color
+	Parts, // boxes of its own (Kind_Info.parts): a body, a head, limbs that swing
+}
+
+MAX_MODEL_PARTS :: 16
+
+// Part_Skin: how a part of a shaped model is shaded (the entity pass's parts).
+Part_Skin :: enum u8 {
+	Body,
+	Legs,
+	Head, // its front has eyes
+}
+PART_SKIN_LIST := [?]string{"body", "legs", "head"}
+#assert(len(PART_SKIN_LIST) == len(Part_Skin))
+
+// Part_Swing: how a part moves, turning about the middle of its top (a hip, a shoulder).
+Part_Swing :: enum u8 {
+	None,
+	Walk, // to and fro as the creature walks
+	Walk_Back, // the same, the other way (the other leg, the arm opposite)
+	Strike, // forward while it strikes (the Striking look), else as Walk
+}
+PART_SWING_LIST := [?]string{"none", "walk", "walk_back", "strike"}
+#assert(len(PART_SWING_LIST) == len(Part_Swing))
+
+// Model_Part: a box of a shaped model, in the creature's own space (blocks from the middle
+// of its feet; -z is its front), with its colour, its shading and its swing.
+Model_Part :: struct {
+	lo, hi: [3]f32,
+	color:  [3]u8,
+	skin:   Part_Skin,
+	swing:  Part_Swing,
 }
 ENTITY_MODEL_LIST := [?]string{"sheep", "rocket", "item", "player"}
 
@@ -182,6 +213,7 @@ Kind_Info :: struct {
 	fields:     []Kind_Field,
 	model:      Entity_Model,
 	color:      [3]u8, // model Box
+	parts:      []Model_Part, // model Parts
 	spawn:      Maybe(Kind_Spawn_Rule),
 	attack:     Maybe(Kind_Attack_Info), // it fights (a steered walker)
 }
@@ -750,6 +782,10 @@ read_entity_model :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) {
 		info.model = Entity_Model(at)
 		return
 	}
+	if v.kind == .Object && len(v.members) == 1 && v.members[0].key == "parts" {
+		read_model_parts(b, f, v.members[0].value, info)
+		return
+	}
 	ok := v.kind == .Object && len(v.members) == 1 && v.members[0].key == "box"
 	if ok {
 		c := v.members[0].value
@@ -771,6 +807,91 @@ read_entity_model :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) {
 		return
 	}
 	info.model = .Box
+}
+
+// read_model_parts: a shaped model's parts, [{"box": [x0, y0, z0, x1, y1, z1], "color":
+// [r, g, b], "skin": "body" | "legs" | "head", "swing": "none" | "walk" | "walk_back" |
+// "strike"}, ...] (skin and swing optional: body, none).
+@(private)
+read_model_parts :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, info: ^Kind_Info) {
+	USAGE :: `parts is a list of at most 16 {"box": [x0, y0, z0, x1, y1, z1], "color": [r, g, b], "skin", "swing"}`
+	if v.kind != .Array || len(v.items) == 0 || len(v.items) > MAX_MODEL_PARTS {
+		fail_field(b, f, v, USAGE)
+		return
+	}
+	parts := make([]Model_Part, len(v.items))
+	for e, i in v.items {
+		p := &parts[i]
+		if e.kind != .Object {
+			fail_field(b, f, e, USAGE)
+			return
+		}
+		seen_box, seen_color := false, false
+		for m in e.members {
+			switch m.key {
+			case "box":
+				ok := m.value.kind == .Array && len(m.value.items) == 6
+				corners: [6]f32
+				for c, k in m.value.items {
+					x, is_number := json_number(c)
+					if !ok || !is_number || x < -4 || x > 4 {
+						ok = false
+						break
+					}
+					corners[k] = f32(x)
+				}
+				p.lo, p.hi =
+					{corners[0], corners[1], corners[2]}, {corners[3], corners[4], corners[5]}
+				if !ok || p.lo.x >= p.hi.x || p.lo.y >= p.hi.y || p.lo.z >= p.hi.z {
+					fail_field(
+						b,
+						f,
+						m.value,
+						"a part's box is [x0, y0, z0, x1, y1, z1], -4..4, each low below its high",
+					)
+					return
+				}
+				seen_box = true
+			case "color":
+				ok := m.value.kind == .Array && len(m.value.items) == 3
+				for c, k in m.value.items {
+					if !ok || c.kind != .Int || c.i < 0 || c.i > 255 {
+						ok = false
+						break
+					}
+					p.color[k] = u8(c.i)
+				}
+				if !ok {
+					fail_field(
+						b,
+						f,
+						m.value,
+						"a part's color is [r, g, b], each a whole number 0..255",
+					)
+					return
+				}
+				seen_color = true
+			case "skin":
+				p.skin = Part_Skin(choice_of(b, f, m.value, "skin", PART_SKIN_LIST[:], 0))
+			case "swing":
+				p.swing = Part_Swing(choice_of(b, f, m.value, "swing", PART_SWING_LIST[:], 0))
+			case:
+				fail_field(
+					b,
+					f,
+					m.value,
+					fmt.aprintf("\"%s\" is not a part's field (box, color, skin, swing)", m.key),
+				)
+				return
+			}
+		}
+		if !seen_box || !seen_color {
+			fail_field(b, f, e, "a part needs a \"box\" and a \"color\"")
+			return
+		}
+	}
+	info.parts = parts
+	info.model = .Parts
 }
 
 @(private)
@@ -952,6 +1073,7 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 			k.model,
 			k.color,
 		)
+		for p in k.parts {fmt.sbprintf(sb, " part=%v,%v,%v,%v,%v", p.lo, p.hi, p.color, p.skin, p.swing)}
 		if a, has := k.attack.?; has {
 			fmt.sbprintf(sb, " attack=%v %v %v %s", a.damage, a.reach, a.cooldown, a.shot_name)
 		}

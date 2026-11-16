@@ -239,6 +239,21 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 			`testpack/data/entities/k.json:1:33: look "striking" is its attack's; add an "attack"`,
 		},
 		{
+			"a part with its box inside out",
+			`{"k": {"box": [1, 1], "model": {"parts": [{"box": [0, 1, 0, 0.5, 0.5, 0.5], "color": [1, 2, 3]}]}}}`,
+			`testpack/data/entities/k.json:1:51: a part's box is [x0, y0, z0, x1, y1, z1], -4..4, each low below its high`,
+		},
+		{
+			"a part with no colour",
+			`{"k": {"box": [1, 1], "model": {"parts": [{"box": [0, 0, 0, 0.5, 0.5, 0.5], "swing": "walk"}]}}}`,
+			`testpack/data/entities/k.json:1:43: a part needs a "box" and a "color"`,
+		},
+		{
+			"a part that swings oddly",
+			`{"k": {"box": [1, 1], "model": {"parts": [{"box": [0, 0, 0, 0.5, 0.5, 0.5], "color": [1, 2, 3], "swing": "wave"}]}}}`,
+			`testpack/data/entities/k.json:1:106: swing is one of "none", "walk", "walk_back", "strike"; got "wave"; did you mean "walk"?`,
+		},
+		{
 			"an unknown field",
 			`{"k": {"box": [1, 1], "model": "item", "helth": 3}}`,
 			`testpack/data/entities/k.json:1:40: "helth" is not a kind field; did you mean "health"?`,
@@ -255,4 +270,37 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 		) {matched = strings.has_prefix(got, c.want[:len(c.want) - 1])}
 		testing.expectf(t, matched, "%s:\n--- got:\n%s\n--- want:\n%s", c.name, got, c.want)
 	}
+}
+
+// A shaped fighter: its parts and its attack, as the pack wrote them.
+@(test)
+test_entity_kind_shape_and_attack :: proc(t: ^testing.T) {
+	json := `{
+		"orc": {"box": [0.8, 1.8], "physics": "walker",
+		        "walker": {"walk_speed": 2, "run_speed": 2, "jump": 1, "step": 0}, "brain": "steered",
+		        "attack": {"damage": 3, "reach": 1.2, "cooldown": 0.8, "shot": "testpack:spit"},
+		        "looks": ["striking"],
+		        "model": {"parts": [
+		            {"box": [-0.3, 0.8, -0.2, 0.3, 1.5, 0.2], "color": [80, 120, 60]},
+		            {"box": [-0.3, 0, -0.1, -0.05, 0.8, 0.1], "color": [40, 40, 40], "skin": "legs", "swing": "walk"},
+		            {"box": [0.3, 0.7, -0.1, 0.5, 1.5, 0.1], "color": [80, 120, 60], "swing": "strike"}]}},
+		"spit": {"box": [0.2, 0.2], "physics": "projectile",
+		         "projectile": {"speed": 20, "gravity": 0, "life": 2, "explode": 0}, "model": "rocket"}
+	}`
+	reg, errs := build_with(pack_of("testpack", []File{{"data/entities/k.json", json}}))
+	testing.expect_value(t, errors_text(errs), "")
+	if reg == nil {return}
+	defer registry_destroy(reg)
+	orc, _ := registry_kind(reg, "testpack:orc")
+	spit, _ := registry_kind(reg, "testpack:spit")
+	info := kind_info(reg, orc)
+	testing.expect_value(t, info.model, Entity_Model.Parts)
+	if !testing.expect_value(t, len(info.parts), 3) {return}
+	testing.expect_value(t, info.parts[1].skin, Part_Skin.Legs)
+	testing.expect_value(t, info.parts[2].swing, Part_Swing.Strike)
+	testing.expect_value(t, info.parts[0].hi, [3]f32{0.3, 1.5, 0.2})
+	a, fights := info.attack.?
+	testing.expect(t, fights)
+	testing.expect_value(t, a.shot, spit)
+	testing.expect_value(t, a.reach, 1.2)
 }

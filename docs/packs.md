@@ -66,7 +66,14 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   of the target's box, a shot flies straight at its point and, with `explode` 0, hurts what it
   hits by the damage instead of going off.
 - `fields`: at most 8 saved numbers, `{"name": {"type": "u8"|"u16", "min": n, "max": n}}`.
-- `model`: `sheep`, `rocket`, `item`, `player` or `{"box": [r, g, b]}`.
+- `model`: `sheep`, `rocket`, `item`, `player`, `{"box": [r, g, b]}` (one box, the kind's size)
+  or `{"parts": [...]}`, a shape of at most 16 boxes in the creature's own space (blocks from
+  the middle of its feet, `-z` its front): each `{"box": [x0, y0, z0, x1, y1, z1], "color":
+  [r, g, b]}` with an optional `skin` (`body`, `legs`, `head`: the entity pass's shading; a
+  head has eyes) and `swing` (`none`; `walk` and `walk_back`, to and fro with the stride, the
+  other leg the other way; `strike`, forward while the kind shows `striking`, else as `walk`).
+  A part turns about the middle of its top (a hip, a shoulder). The client draws it
+  (`shaped` in `client/engine/entities.odin`); nothing about it is sent.
 - `spawn`: natural spawning (`on` a block matcher, `day` fractions, `every` ticks, `chance`, `cap`,
   `within`, `distance`, `group`), all required.
 
