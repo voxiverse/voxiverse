@@ -63,9 +63,8 @@ Side :: struct {
 	computer: Computer,
 }
 
+// Wins: what the universe keeps of a player, by name (play.By_Name).
 Wins :: struct {
-	name:  [16]u8,
-	len:   int,
 	count: int,
 }
 
@@ -79,7 +78,7 @@ State :: struct {
 	built:     bool, // the field is in the world
 	winner:    u8,
 	routes:    play.Routes,
-	wins:      [MAX_WINS]Wins,
+	wins:      play.By_Name(Wins, MAX_WINS),
 	units:     [skirmish.Unit]game.Kind_Id,
 	buildings: [skirmish.Building]game.Kind_Id,
 	crystal:   game.Kind_Id,
@@ -271,17 +270,12 @@ match_clear :: proc(s: ^core.Server) {
 }
 
 wins_add :: proc(g: ^State, name: string) {
-	for &w in g.wins {
-		if string(w.name[:w.len]) == name {w.count += 1; return}
-	}
-	for &w in g.wins {
-		if w.len == 0 {w.len = copy(w.name[:], name); w.count = 1; return}
-	}
+	if w := play.by_name(&g.wins, name, make_it = true); w != nil {w.count += 1}
 }
 
 wins_of :: proc(g: ^State, name: string) -> int {
-	for &w in g.wins {if w.len > 0 && string(w.name[:w.len]) == name {return w.count}}
-	return 0
+	w := play.by_name(&g.wins, name)
+	return w.count if w != nil else 0
 }
 
 // joined: a player who comes during a match takes a side the computer plays, if one still
@@ -486,29 +480,29 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 	return true
 }
 
-// save: the settings and every player's wins, kept with the universe (`wins <n> <name>`).
+// save: the settings and every player's wins, kept with the universe (`wins = <n> <name>`).
 save :: proc(s: ^core.Server, out: ^strings.Builder) {
 	g := state(s)
 	play.settings_save(skirmish.settings_table(), &g.settings, out)
-	for &w in g.wins {
-		if w.len > 0 {fmt.sbprintf(out, "wins = %d %s\n", w.count, string(w.name[:w.len]))}
+	write :: proc(b: ^strings.Builder, w: ^Wins) -> bool {
+		strings.write_int(b, w.count)
+		return w.count > 0
 	}
+	play.by_name_save(&g.wins, "wins", out, write)
 }
 
 // load: what the universe kept (a line Skirmish does not know is not Skirmish's).
 load :: proc(s: ^core.Server, text: string) -> bool {
 	g := state(s)
 	own := play.settings_read(skirmish.settings_table(), &g.settings, text) or_return
-	i := 0
-	for line in own {
-		if line.key != "wins" || i >= MAX_WINS {return false}
-		count, _, name := strings.partition(line.value, " ")
-		n, ok := strconv.parse_int(count)
-		if !ok || n < 0 || len(name) == 0 || len(name) > 16 {return false}
-		g.wins[i].len = copy(g.wins[i].name[:], name)
-		g.wins[i].count = n
-		i += 1
+	read :: proc(f: []string, w: ^Wins) -> bool {
+		if len(f) != 1 {return false}
+		n, ok := strconv.parse_int(f[0])
+		if !ok || n < 0 {return false}
+		w.count = n
+		return true
 	}
+	for line in own {play.by_name_read(&g.wins, "wins", line, read) or_return}
 	return true
 }
 

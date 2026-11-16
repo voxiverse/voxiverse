@@ -1,6 +1,7 @@
 package skirmish_server
 
 import "core:math"
+import "core:strings"
 import "core:testing"
 
 import "common:game"
@@ -361,4 +362,28 @@ test_two_players_play_two_sides :: proc(t: ^testing.T) {
 	o.kind, o.at = .Move, {10, skirmish.GROUND, 10}
 	core.harness_request(s, guest, &o)
 	testing.expect(t, playtest.guest_told(rig, "4 of those are not yours to command"))
+}
+
+// The settings and every player's wins are kept with the universe and read back.
+@(test)
+test_settings_and_wins_are_kept :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	defer playtest.stop(rig)
+	if !playtest.start(t, rig, GAME) {return}
+	s := playtest.srv(rig)
+	g := state(s)
+	g.settings.sides, g.settings.wave = 3, 9
+	wins_add(g, "ana")
+	wins_add(g, "ana")
+	wins_add(g, "bo")
+	out := strings.builder_make(context.temp_allocator)
+	save(s, &out)
+	g.settings, g.wins = skirmish.DEFAULT_SETTINGS, {}
+	testing.expect(t, load(s, strings.to_string(out)))
+	testing.expect_value(t, g.settings.sides, 3)
+	testing.expect_value(t, g.settings.wave, 9)
+	testing.expect_value(t, wins_of(g, "ana"), 2)
+	testing.expect_value(t, wins_of(g, "bo"), 1)
+	testing.expect(t, !load(s, "wins = -1 cy"), "a count out of bounds")
 }
