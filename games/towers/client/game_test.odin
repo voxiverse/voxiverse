@@ -34,7 +34,7 @@ test_towers_on_the_hud :: proc(t: ^testing.T) {
 	playtest.step(rig, 10)
 	testing.expect_value(t, v.run.phase, towers.Phase.Building)
 	testing.expect(t, strings.has_prefix(status(s), "TOWERS  build!  first wave in "), status(s))
-	testing.expect_value(t, mine(s).coins, towers.DEFAULT_SETTINGS.coins)
+	testing.expect_value(t, int(mine(s).coins), towers.DEFAULT_SETTINGS.coins)
 
 	// A tower by the gate, and the first wave: the banner, the shots, a creep hurt.
 	srv := playtest.srv(rig)

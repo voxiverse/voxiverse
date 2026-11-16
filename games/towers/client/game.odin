@@ -2,8 +2,6 @@ package towers_client
 
 import "core:fmt"
 import "core:math"
-import "core:slice"
-import "core:strings"
 
 import "client:engine"
 import "client:ui"
@@ -34,32 +32,17 @@ GAME :: engine.Game {
 // View: what the session knows of the run.
 View :: struct {
 	run:      towers.Run,
-	builders: [game.MAX_PLAYERS]Seat, // by player id
+	builders: engine.Seats(towers.Builder), // by player id
 	flash:    engine.Flash, // a wave set out or held
 	pieces:   [towers.Piece]game.Item, // what each piece's item is in this registry
 	kinds:    [towers.Creep]game.Kind_Id,
 	shots:    int, // seen (tests)
 }
 
-// Seat: a builder's purse, as told.
-Seat :: struct {
-	known:    bool,
-	name:     [game.MAX_NAME_LENGTH]u8,
-	name_len: int,
-	coins:    int,
-	kills:    int,
-	spent:    int,
-}
-
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
-seat_name :: proc(seat: ^Seat) -> string {return string(seat.name[:seat.name_len])}
-
 // mine: the player's own purse.
-mine :: proc(s: ^engine.Session) -> ^Seat {
-	v := view(s)
-	return &v.builders[min(int(s.welcome.player), len(v.builders) - 1)]
-}
+mine :: proc(s: ^engine.Session) -> ^towers.Builder {return engine.seat_mine(s, &view(s).builders)}
 
 // started: the pack's names, as this session's registry has them.
 started :: proc(s: ^engine.Session) {
@@ -77,20 +60,7 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	if run, ok := engine.game_value(s, r, towers.Run); ok && run != nil {
 		v.run = run^
 	}
-	if b, ok := engine.game_value(s, r, towers.Builder); ok && int(r.key.a) < len(v.builders) {
-		seat := &v.builders[r.key.a]
-		if b == nil {
-			seat^ = {}
-		} else {
-			seat^ = {
-				known = true,
-				coins = int(b.coins),
-				kills = int(b.kills),
-				spent = int(b.spent),
-			}
-			seat.name_len = copy(seat.name[:], b.name)
-		}
-	}
+	if engine.seats_received(s, &v.builders, r) {return}
 	if wave, ok := engine.game_value(s, r, towers.Wave); ok && wave != nil {
 		if wave.done {
 			engine.flash(&v.flash, s, towers.tr(.Wave_Held, wave.wave), .Good)
@@ -221,7 +191,7 @@ preview :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		at := hit.block + game.Block_Pos(hit.normal)
 		ok :=
 			towers.buildable(at) &&
-			mine(s).coins >= towers.PIECES[p].price &&
+			int(mine(s).coins) >= towers.PIECES[p].price &&
 			v.run.phase != .Results
 		engine.world_box(s, at, at, {90, 230, 110, 255} if ok else {240, 70, 60, 255})
 		label := towers.tr(
@@ -234,21 +204,13 @@ preview :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	}
 }
 
-// Ranked: a known builder, by its player id.
-Ranked :: struct {
-	id:   int,
-	seat: ^Seat,
-}
-
-// ranked: the known builders, the most kills first, then by name (temp memory).
-ranked :: proc(v: ^View) -> []Ranked {
-	all := make([dynamic]Ranked, context.temp_allocator)
-	for &seat, id in v.builders {if seat.known {append(&all, Ranked{id, &seat})}}
-	slice.sort_by(all[:], proc(a, b: Ranked) -> bool {
-		if a.seat.kills != b.seat.kills {return a.seat.kills > b.seat.kills}
-		return strings.compare(seat_name(a.seat), seat_name(b.seat)) < 0
-	})
-	return all[:]
+// ranked: the known builders, the most kills first, then by name, as player ids (temp
+// memory).
+ranked :: proc(v: ^View) -> []int {
+	return engine.seats_ranked(
+		&v.builders,
+		proc(a, b: ^towers.Builder) -> bool {return a.kills > b.kills},
+	)
 }
 
 // scoreboard: every builder of the run, the most kills first, with their coins and what
@@ -263,14 +225,15 @@ scoreboard :: proc(s: ^engine.Session, board: ^engine.Scoreboard) {
 		towers.tr(.Column_Coins),
 		towers.tr(.Column_Spent),
 	)
-	for b in ranked(v) {
+	for id in ranked(v) {
+		b := &v.builders.values[id]
 		engine.scoreboard_row(
 			board,
-			seat_name(b.seat),
-			fmt.tprint(b.seat.kills),
-			fmt.tprint(b.seat.coins),
-			fmt.tprint(b.seat.spent),
-			you = b.id == int(s.welcome.player),
+			b.name,
+			fmt.tprint(b.kills),
+			fmt.tprint(b.coins),
+			fmt.tprint(b.spent),
+			you = id == int(s.welcome.player),
 		)
 	}
 }
