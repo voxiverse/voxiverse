@@ -7,6 +7,7 @@ import "core:strings"
 
 import "common:base"
 import "common:base/fuzz"
+import "common:limited"
 import platform "common:platform"
 
 // The fuzz driver (docs/fuzzing.md): one process, one target at a time, supervised by
@@ -154,10 +155,7 @@ minimize :: proc(target: ^fuzz.Target, cfg: fuzz.Config, file: string) {
 			append(&command, "--")
 			append(&command, ..c.options)
 		}
-		state, stdout, stderr, perr := os.process_exec(
-			{command = command[:]},
-			context.temp_allocator,
-		)
+		state, stdout, stderr, perr := limited.exec({command = command[:]}, context.temp_allocator)
 		if perr != nil {return ""}
 		for line in strings.split_lines(string(stdout), context.temp_allocator) {
 			if strings.has_prefix(line, "failure: ") {return line}

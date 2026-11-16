@@ -7,6 +7,8 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
+import "common:limited"
+
 // `build fuzz`: builds tools/fuzz and supervises it (docs/fuzzing.md). The driver runs one
 // target at a time in a process of its own, so a crash ends that process only: it is recorded
 // (the harness saved the input under build/fuzz/<target>/) and the target starts again with
@@ -186,7 +188,7 @@ build_fuzz_driver :: proc(sanitize: bool) -> (exe: string, ok: bool) {
 
 // fuzz_list: the driver's target names.
 fuzz_list :: proc(exe: string) -> (names: []string, ok: bool) {
-	state, stdout, _, err := os.process_exec({command = {exe, "--list"}}, context.allocator)
+	state, stdout, _, err := limited.exec({command = {exe, "--list"}}, context.allocator)
 	if err != nil || !state.success {return nil, false}
 	return strings.split_lines(strings.trim_space(string(stdout))), true
 }

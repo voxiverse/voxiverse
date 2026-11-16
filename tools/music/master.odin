@@ -8,6 +8,8 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 
+import "common:limited"
+
 import "client:audio"
 
 MUSIC_LUFS :: -20.0
@@ -114,7 +116,7 @@ find_on_path :: proc(name: string) -> (path: string, ok: bool) {
 }
 
 run_command :: proc(cmd: []string) -> bool {
-	state, _, stderr, err := os.process_exec(os.Process_Desc{command = cmd}, context.allocator)
+	state, _, stderr, err := limited.exec(os.Process_Desc{command = cmd}, context.allocator)
 	if err != nil || !state.success {
 		fmt.eprintfln("music: %s failed: %s", cmd[0], string(stderr))
 		return false

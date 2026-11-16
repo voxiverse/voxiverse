@@ -74,9 +74,64 @@ run_limited :: proc(cmd: []string, limit: time.Duration) -> Run_Result {
 // capture executes cmd and returns its stdout; ok is false if it failed or
 // couldn't start (silently: callers decide whether that is an error).
 capture :: proc(cmd: []string) -> (output: string, ok: bool) {
-	state, stdout, _, err := os.process_exec(os.Process_Desc{command = cmd}, context.allocator)
+	state, stdout, stderr, err := exec(os.Process_Desc{command = cmd}, context.allocator)
+	delete(stderr)
 	if err != nil {return "", false}
 	return string(stdout), state.exited && state.exit_code == 0
+}
+
+// exec runs desc to its end and returns what it wrote to stdout and stderr, as
+// os.process_exec does, without its lost output: process_exec stops reading a pipe
+// when poll says the writer hung up and nothing waits, but Linux polls a pipe without
+// a lock, so a child that writes and exits between the two looks (now and then, under
+// load) like one that wrote nothing: `git tag --list` exited 0 and its tags were never
+// read. Here a hang-up is read too, until the read itself says the pipe is empty.
+exec :: proc(
+	desc: os.Process_Desc,
+	allocator := context.allocator,
+) -> (
+	state: os.Process_State,
+	stdout, stderr: []u8,
+	err: os.Error,
+) {
+	assert(desc.stdout == nil && desc.stderr == nil, "exec captures stdout and stderr")
+	out_r, out_w := os.pipe() or_return
+	defer os.close(out_r)
+	err_r, err_w := os.pipe() or_return
+	defer os.close(err_r)
+	child: os.Process
+	{
+		defer os.close(out_w)
+		defer os.close(err_w)
+		d := desc
+		d.stdout, d.stderr = out_w, err_w
+		child = os.process_start(d) or_return
+	}
+	out := make([dynamic]u8, allocator)
+	errs := make([dynamic]u8, allocator)
+	Pipe :: struct {
+		r:    ^os.File,
+		into: ^[dynamic]u8,
+		done: bool,
+	}
+	pipes := [2]Pipe{{out_r, &out, false}, {err_r, &errs, false}}
+	buf: [4096]u8
+	for !pipes[0].done || !pipes[1].done {
+		read_any := false
+		for &p in pipes {
+			if p.done {continue}
+			// (true: data; Broken_Pipe: the writer hung up, but data may still wait)
+			has, perr := os.pipe_has_data(p.r)
+			if !has && perr == nil {continue}
+			n, rerr := os.read(p.r, buf[:])
+			if n > 0 {append(p.into, ..buf[:n])}
+			if rerr != nil {p.done = true} 	// EOF: every writer closed and nothing left
+			read_any = true
+		}
+		if !read_any {time.sleep(time.Millisecond)}
+	}
+	state, err = os.process_wait(child)
+	return state, out[:], errs[:], err
 }
 
 // Job is one command of run_parallel's.

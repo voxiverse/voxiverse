@@ -9,6 +9,7 @@ import "core:strings"
 
 import "common:base"
 import "common:base/fuzz"
+import "common:limited"
 
 // The fuzzers: four targets of the fuzz harness (`build fuzz script.source
 // script.generated script.bytecode script.snapshot`, docs/fuzzing.md). Their signature is
@@ -530,7 +531,7 @@ fuzz_compare_lua :: proc(lua, src, ours: string) -> string {
 	if os.write_entire_file_from_bytes(path, transmute([]u8)src) != nil {
 		return fmt.tprintf("cannot write %s", path)
 	}
-	state, stdout, stderr, err := os.process_exec({command = {lua, path}}, context.temp_allocator)
+	state, stdout, stderr, err := limited.exec({command = {lua, path}}, context.temp_allocator)
 	if err != nil {return fmt.tprintf("cannot run %s: %v", lua, err)}
 	if !state.success {return fmt.tprintf("%s failed: %s", lua, string(stderr))}
 	theirs, _ := strings.replace_all(string(stdout), "\r\n", "\n", context.temp_allocator)

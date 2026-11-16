@@ -10,6 +10,7 @@ import "core:strings"
 import "core:time"
 
 import "common:base"
+import "common:limited"
 import "common:script"
 
 // The `script` benchmark scenario (`build bench script`, also
@@ -405,7 +406,7 @@ script_run_ours :: proc(path: string) -> (out, failure: string, units: u64, ms: 
 // it said on stderr, its user time, and whether it ended well.
 @(private = "file")
 script_run_lua :: proc(lua, path: string) -> (out, errors: string, ms: f64, ok: bool) {
-	state, stdout, stderr, err := os.process_exec({command = {lua, path}}, context.allocator)
+	state, stdout, stderr, err := limited.exec({command = {lua, path}}, context.allocator)
 	if err != nil {return "", fmt.aprintf("cannot start %s: %v", lua, err), 0, false}
 	ms = f64(state.user_time) / f64(time.Millisecond)
 	return string(stdout), string(stderr), ms, state.exited && state.exit_code == 0

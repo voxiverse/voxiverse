@@ -9,6 +9,7 @@ import "core:thread"
 import "core:time"
 
 import "common:base"
+import "common:limited"
 
 TEST_OUT :: "build/tmp/fuzz-test"
 
@@ -149,7 +150,7 @@ test_crash_saves_the_input :: proc(t: ^testing.T) {
 		command = {self},
 		env     = {"VX_FUZZ_CHILD=1"},
 	}
-	_, stdout, stderr, err := os.process_exec(desc, context.allocator)
+	_, stdout, stderr, err := limited.exec(desc, context.allocator)
 	defer {delete(stdout); delete(stderr)}
 	testing.expectf(t, err == nil, "the child ran: %v %v", err, self)
 	testing.expect(t, strings.contains(string(stderr), "fuzz-failure:"), string(stderr))

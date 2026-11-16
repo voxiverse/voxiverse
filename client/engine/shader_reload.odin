@@ -8,6 +8,7 @@ import "core:strings"
 import "core:time"
 
 import "common:base"
+import "common:limited"
 
 
 // Shader hot reload (development builds, `debug.hot_reload_shaders`): when a
@@ -77,7 +78,7 @@ shader_watch_update :: proc(app: ^App, dt: f32) {
 	changed := scan(w)
 	if len(changed) == 0 {return}
 
-	state, stdout, stderr, err := os.process_exec(
+	state, stdout, stderr, err := limited.exec(
 		{working_dir = w.repo, command = {w.driver, "shaders"}},
 		context.temp_allocator,
 	)

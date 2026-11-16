@@ -8,6 +8,8 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
+import "common:limited"
+
 // `build bench compare <ref> <scenario> [-runs:N]`: is the
 // working tree faster or slower than <ref> at a scenario? Both are built
 // alike (this driver's flags; <ref> in a git worktree under
@@ -131,7 +133,7 @@ compare_run :: proc(side: ^Compare_Side, scenario, size: string) -> bool {
 			scenario,
 		}
 	}
-	state, stdout, stderr, run_err := os.process_exec(
+	state, stdout, stderr, run_err := limited.exec(
 		os.Process_Desc{command = cmd},
 		context.allocator,
 	)

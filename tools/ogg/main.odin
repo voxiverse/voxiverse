@@ -6,6 +6,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
+import "common:limited"
 import "common:ogg"
 
 // The Ogg decoder's maintenance commands (docs/debugging.md):
@@ -119,7 +120,7 @@ reference :: proc() -> bool {
 	for name in MUSIC {
 		src := fmt.aprintf("%s%s.ogg", MUSIC_DIR, name)
 		tmp := fmt.aprintf("build/tmp/ref_%s.f32", name)
-		state, _, errout, err := os.process_exec(
+		state, _, errout, err := limited.exec(
 			{
 				command = {
 					"ffmpeg",
@@ -176,7 +177,7 @@ reference_edge :: proc() -> bool {
 		}
 		src := fmt.aprintf("%sedge/%s", TESTDATA, f.name)
 		tmp := fmt.aprintf("build/tmp/ref_edge_%s.f32", name)
-		state, _, errout, perr := os.process_exec(
+		state, _, errout, perr := limited.exec(
 			{
 				command = {
 					"ffmpeg",
