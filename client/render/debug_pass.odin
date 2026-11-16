@@ -53,17 +53,6 @@ debug_quad :: proc(d: ^Debug_Draw, a, b, c, e: [3]f64, color: [4]u8) {
 	)
 }
 
-// debug_solid fills the six faces of the box lo..hi (a block's ghost).
-debug_solid :: proc(d: ^Debug_Draw, lo, hi: [3]f64, color: [4]u8) {
-	x0, y0, z0, x1, y1, z1 := lo.x, lo.y, lo.z, hi.x, hi.y, hi.z
-	debug_quad(d, {x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}, color)
-	debug_quad(d, {x0, y1, z0}, {x1, y1, z0}, {x1, y1, z1}, {x0, y1, z1}, color)
-	debug_quad(d, {x0, y0, z0}, {x1, y0, z0}, {x1, y1, z0}, {x0, y1, z0}, color)
-	debug_quad(d, {x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}, color)
-	debug_quad(d, {x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}, color)
-	debug_quad(d, {x1, y0, z0}, {x1, y0, z1}, {x1, y1, z1}, {x1, y1, z0}, color)
-}
-
 debug_line :: proc(d: ^Debug_Draw, a, b: [3]f64, color: [4]u8) {
 	append(&d.vertices, Debug_Point{a, color}, Debug_Point{b, color})
 }
