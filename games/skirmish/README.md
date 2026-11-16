@@ -55,7 +55,9 @@ fights only once it is there.
   buildings (the ghost follows the pointer, green where it is affordable; left button to
   place, right to cancel) and Stop; for an army, Attack (the next left click attack-moves, or
   attacks the foe clicked) and Stop; for a building, what it trains.
-- Ctrl and a digit keeps what is picked as a group; the digit picks it again.
+- Ctrl and a digit keeps what is picked as a group; the digit picks it again. A commander
+  holds no hotbar, so the digits are the groups' alone; every key here is rebindable under
+  Skirmish in Options > Controls, kept for this game.
 - The minimap, bottom left: the field, your units and buildings, the foes you see; press it
   to move the camera there.
 - The fog: ground none of your side sees is darkened, ground none has ever seen more so;

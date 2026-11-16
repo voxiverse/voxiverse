@@ -34,6 +34,7 @@ GAME :: engine.Game {
 	debug      = debug,
 	scoreboard = scoreboard,
 	keys       = KEYS,
+	no_hotbar  = true, // (a commander is bodiless: its digits are the control groups)
 }
 
 CAMERA :: engine.Game_Camera {
