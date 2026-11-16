@@ -68,7 +68,7 @@ test_settings_read_leaves_the_games_lines :: proc(t: ^testing.T) {
 	testing.expect_value(t, back, Test_Settings{9, 4})
 }
 
-// A game whose command is its settings': /kit <name> <value>.
+// A game whose command is its settings': /kit set <name> <value>.
 @(private = "file")
 Kit_State :: struct {
 	settings: Test_Settings,
@@ -117,12 +117,12 @@ test_settings_command :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(
 		t,
-		say(sess, "kit frags 9"),
+		say(sess, "kit set frags 9"),
 		"Kit: frags = 9 (the first to this many wins)",
 	)
 	testing.expect_value(t, k.settings.frags, 9)
-	testing.expect_value(t, say(sess, "kit respawn 31"), "Kit: respawn <0..30>")
-	testing.expect_value(t, say(sess, "kit frags many"), "Kit: frags <1..200>")
+	testing.expect_value(t, say(sess, "kit set respawn 31"), "Kit: respawn <0..30>")
+	testing.expect_value(t, say(sess, "kit set frags many"), "Kit: frags <1..200>")
 	testing.expect_value(t, k.settings, Test_Settings{9, 2})
 	testing.expect_value(t, k.changed, 1)
 	testing.expect_value(t, say(sess, "kit lives 3"), "Kit: not a setting")

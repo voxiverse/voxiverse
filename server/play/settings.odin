@@ -22,8 +22,7 @@ import "server:core"
 // the settings and how to set them. handled false when the first argument is not `set`
 // (the game's own commands, which may share a setting's name), changed true when one
 // was set. A name that is no setting, a value out of its bounds, or a player without
-// the node is refused and told why. (`/<game> <name> <value>`, the older form, still
-// sets a setting while the games move to `set`.)
+// the node is refused and told why.
 settings_command :: proc(
 	s: ^core.Server,
 	c: ^core.Client,
@@ -57,19 +56,30 @@ settings_command :: proc(
 			)
 			return true, false
 		}
-		return settings_command(s, c, table, settings, node, args[1:])
+		return true, settings_set(s, c, table, settings, node, args[1], args[2])
 	}
-	if len(args) != 2 {return false, false}
-	v, known := base.var_find(table, args[0])
-	if !known {return false, false}
+	return false, false
+}
+
+// settings_set: one setting set from its text, said or refused (true: it was set).
+@(private = "file")
+settings_set :: proc(
+	s: ^core.Server,
+	c: ^core.Client,
+	table: base.Var_Table,
+	settings: rawptr,
+	node, setting, value: string,
+) -> bool {
+	v, _ := base.var_find(table, setting)
+	name := s.config.game.name
 	if !core.allowed(s, c, node) {
 		core.notice(s, c, fmt.tprintf("You may not change %s's settings (%s)", name, node))
-		return true, false
+		return false
 	}
 	trial := scratch_copy(table, settings)
-	if base.var_set(table, trial, args[0], args[1]) != .None {
+	if base.var_set(table, trial, setting, value) != .None {
 		core.notice(s, c, fmt.tprintf("%s: %s", name, setting_usage(table, v)))
-		return true, false
+		return false
 	}
 	mem.copy(settings, trial, reflect.size_of_typeid(table.type))
 	core.notice(
@@ -78,12 +88,12 @@ settings_command :: proc(
 		fmt.tprintf(
 			"%s: %s = %s (%s)",
 			name,
-			args[0],
+			setting,
 			base.var_format(table, settings, v),
 			v.help,
 		),
 	)
-	return true, true
+	return true
 }
 
 // settings_usage: every setting as its command takes it, "set frags <1..200> | set time
@@ -161,8 +171,9 @@ settings_read :: proc(
 	return rest[:], true
 }
 
-// settings_load: the settings the universe kept (the game's load hook); false, with
-// nothing changed, for a line that names none or a value out of its bounds.
+// settings_load: settings from "name = value" lines; false, with nothing changed, for a
+// line that names none or a value out of its bounds.
+@(private = "package")
 settings_load :: proc(table: base.Var_Table, settings: rawptr, text: string) -> bool {
 	trial := scratch_copy(table, settings)
 	if len(base.vars_read(table, trial, text)) > 0 {return false}
