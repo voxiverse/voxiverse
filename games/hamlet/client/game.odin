@@ -122,7 +122,7 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 		if st != nil {v.structures[r.key.a] = st^}
 	}
 	if m, ok := engine.game_value(s, r, hamlet.Milestone); ok && m != nil {
-		text := fmt.tprintf("%d PEOPLE LIVE IN HAMLET", m.population)
+		text := hamlet.tr(.Milestone, m.population)
 		engine.flash(&view(s).flash, s, text, .Good, MILESTONE_SECONDS)
 	}
 }
@@ -202,7 +202,7 @@ tools :: proc(s: ^engine.Session) {
 		at := here - size / 2
 		floor, refusal := hamlet.placement(&v.tiles, &v.ground, v.kind, at, v.rotation, {.Grass})
 		if refusal == "" && !hamlet.can_afford(stock(v), hamlet.KINDS_INFO[v.kind].cost) {
-			refusal = "Not enough in stock"
+			refusal = hamlet.tr(.Short_Of_Stock)
 		}
 		if refusal != "" {
 			floor = hamlet.ground_top(&v.ground, here.x, here.y) + 1
@@ -323,20 +323,20 @@ mark_color :: proc(v: ^View, x, z: i32) -> (color: [4]u8, shown: bool) {
 }
 
 TOOLS :: [?]struct {
-	label: string,
+	label: hamlet.Text,
 	tool:  Tool,
 	kind:  hamlet.Kind,
 } {
-	{"Look", .Look, .House},
-	{"Road", .Road, .House},
-	{"Zone", .Zone, .House},
-	{"Lumber", .Build, .Woodcutter},
-	{"Quarry", .Build, .Quarry},
-	{"Farm", .Build, .Farm},
-	{"Store", .Build, .Storehouse},
-	{"Well", .Build, .Well},
-	{"Market", .Build, .Market},
-	{"Demolish", .Demolish, .House},
+	{.Tool_Look, .Look, .House},
+	{.Tool_Road, .Road, .House},
+	{.Tool_Zone, .Zone, .House},
+	{.Tool_Lumber, .Build, .Woodcutter},
+	{.Tool_Quarry, .Build, .Quarry},
+	{.Tool_Farm, .Build, .Farm},
+	{.Tool_Store, .Build, .Storehouse},
+	{.Tool_Well, .Build, .Well},
+	{.Tool_Market, .Build, .Market},
+	{.Tool_Demolish, .Demolish, .House},
 }
 
 SPEEDS :: [?]u8{0, 1, 2, 4}
@@ -349,15 +349,15 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	top := ui.cut_top(&screen, t.row_height + t.padding)
 	ui.panel(ctx, top)
 	town := v.town
-	next := "all milestones reached"
+	next := hamlet.tr(.All_Milestones)
 	if int(town.milestone) < len(hamlet.MILESTONES) {
-		next = fmt.tprintf("next: %d", hamlet.MILESTONES[town.milestone])
+		next = hamlet.tr(.Next_Milestone, hamlet.MILESTONES[town.milestone])
 	}
 	ui.draw_text(
 		ctx,
 		top,
-		fmt.tprintf(
-			"HAMLET  day %d   people %d / homes %d   jobs %d/%d   wood %d  stone %d  food %d   happy %d%%   %s",
+		hamlet.tr(
+			.Status,
 			town.day,
 			town.population,
 			town.housing,
@@ -384,24 +384,24 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	for entry, i in TOOLS {
 		r := ui.Rect{row.x + f32(i) * width, row.y, width - 4, row.h}
 		chosen := v.tool == entry.tool && (entry.tool != .Build || v.kind == entry.kind)
-		if ui.button(ctx, entry.label, r, id = fmt.tprintf("tool %d", i)) {
+		if ui.button(ctx, hamlet.tr(entry.label), r, id = fmt.tprintf("tool %d", i)) {
 			v.tool, v.kind = entry.tool, entry.kind
 		}
 		if chosen {lit(ctx, r, t.success)}
 	}
 	o := ui.Rect{row.x + f32(len(TOOLS)) * width, row.y, width - 4, row.h}
-	labels := [Overlay]string {
-		.None      = "Overlay",
-		.Access    = "Roads",
-		.Happiness = "Happy",
+	labels := [Overlay]hamlet.Text {
+		.None      = .Overlay_None,
+		.Access    = .Overlay_Roads,
+		.Happiness = .Overlay_Happy,
 	}
-	if ui.button(ctx, labels[v.overlay], o, id = "overlay") {
+	if ui.button(ctx, hamlet.tr(labels[v.overlay]), o, id = "overlay") {
 		v.overlay = Overlay((int(v.overlay) + 1) % len(Overlay))
 	}
 	if v.overlay != .None {lit(ctx, o, t.warning)}
 	for speed, i in SPEEDS {
 		r := ui.Rect{row.x + f32(len(TOOLS) + 1 + i) * width, row.y, width - 4, row.h}
-		label := "Pause" if speed == 0 else fmt.tprintf("%dx", speed)
+		label := hamlet.tr(.Pause) if speed == 0 else hamlet.tr(.Speed, speed)
 		if ui.button(ctx, label, r, id = fmt.tprintf("speed %d", speed)) {
 			r := hamlet.Set_Speed{speed}
 			send(s, &r)
@@ -427,7 +427,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			f64(st.at.y) + f64(size.y) / 2,
 		}
 		text := info.name
-		if info.jobs > 0 {text = fmt.tprintf("%s %d/%d", info.name, st.workers, info.jobs)}
+		if info.jobs > 0 {text = hamlet.tr(.Workplace, info.name, st.workers, info.jobs)}
 		engine.world_label(s, ctx, at, text)
 	}
 	engine.flash_draw(ctx, &v.flash, s, -160)
@@ -497,25 +497,16 @@ lit :: proc(ctx: ^ui.Context, r: ui.Rect, color: ui.Color) {
 tool_hint :: proc(v: ^View) -> string {
 	switch v.tool {
 	case .Look:
-		return(
-			"Pan: WASD, the edges, the middle button   Zoom: the wheel   Turn: F5, Shift and the wheel" \
-		)
+		return hamlet.tr(.Hint_Look)
 	case .Road:
-		return "Road: drag along the ground (an L: across, then along); roads are free"
+		return hamlet.tr(.Hint_Road)
 	case .Zone:
-		return(
-			"Zone for homes: drag (left: zone, right: clear); houses grow by a road with water near" \
-		)
+		return hamlet.tr(.Hint_Zone)
 	case .Build:
 		info := &hamlet.KINDS_INFO[v.kind]
-		return fmt.tprintf(
-			"%s: %d wood, %d stone; click to place, right button turns it; it must touch a road",
-			info.name,
-			info.cost[.Wood],
-			info.cost[.Stone],
-		)
+		return hamlet.tr(.Hint_Build, info.name, info.cost[.Wood], info.cost[.Stone])
 	case .Demolish:
-		return "Demolish: click a road, a zone or a building (half its cost comes back)"
+		return hamlet.tr(.Hint_Demolish)
 	}
 	return ""
 }

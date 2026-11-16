@@ -377,8 +377,8 @@ tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[ke
 ```
 
 A test holds every key to its text (`base.text_missing(TEXT_EN)`); a translation is another
-table of the same keys beside it. `games/flood` is the model; the other games still write
-their HUDs' English in place, and the server's notices and announcements are English.
+table of the same keys beside it. `games/flood` is the model; every game's HUD speaks from its
+table, while the server's notices and announcements are still English in place.
 
 ## Which game a session plays
 
