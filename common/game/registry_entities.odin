@@ -544,7 +544,12 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 			looks := make([dynamic]string)
 			for e in f.value.items {
 				if e.kind != .String || !look_name_ok(e.s) {
-					fail_field(b, f, e, "a look is a name of a-z and _ such as \"shorn\"")
+					fail_field(
+						b,
+						f,
+						e,
+						"a look is a name of a-z, 0-9 (not first) and _ such as \"shorn\"",
+					)
 					continue
 				}
 				if slice.contains(looks[:], e.s) {
@@ -807,8 +812,10 @@ read_entity_model :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) {
 // look_name_ok: a look's name is a-z and _, at most 32 bytes.
 @(private)
 look_name_ok :: proc(name: string) -> bool {
-	if len(name) == 0 || len(name) > 32 {return false}
-	for c in transmute([]u8)name {if (c < 'a' || c > 'z') && c != '_' {return false}}
+	if len(name) == 0 || len(name) > 32 || (name[0] >= '0' && name[0] <= '9') {return false}
+	for c in transmute([]u8)name {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '_' {return false}
+	}
 	return true
 }
 

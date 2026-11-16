@@ -56,6 +56,7 @@ Client :: struct {
 	pack_offset:     u32, // ... and how much of it has gone
 	protect_told:    u64, // the tick a protected place was last said (protect.odin)
 	kick_reason:     string, // (a constant)
+	team:            u8, // the side it plays on (0: none; client_set_team, sides.odin)
 	position:        [3]f64,
 	center:          game.Chunk_Pos, // the chunk the client is in
 	moved:           bool, // center changed since the last unload pass

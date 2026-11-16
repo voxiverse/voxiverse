@@ -600,9 +600,9 @@ entity_find :: proc(w: ^World, id: u32) -> (game.Entity_Handle, bool) {
 	return h, true
 }
 
-// entities_put tells a client about the entities near it: what each is and
-// where (a view: an entity out of its area, or gone from the world, is removed
-// by not being put).
+// entities_put tells a client about the entities near it (in a world with fog, a
+// player on a team: those its team sees, sides.odin): what each is and where (a view:
+// an entity out of its area, or gone from the world, is removed by not being put).
 entities_put :: proc(s: ^Server, c: ^Client) {
 	w := c.world
 	// The entities within ENTITY_VIEW horizontally (players are not told as
@@ -611,20 +611,35 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 	// holds a kind's cap per whole message, so the set swapping its farthest for a
 	// nearer one in one message is no overflow.)
 	around := make([dynamic]game.Entity_Id, context.temp_allocator)
-	game.spatial_cylinder(
-		&w.entity_world.spatial,
-		c.player.position,
-		ENTITY_VIEW,
-		ANY_HEIGHT,
-		{none = {.Player}},
-		&around,
-	)
+	if w.fog && c.team != 0 {
+		// Under fog a player on a team is told of what its team sees, wherever it is
+		// (sides.odin), and of nothing else.
+		it := entities_each(w)
+		for h in entities_next(&it) {
+			if entity_seen(w, c.team, h) {append(&around, game.Entity_Id(entity_id(w, h)))}
+		}
+	} else {
+		game.spatial_cylinder(
+			&w.entity_world.spatial,
+			c.player.position,
+			ENTITY_VIEW,
+			ANY_HEIGHT,
+			{none = {.Player}},
+			&around,
+		)
+	}
 	if len(around) > protocol.MAX_KNOWN_ENTITIES {nearest_first(w, c.player.position, around[:])}
 	for id in around[:min(len(around), protocol.MAX_KNOWN_ENTITIES)] {
 		h, _ := entity_find(w, u32(id))
 		if h == 0 {continue}
 		key := protocol.key_entity(u32(id))
-		record := protocol.Entity_Record{entity_kind(w, h), entity_stack(w, h)^, 0, 0}
+		record := protocol.Entity_Record {
+			kind  = entity_kind(w, h),
+			stack = entity_stack(w, h)^,
+		}
+		if side := game.store_get(&w.entity_world.store, h, C_SIDE, Side); side != nil {
+			record.team, record.vision = side.team, side.vision
+		}
 		if hp := entity_health(w, h); hp != nil {
 			record.health = u16(clamp(hp.health, 0, 65535))
 			record.max_health = u16(clamp(hp.max, 0, 65535))
@@ -960,7 +975,7 @@ Entity_World :: struct {
 	next_player_id: u32, // entities.odin: the ids of player entities
 	tag_names:      [dynamic]string, // tag i is tag_names[i-1]
 	deaths:         [dynamic]Entity_Death, // this tick's
-	infos:          [game.FIRST_SERVER_COMPONENT + 4]game.Component_Info,
+	infos:          [game.FIRST_SERVER_COMPONENT + 5]game.Component_Info,
 }
 
 @(private = "file")
@@ -991,6 +1006,12 @@ entity_world_init :: proc(ew: ^Entity_World, seed: u64, max_entities := MAX_ENTI
 		type  = Looks,
 		size  = size_of(Looks),
 		align = align_of(Looks),
+	}
+	ew.infos[C_SIDE] = game.Component_Info {
+		name  = "side",
+		type  = Side,
+		size  = size_of(Side),
+		align = align_of(Side),
 	}
 	ew.infos[C_GAME_DATA] = game.Component_Info {
 		name  = "game_data",

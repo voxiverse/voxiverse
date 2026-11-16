@@ -64,9 +64,10 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
 - `voice` (`bleat`, `none`, `growl`, `squeak`, `groan`, `croak`, `grunt`; default `bleat`): how
   one cries when it is hurt and when it dies, made by the client's synthesis (`client/sfx`:
   `creature_sound`); `none` is silent (a chest, a shot).
-- `looks` (at most 16 names of `a-z` and `_`: bit i of what a client is told of how one looks
-  is its i-th; its game shows them, `core.entity_show`, and the engine shows `striking` while
-  its attack does, a blow or a shot a moment ago).
+- `looks` (at most 16 names of `a-z`, `0-9` (not first) and `_`: bit i of what a client is
+  told of how one looks is its i-th; its game shows them, `core.entity_show`, and the engine
+  shows `striking` while its attack does, a blow or a shot a moment ago, and `team1` to
+  `team8` for the team it is on: [games.md](games.md#sides)).
 - `attack` (a `steered` or `game` walker's): `{"damage": n, "reach": blocks, "cooldown": seconds}` and,
   for a shooter, `"shot"`: a projectile kind's id. The game says when and at whom
   (`entity_strike`, `entity_shoot`: [games.md](games.md#walkers)); a blow lands within `reach`

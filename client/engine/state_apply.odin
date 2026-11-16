@@ -196,6 +196,7 @@ apply_entity :: proc(s: ^Session, g: protocol.Received) {
 	v := (^protocol.Entity_Record)(g.value)
 	if e, known := &s.entities[id]; known && g.op == .Change {
 		e.kind, e.stack, e.health, e.max_health = v.kind, v.stack, v.health, v.max_health
+		e.team, e.vision = v.team, v.vision
 		return
 	}
 	s.entities[id] = {
@@ -203,6 +204,8 @@ apply_entity :: proc(s: ^Session, g: protocol.Received) {
 		stack      = v.stack,
 		health     = v.health,
 		max_health = v.max_health,
+		team       = v.team,
+		vision     = v.vision,
 	}
 	if m := protocol.receiver_snapshot_get(&s.rx, int(protocol.State_Kind.Entity_Motion), g.key);
 	   m != nil {

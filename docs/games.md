@@ -239,6 +239,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `entity_keep(w, h, target, near, far)`, `entity_sees(w, h, p)` | Keep a walker within a band of distances from a point, facing it (chase: `0, reach`; keep distance; flee); whether nothing solid lies between its eyes and a point |
 | `entity_strike(w, h, target)`, `entity_shoot(w, h, p)` | A creature's attack, its kind's `attack` data: a blow at a player or entity within its reach, or its shot at a point, each when its cooldown allows, credited to it |
 | `entity_glide(w, h, points)` | Send a steered walker along points in straight legs, with no physics, at a fraction of a walker's cost (a town's citizens on its roads); `entity_arrived` at the last |
+| `MAX_TEAMS`, `client_set_team(c, team)`, `client_team(c)`, `entity_set_team(w, h, team)`, `entity_team(w, h)`, `entity_set_vision(w, h, blocks)`, `entity_vision(w, h)`, `world_fog(w, on)`, `team_sees(w, team, p)` | Sides ([below](#sides)): a player's and an entity's team (0: none; no harm passes between two of a team, and a kind's `team<n>` look shows its team's colour), how far an entity sees for its team, and a world whose players on a team are told only of the entities their team sees |
 | `route_make(w, area, start, goal, kind)`, `route_free(w, r)`, `Route_Handle`, `route_cost(w, r, p)`, `route_reaches(w, r, p)`, `route_would_shut(w, r, p, block)` | A way to one goal over an area that every walker following it shares; what it costs from a block, whether there is one, whether a block placed there would shut it |
 
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
@@ -276,6 +277,22 @@ it is where the next shared piece goes.
 A seeded layout is a template made in code: `game.template_make(size)`, then
 `game.template_fill(&t, lo, hi, block)` for each box (clipped to the template), pasted by
 `arena_build` (or `bulk_edit`'s `.Paste`).
+
+### Sides
+
+A real-time strategy's armies, a team match's players: sides are the engine's
+(`server/core/sides.odin`). A player and an entity are on a team, 1 to `MAX_TEAMS`, or on
+none (0) until the game says (`client_set_team`, `entity_set_team`; not saved: a game whose
+sides outlive a restart sets them again from its records). Where the engine decides alone
+it keeps them apart: no blow, shot or blast passes between two of a team (before the game's
+`harming` hook is asked), and an entity whose kind has a look named `team1`..`team8` shows
+its team's and hides the others', so an army's colours are its kinds' data. In a world with
+fog (`world_fog(w, true)`), a player on a team is told of its own side's entities wherever
+they stand and of any other entity only while one of its own sees it (`entity_set_vision`:
+blocks around it, horizontally; `team_sees` asks the same of a point): nothing its team
+does not see reaches its client, so the fog is the server's, not a picture drawn over what
+was sent. Its client knows each entity's team and vision from its record
+(`engine.Other_Entity`'s `team` and `vision`), from which it draws its own fog.
 
 ### Walkers
 

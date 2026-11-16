@@ -48,8 +48,10 @@ Harming :: struct {
 	world:    ^World, // where
 }
 
-// harming: what the game's harming hook makes of an amount (the amount, with none).
+// harming: what the game's harming hook makes of an amount (the amount, with none); none
+// between two of a team (sides.odin).
 harming :: proc(s: ^Server, h: Harming) -> f32 {
+	if from, to := harm_sides(h); same_side(from, to) {return 0} 	// (sides.odin)
 	if s.config.game.harming == nil {return h.amount}
 	h := h
 	s.config.game.harming(s, &h)

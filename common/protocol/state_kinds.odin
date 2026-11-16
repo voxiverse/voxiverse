@@ -15,6 +15,7 @@ import "core:slice"
 // with a key (a player, an entity) are rebuilt every tick: what is not put is
 // removed. Values travel exactly.
 
+MAX_TEAMS :: 8 // the sides a world's players and entities may be on (server/core/sides.odin)
 MAX_KNOWN_ENTITIES :: 1024 // entities a client is told about at a time (the nearest)
 
 State_Kind :: enum u8 {
@@ -118,6 +119,8 @@ Entity_Record :: struct {
 	stack:      game.Stack, // a dropped item's (else empty)
 	health:     u16, // what it has left (a game draws it as a bar: engine.entity_bars)
 	max_health: u16, // its most (0: it has no health)
+	team:       u8, // its side (0: none; server/core/sides.odin)
+	vision:     u8, // blocks it sees for its side in a world with fog (0: none)
 }
 
 Entity_Motion :: struct {
@@ -397,7 +400,8 @@ check_entity_record :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	return(
 		game.kind_info(reg, r.kind) != nil &&
 		st.count >= 0 &&
-		(st.item == game.NO_ITEM || game.item_valid(reg, st.item)) \
+		(st.item == game.NO_ITEM || game.item_valid(reg, st.item)) &&
+		int(r.team) <= MAX_TEAMS \
 	)
 }
 

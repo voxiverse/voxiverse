@@ -19,7 +19,7 @@ import sc "common:steam"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 47
+PROTOCOL_VERSION :: 48
 MAX_MESSAGE_SIZE :: 64 * 1024
 
 // Client -> server.

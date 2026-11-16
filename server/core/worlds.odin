@@ -63,6 +63,8 @@ World :: struct {
 	revisit:           map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (server/store/compact.odin)
 	game_state:        []byte, // the game's state for this world (world_state; the world's arena)
 	game_open:         bool, // the game's world_opened ran: its world_closed runs when the world closes
+	fog:               bool, // its players on a team are told only of what their team sees (world_fog; sides.odin)
+	sight:             Sight, // every team's eyes this tick (sight_of; heap)
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -167,6 +169,7 @@ world_close :: proc(w: ^World) {
 		w.entity_world = nil
 		virtual.arena_destroy(&w.arena)
 	}
+	sight_destroy(&w.sight)
 	delete(w.tops)
 	delete(w.noted_changes)
 	delete(w.gates)

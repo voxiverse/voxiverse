@@ -148,6 +148,8 @@ local SCHEMA = {
     { name = "stack.data", t = "u32" },
     { name = "health", t = "u16" },
     { name = "max_health", t = "u16" },
+    { name = "team", t = "u8" },
+    { name = "vision", t = "u8" },
   } },
   { id = 12, name = "entity_motion", key = "entity", lane = "snapshot", fields = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
