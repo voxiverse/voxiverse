@@ -12,7 +12,9 @@ import "server:store"
 
 // universe_check: is the universe in dir whole? Read-only; run it after
 // store_recover (the dedicated server's --check does). It reads every file the
-// way the loaders do and says what does not read: the crash tests' oracle.
+// way the loaders do and says what does not read: the crash tests' oracle. The
+// game the universe plays, when it is among `games`, checks its own files of each
+// world (World_File.check).
 
 Check_Report :: struct {
 	ok:         bool,
@@ -20,6 +22,7 @@ Check_Report :: struct {
 	generation: u64,
 	problems:   [dynamic]string, // (temp allocator)
 	reg:        ^game.Registry, // the universe's packs, built to read its files
+	game:       ^Game, // the game it plays, if it is one of those given (its world files are checked)
 }
 
 @(private = "file")
@@ -27,16 +30,16 @@ problem :: proc(r: ^Check_Report, format: string, args: ..any) {
 	append(&r.problems, fmt.tprintf(format, ..args))
 }
 
-universe_check :: proc(dir: string) -> (r: Check_Report) {
+universe_check :: proc(dir: string, games: []Game = nil) -> (r: Check_Report) {
 	r.problems = make([dynamic]string, context.temp_allocator)
-	check_universe(&r, dir)
+	check_universe(&r, dir, games)
 	if r.reg != nil {game.registry_destroy(r.reg)}
 	r.ok = len(r.problems) == 0
 	return
 }
 
 @(private = "file")
-check_universe :: proc(r: ^Check_Report, dir: string) {
+check_universe :: proc(r: ^Check_Report, dir: string, games: []Game) {
 	files := make([dynamic]string, context.temp_allocator)
 	store.walk_files(dir, "", &files)
 	for rel in files {
@@ -69,6 +72,9 @@ check_universe :: proc(r: ^Check_Report, dir: string) {
 		return
 	}
 	r.reg = reg
+	if id, ok := store.text_value(text, "game"); ok {
+		for &g in games {if g.id == id {r.game = &g}}
+	}
 	if _, ok := store.text_value(text, "home");
 	   !ok {problem(r, "%s has no home world", store.UNIVERSE_FILE)}
 	worlds, _ := os.read_all_directory_by_path(
@@ -150,6 +156,18 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 		context.temp_allocator,
 	); eerr == nil {
 		if !economy_check(edata) {problem(r, "%s is damaged", economy)}
+	}
+	if r.game != nil {
+		for f in r.game.world_files {
+			if f.check == nil {continue}
+			rel := fmt.tprintf("%s/%s.%s", world, r.game.id, f.name)
+			if fdata, ferr := os.read_entire_file_from_path(
+				store.full_path(dir, rel),
+				context.temp_allocator,
+			); ferr == nil && !f.check(fdata) {
+				problem(r, "%s is damaged", rel)
+			}
+		}
 	}
 	stats := fmt.tprintf("%s/%s", world, STATS_FILE)
 	if os.exists(store.full_path(dir, stats)) {check_json(r, dir, stats)}

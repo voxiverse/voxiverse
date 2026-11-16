@@ -447,7 +447,8 @@ admin_worlds :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 // World_File: a file a game keeps in each world's directory.
 World_File :: struct {
-	name: string, // its name after the game's id and a dot: [a-z0-9_.], at most MAX_WORLD_FILE_NAME bytes
+	name:  string, // its name after the game's id and a dot: [a-z0-9_.], at most MAX_WORLD_FILE_NAME bytes
+	check: proc(data: []u8) -> (whole: bool), // whether a file of it reads as the game would read it (--check: universe_check); nil: not checked
 }
 
 MAX_WORLD_FILE_NAME :: 32

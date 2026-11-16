@@ -316,4 +316,5 @@ and 0 disables backups. The server never removes `pre-*` backups.
 backup's files in place in one transaction, deleting the files the backup does not contain.
 
 `voxiverse-server --check` reads every file the way the loaders do, and exits with status 1
-if it finds a problem.
+if it finds a problem. The game the universe plays checks its own files of each world
+(`World_File.check`, [games.md](games.md)).

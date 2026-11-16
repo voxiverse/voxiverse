@@ -279,7 +279,7 @@ run_check :: proc(universe: string) -> bool {
 		fmt.eprintfln("%s", why)
 		return false
 	}
-	report := core.universe_check(universe)
+	report := core.universe_check(universe, games.SERVER)
 	if report.ok {
 		fmt.printfln("%s: ok (generation %d)", universe, report.generation)
 		return true

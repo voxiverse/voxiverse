@@ -339,7 +339,8 @@ test_world_keeps_an_area :: proc(t: ^testing.T) {
 // A game keeps state and files of its own for each world: made when the world opens (the
 // home world after start, another as it loads), its files staged by each save and read back
 // when the universe opens again, freed when the world closes (unloaded, or the session
-// stops); a damaged file is moved aside; a name it may not keep is refused at start.
+// stops); a damaged file is moved aside, and --check finds it; a name it may not keep is
+// refused at start.
 @(private = "file")
 Notes_Game :: struct {
 	opened, closed, saved: int,
@@ -356,7 +357,10 @@ NOTES_GAME :: Game {
 	info = {id = "notes", name = "Notes", description = "Keeps a note in each world."},
 	server_state = Notes_Game,
 	world_state = Notes,
-	world_files = {{name = "note.txt"}},
+	world_files = {{name = "note.txt", check = proc(data: []u8) -> bool {
+				_, ok := strconv.parse_int(string(data))
+				return ok
+			}}},
 	world_opened = proc(s: ^Server, w: ^World) {
 		game_state(s, Notes_Game).opened += 1
 		if data, ok := world_file_read(w, "note.txt"); ok {
@@ -428,6 +432,10 @@ test_a_game_keeps_files_of_its_own_in_each_world :: proc(t: ^testing.T) {
 
 	// A file the game cannot read is moved aside; the world opens without it.
 	_ = os.write_entire_file(path, transmute([]u8)string("forty-two"))
+	// --check asks the game whether its files read (only the game the universe plays).
+	report := universe_check(dir, {NOTES_GAME})
+	testing.expectf(t, !report.ok && len(report.problems) == 1, "%v", report.problems)
+	testing.expect(t, universe_check(dir).ok, "a game not given checked its files")
 	quiet := context.logger // (opening reports it as an error, quieted here)
 	quiet.lowest_level = .Fatal
 	context.logger = quiet

@@ -462,7 +462,9 @@ A game declares two types and the server owns their memory (the session's arena,
   bytes)`, in the save's transaction: written whole with the rest or not at all), its
   `world_opened` reads them back (`core.world_file_read(w, name)`); one it cannot read it moves
   aside (`core.world_file_aside`: `<file>.bad`, logged) and goes on without it. A world not
-  saved (a scratch world) keeps none. `start` refuses a name that is not 1 to 32 bytes of
+  saved (a scratch world) keeps none. A file's `check` (`proc(data) -> bool`, optional) says
+whether it reads as the game would read it: `voxiverse-server --check` asks it of each world's
+file when the universe plays the game ([saves.md](saves.md)). `start` refuses a name that is not 1 to 32 bytes of
   `a-z`, `0-9`, `_` and `.`, or one named twice.
 
 - `entity_data`: a record on each entity of the game's own kinds (its pack's,
