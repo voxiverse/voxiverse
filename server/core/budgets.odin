@@ -917,6 +917,78 @@ budget_walkers :: proc() -> (r: Budget_Walkers, ok: bool) {
 	return r, true
 }
 
+// ---- the fighters ----
+
+Budget_Fighters :: struct {
+	mean_us:  f64, // the game's calls and the entities' tick, mean over the scene
+	worst_us: i64, // ... and the slowest
+	struck:   int, // blows that landed
+	apart:    int, // fighters not inside another at the end
+}
+
+BUDGET_FIGHTERS :: 150
+BUDGET_FIGHTER_TICKS :: 300
+
+@(private = "file")
+BUDGET_FIGHTER_KIND :: `{"fighter": {"box": [0.7, 1.8], "health": 10000, "hittable": true,
+	"physics": "walker", "walker": {"walk_speed": 3, "run_speed": 3, "jump": 1.2, "step": 0},
+	"brain": "steered", "attack": {"damage": 1, "reach": 1, "cooldown": 1},
+	"model": {"box": [120, 140, 90]}}}`
+
+// budget_fighters: 150 creatures hunting a point that circles the 100 x 100 platform (a
+// dungeon's every creature awake on one delver, more than a game wakes at once): each
+// tick each keeps by it (entity_keep), looks at it (entity_sees) and strikes the next
+// fighter (entity_strike, ready once a second), and the entities' tick steers them, pushes
+// them apart and moves them: the work a fighting game adds that grows with its creatures.
+budget_fighters :: proc() -> (r: Budget_Fighters, ok: bool) {
+	h := new(Harness)
+	defer free(h)
+	files := [2]game.Pack_File {
+		{"pack.json", transmute([]u8)string(BUDGET_WALKER_PACK)},
+		{"data/entities/fighter.json", transmute([]u8)string(BUDGET_FIGHTER_KIND)},
+	}
+	extra := [1]game.Pack_Source{{"budget", files[:]}}
+	w := budget_world(h, extra[:]) or_return
+	defer harness_stop(h)
+	s := &h.srv
+	budget_platform(w)
+	kind := game.registry_kind(s.registry, "budget:fighter") or_return
+	fighters: [BUDGET_FIGHTERS]game.Entity_Handle
+	for i in 0 ..< BUDGET_FIGHTERS {
+		at := [3]f64{-40.5 + f64(i % 15) * 5, 61, -40.5 + f64(i / 15) * 8}
+		fighters[i] = entity_spawn(w, kind, at, false)
+		if fighters[i] == 0 {return}
+	}
+	total: i64
+	for t in 0 ..< BUDGET_FIGHTER_TICKS {
+		a := f64(t) / BUDGET_FIGHTER_TICKS * math.TAU
+		prey := [3]f64{base.cos(a) * 20, 61, base.sin(a) * 20}
+		s.tick += 1
+		start := base.thread_cpu_us()
+		for e, i in fighters {
+			entity_keep(w, e, prey, 0, 1)
+			entity_sees(w, e, prey + {0, 1, 0})
+			if entity_strike(w, e, fighters[(i + 1) % BUDGET_FIGHTERS]) == .Hit {r.struck += 1}
+		}
+		entities_tick(w)
+		took := base.thread_cpu_us() - start
+		total += took
+		r.worst_us = max(r.worst_us, took)
+		budget_world_tick_after(s, w)
+	}
+	r.mean_us = f64(total) / BUDGET_FIGHTER_TICKS
+	for e, i in fighters {
+		inside := false
+		for o, j in fighters {
+			if i == j {continue}
+			d := entity_pos(w, e) - entity_pos(w, o)
+			inside ||= d.x * d.x + d.z * d.z < 0.3 * 0.3 && abs(d.y) < 1
+		}
+		if !inside {r.apart += 1}
+	}
+	return r, true
+}
+
 // budget_world_tick_after: the rest of a world's tick after its entities (the scenes
 // that time the entities alone): the changes' flush and the journal.
 @(private = "file")

@@ -284,6 +284,17 @@ test_budget_walkers_walk :: proc(t: ^testing.T) {
 	testing.expectf(t, r.builds >= 5, "the route was searched %d times", r.builds)
 }
 
+// The fighters' budget scene (`build bench budgets` times it): 150 creatures hunting a
+// circling point strike (half as many blows as there are of them, at least: they meet
+// as they close in) and do not stand inside each other.
+@(test)
+test_budget_fighters_fight :: proc(t: ^testing.T) {
+	r, ok := budget_fighters()
+	testing.expect(t, ok, "the scene did not start")
+	testing.expectf(t, r.struck >= BUDGET_FIGHTERS / 2, "only %d blows landed", r.struck)
+	testing.expectf(t, r.apart >= BUDGET_FIGHTERS / 2, "only %d stood apart", r.apart)
+}
+
 // What the entity hooks were told (the test game's state).
 @(private = "file")
 Told :: struct {

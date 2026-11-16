@@ -22,7 +22,7 @@ import "server:core"
 // desktop's so a slow runner does not flake. The counters are a multiple of
 // what building them cost in the same run, not a number of seconds (#43).
 
-BUDGETS_VERSION :: 7
+BUDGETS_VERSION :: 8
 
 Budgets_Options :: struct {
 	repetitions: int `usage:"times the whole is done (default 3, 5 with -check)"`,
@@ -55,6 +55,7 @@ BUDGET_LIMITS := [?]struct {
 	{.Island_Tick, 200}, // the issue's 0.2 ms a tick, 64 observers moving
 	{.Collide_Move, 2000},
 	{.Walkers_Tick, 3000}, // a wave of 200 on a route rebuilt every second: measured at about 0.5 ms
+	{.Fighters_Tick, 4000}, // 150 creatures hunting, looking, striking, pushed apart: measured at about 0.6 ms
 	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 0.8 s
 	{.Planet_Placement, 300}, // the issue's 300 ms for a world of 10 peoples
 	{.Planet_History, 200}, // the issue's 200 ms for 6 000 years; measured at about 20 ms
@@ -191,6 +192,15 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) 
 		append(broken, fmt.aprintf("the walkers: %v", walkers))
 	}
 	base.metric_add(.Walkers_Tick, f32(walkers.mean_us))
+
+	fmt.printfln("scene: %s", "the fighters")
+	fighters, fought := core.budget_fighters()
+	if !fought ||
+	   fighters.struck < core.BUDGET_FIGHTERS / 2 ||
+	   fighters.apart < core.BUDGET_FIGHTERS / 2 {
+		append(broken, fmt.aprintf("the fighters: %v", fighters))
+	}
+	base.metric_add(.Fighters_Tick, f32(fighters.mean_us))
 }
 
 // budget_planet builds the planet from the committed relief, then its peoples' 6 000
