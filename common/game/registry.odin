@@ -192,9 +192,10 @@ Place_Rule :: enum u8 {
 	Attached,
 	Connect, // the default state with its neighbours' connections (a fence)
 	Door, // two cells, a lower and an upper half
+	Facing, // facing the way its placer looks (a machine, a conveyor)
 }
 
-PLACE_RULE_LIST := [?]string{"default", "stairs", "slab", "attached", "connect", "door"}
+PLACE_RULE_LIST := [?]string{"default", "stairs", "slab", "attached", "connect", "door", "facing"}
 #assert(len(PLACE_RULE_LIST) == len(Place_Rule))
 
 // Use_Rule: what the right button does to a block of the type (besides what

@@ -399,6 +399,9 @@ read_block_behaviour :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def
 		if def.place == .Connect && def.connect == NO_TAG && field_of(m, "connect") == nil {
 			fail_type(b, m, "place \"connect\" needs a \"connect\" field")
 		}
+		if def.place == .Facing && !prop_has_values(def, "facing", ROTATE_VALUES[:]) {
+			fail_type(b, m, "place \"facing\" needs the property facing: north, east, south, west")
+		}
 		if def.place == .Door {
 			if !prop_has_values(def, "facing", ROTATE_VALUES[:]) {
 				fail_type(

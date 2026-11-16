@@ -147,6 +147,9 @@ placement :: proc(
 		return pos, b, true
 	case .Connect:
 		return pos, shape_update(reg, b, pos, q), true
+	case .Facing:
+		b = state_set(t, b, "facing", ROTATE_VALUES[facing_of_yaw(ctx.yaw)]) or_return
+		return pos, b, true
 	case .Door:
 		b = state_set(t, b, "facing", ROTATE_VALUES[facing_of_yaw(ctx.yaw)]) or_return
 		b = state_set(t, b, "half", "lower") or_return

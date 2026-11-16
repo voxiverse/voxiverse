@@ -365,3 +365,29 @@ test_edit_kind :: proc(t: ^testing.T) {
 	testing.expect_value(t, edit_kind(tb, closed, turned), Edit_Kind.Place)
 	testing.expect_value(t, edit_kind(tb, .Stone, opened), Edit_Kind.Place)
 }
+
+// A block placed by the facing rule faces the way its placer looks (a machine, a conveyor);
+// one without the facing property is refused as a pack.
+@(test)
+test_a_block_is_placed_facing_its_placer :: proc(t: ^testing.T) {
+	text := `{"press": {"states": {"facing": ["north", "east", "south", "west"]}, "default": {"facing": "north"}, "textures": {"all": "voxiverse:stone"}, "place": "facing"}}`
+	reg, errs := build_with(pack_of("works", {{"data/blocks/works.json", text}}))
+	testing.expect(t, reg != nil, errors_text(errs))
+	if reg == nil {return}
+	w: Map_World
+	defer delete(w)
+	q := map_query(&w, reg)
+	w[{0, 0, 0}] = .Stone
+	press := type_named(reg, "works:press")
+	_, b, ok := placement(
+		reg,
+		press,
+		{target = {0, 0, 0}, face = .Pos_Y, hit = {8, 16, 8}, yaw = math.PI},
+		q,
+	)
+	testing.expect(t, ok)
+	testing.expect(t, state_is(&reg.blocks, b, "facing", "south"), state_text(reg, b))
+	bare := `{"press": {"textures": {"all": "voxiverse:stone"}, "place": "facing"}}`
+	_, errs = build_with(pack_of("works", {{"data/blocks/works.json", bare}}))
+	testing.expect(t, len(errs) > 0, "a facing rule without the property was let through")
+}
