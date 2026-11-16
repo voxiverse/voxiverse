@@ -113,3 +113,30 @@ test_a_games_screen_opens_and_closes :: proc(t: ^testing.T) {
 	testing.expect(t, !engine.game_screen_shown(s))
 	testing.expect(t, !shop_frame(app))
 }
+
+// A game's HUD names the keys of its actions as the player bound them, and its screen hears
+// them pressed while it is open (the key that opened a market closes it).
+@(test)
+test_a_games_actions_name_their_keys :: proc(t: ^testing.T) {
+	f: Shop_Fixture
+	shop_fixture(t, &f)
+	defer shop_fixture_destroy(&f)
+	app, s := f.app, f.s
+	s.game.actions = {"Shop", "Haggle"}
+	app.settings.keys.game_2 = .H
+	shop_frame(app)
+	testing.expect_value(t, engine.game_action_key(s, 0), "Z")
+	testing.expect_value(t, engine.game_action_key(s, 1), "H")
+	testing.expect_value(t, engine.game_action_key(s, 2), "") // (the game has two)
+	testing.expect(t, !engine.game_action_pressed(s, 0))
+
+	engine.game_screen_open(s)
+	shop_frame(app)
+	app.actions.key_pressed += {.Game_1}
+	shop_frame(app)
+	testing.expect(t, engine.game_action_pressed(s, 0), "the screen did not hear its key")
+	testing.expect(t, !engine.game_action_pressed(s, 1))
+	app.actions.key_pressed -= {.Game_1}
+	shop_frame(app)
+	testing.expect(t, !engine.game_action_pressed(s, 0), "a press lasted past its frame")
+}

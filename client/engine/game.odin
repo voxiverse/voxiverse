@@ -53,10 +53,42 @@ game_screen_shown :: proc(s: ^Session) -> bool {
 	return s.game_screen
 }
 
+// Key_Label: what a key is called on screen, kept by value (game_action_key).
+Key_Label :: struct {
+	text: [24]u8,
+	len:  u8,
+}
+
+// game_action_key: the name of the key the player has bound to the game's action
+// `index` (into Game.actions), as their keyboard prints it ("Z"; "(none)" when unbound),
+// for a HUD to say which key does what. "" for an action the game has not.
+game_action_key :: proc(s: ^Session, index: int) -> string {
+	if index < 0 || index >= len(s.game.actions) || index >= len(s.game_keys) {return ""}
+	k := &s.game_keys[index]
+	return string(k.text[:k.len])
+}
+
+// game_action_pressed: the key of the game's action `index` was pressed this frame,
+// wherever the keyboard is (over the world or the game's own screen: the key that opened
+// a screen may close it). Over the world the action also goes to the server part.
+game_action_pressed :: proc(s: ^Session, index: int) -> bool {
+	return index >= 0 && index < len(s.game.actions) && index in s.game_pressed
+}
+
 // game_screen_sync (every frame): the overlay stack holds the game's screen while the
-// session playing has it open, and only then.
+// session playing has it open, and only then; the names of the keys bound to the game's
+// actions are taken from the settings (game_action_key), and which were pressed from the
+// actions (game_action_pressed).
 game_screen_sync :: proc(app: ^App) {
 	s := app.session
+	if s != nil {
+		s.game_pressed = {}
+		for action, i in GAME_ACTIONS {
+			label := key_label(&app.window, action_key(&app.settings.keys, action)^)
+			s.game_keys[i].len = u8(copy(s.game_keys[i].text[:], label))
+			if key_action_pressed(&app.actions, action) {s.game_pressed += {i}}
+		}
+	}
 	if s != nil && s.state != .Playing {s.game_screen = false} 	// (the world left: closed)
 	want := s != nil && s.game_screen
 	open := overlay_is_open(&app.overlays, .Game_Screen)
