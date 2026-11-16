@@ -808,6 +808,30 @@ check :: proc() -> bool {
 			},
 		)
 	}
+	// Every package is checked as above, with no defines: the release build's values of
+	// base.DEV and base.PROFILE. The executables are checked again in each build the driver
+	// makes of them, so code under `when base.DEV` (the dev and debug builds), `when
+	// base.PROFILE` (--profile) and the release client's embedded shaders is checked too.
+	// Each checks the whole program it builds, so the packages under it come with it.
+	os.make_directory_all(SHADER_OUT_DIR) // the release client #loads it (empty is checked too)
+	for config in BUILD_CONFIGS {
+		append(
+			&jobs,
+			Check_Job {
+				label = strings.concatenate({"check  ", config.pkg, " (", config.name, ")"}),
+				target = host_target(),
+				cmd = slice.concatenate(
+					[][]string {
+						{"odin", "check", config.pkg},
+						ODIN_FLAGS,
+						COLLECTIONS,
+						{"-no-threaded-checker"},
+						config.defines,
+					},
+				),
+			},
+		)
+	}
 	// The other Tier 1 targets' object builds run only when asked for (VX_CROSS=1 or `check --cross`).
 	cross := os.get_env("VX_CROSS", context.temp_allocator) == "1"
 	for arg in os.args[1:] {
@@ -829,6 +853,30 @@ check :: proc() -> bool {
 		check_no_binaries() &&
 		ok \
 	)
+}
+
+// Build_Config: an executable as a build of the driver's makes it, by the defines that change
+// which code it compiles (build_game's profiles, build_fuzz_driver). The defines no build
+// sets (none: base.DEV and base.PROFILE false) are the per-package checks'.
+Build_Config :: struct {
+	pkg:     string,
+	name:    string,
+	defines: []string,
+}
+
+BUILD_CONFIGS :: []Build_Config {
+	{GAME_PACKAGE, "dev", {"-define:VX_DEV=true"}},
+	{GAME_PACKAGE, "dev --profile", {"-define:VX_DEV=true", "-define:VX_PROFILE=true"}},
+	{GAME_PACKAGE, "release", {"-define:VX_DEV=false", "-define:VX_EMBED_SHADERS=true"}},
+	{
+		GAME_PACKAGE,
+		"release --profile",
+		{"-define:VX_DEV=false", "-define:VX_EMBED_SHADERS=true", "-define:VX_PROFILE=true"},
+	},
+	{SERVER_PACKAGE, "dev", {"-define:VX_DEV=true"}},
+	{SERVER_PACKAGE, "dev --profile", {"-define:VX_DEV=true", "-define:VX_PROFILE=true"}},
+	{SERVER_PACKAGE, "release --profile", {"-define:VX_DEV=false", "-define:VX_PROFILE=true"}},
+	{"tools/fuzz", "fuzz driver", {"-define:VX_DEV=true"}},
 }
 
 // Check_Job: one of check's commands.

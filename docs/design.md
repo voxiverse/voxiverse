@@ -217,7 +217,13 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   (e.g. Linux arm64) `GLSLANG=/path/to/glslangValidator` overrides it. Compile errors
   point at the GLSL file and line.
 - **The inner loop is parallel and clean.** `check` runs the host's type checks and the other
-  targets' object builds in one pool, one job per core (`VX_JOBS=n` overrides); `test` runs the
+  targets' object builds in one pool, one job per core (`VX_JOBS=n` overrides). Every package
+  is checked as the release build sees it (`base.DEV` and `base.PROFILE` false); the
+  executables are checked again as each build the driver makes of them (`BUILD_CONFIGS`: the
+  client and server in dev, dev with `--profile`, release with `--profile`, the client's
+  release with its embedded shaders, the fuzz driver), so code under `when base.DEV` is
+  checked on every commit; a test fails a new boolean `#config` switch no configuration sets.
+  This adds eight one-second jobs, about 2 s to the 24 s check. `test` runs the
   packages the same way, the slowest last time first, each printing its output whole when it ends;
   `test <package>...` runs only those. Builds and tests execute directly in parallel without
   intermediate compiler cache state: builds stay fast, reproducible, and deterministic, eliminating
