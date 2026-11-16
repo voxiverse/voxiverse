@@ -31,6 +31,8 @@ BASE_SIM := #load_directory("../../assets/packs/voxiverse/data/sim")
 @(private = "file")
 BASE_ENTITIES := #load_directory("../../assets/packs/voxiverse/data/entities")
 @(private = "file")
+BASE_RECIPES := #load_directory("../../assets/packs/voxiverse/data/recipes")
+@(private = "file")
 BASE_STRUCTURES := #load_directory("../../assets/packs/voxiverse/server/structures")
 
 // base_pack_source: the base pack's files, for registry_build (and for
@@ -54,6 +56,7 @@ base_pack_source :: proc(allocator := context.allocator) -> Pack_Source {
 	add(&files, "data/models", BASE_MODELS)
 	add(&files, "data/sim", BASE_SIM)
 	add(&files, "data/entities", BASE_ENTITIES)
+	add(&files, "data/recipes", BASE_RECIPES)
 	add(&files, "server/structures", BASE_STRUCTURES)
 	return {BASE_NAMESPACE, files[:]}
 }

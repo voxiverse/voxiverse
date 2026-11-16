@@ -1,0 +1,4 @@
+{
+	// A log split into planks, anywhere in the grid.
+	"planks": {"type": "shapeless", "inputs": [{"item": "voxiverse:log", "count": 1}], "output": {"item": "voxiverse:planks", "count": 4}}
+}
