@@ -111,3 +111,55 @@ test_arena_and_watchers :: proc(t: ^testing.T) {
 	testing.expect_value(t, game.inventory_held(&c.inventory).item, rifle)
 	testing.expect(t, !hold(s, c, "voxiverse:grappling_hook"))
 }
+
+// An open arena: the template alone, built where it stands (no walls, nothing under).
+@(private = "file")
+OPEN_ARENA :: Arena {
+	origin = {2, 20, 3},
+	size   = {6, 4, 5},
+	open   = true,
+}
+
+@(private = "file")
+OPEN_GAME :: core.Game {
+	info = {id = "open", name = "Open", description = "server/play's tests' open arena"},
+	server_state = Ground,
+	configure = proc(config: ^core.Config) {configure_flat(config, {5.5, 0, 5.5}, "creative")},
+	start = proc(s: ^core.Server) -> bool {
+		core.world_keep(s.home, arena_area(OPEN_ARENA))
+		return true
+	},
+	tick = proc(s: ^core.Server) {
+		g := core.game_state(s, Ground)
+		if g.built {return}
+		t := game.template_make(OPEN_ARENA.size, context.temp_allocator)
+		game.template_fill(&t, {0, 0, 0}, {5, 0, 4}, .Planks)
+		g.built, _ = arena_build(s, s.home, OPEN_ARENA, &t, force = false)
+	},
+}
+
+@(test)
+test_open_arena :: proc(t: ^testing.T) {
+	testing.expect_value(t, arena_area(OPEN_ARENA), core.Box{{2, 20, 3}, {7, 23, 7}})
+	testing.expect(t, arena_holds(OPEN_ARENA, {4, 21, 4}))
+	testing.expect(t, !arena_holds(OPEN_ARENA, {4, 25, 4}))
+	sess := new(core.Session)
+	defer free(sess)
+	config := core.harness_world()
+	config.game = OPEN_GAME
+	if !testing.expect(t, core.session_start(sess, {}, false, with = config)) {return}
+	defer core.session_stop(sess)
+	s := &sess.h.srv
+	built :: proc(data: rawptr) -> bool {return(
+			core.game_state((^core.Server)(data), Ground).built \
+		)}
+	_, ok := core.harness_step_until(&sess.h, built, s, 600)
+	if !testing.expect(t, ok, "never built") {return}
+	at :: proc(w: ^core.World, p: game.Block_Pos) -> game.Block {
+		b, _ := core.block_at(w, p)
+		return b
+	}
+	testing.expect_value(t, at(s.home, {2, 20, 3}), game.Block.Planks) // the template's floor
+	testing.expect_value(t, at(s.home, {1, 21, 5}), game.Block.Air) // no wall
+	testing.expect_value(t, at(s.home, {5, 19, 5}), game.Block.Air) // nothing under
+}

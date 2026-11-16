@@ -8,7 +8,8 @@ import "server:core"
 // as it was laid out whatever the last one's blasts carved. Its inside is size blocks
 // from origin (x and z, and y up from the floor's layer, origin.y), walled round with
 // wall from depth blocks under the floor to wall_top, with under below the inside, so a
-// blast through the floor finds stone, not the open flat world.
+// blast through the floor finds stone, not the open flat world. An open arena has no
+// walls and nothing under it: the template is the whole of it (a course in the sky).
 Arena :: struct {
 	origin:   [3]i32, // the inside's lowest corner: its floor's layer
 	size:     [3]i32, // the inside, floor to sky (the template's size)
@@ -16,11 +17,13 @@ Arena :: struct {
 	depth:    i32, // layers of `under` beneath the inside (and of wall)
 	wall:     game.Block, // (zero: bedrock)
 	under:    game.Block, // (zero: stone)
+	open:     bool, // no walls, nothing under: the template alone (wall_top, depth unused)
 }
 
 // arena_area: the arena's whole box, walls and what is under it: what the game keeps
 // loaded (core.world_keep) and builds in.
 arena_area :: proc(a: Arena) -> core.Box {
+	if a.open {return arena_inside(a)}
 	return {a.origin - {1, a.depth, 1}, {a.origin.x + a.size.x, a.wall_top, a.origin.z + a.size.z}}
 }
 
@@ -47,6 +50,11 @@ arena_build :: proc(
 	if !loaded && !force {return false, false}
 	assert(t.size == a.size, "the arena's template is not its inside's size")
 	act := core.game_act(s, w, .Structure)
+	inside := arena_inside(a)
+	if a.open {
+		core.bulk_edit(w, {shape = inside, op = .Paste, template = t, partial = true}, act)
+		return true, loaded
+	}
 	wall := a.wall if a.wall != .Air else .Bedrock
 	under := a.under if a.under != .Air else .Stone
 	lo, hi := area.lo, area.hi
@@ -63,7 +71,6 @@ arena_build :: proc(
 		below := core.Box{{lo.x + 1, lo.y, lo.z + 1}, {hi.x - 1, a.origin.y - 1, hi.z - 1}}
 		core.bulk_edit(w, {shape = below, op = .Set, block = under, partial = true}, act)
 	}
-	inside := arena_inside(a)
 	core.bulk_edit(w, {shape = inside, op = .Paste, template = t, partial = true}, act)
 	return true, loaded
 }
@@ -72,12 +79,13 @@ arena_build :: proc(
 // over their top and `below` blocks under its floor.
 arena_holds :: proc(a: Arena, p: [3]f64, above := 0.0, below := 0.0) -> bool {
 	lo, hi := a.origin, a.origin + a.size
+	top := f64(hi.y - 1) if a.open else f64(a.wall_top)
 	return(
 		p.x >= f64(lo.x) &&
 		p.z >= f64(lo.z) &&
 		p.x < f64(hi.x) &&
 		p.z < f64(hi.z) &&
 		p.y >= f64(lo.y) - below &&
-		p.y <= f64(a.wall_top) + above \
+		p.y <= top + above \
 	)
 }
