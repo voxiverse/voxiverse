@@ -59,12 +59,12 @@ test_marks_show_health_and_points :: proc(t: ^testing.T) {
 	if !testing.expect(t, joined, "never joined") {return}
 	s := rig.s
 	w := rig.h.srv.home
-	sheep := core.entity_spawn(w, rig.h.srv.registry.engine.dummy, {4.5, 0, 0.5}, false)
-	id := core.entity_id(w, sheep)
-	core.entity_harm(w, sheep, {amount = 1, kind = .Game})
+	dummy := core.entity_spawn(w, rig.h.srv.registry.engine.dummy, {4.5, 0, 0.5}, false)
+	id := core.entity_id(w, dummy)
+	core.entity_harm(w, dummy, {amount = 1, kind = .Game})
 	core.harness_step(&rig.h, 10)
 	e, known := &s.entities[id]
-	if !testing.expect(t, known, "the sheep never came") {return}
+	if !testing.expect(t, known, "the dummy never came") {return}
 	testing.expect_value(t, e.health, 3)
 	testing.expect_value(t, e.max_health, 4)
 
@@ -88,13 +88,13 @@ test_marks_show_health_and_points :: proc(t: ^testing.T) {
 	_, ok = world_point(s, &ctx, {0.5, 1.6, -(MARK_DISTANCE + 10)})
 	testing.expect(t, !ok, "a point too far was drawn")
 
-	// An entity's marks go just over its box (a sheep's is 0.9 high).
+	// An entity's marks go just over its box (a dummy's is 0.9 high).
 	top, over := entity_top(s, id)
 	feet, _ := entity_place(s, id)
 	testing.expectf(
 		t,
 		over && top.xz == feet.xz && abs(top.y - feet.y - (0.9 + ENTITY_MARK_LIFT)) < 1e-6,
-		"over the sheep at %v, its feet at %v",
+		"over the dummy at %v, its feet at %v",
 		top,
 		feet,
 	)

@@ -57,7 +57,7 @@ test_game_records_keyed_by_entity :: proc(t: ^testing.T) {
 	far := entity_spawn(s.home, s.registry.engine.dummy, {200.5, 0, 0.5}, false)
 	harness_step(&sess.h, 10)
 	tag := mirror_game_record(&sess.mirror, Tag, protocol.key_entity(entity_id(s.home, near)))
-	if testing.expect(t, tag != nil, "the near sheep's tag never came") {
+	if testing.expect(t, tag != nil, "the near dummy's tag never came") {
 		testing.expect_value(t, tag.name, "Grimtooth")
 		testing.expect(t, tag.elite)
 	}
@@ -87,13 +87,13 @@ test_entities_told_nearest_first :: proc(t: ^testing.T) {
 	defer harness_stop(h)
 	s := &h.srv
 	w := s.home
-	sheep := test_reg().engine.dummy
+	dummy := test_reg().engine.dummy
 	for i in 0 ..< protocol.MAX_KNOWN_ENTITIES {
 		a := f64(i) / protocol.MAX_KNOWN_ENTITIES * 6.28
-		entity_spawn(w, sheep, {50 * base.cos(a), 0, 50 * base.sin(a)}, false)
+		entity_spawn(w, dummy, {50 * base.cos(a), 0, 50 * base.sin(a)}, false)
 	}
 	near: [10]u32
-	for &id, i in near {id = entity_id(w, entity_spawn(w, sheep, {f64(i) - 5, 0, 2}, false))}
+	for &id, i in near {id = entity_id(w, entity_spawn(w, dummy, {f64(i) - 5, 0, 2}, false))}
 	game.store_apply(&w.entity_world.store)
 	entities_sync_spatial(w)
 	c := new(Client)

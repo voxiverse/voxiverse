@@ -31,12 +31,12 @@ games were recorded names none: it plays the game it is opened with, and the nex
 records that game (the client opens such a universe as `sandbox`, the engine's world that
 every universe made before then played).
 
-`entities.cfg` has a line per saved entity: its kind by its registry id (`voxiverse:sheep`;
+`entities.cfg` has a line per saved entity: its kind by its registry id (`sandbox:sheep`;
 a bare name is the base pack's), `x y z yaw health natural`, then what else it has as
 `name=value` fields, each left out at its default: `max` (its most health, when a game set
 another than its kind's), a dropped stack's `item`, `count`, `action` (the journal action
-that dropped it) and `stack_data` (`Stack.data`), a sheep's `shorn`, `genes`, `growth`,
-`love` and `wait`, a steered walker's way (`speed`; `go=x,y,z`, `keep=x,y,z,near,far` or
+that dropped it) and `stack_data` (`Stack.data`), the looks its game showed (`looks`, their
+bits), a steered walker's way (`speed`; `go=x,y,z`, `keep=x,y,z,near,far` or
 `glide=x,y,z/x,y,z/...`) and the game's record on an entity of its kinds, field by field
 (`data.<field>`, nested ones by dotted paths: [games.md](games.md)). A line whose kind the
 world's packs no longer have (or no longer save) is dropped, and the server's log names the
@@ -184,7 +184,7 @@ releases the lock with its process, so a crash leaves no stale lock.
 
 ## Formats
 
-`SAVE_FORMAT` (7) is recorded in `universe.cfg` and in each `world.cfg`. A universe of an older format the migrations reach is brought up to date when it is opened, any other refused (see [Migrations](#migrations)).
+`SAVE_FORMAT` (8) is recorded in `universe.cfg` and in each `world.cfg`. A universe of an older format the migrations reach is brought up to date when it is opened, any other refused (see [Migrations](#migrations)).
 
 ### Region format 5
 
@@ -278,6 +278,7 @@ this world was made by an older build; create a new one
 | From | What it does | Fixture |
 |---|---|---|
 | 6 | `entities.cfg`'s lines name their fields (`item=`, `shorn=`...) where format 6 placed them by position; a `critter` is a `voxiverse:sheep` | `assets/fixtures/save-v6` |
+| 7 | The base pack's sheep (`voxiverse:sheep`) are the sandbox's (`sandbox:sheep`): what the engine kept of each (`shorn`, `genes`, `love`, `wait`; `growth` as `grows`, the ticks before it is grown) is the sandbox's record on it (`data.<field>`) | `assets/fixtures/save-v7` |
 
 A migration that fails commits nothing, and the open fails with "this world could not be
 brought up to date (the log says why); nothing in it was changed". The rules for a

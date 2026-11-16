@@ -38,7 +38,7 @@ register_world_commands :: proc(c: ^engine.Console) {
 		c,
 		{
 			"use",
-			"use: the right button once on what is aimed at (a chest opens, a sheep is sheared)",
+			"use: the right button once on what is aimed at (a chest opens, a creature is used)",
 			proc(app: ^engine.App, args: []string) {
 				s := app.session
 				if !(engine.session_use_entity(s) || engine.session_use_block(s)) {

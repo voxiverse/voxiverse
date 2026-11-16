@@ -6,13 +6,13 @@ package game
 // Reason: append-only (the number is in the event's n1).
 Reason :: enum u8 {
 	Drop_Block, // what a broken block leaves (block_drop)
-	Drop_Mob, // wool from a sheep
+	Drop_Mob, // what a creature of the engine's dropped (none now: a game's drops are the game's)
 	Give, // admin_give
 	Kit, // a new player's kit
 	Catalog, // taken from the creative catalog
 	Spill_Old, // found with no owner on load (a saved character's overflow)
 	Place, // used up placing a block
-	Use, // fed to a sheep, loaded into a weapon (its ammo)
+	Use, // spent on a use (fed to a creature: core.item_spend), loaded into a weapon (its ammo)
 	Clear, // admin_clear
 	Expire, // an item entity's age
 	Catalog_Return, // put back in the catalog (the cursor's stack replaced by a Take)

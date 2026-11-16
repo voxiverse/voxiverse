@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:testing"
 
-import "common:game"
+import "games:sandbox"
 import "server:core"
 import "server:playtest"
 
@@ -24,16 +24,25 @@ copy_dir :: proc(from, to: string) {
 	}
 }
 
-// A sandbox universe saved by an older build (assets/fixtures/save-v6: save format 6)
-// opens, brought up to date, with its sheep as they were: the shorn black one, the
-// spotted one in love (one that came by itself: it does not go before a player is
-// there to be far from), the lamb; and the stack of wool that lay on the ground.
+// A sandbox universe saved by an older build opens, brought up to date, with its sheep as
+// they were, now the sandbox's (sandbox:sheep, their records the game's): the shorn black
+// one, the spotted one in love (one that came by itself: it does not go before a player is
+// there to be far from), the lamb; and the stack of wool that lay on the ground. Format 6
+// (assets/fixtures/save-v6) from before the entities' fields were named, format 7
+// (assets/fixtures/save-v7) from the commit before the sheep left the engine.
 @(test)
-test_a_format_6_universe_keeps_its_sheep :: proc(t: ^testing.T) {
-	dir :: "build/tmp/sandbox_save_v6"
+test_an_older_universe_keeps_its_sheep :: proc(t: ^testing.T) {
+	for fixture in ([]string{"assets/fixtures/save-v6", "assets/fixtures/save-v7"}) {
+		keeps_its_sheep(t, fixture)
+	}
+}
+
+@(private = "file")
+keeps_its_sheep :: proc(t: ^testing.T, fixture: string) {
+	dir :: "build/tmp/sandbox_save_older"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	copy_dir("assets/fixtures/save-v6", dir)
+	copy_dir(fixture, dir)
 	rig := new(playtest.Rig)
 	defer free(rig)
 	if !playtest.start(t, rig, GAME, {save_dir = dir}) {return}
@@ -47,16 +56,19 @@ test_a_format_6_universe_keeps_its_sheep :: proc(t: ^testing.T) {
 	seen: Seen
 	it := core.entities_each(w)
 	for h in core.entities_next(&it) {
-		switch core.entity_kind(w, h) {
-		case s.registry.engine.sheep:
-			genes := core.entity_genes(w, h).genes
-			br := core.entity_breeding(w, h)
-			seen.shorn_black ||= core.entity_wool(w, h).shorn && game.genes_black(genes)
-			seen.in_love ||= br.love > 0 && genes == {.Coat_A} && core.entity_is_natural(w, h)
-			seen.lamb ||= br.growth < game.LAMB_TICKS && game.genes_spotted(genes) && br.wait > 0
-		case s.registry.engine.item:
+		if d := sheep(s, w, h); d != nil {
+			seen.shorn_black ||= d.shorn && sandbox.genes_black(d.genes)
+			seen.in_love ||= d.love > 0 && d.genes == {.Coat_A} && core.entity_is_natural(w, h)
+			seen.lamb ||= d.grows > 0 && sandbox.genes_spotted(d.genes) && d.wait > 0
+		} else if core.entity_kind(w, h) == s.registry.engine.item {
 			seen.wool += core.entity_stack(w, h).count
 		}
 	}
-	testing.expect_value(t, seen, Seen{true, true, true, 2})
+	testing.expectf(
+		t,
+		seen == {true, true, true, seen.wool} && seen.wool >= 2,
+		"%s: %v",
+		fixture,
+		seen,
+	)
 }

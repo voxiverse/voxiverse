@@ -48,21 +48,20 @@ which takes the game's ([games.md](games.md#the-games-pack)).
 ## Entity kinds
 
 Entity kinds are `data/entities/*.json` entries (`common/game/registry_entities.odin`); the base
-pack's are `animals.json` (`sheep`) and `engine.json` (`rocket`, `item`, `player`, and `dummy`,
-a creature that stands where it is put: a target to hit, what the engine's tests walk, hurt
-and save), with the numbers the engine's tables hold today. A kind is a `Kind_Id` (its registry index + 1; 0 is none)
+pack's are `engine.json`'s (`rocket`, `item`, `player`, and `dummy`, a creature that stands
+where it is put: a target to hit, what the engine's tests walk, hurt and save); a game's
+creatures are its own pack's (the sandbox's sheep: `games/sandbox/pack`). A kind is a `Kind_Id` (its registry index + 1; 0 is none)
 and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the registry is built
 (a `Pack_Error` at the value, saying the fix):
 
 - `box` `[width, height]`, each 0.1..4; `health` (default 1); `saved`, `summonable`, `hittable`.
 - `physics` (`none`, `walker`, `item`, `projectile`) with its block of numbers (`walker`, `item`
   or `projectile`), required with it and refused without it.
-- `brain` (`none`, `grazer`, `steered`, `game`; each needs `walker`): `grazer` is the sheep's
-  mind; `steered` none, the walker stands or goes where its game sends it
-  ([games.md](games.md#walkers)); `game` its game's, the game's `think` hook each tick, then
-  steered as `steered` is,
-  `with` (`wool`, `genes`, `breeding`),
-  `looks` (at most 16 names of `a-z` and `_`: bit i of what a client is told of how one looks
+- `brain` (`none`, `steered`, `game`; each but `none` needs `walker`): `steered`, the walker
+  stands or goes where its game sends it ([games.md](games.md#walkers)); `game`, its game's
+  mind, the game's `think` hook each tick, then steered as `steered` is. The engine has no
+  creature's mind of its own.
+- `looks` (at most 16 names of `a-z` and `_`: bit i of what a client is told of how one looks
   is its i-th; its game shows them, `core.entity_show`, and the engine shows `striking` while
   its attack does, a blow or a shot a moment ago).
 - `attack` (a `steered` or `game` walker's): `{"damage": n, "reach": blocks, "cooldown": seconds}` and,
@@ -101,9 +100,7 @@ has their data, in this fixed order:
    kind's `despawn` distance goes (in a world with no player in it, none goes).
 2. brains: each kind's brain over its creatures, once a tick for the whole kind (the kinds in
    id order, the creatures lowest id first; one born during it gets its turn in the same tick).
-   The engine's own are the default: `brain: grazer`, the clocks of a kind with `breeding`,
-   thinking (flee, look, wander, graze, and mating, which makes the lamb) and steering, the
-   wish to the walkers; `brain: game`, its game's `think` hook. Then `brain: steered` and
+   `brain: game`: its game's `think` hook. Then `brain: steered` and
    `game`: the way its game or its brain sent it (a point, a route, a band of distances from
    a point), its attack's cooldown, and a push out of any walker or player it overlaps.
 3. walkers' physics: `physics: walker`. Each takes its step with the wish its brain made (none

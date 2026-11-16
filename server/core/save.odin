@@ -716,8 +716,8 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 
 // entities.cfg: one line per saved entity: its kind, x y z yaw health natural, then what
 // else it has as `name=value` fields: `max` (its most health, when a game set another than
-// its kind's), a dropped stack's `item count action stack_data`, a sheep's `shorn genes
-// growth love wait`, the looks its game set (`looks`, their bits), a steered walker's way (`speed`; `go=x,y,z`, `keep=x,y,z,near,far` or
+// its kind's), a dropped stack's `item count action stack_data`, the looks its game set
+// (`looks`, their bits), a steered walker's way (`speed`; `go=x,y,z`, `keep=x,y,z,near,far` or
 // `glide=x,y,z/x,y,z/...`: a route it followed is the game's to give it again) and the
 // game's record (`data.<field>`, Game.entity_data). A field at its default is left out.
 @(private = "file")
@@ -754,17 +754,6 @@ write_entities :: proc(w: ^World) -> bool {
 			)
 			if a := entity_owner(w, e).action; a != 0 {fmt.sbprintf(&b, " action=%d", a)}
 			if stack.data != 0 {fmt.sbprintf(&b, " stack_data=%d", stack.data)}
-		}
-		if entity_kind(w, e) == s.registry.engine.sheep {
-			fmt.sbprintf(
-				&b,
-				" shorn=%v genes=%d growth=%d love=%d wait=%d",
-				entity_wool(w, e).shorn,
-				transmute(u8)entity_genes(w, e).genes,
-				entity_breeding(w, e).growth,
-				entity_breeding(w, e).love,
-				entity_breeding(w, e).wait,
-			)
 		}
 		if looks := game.store_get(&w.entity_world.store, e, C_LOOKS, Looks);
 		   looks != nil && looks.bits != 0 {fmt.sbprintf(&b, " looks=%d", looks.bits)}
@@ -935,22 +924,6 @@ entity_fields_read :: proc(
 			n := strconv.parse_u64(value, 10) or_return
 			if n > u64(max(u32)) {return false}
 			entity_stack(w, e).data = u32(n)
-		case kind == reg.engine.sheep && name == "shorn":
-			entity_wool(w, e).shorn = value == "true"
-		case kind == reg.engine.sheep && name == "genes":
-			entity_genes(w, e).genes = transmute(game.Genes)u8(
-				int_of(fields, name, 0, 15) or_return,
-			)
-		case kind == reg.engine.sheep && name == "growth":
-			entity_breeding(w, e).growth = i32(int_of(fields, name, 0, game.LAMB_TICKS) or_return)
-		case kind == reg.engine.sheep && name == "love":
-			entity_breeding(w, e).love = i32(
-				int_of(fields, name, 0, game.BREED_READY_TICKS) or_return,
-			)
-		case kind == reg.engine.sheep && name == "wait":
-			entity_breeding(w, e).wait = i32(
-				int_of(fields, name, 0, game.BREED_WAIT_TICKS) or_return,
-			)
 		case name == "looks":
 			looks := game.store_get(&w.entity_world.store, e, C_LOOKS, Looks)
 			if looks == nil {return false}

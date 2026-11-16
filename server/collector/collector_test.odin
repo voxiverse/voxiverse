@@ -420,7 +420,7 @@ test_a_report_round_trips :: proc(t: ^testing.T) {
 	r: Rig
 	if !testing.expect(t, rig_open(&r, lake)) {return}
 	defer rig_close(&r)
-	testing.expect(t, report_write(logs, "the sheep ate my homework\nversion 0.26"))
+	testing.expect(t, report_write(logs, "the dog ate my homework\nversion 0.26"))
 	u: Uploader
 	rig_uploader(&r, &u, logs, access.account_key_make())
 	upload_pass(&u)
@@ -438,7 +438,7 @@ test_a_report_round_trips :: proc(t: ^testing.T) {
 			if info.type ==
 			   .Directory {walk(info.fullpath, found)} else if strings.has_suffix(info.name, ".txt") {
 				data, _ := os.read_entire_file_from_path(info.fullpath, context.temp_allocator)
-				if strings.contains(string(data), "sheep ate my homework") {found^ = true}
+				if strings.contains(string(data), "dog ate my homework") {found^ = true}
 			}
 		}
 	}

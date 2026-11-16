@@ -40,8 +40,8 @@ Net_Client :: struct {
 	worn:                        map[u16][game.WORN_SLOTS]game.Item, // last Player_Worn, by player id
 	changed:                     [dynamic]Net_Block,
 	entities:                    map[u32][3]f64, // known entities, where last seen
-	shorn:                       map[u32]bool, // sheep as last told shorn or not
-	sheep:                       map[u32]u16, // and what else about their looks (their bits)
+	looks:                       map[u32]u16, // entities' looks as last told (their bits)
+	motions:                     map[u32][3]f64, // every entity's place as last told, its record come or not
 	stats_text:                  string, // the last Stats_Page's lines (heap)
 	market:                      protocol.Market_View, // the last Market_View (its town is market_town)
 	market_town:                 string, // (heap)
@@ -172,8 +172,8 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.confirms)
 	delete(c.deleted)
 	delete(c.entities)
-	delete(c.shorn)
-	delete(c.sheep)
+	delete(c.looks)
+	delete(c.motions)
 	delete(c.stats_text)
 	delete(c.market_town)
 	delete(c.results)
@@ -275,20 +275,22 @@ net_apply :: proc(c: ^Net_Client, got: []protocol.Received) {
 			}
 		case .Entity:
 			// (an entity is known once it has a place too: Entity_Motion)
+			id := u32(g.key.a)
 			if g.op == .Remove {
-				id := u32(g.key.a)
 				delete_key(&c.entities, id)
-				delete_key(&c.shorn, id)
-				delete_key(&c.sheep, id)
+				delete_key(&c.looks, id)
+				delete_key(&c.motions, id)
+			} else if p, placed := c.motions[id]; placed {
+				c.entities[id] = p // (its place came first: a still one's is not told again)
 			}
 		case .Entity_Motion:
 			id := u32(g.key.a)
 			if g.op == .Remove {continue}
 			v := (^protocol.Entity_Motion)(g.value)
+			c.motions[id] = v.position
 			if protocol.replica_get(&c.rx.live, int(protocol.State_Kind.Entity), g.key) != nil {
 				c.entities[id] = v.position
-				c.shorn[id] = sheep_look(v.looks, "shorn")
-				c.sheep[id] = v.looks
+				c.looks[id] = v.looks
 			}
 		case .Block:
 			v := (^protocol.Block_Record)(g.value)
@@ -516,12 +518,6 @@ at_rest :: proc(c: ^Net_Client) -> bool {
 	return c.rest_still >= 5
 }
 
-@(private)
-// sheep_look: a sheep's looks as told (their bits) include the named one.
-sheep_look :: proc(bits: u16, name: string) -> bool {
-	return bits & game.kind_look(game.kind_info(test_reg(), test_reg().engine.sheep), name) != 0
-}
-
 landed :: proc(c: ^Net_Client) -> bool {
 	return c.welcomed && c.update.state.on_ground && c.update.acked > 0 && len(c.chunks) > 50
 }
@@ -720,26 +716,30 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 
 	// The state model through the loss: once the loss stops, within 30 ticks
 	// each client holds exactly the server's values of the other player and of
-	// a summoned sheep (snapshots that were lost are sent again against the
-	// newest the client acknowledged).
-	net_send(&a, protocol.Command{"summon sheep"})
+	// a summoned dummy walking off (snapshots that were lost are sent again against
+	// the newest the client acknowledged).
+	net_send(&a, protocol.Command{"summon dummy"})
 	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
 			return len(cs[0].entities) == 1 && len(cs[1].entities) == 1
 		}, 30)
-	if !testing.expect(t, ok, "the summoned sheep never reached both clients") {return}
+	if !testing.expect(t, ok, "the summoned dummy never reached both clients") {return}
+	call(srv, proc(s: ^Server, data: rawptr) {
+			it := entities_each(s.home)
+			for e in entities_next(&it) {entity_go(s.home, e, entity_pos(s.home, e) + {10, 0, 4})}
+		}, nil)
 	netcode.simnet_set_conditions(&h.net, {})
 	// Converged: a client's newest complete snapshot is recent, and what it
 	// holds is exactly what the server's sender recorded for that tick (the
 	// sender's ring is what the receiver holds if every part arrived), and what
-	// the client shows of the other player and the sheep is that. (Not the
-	// server's values of the moment: the sheep wanders, and the server ticks
+	// the client shows of the other player and the dummy is that. (Not the
+	// server's values of the moment: the dummy walks, and the server ticks
 	// between a client's last packet and the test's look.)
 	Look :: struct {
 		cs:     [2]^Net_Client,
 		ids:    [2]u16,
 		recent: [2]bool, // the ack is within 10 ticks of the server's
 		same:   [2]bool, // the sender's and the receiver's snapshot at the ack are one
-		shown:  [2]bool, // and the client shows the other player and the sheep as it has them
+		shown:  [2]bool, // and the client shows the other player and the dummy as it has them
 	}
 	look: Look
 	look.cs = {&a, &b}
@@ -774,16 +774,16 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 							{a = i32(other)},
 						),
 					)
-					sheep: ^protocol.Entity_Motion
+					dummy: ^protocol.Entity_Motion
 					for rec in sent.data.tables[protocol.State_Kind.Entity_Motion].records {
-						sheep = (^protocol.Entity_Motion)(rec.value)
+						dummy = (^protocol.Entity_Motion)(rec.value)
 					}
 					look.shown[i] =
 						motion != nil &&
-						sheep != nil &&
+						dummy != nil &&
 						c.seen[other] == motion.position &&
 						len(c.entities) == 1
-					for _, p in c.entities {look.shown[i] &&= p == sheep.position}
+					for _, p in c.entities {look.shown[i] &&= p == dummy.position}
 				}
 			},
 			&look,

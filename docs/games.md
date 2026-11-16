@@ -284,9 +284,9 @@ leave the route's start or a walker following it with no way.
 A creature with a mind of its own has `"brain": "game"`: the game's `think` hook is given
 every creature of the kind each tick, in one call (a herd of hundreds costs one call and
 what the game reads once for all of them), and steers them with the same calls, which the
-engine then carries out; an engine brain (`grazer`) is only the default for a kind that
-names it. What it decides from is the game's record on each (`entity_data`) and what it
-asks the world.
+engine then carries out (the engine has no creature's mind of its own: `games/sandbox`'s
+sheep are the model). What it decides from is the game's record on each (`entity_data`)
+and what it asks the world.
 
 A walker that fights is the same steered walker with an `attack` in its kind. `entity_keep`
 holds it within a band of distances from a point the game gives each tick (a player's

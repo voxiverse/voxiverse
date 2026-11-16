@@ -7,22 +7,6 @@ import "core:testing"
 
 import "common:base"
 
-// copy_dir copies the directory from into to (made), files and directories.
-@(private = "file")
-copy_dir :: proc(from, to: string) {
-	os.make_directory_all(to)
-	entries, _ := os.read_all_directory_by_path(from, context.temp_allocator)
-	for e in entries {
-		src, dst := fmt.tprintf("%s/%s", from, e.name), fmt.tprintf("%s/%s", to, e.name)
-		if e.type == .Directory {
-			copy_dir(src, dst)
-		} else if data, err := os.read_entire_file_from_path(src, context.temp_allocator);
-		   err == nil {
-			_ = os.write_entire_file(dst, data)
-		}
-	}
-}
-
 // The universe of format 6 (assets/fixtures/save-v6: written by the server of that format,
 // a sandbox world with a shorn black sheep, a spotted one in love, a lamb and a dropped
 // stack of wool) comes to the current format: its entities' fields by name, the rest as it
@@ -32,7 +16,7 @@ test_migrate_v6 :: proc(t: ^testing.T) {
 	dir :: "build/tmp/test_migrate_v6"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	copy_dir("assets/fixtures/save-v6", dir)
+	copy_fixture("assets/fixtures/save-v6", dir)
 	disk: base.Disk
 	res := migrate_universe(dir, &disk, 6, 1)
 	if !testing.expectf(t, res.ok, "the migration failed: %s", res.why) {return}
@@ -43,10 +27,11 @@ test_migrate_v6 :: proc(t: ^testing.T) {
 		fmt.tprintf("%s/%s/entities.cfg", dir, world),
 		context.temp_allocator,
 	)
+	// (through format 7 to the current one: the sheep are the sandbox's now, migrate_v7)
 	want := []string {
-		"voxiverse:sheep 3.5000 1.2743 0.4706 1.5072 4 false shorn=true genes=3 growth=18000 love=0 wait=0",
-		"voxiverse:sheep -2.5000 1.0000 0.5000 -2.5633 4 true shorn=false genes=4 growth=18000 love=298 wait=0",
-		"voxiverse:sheep 0.5000 1.0000 3.5000 0.9994 4 false shorn=false genes=12 growth=102 love=0 wait=48",
+		"sandbox:sheep 3.5000 1.2743 0.4706 1.5072 4 false data.shorn=true data.genes=3",
+		"sandbox:sheep -2.5000 1.0000 0.5000 -2.5633 4 true data.genes=4 data.love=298",
+		"sandbox:sheep 0.5000 1.0000 3.5000 0.9994 4 false data.genes=12 data.grows=17898 data.wait=48",
 		"voxiverse:item 0.5000 2.1289 -2.5000 1.3438 1 false item=voxiverse:wool count=2 stack_data=7",
 	}
 	for line in want {

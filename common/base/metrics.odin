@@ -74,7 +74,7 @@ Metric :: enum u8 {
 	Spatial_Move, // CPU ns per move of 2 000 entries random-walking 0.2 blocks
 	Spatial_Sphere, // CPU ns per spatial_sphere of radius 16 among 2 000 entries
 	Island_Tick, // CPU us per server tick to keep the islands of 64 walking observers (common/island)
-	Collide_Move, // CPU ns per collide_move of a sheep-sized box, 0.15-block delta
+	Collide_Move, // CPU ns per collide_move of a creature-sized box (0.8 x 0.9), 0.15-block delta
 	Walkers_Tick, // CPU us per entities' tick of 200 steered walkers following a route (server/core/walkers.odin)
 	Fighters_Tick, // CPU us per tick of 150 creatures keeping by a moving point, looking and striking (server/core/walkers.odin)
 	Gliders_Tick, // CPU us per entities' tick of 1000 steered walkers gliding (server/core/walkers.odin, entity_glide)

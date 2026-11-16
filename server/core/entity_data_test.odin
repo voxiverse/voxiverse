@@ -43,7 +43,7 @@ test_a_games_creature_survives_a_restart :: proc(t: ^testing.T) {
 	entity_set_speed(s.home, e, 2.5)
 	entity_go(s.home, e, {20.5, 1, 3.5})
 	testing.expect(t, entity_show(s.home, e, "big", true))
-	testing.expect(t, entity_show(s.home, e, "shorn", true)) // (a name the base pack's sheep compute: its own here)
+	testing.expect(t, entity_show(s.home, e, "sad", true))
 	testing.expect(t, !entity_show(s.home, e, "tall", true), "a look the kind has not")
 	testing.expect_value(t, entity_looks(s.home, s.registry, e), 3)
 	testing.expect(t, harness_stop(h))
@@ -138,7 +138,7 @@ test_a_games_brain_thinks_for_its_creatures :: proc(t: ^testing.T) {
 
 // A game decides its natural creatures: a kind's spawn rule (its pack's) brings them near
 // the players, no more than its cap, and the game's spawned hook makes each what it is or
-// refuses it.
+// refuses it; with nobody near, they go.
 @(test)
 test_a_game_decides_its_natural_spawns :: proc(t: ^testing.T) {
 	Seen :: struct {
@@ -157,7 +157,7 @@ test_a_game_decides_its_natural_spawns :: proc(t: ^testing.T) {
 	config.game.server_state = Seen
 	config.game.spawned = proc(s: ^Server, w: ^World, h: game.Entity_Handle) -> bool {
 		d := entity_data(w, h, Creature_Data)
-		if d == nil {return true} 	// (the base pack's sheep: not the game's)
+		if d == nil {return true} 	// (not the game's kind)
 		seen := game_state(s, Seen)
 		seen.calls += 1
 		d.number = 7
@@ -196,6 +196,20 @@ test_a_game_decides_its_natural_spawns :: proc(t: ^testing.T) {
 	testing.expect(t, most >= 1, "none came")
 	testing.expectf(t, most <= 4, "%d came: the cap is 4", most)
 	testing.expect(t, game_state(s, Seen).calls > most, "none was refused")
+
+	// Its player away, past their despawn distance: they go.
+	net_send(c, protocol.Teleport{position = {0.5, 140, 400.5}})
+	gone :: proc(cs: []^Net_Client) -> bool {
+		for _, p in cs[0].entities {if p.z < 300 {return false}}
+		return cs[0].update.state.position.z > 300
+	}
+	went := net_wait(t, {c}, gone, 20)
+	wild_left := 0
+	it := entities_each(s.home)
+	for e in entities_next(&it) {
+		if entity_kind(s.home, e) == wild && entity_pos(s.home, e).z < 300 {wild_left += 1}
+	}
+	testing.expect(t, went && wild_left == 0, "the wild ones stayed with nobody near")
 }
 
 // A player uses a creature: the game's entity_use hook is asked with what the player

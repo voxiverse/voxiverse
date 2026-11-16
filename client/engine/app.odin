@@ -317,7 +317,7 @@ enter_world :: proc(
 	save_dir: string,
 	seed: i64,
 	spawn: Maybe([3]f64) = nil,
-	benchmark := false, // the same work every run: no sheep, still clouds
+	benchmark := false, // the same work every run: no creatures, still clouds
 	mode := "creative", // a new universe's default game mode
 	earth := false, // a new universe's home world is Earth
 	game_id := "", // the game it plays ("": App.game, the command line's)

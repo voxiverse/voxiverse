@@ -4,8 +4,8 @@ import "core:math"
 
 import "common:base"
 
-// Entities: things in the world other than blocks and players (for now one
-// kind, the sheep). The server simulates them (server/core/entities.odin) and
+// Entities: things in the world other than blocks and players (creatures, dropped
+// stacks, projectiles). The server simulates them (server/core/entities.odin) and
 // tells each client about the ones near it; both sides share these
 // definitions and the physics.
 

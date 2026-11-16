@@ -59,7 +59,7 @@ flush_events :: proc(srv: ^Server) {
 }
 
 // The exit check, over UDP and the save: a scripted session (chat,
-// commands, a teleport, placing and breaking, a sheep sheared and hit, an item
+// commands, a teleport, placing and breaking, a dummy hit, an item
 // dropped, walking) gives exactly the expected counters and the events in
 // order, kept through save and load, and shown over UDP.
 @(test)
@@ -100,14 +100,12 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	net_send(a, protocol.edit_plain(2, a.seq, beside, .Air))
 	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 2 in cs[0].results})
 	testing.expect(t, ok && a.results[2].accepted, "the dirt was not broken")
-	// A sheep: sheared, then hit once.
-	net_send(a, protocol.Command{"summon sheep"})
+	// A dummy, hit once.
+	net_send(a, protocol.Command{"summon dummy"})
 	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
-	testing.expect(t, ok, "no sheep")
+	testing.expect(t, ok, "no dummy")
 	id: u32
 	for k in a.entities {id = k}
-	net_send(a, protocol.Use_Entity{id, a.seq})
-	pause(t, a, 0.3)
 	net_send(a, protocol.Attack{id, a.seq})
 	pause(t, a, 0.3)
 	// One stone dropped; some walking.
@@ -136,8 +134,7 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 		expect(t, m, "blocks.placed", 1, when_)
 		expect(t, m, "blocks.placed.dirt", 1, when_)
 		expect(t, m, "blocks.mined.dirt", 1, when_)
-		expect(t, m, "sheep.sheared", 1, when_)
-		expect(t, m, "entities.hit.sheep", 1, when_)
+		expect(t, m, "entities.hit.dummy", 1, when_)
 		expect(t, m, "items.dropped.stone", 1, when_)
 		testing.expectf(
 			t,
@@ -173,7 +170,7 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	for what in ([]string{`"k":"item_dropped"`, `"k":"entity_hit"`}) {
 		testing.expectf(t, strings.contains(text, what), "the log lacks %s", what)
 	}
-	// (shearing and the hit wait for their inputs, the drop does not: their order is not fixed)
+	// (the hit waits for its input, the drop does not: their order is not fixed)
 	at := 0
 	for what in order {
 		i := strings.index(text[at:], what)
@@ -187,7 +184,7 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	)
 	testing.expect(
 		t,
-		strings.contains(text, `"block":"dirt"`) && strings.contains(text, `"entity":"sheep"`),
+		strings.contains(text, `"block":"dirt"`) && strings.contains(text, `"entity":"dummy"`),
 	)
 
 	// Over UDP: the stats page shows the server's numbers.

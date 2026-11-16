@@ -53,7 +53,8 @@ Gun_Sound :: enum u8 {
 	Reload, // two clicks
 }
 
-Sheep_Sound :: enum u8 {
+// Creature_Sound: a creature's voice (every creature's: a bleat), hurt or dying.
+Creature_Sound :: enum u8 {
 	Hurt, // a short bleat
 	Die, // a long, falling one, and a puff
 }
@@ -247,10 +248,10 @@ player_sound :: proc(p: Player_Sound, variant: int, allocator := context.allocat
 	return nil
 }
 
-// sheep_sound: a sheep's voice, a bleat: a sliding pitch with vibrato
+// creature_sound: a creature's voice, a bleat: a sliding pitch with vibrato
 // whose harmonics are shaped by two formants (no filters: each harmonic's
 // loudness is the formants' at its frequency).
-sheep_sound :: proc(c: Sheep_Sound, variant: int, allocator := context.allocator) -> []f32 {
+creature_sound :: proc(c: Creature_Sound, variant: int, allocator := context.allocator) -> []f32 {
 	s := Synth {
 		rng = seed(7777 + u32(c) * 131 + u32(variant) * 7),
 	}

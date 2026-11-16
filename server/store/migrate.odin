@@ -37,6 +37,7 @@ Migrator :: struct {
 @(rodata)
 MIGRATIONS := [?]Migration {
 	{from = 6, name = "entities' fields by name", run = migrate_v6_entities},
+	{from = 7, name = "the sheep are the sandbox's", run = migrate_v7_sheep},
 }
 
 // migrations_reach: the chain brings a universe of format `from` to SAVE_FORMAT.

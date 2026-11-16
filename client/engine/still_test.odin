@@ -12,7 +12,7 @@ import "common:protocol"
 import "server:core"
 
 // Those who stand still stay in sight. Snapshots carry only what changed, so
-// a player or a sheep that does not move sends nothing; it must not go
+// a player or a creature that does not move sends nothing; it must not go
 // invisible after STALE_SECONDS, and when it moves again it must not glide
 // in from where it was last heard of. Two sessions on a stepped server: the
 // ticks are the test's, no waiting in real time for them.
@@ -186,22 +186,22 @@ test_still_player_stays_visible :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_still_sheep_stays_visible :: proc(t: ^testing.T) {
+test_still_creature_stays_visible :: proc(t: ^testing.T) {
 	p: Pair
 	defer pair_stop(&p)
 	if !pair_start(t, &p) {return}
-	send_message(p.mover, protocol.Command{"summon sheep"})
+	send_message(p.mover, protocol.Command{"summon dummy"})
 	for _ in 0 ..< 600 {
 		tick_all(&p)
 		if len(p.watch.entities) == 1 {break}
 	}
 	if !testing.expect_value(t, len(p.watch.entities), 1) {return}
-	// Sheep wander and rest; through all of it, it is there.
+	// A dummy stands where it is put; through all of it, it is there.
 	for tick in 0 ..< 2 * STILL_TICKS {
 		tick_all(&p)
 		for _, &e in p.watch.entities {
 			v, ok := seen(p.watch, &e.track)
-			if !testing.expectf(t, ok, "the sheep vanished at tick %d", tick) {return}
+			if !testing.expectf(t, ok, "the dummy vanished at tick %d", tick) {return}
 			testing.expect(t, v.position.y > 0)
 		}
 	}

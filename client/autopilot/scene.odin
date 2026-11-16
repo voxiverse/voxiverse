@@ -17,7 +17,7 @@ import "server:collector"
 // `build images` runs every scene on lavapipe and compares the pictures with
 // the baselines. Whatever could change the picture from one run to the next
 // is fixed: the benchmarks' settings (BENCHMARK_SETTINGS), the scratch world
-// at its fixed spawn with still clouds and no sheep, still rules (the time of
+// at its fixed spawn with still clouds and no creatures, still rules (the time of
 // day stopped at BENCH_TIME_OF_DAY unless the scene sets another, no random
 // ticks, no gravity: a player put somewhere stays there), the water's
 // animation stopped (App.seconds stays 0), no chat lines or toasts (they fade

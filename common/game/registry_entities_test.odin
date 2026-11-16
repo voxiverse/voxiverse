@@ -11,42 +11,62 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	testing.expect_value(t, errors_text(errs0), "")
 	if reg == nil {return}
 	defer registry_destroy(reg)
-	testing.expect_value(t, len(reg.kinds), 5)
+	testing.expect_value(t, len(reg.kinds), 4)
 
-	sheep_id, ok := registry_kind(reg, "sheep")
+	dummy_id, ok := registry_kind(reg, "dummy")
 	testing.expect(t, ok)
-	testing.expect_value(t, sheep_id, Kind_Id(1))
-	testing.expect_value(t, kind_info(reg, sheep_id).id, "voxiverse:sheep")
-	by_full, _ := registry_kind(reg, "voxiverse:sheep")
-	testing.expect_value(t, by_full, sheep_id)
+	testing.expect_value(t, dummy_id, Kind_Id(3))
+	testing.expect_value(t, kind_info(reg, dummy_id).id, "voxiverse:dummy")
+	by_full, _ := registry_kind(reg, "voxiverse:dummy")
+	testing.expect_value(t, by_full, dummy_id)
+	testing.expect_value(t, reg.engine.dummy, dummy_id)
 	_, missing := registry_kind(reg, "cow")
-	testing.expect(t, !missing)
+	testing.expect(t, !missing, "the base pack has a cow")
 	testing.expect(t, kind_info(reg, 0) == nil)
-	testing.expect(t, kind_info(reg, 6) == nil)
+	testing.expect(t, kind_info(reg, 5) == nil)
 
-	s := kind_info(reg, sheep_id)
-	testing.expect_value(t, s.box, [2]f32{0.8, 0.9})
-	testing.expect_value(t, s.health, 4)
-	testing.expect(t, s.saved && s.summonable && s.hittable)
-	testing.expect_value(t, s.physics, Entity_Physics.Walker)
-	testing.expect_value(t, s.walker, Kind_Walker_Info{1.4, 4.2, 1.2, 0})
-	testing.expect_value(t, s.brain, Entity_Brain.Grazer)
-	testing.expect_value(t, s.with, Entity_Parts{.Wool, .Genes, .Breeding})
-	testing.expect_value(t, len(s.looks), 5)
-	testing.expect_value(t, s.model, Entity_Model.Parts)
-	rule, spawns := s.spawn.?
+	d := kind_info(reg, dummy_id)
+	testing.expect_value(t, d.box, [2]f32{0.8, 0.9})
+	testing.expect_value(t, d.health, 4)
+	testing.expect(t, d.saved && d.summonable && d.hittable)
+	testing.expect_value(t, d.physics, Entity_Physics.Walker)
+	testing.expect_value(t, d.walker, Kind_Walker_Info{1.4, 4.2, 1.2, 0})
+	testing.expect_value(t, d.brain, Entity_Brain.Steered)
+	testing.expect_value(t, d.model, Entity_Model.Box)
+	_, dummy_spawns := d.spawn.?
+	testing.expect(t, !dummy_spawns)
+
+	// A spawn rule, as data.
+	wild := pack_of(
+		"testpack",
+		[]File {
+			{
+				"data/entities/wild.json",
+				`{"wild": {"box": [1, 1], "physics": "walker", "walker": {"walk_speed": 1, "run_speed": 2, "jump": 1, "step": 0}, "brain": "game", "model": {"box": [1, 2, 3]},
+				"spawn": {"on": "voxiverse:grass", "day": [0.27, 0.73], "every": 60, "chance": 0.5, "cap": 6, "within": 48, "distance": [16, 40], "group": [1, 3], "sky": true}}}`,
+			},
+		},
+	)
+	with_wild, errs_wild := build_with(wild)
+	testing.expect_value(t, errors_text(errs_wild), "")
+	if with_wild == nil {return}
+	defer registry_destroy(with_wild)
+	wild_id, _ := registry_kind(with_wild, "testpack:wild")
+	rule, spawns := kind_info(with_wild, wild_id).spawn.?
 	testing.expect(t, spawns)
-	grass, _ := registry_block(reg, "grass")
+	grass, _ := registry_block(with_wild, "grass")
 	testing.expect(t, rule_matcher_has(&rule.on, grass))
-	stone, _ := registry_block(reg, "stone")
+	stone, _ := registry_block(with_wild, "stone")
 	testing.expect(t, !rule_matcher_has(&rule.on, stone))
 	testing.expect_value(t, rule.day, [2]f32{0.27, 0.73})
-	testing.expect_value(t, rule.every, TICK_RATE * 2) // SPAWN_EVERY
+	testing.expect_value(t, rule.every, TICK_RATE * 2)
 	testing.expect_value(t, rule.chance, f32(0.5))
 	testing.expect_value(t, rule.cap, 6)
 	testing.expect_value(t, rule.within, 48)
 	testing.expect_value(t, rule.distance, [2]f32{16, 40})
 	testing.expect_value(t, rule.group, [2]int{1, 3})
+	testing.expect(t, rule.sky)
+	testing.expect_value(t, rule.despawn, SPAWN_DESPAWN)
 
 	rocket_id, _ := registry_kind(reg, "rocket")
 	r := kind_info(reg, rocket_id)
@@ -56,8 +76,8 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	testing.expect_value(t, r.physics, Entity_Physics.Projectile)
 	testing.expect_value(t, r.projectile, Kind_Projectile_Info{32, 3, 6, 4})
 	testing.expect_value(t, r.model, Entity_Model.Rocket)
-	_, spawns = r.spawn.?
-	testing.expect(t, !spawns)
+	_, rocket_spawns := r.spawn.?
+	testing.expect(t, !rocket_spawns)
 
 	item_id, _ := registry_kind(reg, "item")
 	it := kind_info(reg, item_id)
@@ -82,10 +102,10 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	with, errs := build_with(pack)
 	testing.expect_value(t, errors_text(errs), "")
 	if with == nil {return}
-	testing.expect_value(t, len(with.kinds), 6)
+	testing.expect_value(t, len(with.kinds), 5)
 	cube_id, found := registry_kind(with, "testpack:cube")
 	testing.expect(t, found)
-	testing.expect_value(t, cube_id, Kind_Id(6))
+	testing.expect_value(t, cube_id, Kind_Id(5))
 	c := kind_info(with, cube_id)
 	testing.expect_value(t, c.model, Entity_Model.Box)
 	testing.expect_value(t, c.color, [3]u8{200, 40, 40})
@@ -112,7 +132,7 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 		{
 			"unknown brain",
 			`{"k": {"box": [1, 1], ` + WALKER + `, "brain": "hunter", "model": "item"}}`,
-			`testpack/data/entities/k.json:1:120: brain is one of "none", "grazer", "steered", "game"; got "hunter"`,
+			`testpack/data/entities/k.json:1:120: brain is one of "none", "steered", "game"; got "hunter"`,
 		},
 		{
 			"unknown model",
@@ -120,9 +140,9 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 			`testpack/data/entities/k.json:1:32: model is one of "rocket", "item", "player" or {"box": [r, g, b]}; got "cow"`,
 		},
 		{
-			"grazer without walker",
-			`{"k": {"box": [1, 1], "brain": "grazer", "model": "item"}}`,
-			`testpack/data/entities/k.json:1:32: brain "grazer" needs physics "walker"`,
+			"a game's brain without walker",
+			`{"k": {"box": [1, 1], "brain": "game", "model": "item"}}`,
+			`testpack/data/entities/k.json:1:32: brain "game" needs physics "walker"`,
 		},
 		{
 			"steered without walker",
@@ -178,8 +198,8 @@ testpack/data/entities/k.json:1:54: walker needs "step"; add it`,
 		},
 		{
 			"seventeen looks",
-			`{"k": {"box": [1, 1], "with": ["wool"], "looks": ["shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn","shorn"], "model": "item"}}`,
-			`testpack/data/entities/k.json:1:50: 17 looks; the limit is 16`,
+			`{"k": {"box": [1, 1], "looks": ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q"], "model": "item"}}`,
+			`testpack/data/entities/k.json:1:32: 17 looks; the limit is 16`,
 		},
 		{
 			"a day outside 0..1",
@@ -194,7 +214,7 @@ testpack/data/entities/k.json:1:54: walker needs "step"; add it`,
 		{
 			"no model",
 			`{"k": {"box": [1, 1]}}`,
-			`testpack/data/entities/k.json:1:2: a kind needs a "model": one of "sheep", "rocket", "item", "player" or {"box": [r, g, b]}`,
+			`testpack/data/entities/k.json:1:2: a kind needs a "model": one of "rocket", "item", "player", {"box": [r, g, b]} or {"parts": [...]}`,
 		},
 		{
 			"a spawn number missing",
@@ -230,8 +250,8 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 			"a shot that is no projectile",
 			`{"k": {"box": [1, 1], ` +
 			WALKER +
-			`, "brain": "steered", "attack": {"damage": 1, "reach": 1, "cooldown": 1, "shot": "voxiverse:sheep"}, "model": "item"}}`,
-			`testpack/data/entities/k.json:1:2: attack shot "voxiverse:sheep" is not a projectile kind`,
+			`, "brain": "steered", "attack": {"damage": 1, "reach": 1, "cooldown": 1, "shot": "voxiverse:dummy"}, "model": "item"}}`,
+			`testpack/data/entities/k.json:1:2: attack shot "voxiverse:dummy" is not a projectile kind`,
 		},
 		{
 			"striking with no attack",

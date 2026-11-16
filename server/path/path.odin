@@ -26,7 +26,7 @@ Body :: struct {
 	width, height, climb: i32,
 }
 
-// SMALL: one block of air on solid ground, climbing steps (a sheep).
+// SMALL: one block of air on solid ground, climbing steps (a creature a block high).
 SMALL :: Body{1, 1, 1}
 
 // body_of: the body a box needs, width (x and z) by height in blocks, climbing a

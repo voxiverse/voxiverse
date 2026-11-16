@@ -10,50 +10,28 @@ import "common:game"
 import "common:protocol"
 import "server:path"
 
-// Entities on the server: sheep and rockets. What each kind is lies in
-// the registry (game.kind_info); what it does each tick, in the systems (below). A
-// sheep thinks (a small state machine), walks its path (A*, server/path,
-// within a shared node budget) and moves by the shared body physics; a
-// rocket flies until it hits something and explodes. Each client is told
-// about the ones near it: an Entity record (what it is) and an Entity_Motion
-// record (where) while it is near (the records go when it leaves), and an
-// Entity_Died event when it dies. Sheep appear by day on grass around players and go
-// when nobody is near (any kind with a spawn rule in its pack does: spawn_natural); one
-// whose ground is not loaded waits, frozen, until it is. Saved kinds are kept with the world (save.odin: entities.cfg).
+// Entities on the server: creatures, dropped stacks and rockets. What each kind is lies
+// in the registry (game.kind_info); what it does each tick, in the systems (below). A
+// creature's mind is its game's (Game.think) or its game's steering (walkers.odin): it
+// walks its path (A*, server/path, within a shared node budget) and moves by the shared
+// body physics; a rocket flies until it hits something and explodes. Each client is
+// told about the ones near it: an Entity record (what it is) and an Entity_Motion record
+// (where, how it looks) while it is near (the records go when it leaves), and an
+// Entity_Died event when it dies. A kind with a spawn rule in its pack appears by itself
+// around players and goes when nobody is near (spawn_natural); one whose ground is not
+// loaded waits, frozen, until it is. Saved kinds are kept with the world (save.odin:
+// entities.cfg).
 
 MAX_ENTITIES :: 2048
 ENTITY_VIEW :: 64 // blocks: a client is told about entities this near (horizontally)
 ANY_HEIGHT :: 4096 // half a cylinder's height: no vertical limit
 PATH_BUDGET_PER_TICK :: 1500 // A* nodes for all entities in one tick
 PATH_BUDGET_EACH :: 400
-HURT_TICKS :: game.TICK_RATE / 3 // how long a hit stuns (no steering)
-FLEE_TICKS :: game.TICK_RATE * 5
-
-Brain_State :: enum u8 {
-	Idle, // standing; looking about
-	Look, // a player is close: watch them
-	Wander, // walking a path somewhere nearby
-	Graze, // head down for a while
-	Flee, // hit: running away
-	Mate, // ready to breed: walking to another that is
-}
-
-Brain :: struct {
-	state:   Brain_State,
-	timer:   int, // ticks left in this state
-	path:    path.Path,
-	step:    int, // the next waypoint
-	goal:    game.Block_Pos,
-	look_at: [3]f64,
-	from:    [3]f64, // fleeing from here
-	hurt:    int, // ticks of stun left
-	stuck:   int, // ticks without progress on the path
-}
 
 Entities :: struct {
 	lookups: int, // id lookups made (a test counts them)
 	next_id: u32,
-	budget:  int, // A* nodes left this tick (the sheep's and the steered walkers')
+	budget:  int, // A* nodes left this tick (the steered walkers')
 	rng:     base.Rng,
 	walkers: Walkers, // the routes and changed blocks of the walkers games steer (walkers.odin)
 }
@@ -142,32 +120,13 @@ entities_sync_spatial :: proc(w: ^World) {
 }
 
 // entity_looks: what clients are told about how an entity looks: bit i is its kind's i-th
-// look, as its game set it (entity_show), "striking" while its attack shows, and the
-// base pack's sheep's, computed from the components its kind has.
+// look, as its game set it (entity_show), and "striking" while its attack shows.
 entity_looks :: proc(w: ^World, reg: ^game.Registry, h: game.Entity_Handle) -> (bits: u16) {
 	info := game.kind_info(reg, entity_kind(w, h))
 	if info == nil {return}
 	if set := game.store_get(&w.entity_world.store, h, C_LOOKS, Looks);
 	   set != nil {bits = set.bits}
 	if info.striking != 0 && entity_striking(w, h) {bits |= info.striking}
-	for look, i in info.looks {
-		on: bool
-		switch {
-		case look == "shorn" && .Wool in info.with:
-			on = entity_wool(w, h).shorn
-		case look == "lamb" && .Breeding in info.with:
-			on = entity_breeding(w, h).growth < game.LAMB_TICKS
-		case look == "black" && .Genes in info.with:
-			on = game.genes_black(entity_genes(w, h).genes)
-		case look == "spotted" && .Genes in info.with:
-			on = game.genes_spotted(entity_genes(w, h).genes)
-		case look == "in_love" && .Breeding in info.with:
-			on = entity_breeding(w, h).love > 0
-		case:
-			continue
-		}
-		if on {bits |= 1 << u16(i)} else {bits &~= 1 << u16(i)}
-	}
 	return
 }
 
@@ -187,130 +146,18 @@ entity_show :: proc(w: ^World, h: game.Entity_Handle, look: string, on: bool) ->
 	return true
 }
 
-// sheep_use: wheat feeds it (an adult becomes ready to breed; a lamb grows
-// up a tenth sooner), anything else shears an adult by hand: 1 to 3 wool
-// (white or black by its genes) fall, and it is shorn until it eats grass.
-sheep_use :: proc(s: ^Server, c: ^Client, h: game.Entity_Handle) -> bool {
-	w := c.world
-	lamb := entity_breeding(w, h).growth < game.LAMB_TICKS
-	held := game.inventory_held(&c.inventory)
-	if !game.stack_empty(held) && held.item == game.item_of_material(.Wheat) {
-		switch {
-		case lamb:
-			entity_breeding(w, h).growth = min(
-				entity_breeding(w, h).growth + game.LAMB_TICKS / 10,
-				game.LAMB_TICKS,
-			)
-		case entity_breeding(w, h).love == 0 && entity_breeding(w, h).wait == 0:
-			entity_breeding(w, h).love = game.BREED_READY_TICKS
-		case:
-			return false
-		}
-		record(s, c, .Item_Used, "wheat")
-		if !lamb {
-			stat_add(c, "sheep.fed", 1)
-			award_xp_amount(s, c, 2)
-		}
-		if !has_ability(s, c, .Infinite_Items) {
-			ledger(s, w, .Use, held.item, -1)
-			c.inventory.slots[c.inventory.selected].count -= 1
-			game.inventory_tidy(&c.inventory)
-			c.inv_changed = true
-		}
-		return true
-	}
-	if entity_wool(w, h).shorn || lamb {return false}
-	entity_wool(w, h).shorn = true
-	stat_add(c, "sheep.sheared", 1)
-	award_xp_amount(s, c, 5)
-	r := &w.entities.rng
-	wool := game.item_of_block(
-		s.registry,
-		.Wool_Black if game.genes_black(entity_genes(w, h).genes) else .Wool,
-	)
-	for _ in 0 ..< base.rng_int_range(r, 1, 4) {
-		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
-		ledger(s, w, .Drop_Mob, wool, 1)
-		spawn_item(w, entity_pos(w, h) + {0, 0.6, 0}, {wool, 1, 0, 0}, v, -1)
-	}
-	return true
-}
-
-// sheep_life: a sheep's clocks, one tick: a lamb grows, love and the wait
-// after a lamb run down.
-sheep_life :: proc(w: ^World, h: game.Entity_Handle) {
-	if entity_breeding(w, h).growth < game.LAMB_TICKS {entity_breeding(w, h).growth += 1}
-	if entity_breeding(w, h).love > 0 {entity_breeding(w, h).love -= 1}
-	if entity_breeding(w, h).wait > 0 {entity_breeding(w, h).wait -= 1}
-}
-
-// mate_for: the nearest other sheep that is ready to breed within range of
-// ent (an adult in love), if any. The spatial service names the sheep near
-// ent (its boxes are where the sheep were at the end of the last tick, so it
-// asks a little wider than BREED_RANGE); the store says how far each is now
-// and whether it is ready.
-mate_for :: proc(w: ^World, h: game.Entity_Handle) -> game.Entity_Handle {
-	ew := w.entity_world
-	kind_id := w.server.registry.engine.sheep
-	if kind_id == 0 {return 0}
-	near := make([dynamic]game.Entity_Id, context.temp_allocator)
-	game.spatial_sphere(
-		&ew.spatial,
-		entity_pos(w, h),
-		game.BREED_RANGE + MATE_SLACK,
-		{kind = u16(kind_id), exclude = game.Entity_Id(entity_id(w, h))},
-		&near,
-	)
-	slice.sort(near[:]) // the lowest id wins a tie, as the list's order did
-	best: game.Entity_Handle
-	best_d := f64(game.BREED_RANGE * game.BREED_RANGE)
-	for id in near {
-		other, _ := entity_find(w, u32(id))
-		if other == 0 ||
-		   entity_kind(w, other) != w.server.registry.engine.sheep ||
-		   entity_breeding(w, other).love <= 0 {continue}
-		if entity_breeding(w, other).growth < game.LAMB_TICKS {continue}
-		d := entity_pos(w, other) - entity_pos(w, h)
-		if dd := d.x * d.x + d.y * d.y + d.z * d.z; dd < best_d {best, best_d = other, dd}
-	}
-	return best
-}
-
-// MATE_SLACK: how far a sheep can have moved since the spatial service last
-// saw it (a sheep runs 4.2 blocks a second; a tick is a twentieth of that).
-@(private = "file")
-MATE_SLACK :: 2
-
-// breed: a and b have met: a lamb between them, of both, and each waits.
-@(private = "file")
-breed :: proc(w: ^World, a, b: game.Entity_Handle) {
-	r := &w.entities.rng
-	at := (entity_pos(w, a) + entity_pos(w, b)) / 2
-	genes := game.genes_child(entity_genes(w, a).genes, entity_genes(w, b).genes, r)
-	entity_breeding(w, a).love, entity_breeding(w, b).love = 0, 0
-	entity_breeding(w, a).wait, entity_breeding(w, b).wait =
-		game.BREED_WAIT_TICKS, game.BREED_WAIT_TICKS
-	if lamb := entity_spawn(w, w.server.registry.engine.sheep, at, false); lamb != 0 {
-		entity_genes(w, lamb).genes, entity_breeding(w, lamb).growth = genes, 0
-		counter_add(&w.stats, "sheep.born", 1)
-	}
-}
-
 // use_entity: a player uses an entity within its reach (a right click) with what it
-// holds: the game's entity_use hook judges it first, as editing judges a block's change
-// (it may do what the use does for its own kinds; a refusal stops it and is told), then
-// the engine does its own use of the kind, if it has one (a sheep's shearing, feeding).
+// holds: what the use does is the game's entity_use hook's, judged as editing judges a
+// block's change (it does what the use does for its own kinds; a refusal is told). The
+// engine's own kinds are not used.
 use_entity :: proc(s: ^Server, c: ^Client, id: u32) {
 	h, _ := entity_find(c.world, id)
 	if h == 0 || !entity_reachable(c, h) {return}
 	if hook := s.config.game.entity_use; hook != nil {
 		if refusal := hook(s, c, h, game.inventory_held(&c.inventory)); refusal != "" {
 			notice(s, c, refusal)
-			return
 		}
-		if !entity_listed(c.world, h) {return} 	// (the game's use took it)
 	}
-	if entity_kind(c.world, h) == s.registry.engine.sheep {sheep_use(s, c, h)}
 }
 
 // entity_reachable: ent is within a player's reach from where the server
@@ -349,7 +196,7 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 }
 
 // explode: a blast at center. Everyone near is shown it, the sphere is
-// carved (where loaded), and what is near is thrown (sheep hurt). size is its
+// carved (where loaded), and what is near is thrown (and hurt). size is its
 // radius as the world's rules scale it: times explosion_size, the throw times
 // explosion_throw. by: the player who set it off (a rocket's shooter), whom
 // the players it hurts are told of and whose kill one is (damage.odin).
@@ -426,7 +273,6 @@ explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id, by: May
 			from   = center,
 		}
 		if seat, set := by.?; set && int(seat) < len(s.clients) {harm.by = &s.clients[seat]}
-		scare(entity_brain(w, h), center)
 		entity_harm(w, h, harm)
 	}
 }
@@ -529,19 +375,8 @@ forward :: proc(yaw, pitch: f32) -> [3]f64 {
 	return {-base.sin(f64(yaw)) * cp, base.sin(f64(pitch)), -base.cos(f64(yaw)) * cp}
 }
 
-// scare: hit from a place, the brain flees and is stunned (the rest of it
-// reset; fields set one by one, a Brain literal would be built on the stack).
-@(private = "file")
-scare :: proc(b: ^Brain, from: [3]f64) {
-	b^ = {}
-	b.state = .Flee
-	b.timer = FLEE_TICKS
-	b.from = from
-	b.hurt = HURT_TICKS
-}
-
 // entity_attack: a player hits an entity (the reach is checked by the
-// caller): knocked back, scared, and harmed (entity_harm). True: it died.
+// caller): knocked back and harmed (entity_harm, told where from). True: it died.
 entity_attack :: proc(
 	w: ^World,
 	h: game.Entity_Handle,
@@ -556,7 +391,6 @@ entity_attack :: proc(
 	kb := game.ATTACK_KNOCKBACK
 	entity_set_velocity(w, h, {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]})
 	entity_set_on_ground(w, h, false)
-	scare(entity_brain(w, h), from)
 	harm := harm
 	harm.from = from
 	return entity_harm(w, h, harm)
@@ -703,51 +537,12 @@ entity_physics :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Physics {
 }
 
 // The plain components behind the door. Each returns the entity's component;
-// for one without it (a rocket has no wool) it returns a scratch value that is
+// for one without it (a rocket has no stack) it returns a scratch value that is
 // reset on every call, so reads see the default and a stray write goes nowhere.
-@(thread_local, private = "file")
-scratch_wool: game.Wool
-@(thread_local, private = "file")
-scratch_genes: game.Component_Genes
-@(thread_local, private = "file")
-scratch_breeding: game.Breeding
 @(thread_local, private = "file")
 scratch_stack: game.Component_Stack
 @(thread_local, private = "file")
 scratch_owner: game.Owner
-@(thread_local, private = "file")
-scratch_brain: Brain
-
-// entity_brain: the entity's brain (a default one, written to nowhere, for an
-// entity without it: only grazers have one).
-entity_brain :: proc(w: ^World, h: game.Entity_Handle) -> ^Brain {
-	if p := game.store_get(&w.entity_world.store, h, C_BRAIN, Brain); p != nil {return p}
-	scratch_brain = {}
-	return &scratch_brain
-}
-
-entity_wool :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Wool {
-	if p := game.store_get(&w.entity_world.store, h, game.C_WOOL, game.Wool); p != nil {return p}
-	scratch_wool = {}
-	return &scratch_wool
-}
-
-entity_genes :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Component_Genes {
-	if p := game.store_get(&w.entity_world.store, h, game.C_GENES, game.Component_Genes);
-	   p != nil {return p}
-	scratch_genes = {}
-	return &scratch_genes
-}
-
-// entity_breeding: growth, love and wait (an adult's growth is LAMB_TICKS).
-entity_breeding :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Breeding {
-	if p := game.store_get(&w.entity_world.store, h, game.C_BREEDING, game.Breeding);
-	   p != nil {return p}
-	scratch_breeding = {
-		growth = game.LAMB_TICKS,
-	}
-	return &scratch_breeding
-}
 
 // entity_stack: a dropped item's stack.
 entity_stack :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Stack {
@@ -991,9 +786,6 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 		if path.standable(query, p) {
 			if h := entity_spawn(w, kind, {f64(p.x) + 0.5, f64(p.y), f64(p.z) + 0.5}, false);
 			   h != 0 {
-				if kind == s.registry.engine.sheep {
-					entity_genes(w, h).genes = game.genes_wild(&w.entities.rng)
-				}
 				log.infof(
 					"server summoned kind=%s id=%d at=%v by=%s",
 					game.kind_info(s.registry, kind).id,
@@ -1007,192 +799,6 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 		}
 	}
 	return false
-}
-
-// --- Behaviour --------------------------------------------------------------
-
-// think moves the brain from state to state.
-think :: proc(w: ^World, h: game.Entity_Handle) {
-	b := entity_brain(w, h)
-	r := &w.entities.rng
-	if b.hurt > 0 {b.hurt -= 1}
-	b.timer -= 1
-	pos := entity_pos(w, h)
-	// Ready to breed: toward another that is; else as before.
-	if entity_breeding(w, h).love > 0 &&
-	   entity_breeding(w, h).growth >= game.LAMB_TICKS &&
-	   b.state != .Flee {
-		if m := mate_for(w, h); m != 0 {
-			b.state, b.look_at = .Mate, entity_pos(w, m)
-		} else if b.state == .Mate {
-			b.state, b.timer = .Idle, 20
-		}
-	} else if b.state == .Mate {
-		b.state, b.timer = .Idle, 20
-	}
-	switch b.state {
-	case .Mate:
-		// Close enough: the one with the lower id has the lamb.
-		if m := mate_for(w, h); m != 0 {
-			d := entity_pos(w, m) - pos
-			if d.x * d.x + d.z * d.z < 1.6 * 1.6 &&
-			   entity_id(w, h) < entity_id(w, m) {breed(w, h, m)}
-		}
-	case .Flee:
-		if b.timer <= 0 {b.state, b.timer = .Idle, 20}
-		if b.path.count == 0 || b.step >= b.path.count {
-			// Somewhere away from what hit it.
-			away := pos - b.from
-			l := math.sqrt(away.x * away.x + away.z * away.z)
-			if l < 1e-6 {away, l = {1, 0, 0}, 1}
-			target :=
-				pos +
-				away / l * 10 +
-				{base.rng_f64_range(r, -3, 3), 0, base.rng_f64_range(r, -3, 3)}
-			plan(w, h, target)
-		}
-	case .Idle, .Look:
-		if p, ok := nearest_player(w, pos, 6); ok && base.rng_f32(r) < 0.95 {
-			b.state = .Look
-			b.look_at = p + {0, game.PLAYER_EYE, 0}
-		} else if b.state == .Look {
-			b.state = .Idle
-		}
-		// A shorn sheep with grass in front of it wants to eat.
-		if entity_wool(w, h).shorn && b.timer <= 0 && base.rng_f32(r) < 0.6 {
-			if _, ahead := grass_ahead(w, h); ahead {
-				b.state, b.timer = .Graze, base.rng_int_range(r, GRAZE_EAT_TICKS + 10, 120)
-			}
-		}
-		if b.state != .Graze && b.timer <= 0 {
-			switch {
-			case base.rng_f32(r) < 0.55:
-				target := pos + {base.rng_f64_range(r, -8, 8), 0, base.rng_f64_range(r, -8, 8)}
-				if plan(w, h, target) {b.state, b.timer = .Wander, game.TICK_RATE * 12}
-			case base.rng_f32(r) < 0.5:
-				b.state, b.timer = .Graze, base.rng_int_range(r, 40, 120)
-			case:
-				b.timer = base.rng_int_range(r, 30, 90)
-			}
-		}
-	case .Wander:
-		if b.step >= b.path.count || b.timer <= 0 || b.stuck > game.TICK_RATE * 2 {
-			b.state, b.timer = .Idle, base.rng_int_range(r, 30, 120)
-			b.path.count = 0
-		}
-	case .Graze:
-		if b.timer == GRAZE_EAT_TICKS {graze_eat(w, h)}
-		if b.timer <= 0 {b.state, b.timer = .Idle, base.rng_int_range(r, 20, 60)}
-	}
-	// The head: down when grazing, at the player when looking, level else.
-	want_pitch: f32 = 0
-	switch b.state {
-	case .Graze:
-		want_pitch = -1.2
-	case .Look:
-		d :=
-			b.look_at -
-			(pos + {0, game.kind_box(game.kind_info(w.server.registry, entity_kind(w, h)))[1], 0})
-		flat := math.sqrt(d.x * d.x + d.z * d.z)
-		want_pitch = clamp(f32(math.atan2(d.y, flat)), -1, 1)
-		entity_set_yaw(w, h, turn_towards(entity_yaw(w, h), f32(math.atan2(-d.x, -d.z)), 0.15))
-	case .Idle, .Wander, .Flee, .Mate:
-	}
-	pitch := entity_pitch(w, h)
-	entity_set_pitch(w, h, pitch + (want_pitch - pitch) * 0.2)
-}
-
-GRAZE_EAT_TICKS :: 10 // ticks left of a graze when the head is down and the grass goes
-
-// grass_ahead: the grass block in front of ent's feet, if there is one.
-@(private = "file")
-grass_ahead :: proc(w: ^World, h: game.Entity_Handle) -> (p: game.Block_Pos, ok: bool) {
-	pos := entity_pos(w, h)
-	front :=
-		pos + {-f64(base.sin(entity_yaw(w, h))) * 0.8, 0, -f64(base.cos(entity_yaw(w, h))) * 0.8}
-	p = {i32(math.floor(front.x)), i32(math.floor(pos.y + 0.01)) - 1, i32(math.floor(front.z))}
-	b, loaded := chunks_block(&w.chunks, p)
-	return p, loaded && b == .Grass
-}
-
-// graze_eat: a sheep with its head down eats the grass in front of it: the
-// block becomes dirt, and a shorn sheep has its wool back.
-@(private = "file")
-graze_eat :: proc(w: ^World, h: game.Entity_Handle) {
-	p, ok := grass_ahead(w, h)
-	if !ok || !entity_wool(w, h).shorn {return}
-	set_block(w, p, .Dirt, world_act(w, .Graze))
-	entity_wool(w, h).shorn = false
-}
-
-// plan finds a path to near target (from where the entity stands); false
-// if this tick's budget is spent or there is nowhere to go.
-@(private = "file")
-plan :: proc(w: ^World, h: game.Entity_Handle, target: [3]f64) -> bool {
-	e := &w.entities
-	if e.budget < PATH_BUDGET_EACH {return false}
-	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
-	pos := entity_pos(w, h)
-	start := game.Block_Pos {
-		i32(math.floor(pos.x)),
-		i32(math.floor(pos.y + 0.01)),
-		i32(math.floor(pos.z)),
-	}
-	goal := game.Block_Pos{i32(math.floor(target.x)), start.y, i32(math.floor(target.z))}
-	// The goal: a standable block in its column near this height.
-	for dy in ([]i32{0, 1, -1, 2, -2, 3, -3}) {
-		if path.standable(query, goal + {0, dy, 0}) {
-			goal.y += dy
-			break
-		}
-	}
-	e.budget -= PATH_BUDGET_EACH
-	found, ok := path.find(query, start, goal, PATH_BUDGET_EACH)
-	if !ok || found.count == 0 {return false}
-	b := entity_brain(w, h)
-	b.path = found
-	b.step = 0
-	b.stuck = 0
-	return true
-}
-
-// steer: the wished-for velocity and whether to jump, following the path.
-steer :: proc(w: ^World, h: game.Entity_Handle) -> (wish: [2]f32, jump: bool) {
-	b := entity_brain(w, h)
-	if b.hurt > 0 {return} 	// stunned: knockback carries it
-	info := game.kind_info(w.server.registry, entity_kind(w, h))
-	pos := entity_pos(w, h)
-	vel := entity_velocity(w, h)
-	if b.state == .Mate {
-		// Straight at the one it wants (they are close, on open ground).
-		to := [2]f64{b.look_at.x - pos.x, b.look_at.z - pos.z}
-		dist := math.sqrt(to.x * to.x + to.y * to.y)
-		if dist < 1 {return}
-		wish = {f32(to.x / dist), f32(to.y / dist)} * info.walker.walk_speed
-		entity_set_yaw(w, h, turn_towards(entity_yaw(w, h), f32(math.atan2(-to.x, -to.y)), 0.3))
-		stuck := entity_on_ground(w, h) && abs(vel.x) + abs(vel.z) < 0.1 * info.walker.walk_speed
-		jump = stuck
-		return
-	}
-	if b.state != .Wander && b.state != .Flee {return}
-	if b.step >= b.path.count {return}
-	target := b.path.steps[b.step]
-	to := [2]f64{f64(target.x) + 0.5 - pos.x, f64(target.z) + 0.5 - pos.z}
-	dist := math.sqrt(to.x * to.x + to.y * to.y)
-	if dist < 0.25 && abs(f64(target.y) - pos.y) < 0.6 {
-		b.step += 1
-		b.stuck = 0
-		return
-	}
-	speed := info.walker.run_speed if b.state == .Flee else info.walker.walk_speed
-	dir := [2]f32{f32(to.x / max(dist, 1e-6)), f32(to.y / max(dist, 1e-6))}
-	wish = dir * speed
-	entity_set_yaw(w, h, turn_towards(entity_yaw(w, h), f32(math.atan2(-to.x, -to.y)), 0.3))
-	// Up a step, or something in the way: jump.
-	blocked := entity_on_ground(w, h) && math.abs(vel.x) + math.abs(vel.z) < 0.1 * speed
-	jump = entity_on_ground(w, h) && (f64(target.y) > pos.y + 0.5 || blocked)
-	if blocked {b.stuck += 1} else {b.stuck = 0}
-	return
 }
 
 // spawn_natural: the creatures of every kind with a spawn rule (its pack's `spawn`)
@@ -1249,7 +855,6 @@ spawn_natural :: proc(w: ^World) {
 				if !path.standable(query, b) || (rule.sky && !under_sky(w, b)) {continue}
 				h := entity_spawn(w, kind, p, true)
 				if h == 0 {continue}
-				if .Genes in info.with {entity_genes(w, h).genes = game.genes_wild(r)}
 				if s.config.game.spawned != nil && !s.config.game.spawned(s, w, h) {
 					entity_gone(w, h)
 				}
@@ -1312,9 +917,8 @@ HURT_KEPT_TICKS :: game.TICK_RATE * 10 // how long Hurt_By names a killer
 
 // The server's own components, after the shared ones.
 C_SPATIAL_LINK :: game.FIRST_SERVER_COMPONENT
-C_BRAIN :: game.FIRST_SERVER_COMPONENT + 1 // a grazer's Brain (large: set at spawn)
-C_GAME_DATA :: game.FIRST_SERVER_COMPONENT + 3 // the game's record on an entity of its kinds (entity_data)
-C_LOOKS :: game.FIRST_SERVER_COMPONENT + 4 // the looks its game set (a kind with looks)
+C_GAME_DATA :: game.FIRST_SERVER_COMPONENT + 2 // the game's record on an entity of its kinds (entity_data)
+C_LOOKS :: game.FIRST_SERVER_COMPONENT + 3 // the looks its game set (a kind with looks)
 
 // Spatial_Link: the entity's entry in the spatial service. Releasing it (the
 // entity despawned) removes the entry.
@@ -1356,7 +960,7 @@ Entity_World :: struct {
 	next_player_id: u32, // entities.odin: the ids of player entities
 	tag_names:      [dynamic]string, // tag i is tag_names[i-1]
 	deaths:         [dynamic]Entity_Death, // this tick's
-	infos:          [game.FIRST_SERVER_COMPONENT + 5]game.Component_Info,
+	infos:          [game.FIRST_SERVER_COMPONENT + 4]game.Component_Info,
 }
 
 @(private = "file")
@@ -1375,12 +979,6 @@ entity_world_init :: proc(ew: ^Entity_World, seed: u64, max_entities := MAX_ENTI
 		size    = size_of(Spatial_Link),
 		align   = align_of(Spatial_Link),
 		release = spatial_release,
-	}
-	ew.infos[C_BRAIN] = game.Component_Info {
-		name  = "brain",
-		type  = Brain,
-		size  = size_of(Brain),
-		align = align_of(Brain),
 	}
 	ew.infos[C_STEER] = game.Component_Info {
 		name  = "steer",
@@ -1458,12 +1056,8 @@ entity_world_spawn :: proc(
 		int(C_SPATIAL_LINK),
 	}
 	if info.physics != .None {set += {int(game.C_PHYSICS)}}
-	if .Wool in info.with {set += {int(game.C_WOOL)}}
-	if .Genes in info.with {set += {int(game.C_GENES)}}
-	if .Breeding in info.with {set += {int(game.C_BREEDING)}}
 	if info.physics == .Item {set += {int(game.C_STACK), int(game.C_OWNER)}}
 	if info.physics == .Projectile {set += {int(game.C_OWNER)}}
-	if info.brain == .Grazer {set += {int(C_BRAIN)}}
 	if info.brain == .Steered || info.brain == .Game {set += {int(C_STEER)}}
 	if info.hittable {set += {int(game.C_HURT_BY)}}
 	if info.model == .Player {set += {int(game.C_PLAYER_LINK)}}
@@ -1520,12 +1114,6 @@ entity_world_spawn :: proc(
 	_ = game.store_add(st, h, game.C_HEALTH, &hp)
 	_ = game.store_add(st, h, game.C_ORIGIN, &origin)
 	_ = game.store_add(st, h, C_SPATIAL_LINK, &link)
-	if .Breeding in info.with {
-		breeding := game.Breeding {
-			growth = game.LAMB_TICKS, // (an adult; a lamb is made lower)
-		}
-		_ = game.store_add(st, h, game.C_BREEDING, &breeding)
-	}
 	if info.physics == .Item || info.physics == .Projectile {
 		owner := game.Owner {
 			client = -1,
@@ -1888,14 +1476,12 @@ entities_clear :: proc(w: ^World) {
 // --- Systems -----------------------------------------------------------------
 
 // The entity systems: what entities do each tick. Each is a procedure over the entities
-// whose pack data gives them its components (the kind's `physics`, `brain` and
-// `with`), never over a kind by name, and they run in this fixed order:
+// whose pack data gives them its components (the kind's `physics` and `brain`), never
+// over a kind by name, and they run in this fixed order:
 //
 //  1. age: every entity grows a tick older; a natural one nobody is near goes.
-//  2. brains: each kind's brain over its creatures (the engine's grazer: a sheep's
-//     clocks, its thinking, which includes mating and the lamb, and its steering, the
-//     wish to the walkers' physics; a game's: its think hook). Then the steered
-//     walkers (walkers.odin): where their game or its brain sends them.
+//  2. brains: each kind's brain over its creatures (a game's: its think hook). Then the
+//     steered walkers (walkers.odin): where their game or its brain sends them.
 //  3. walkers' physics: every walker takes its step (the wish its brain made,
 //     none for a walker without a brain).
 //  4. items: a dropped stack expires, falls, merges and is picked up.
@@ -1973,8 +1559,9 @@ kind_of :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Kind_Info {
 
 // Brain_Proc: a brain: what the creatures of one kind do this tick, given them all at
 // once (those whose ground is loaded, lowest id first), so a crowd costs one call and the
-// brain may share its looking about among them. The engine's own brains are the default
-// (BRAINS); a kind whose brain is "game" has its game's (Game.think).
+// brain may share its looking about among them. The engine has no mind of a creature's
+// of its own (BRAINS): a kind whose brain is "game" has its game's (Game.think), one that
+// is "steered" its game's steering, from its tick.
 Brain_Proc :: proc(
 	w: ^World,
 	kind: game.Kind_Id,
@@ -1985,27 +1572,8 @@ Brain_Proc :: proc(
 @(rodata, private = "file")
 BRAINS := [game.Entity_Brain]Brain_Proc {
 	.None    = nil,
-	.Grazer  = grazer_brain,
 	.Steered = nil, // (its game steers it from its tick)
 	.Game    = game_brain,
-}
-
-// grazer_brain: the engine's grazers: a sheep's clocks, its thinking (which includes
-// mating and the lamb) and its steering, its wish to the walkers' physics.
-@(private = "file")
-grazer_brain :: proc(
-	w: ^World,
-	kind: game.Kind_Id,
-	entities: []game.Entity_Handle,
-	wishes: ^map[game.Entity_Handle]Wish,
-) {
-	for h in entities {
-		if !entity_listed(w, h) {continue} 	// (gone in this walk)
-		sheep_life(w, h)
-		think(w, h)
-		wish, jump := steer(w, h)
-		wishes[h] = {wish, jump}
-	}
 }
 
 // game_brain: the game's think hook for its kind; the steering does the rest.

@@ -641,7 +641,7 @@ test_admin_commands :: proc(t: ^testing.T) {
 			"Usage: time set <0..1 | sunrise | day | noon | sunset | night | midnight> | add <hours> | query",
 		},
 		{"summonx", "Unknown server command: summonx"},
-		{"summon rocket", "Usage: summon [kind] [count]"},
+		{"summon rocket", "Usage: summon <kind> [count]"},
 		{"fill -100 0 -100 100 60 100 dirt", "fill: too big (at most 262144 blocks)"},
 		// World editing on the selection, kept by the server.
 		{"sel", "Selection cleared"},

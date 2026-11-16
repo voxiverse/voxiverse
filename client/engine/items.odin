@@ -9,7 +9,7 @@ import "common:protocol"
 // Items as the player uses them: the stack in hand (the selected hotbar
 // slot of the inventory, common/game/inventory.odin) and the mouse buttons. A
 // block's item places it with the right button (the left breaks, or hits a
-// sheep); the rocket launcher fires with the left. The inventory is the
+// creature); the rocket launcher fires with the left. The inventory is the
 // server's: what we do to it is predicted at once and sent
 // (session_inventory_do), and replayed over each inventory record until
 // the server has answered it.

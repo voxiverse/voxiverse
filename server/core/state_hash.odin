@@ -59,16 +59,26 @@ Hashed_Entity :: struct {
 	pitch:   f32,
 	health:  int,
 	natural: bool,
-	brain:   Brain,
+	steer:   Steer, // (zero for one not steered)
 	owner:   int,
 	stack:   game.Stack,
-	shorn:   bool,
-	genes:   game.Genes,
-	growth:  int,
-	love:    int,
-	wait:    int,
+	data:    game.Entity_Data, // its game's record (zero for one of no game's kind)
+	looks:   u16,
 	age:     int,
 	action:  u32,
+}
+
+@(private = "file")
+steer_of :: proc(w: ^World, h: game.Entity_Handle) -> Steer {
+	if st := entity_steer(w, h); st != nil {return st^}
+	return {}
+}
+
+@(private = "file")
+data_of :: proc(w: ^World, h: game.Entity_Handle) -> game.Entity_Data {
+	if d := game.store_get(&w.entity_world.store, h, C_GAME_DATA, game.Entity_Data);
+	   d != nil {return d^}
+	return {}
 }
 
 @(private = "file")
@@ -86,14 +96,11 @@ hashed_entities :: proc(w: ^World) -> []Hashed_Entity {
 				entity_pitch(w, h),
 				entity_health_of(w, h),
 				entity_is_natural(w, h),
-				entity_brain(w, h)^,
+				steer_of(w, h),
 				int(entity_owner(w, h).client),
 				entity_stack(w, h)^,
-				entity_wool(w, h).shorn,
-				entity_genes(w, h).genes,
-				int(entity_breeding(w, h).growth),
-				int(entity_breeding(w, h).love),
-				int(entity_breeding(w, h).wait),
+				data_of(w, h),
+				entity_looks(w, w.server.registry, h),
 				entity_age_of(w, h),
 				entity_owner(w, h).action,
 			},

@@ -6,11 +6,10 @@ import "core:strings"
 
 // Entity kinds in the registry: data/entities/<name>.json,
 //
-//	{"sheep": {"box": [0.8, 0.9], "health": 4, "saved": true, "summonable": true,
+//	{"dummy": {"box": [0.8, 0.9], "health": 4, "saved": true, "summonable": true,
 //	           "hittable": true, "physics": "walker",
 //	           "walker": {"walk_speed": 1.4, "run_speed": 4.2, "jump": 1.2, "step": 0},
-//	           "brain": "grazer", "with": ["wool", "genes", "breeding"],
-//	           "looks": ["shorn", "lamb"], "model": "sheep", "spawn": {...}}}
+//	           "brain": "steered", "looks": [...], "model": {"box": [r, g, b]}, "spawn": {...}}}
 //
 // A kind is a Kind_Id (its index in the registry's kinds, plus one: 0 is "none"). The server's
 // entities and the client's others hold one; `reg.engine` names the ones the engine's code
@@ -31,26 +30,16 @@ Entity_Physics :: enum u8 {
 ENTITY_PHYSICS_LIST := [?]string{"none", "walker", "item", "projectile"}
 #assert(len(ENTITY_PHYSICS_LIST) == len(Entity_Physics))
 
-// Entity_Brain: what decides what a creature does each tick. The engine's own are the
-// default; "game" is its game's (core.Game.think), which steers it as "steered" is.
+// Entity_Brain: what decides what a creature does each tick: none (it stands, or falls),
+// its game's steering from its tick ("steered"), or its game's mind ("game": core.Game.think,
+// which steers it as "steered" is). The engine has no creature's mind of its own.
 Entity_Brain :: enum u8 {
 	None,
-	Grazer, // today's sheep: think, steer, graze, flee, mate
 	Steered, // no mind of its own: it stands, or goes where its game sends it (server/core/walkers.odin)
 	Game, // its game's: the game's think hook, every tick, then steered as Steered
 }
-ENTITY_BRAIN_LIST := [?]string{"none", "grazer", "steered", "game"}
+ENTITY_BRAIN_LIST := [?]string{"none", "steered", "game"}
 #assert(len(ENTITY_BRAIN_LIST) == len(Entity_Brain))
-
-// Entity_Part: an optional component a kind asks for with "with".
-Entity_Part :: enum u8 {
-	Wool,
-	Genes,
-	Breeding,
-}
-Entity_Parts :: bit_set[Entity_Part;u8]
-ENTITY_PART_LIST := [?]string{"wool", "genes", "breeding"}
-#assert(len(ENTITY_PART_LIST) == len(Entity_Part))
 
 // A kind's looks are names (at most MAX_KIND_LOOKS, its pack's "looks"): bit i of a
 // replicated entity's looks (Entity_Motion.looks) is its i-th. Its game sets them
@@ -209,7 +198,6 @@ Kind_Info :: struct {
 	projectile: Kind_Projectile_Info,
 	item:       Kind_Item_Info,
 	brain:      Entity_Brain,
-	with:       Entity_Parts,
 	looks:      []string, // look i is bit i of a replicated entity's looks
 	striking:   u16, // its "striking" look's bit (0: none), which the engine sets
 	fields:     []Kind_Field,
@@ -222,10 +210,11 @@ Kind_Info :: struct {
 	attack:     Maybe(Kind_Attack_Info), // it fights (a steered walker)
 }
 
-// Engine_Kinds: the base pack's kinds the engine's code acts on by name (the sheep's
-// brain, the rocket launcher, dropped stacks); 0 where a registry has no such kind.
+// Engine_Kinds: the base pack's kinds the engine's code acts on by name (the rocket
+// launcher, dropped stacks, the players, the tests' dummy); 0 where a registry has no such
+// kind.
 Engine_Kinds :: struct {
-	sheep, rocket, item, player, dummy: Kind_Id,
+	rocket, item, player, dummy: Kind_Id,
 }
 
 registry_kind :: proc(reg: ^Registry, text: string) -> (Kind_Id, bool) {
@@ -236,7 +225,7 @@ registry_kind :: proc(reg: ^Registry, text: string) -> (Kind_Id, bool) {
 	return Kind_Id(at + 1), found
 }
 
-// kind_name: the kind's name without its namespace ("sheep"): what a command or a
+// kind_name: the kind's name without its namespace ("dummy"): what a command or a
 // statistic calls it.
 kind_name :: proc(info: ^Kind_Info) -> string {
 	if at := strings.index_byte(info.id, ':'); at >= 0 {return info.id[at + 1:]}
@@ -267,7 +256,6 @@ ENTITY_FIELDS := []string {
 	"projectile",
 	"item",
 	"brain",
-	"with",
 	"looks",
 	"fields",
 	"model",
@@ -520,33 +508,6 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 			)
 		}
 	}
-	if f := field_of(m, "with"); f != nil {
-		if f.value.kind != .Array {
-			fail_field(b, f, f.value, "with is a list of components: wool, genes, breeding")
-		} else {
-			for e in f.value.items {
-				if e.kind != .String {
-					fail_field(b, f, e, "a component is a name such as \"wool\"")
-					continue
-				}
-				at := slice.linear_search(ENTITY_PART_LIST[:], e.s) or_else -1
-				if at < 0 {
-					fail_field(
-						b,
-						f,
-						e,
-						fmt.aprintf(
-							"\"%s\" is not a component a kind can have%s",
-							e.s,
-							suggestion(e.s, ENTITY_PART_LIST[:]),
-						),
-					)
-					continue
-				}
-				info.with += {Entity_Part(at)}
-			}
-		}
-	}
 	if f := field_of(m, "attack"); f != nil {
 		info.attack = read_attack(b, f, &info)
 	}
@@ -590,7 +551,8 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 		need(
 			b,
 			m,
-			"a \"model\": one of " + `"sheep", "rocket", "item", "player" or {"box": [r, g, b]}`,
+			"a \"model\": one of " +
+			`"rocket", "item", "player", {"box": [r, g, b]} or {"parts": [...]}`,
 		)
 	}
 	if f := field_of(m, "spawn"); f != nil {
@@ -1222,7 +1184,6 @@ build_entity_kinds :: proc(b: ^Reg_Build, reg: ^Registry) {
 		}
 	}
 	reg.engine = {
-		sheep  = kind_by_full_id(reg, "voxiverse:sheep"),
 		dummy  = kind_by_full_id(reg, "voxiverse:dummy"),
 		rocket = kind_by_full_id(reg, "voxiverse:rocket"),
 		item   = kind_by_full_id(reg, "voxiverse:item"),
@@ -1235,7 +1196,7 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 	for k in reg.kinds {
 		fmt.sbprintf(
 			sb,
-			"entity %s box=%v health=%d saved=%v summonable=%v hittable=%v physics=%v walker=%v projectile=%v item=%v brain=%v with=%v looks=%v fields=%v model=%v color=%v",
+			"entity %s box=%v health=%d saved=%v summonable=%v hittable=%v physics=%v walker=%v projectile=%v item=%v brain=%v looks=%v fields=%v model=%v color=%v scale=%v puffs=%v",
 			k.id,
 			k.box,
 			k.health,
@@ -1247,13 +1208,28 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 			k.projectile,
 			k.item,
 			k.brain,
-			k.with,
 			k.looks,
 			k.fields,
 			k.model,
 			k.color,
+			k.scale,
+			k.puffs,
 		)
-		for p in k.parts {fmt.sbprintf(sb, " part=%v,%v,%v,%v,%v", p.lo, p.hi, p.color, p.skin, p.swing)}
+		for p in k.parts {
+			fmt.sbprintf(
+				sb,
+				" part=%v,%v,%v,%v,%v,%v,%v,%v,%v",
+				p.lo,
+				p.hi,
+				p.color,
+				p.skin,
+				p.swing,
+				p.hinge,
+				p.shown,
+				p.hidden,
+				p.recolor,
+			)
+		}
 		if a, has := k.attack.?; has {
 			fmt.sbprintf(sb, " attack=%v %v %v %s", a.damage, a.reach, a.cooldown, a.shot_name)
 		}

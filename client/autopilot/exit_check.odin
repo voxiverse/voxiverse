@@ -18,7 +18,7 @@ import "server:core"
 // checks need the server here); false (said why) if it cannot run.
 exit_check_start :: proc(app: ^engine.App, c: ^engine.Exit_Check, name: string) -> bool {
 	if app.session == nil {
-		// A still world (no sheep of their own, nothing growing or spreading): the checks measure what they do.
+		// A still world (no creatures of their own, nothing growing or spreading): the checks measure what they do.
 		engine.enter_world(app, "", engine.SCRATCH_SEED, engine.SCRATCH_SPAWN, benchmark = true)
 	}
 	if app.session == nil || !engine.session_hosting(app.session) {

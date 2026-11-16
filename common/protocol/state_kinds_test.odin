@@ -94,8 +94,8 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	motion := Player_Motion{{1.5, -60, 2e6}, 1, -0.5, true, true}
 	round_trip(t, &l, .Player_Motion, key_player(4), &motion)
 	// Entity_Spawn, Entities
-	sheep := Entity_Record{game.test_reg().engine.dummy, {}, 3, 4}
-	round_trip(t, &l, .Entity, key_entity(77), &sheep)
+	dummy := Entity_Record{game.test_reg().engine.dummy, {}, 3, 4}
+	round_trip(t, &l, .Entity, key_entity(77), &dummy)
 	dropped := Entity_Record {
 		game.test_reg().engine.item,
 		{game.item_of_block(game.test_reg(), .Sand), 12, 0, 0},

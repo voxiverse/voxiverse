@@ -49,7 +49,7 @@ Block :: enum u16 {
 	Gate_Chevron, // dark
 	Gate_Chevron_Lit, // locked while dialing, and while open
 	Gate_Horizon, // the open gate's surface: walking in travels
-	Wool, // white; from a sheep
+	Wool, // white
 	// Farming: tilled ground, and wheat in eight stages (block states,
 	// as water has its levels).
 	Farmland, // dry
@@ -62,7 +62,7 @@ Block :: enum u16 {
 	Wheat_5,
 	Wheat_6,
 	Wheat_7, // ripe
-	Wool_Black, // from a sheep with the recessive wool gene
+	Wool_Black,
 	Chest, // holds 25 stacks: a block with a record of its own (server/core/containers.odin)
 }
 

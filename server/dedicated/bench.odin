@@ -24,7 +24,7 @@ import "server:core"
 // arrives is decoded and dropped: nothing is drawn or meshed, so the times
 // are the server's. After a warm-up, BENCH_MEASURE_SECONDS are measured: its
 // ticks, streaming, chunk generation and column tops, bytes sent. Each of
-// BENCH_REPETITIONS is a server of its own. No sheep (the same work every
+// BENCH_REPETITIONS is a server of its own. No creatures (the same work every
 // run). The worker count follows the machine (as a dedicated server's
 // does): results compare on one machine.
 

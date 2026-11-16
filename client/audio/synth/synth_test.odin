@@ -46,7 +46,7 @@ sound glass.place
   eq high_shelf 6000 -2 dB
   eq low_shelf 120 -3 dB
 end
-sound sheep.hurt
+sound creature.hurt
   class creature_hurt
   layer voice
     source formant pitch 560 to 430 vowel bleat to a vibrato 7 40 jitter 0.5 shimmer 0.5 breath 0.05

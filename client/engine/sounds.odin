@@ -53,7 +53,7 @@ Sound_Bank :: struct {
 	pack_retired: [dynamic][]f32, // the files before them: freed at the swap after next (the audio thread has stopped reading them long before)
 	block:        [sfx.Material][sfx.Action][sfx.VARIANTS]audio.Sound_Id,
 	player:       [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
-	sheep:        [sfx.Sheep_Sound][sfx.VARIANTS]audio.Sound_Id,
+	creature:     [sfx.Creature_Sound][sfx.VARIANTS]audio.Sound_Id,
 	blast:        [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
 	gun:          [sfx.Gun_Sound][sfx.VARIANTS]audio.Sound_Id,
 	samples:      [dynamic][]f32, // owned
@@ -86,8 +86,8 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	for p in sfx.Player_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.player[p][v] = add(b, m, sfx.player_sound(p, v), fmt.tprintf("player.%v.%d", p, v))}
 	}
-	for c in sfx.Sheep_Sound {
-		for v in 0 ..< sfx.VARIANTS {b.sheep[c][v] = add(b, m, sfx.sheep_sound(c, v), fmt.tprintf("sheep.%v.%d", c, v))}
+	for c in sfx.Creature_Sound {
+		for v in 0 ..< sfx.VARIANTS {b.creature[c][v] = add(b, m, sfx.creature_sound(c, v), fmt.tprintf("creature.%v.%d", c, v))}
 	}
 	for x in sfx.Blast_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.blast[x][v] = add(b, m, sfx.blast_sound(x, v), fmt.tprintf("blast.%v.%d", x, v))}
@@ -262,7 +262,7 @@ sounds_play :: proc(
 			audio.play(
 				m,
 				{
-					sound = b.sheep[.Hurt][variant],
+					sound = b.creature[.Hurt][variant],
 					gain = gain,
 					pitch = pitch,
 					bus = .World,
@@ -273,7 +273,7 @@ sounds_play :: proc(
 			audio.play(
 				m,
 				{
-					sound = b.sheep[.Die][variant],
+					sound = b.creature[.Die][variant],
 					gain = gain,
 					pitch = pitch,
 					bus = .World,

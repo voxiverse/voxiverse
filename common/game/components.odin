@@ -3,7 +3,7 @@ package game
 // The components every entity kind is built from, shared by server and
 // client (entities v2). Each is plain data, at most MAX_COMPONENT_SIZE bytes
 // (a larger one is set at spawn only, see archetype.odin).
-// Components the server alone needs (Brain holds a path) are registered by
+// Components the server alone needs (Steer holds a path) are registered by
 // the server after these: its ids start at FIRST_SERVER_COMPONENT.
 //
 // A "tag" component has one byte so the store can carry it; only its
@@ -14,19 +14,16 @@ C_TRANSFORM :: Component(0)
 C_PHYSICS :: Component(1)
 C_HEALTH :: Component(2)
 C_AGE :: Component(3)
-C_WOOL :: Component(4)
-C_GENES :: Component(5)
-C_BREEDING :: Component(6)
-C_STACK :: Component(7)
-C_OWNER :: Component(8)
-C_FIELDS :: Component(9)
-C_PLAYER_LINK :: Component(10)
-C_NATURAL :: Component(11)
-C_ORIGIN :: Component(12)
-C_HURT_BY :: Component(13)
-C_FROZEN :: Component(14)
-C_TAGS :: Component(15)
-FIRST_SERVER_COMPONENT :: Component(16)
+C_STACK :: Component(4)
+C_OWNER :: Component(5)
+C_FIELDS :: Component(6)
+C_PLAYER_LINK :: Component(7)
+C_NATURAL :: Component(8)
+C_ORIGIN :: Component(9)
+C_HURT_BY :: Component(10)
+C_FROZEN :: Component(11)
+C_TAGS :: Component(12)
+FIRST_SERVER_COMPONENT :: Component(13)
 
 // Transform: where an entity is. position is the bottom centre.
 Transform :: struct {
@@ -48,18 +45,6 @@ Entity_Health :: struct {
 
 Age :: struct {
 	ticks: i32,
-}
-
-Wool :: struct {
-	shorn: bool,
-}
-
-Component_Genes :: struct {
-	genes: Genes,
-}
-
-Breeding :: struct {
-	growth, love, wait: i32,
 }
 
 Component_Stack :: struct {
@@ -123,15 +108,12 @@ component_info :: proc(name: string, $T: typeid) -> Component_Info {
 
 // entity_component_infos: the shared components, in id order. A store is
 // initialised with these followed by the server's own.
-entity_component_infos :: proc() -> [16]Component_Info {
+entity_component_infos :: proc() -> [13]Component_Info {
 	return {
 		C_TRANSFORM = component_info("transform", Transform),
 		C_PHYSICS = component_info("physics", Physics),
 		C_HEALTH = component_info("health", Entity_Health),
 		C_AGE = component_info("age", Age),
-		C_WOOL = component_info("wool", Wool),
-		C_GENES = component_info("genes", Component_Genes),
-		C_BREEDING = component_info("breeding", Breeding),
 		C_STACK = component_info("stack", Component_Stack),
 		C_OWNER = component_info("owner", Owner),
 		C_FIELDS = component_info("fields", Fields),

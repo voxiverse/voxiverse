@@ -752,7 +752,7 @@ Bench_Field :: struct {
 	blocks: map[game.Block_Pos]game.Block,
 }
 
-// budget_collide: collide_move of a sheep-sized box with a 0.15-block delta in
+// budget_collide: collide_move of a creature-sized box with a 0.15-block delta in
 // a field of blocks (the base pack's: it has no slabs or stairs), ns per
 // call; done counts the calls that were stopped by something.
 budget_collide :: proc(reg: ^game.Registry) -> (r: Budget_Scene) {

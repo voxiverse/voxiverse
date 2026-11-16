@@ -48,7 +48,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	// Night: no sheep of their own accord, only ours. Far goes away.
+	// Night, and a dummy of ours. Far goes away.
 	net_send(near, protocol.Command{"time midnight"})
 	net_send(far, protocol.Teleport{position = {600.5, 120, 0.5}})
 	ok = net_wait(
@@ -58,19 +58,24 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, ok, "far never moved away")
 
-	net_send(near, protocol.Command{"summon sheep"})
+	net_send(near, protocol.Command{"summon dummy"})
 	ok = net_wait(
 		t,
 		{near, far},
 		proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1},
 	)
-	if !testing.expect(t, ok, "the summoned sheep never showed up") {return}
+	if !testing.expect(t, ok, "the summoned dummy never showed up") {return}
 	testing.expect_value(t, len(far.entities), 0) // too far to be told
 
-	// It lives: it moves about over the next seconds, on the ground.
+	// It is steered away over the next seconds, on the ground, and near sees it go.
 	id: u32
 	start_at: [3]f64
 	for k, p in near.entities {id, start_at = k, p}
+	{
+		w := client_by_name(&h.srv, "near").world
+		e, _ := entity_find(w, id)
+		entity_go(w, e, entity_pos(w, e) + {6, 0, 0})
+	}
 	moved := false
 	for _ in 0 ..< 20 * game.TICK_RATE {
 		if moved {break}
@@ -82,7 +87,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		if math.sqrt(d.x * d.x + d.z * d.z) > 1 {moved = true}
 		testing.expectf(t, abs(p.y - start_at.y) < 4, "fell or flew: %v from %v", p, start_at)
 	}
-	testing.expect(t, moved, "the sheep never wandered")
+	testing.expect(t, moved, "the dummy never went")
 
 	// Far comes over: now it is told; goes again: told it is gone.
 	at := near.entities[id]
@@ -92,14 +97,14 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		{near, far},
 		proc(cs: []^Net_Client) -> bool {return len(cs[1].entities) == 1},
 	)
-	testing.expect(t, ok, "far never saw the sheep it walked up to")
+	testing.expect(t, ok, "far never saw the dummy it walked up to")
 	net_send(far, protocol.Teleport{position = {600.5, 120, 0.5}})
 	ok = net_wait(
 		t,
 		{near, far},
 		proc(cs: []^Net_Client) -> bool {return len(cs[1].entities) == 0},
 	)
-	testing.expect(t, ok, "far was not told the sheep left its area")
+	testing.expect(t, ok, "far was not told the dummy left its area")
 
 	// Out of reach: nothing happens.
 	net_send(far, protocol.Attack{id, far.seq})
@@ -110,7 +115,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	// and it is gone for good.
 	for hit in 0 ..< 4 {
 		p, known := near.entities[id]
-		if !testing.expectf(t, known, "lost sight of the sheep before hit %d", hit + 1) {break}
+		if !testing.expectf(t, known, "lost sight of the dummy before hit %d", hit + 1) {break}
 		// Next to it (it runs once hit); the server takes the teleport
 		// first: the same ordered stream.
 		net_send(near, protocol.Teleport{position = p + {1.2, 0, 0}})
@@ -128,7 +133,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	testing.expect_value(t, near.died, 1)
 
 	// Saved: another one, then quit and load.
-	net_send(near, protocol.Command{"summon sheep"})
+	net_send(near, protocol.Command{"summon dummy"})
 	ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	testing.expect(t, ok)
 	// A rocket straight up, still flying when the server stops: not saved.
@@ -144,74 +149,17 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		filepath.join({home_dir(dir, 21), ENTITIES_FILE}, context.temp_allocator) or_else "",
 		context.temp_allocator,
 	)
-	testing.expect(t, strings.contains(string(saved), "sheep"), "the sheep was not saved")
+	testing.expect(t, strings.contains(string(saved), "dummy"), "the dummy was not saved")
 	testing.expect(t, !strings.contains(string(saved), "rocket"), "a rocket in flight was saved")
 	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped = false
-	// Near comes back where it left, beside the saved sheep.
+	// Near comes back where it left, beside the saved dummy.
 	again := new(Net_Client)
 	defer free(again)
 	net_connect(again, 0, "near", h = h)
 	defer net_close(again)
 	ok = net_wait(t, {again}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
-	testing.expect(t, ok, "the saved sheep did not come back")
-}
-
-// Sheep come by themselves in daylight (no more than the cap), and go
-// once nobody is near.
-@(test)
-test_sheep_spawn_and_despawn :: proc(t: ^testing.T) {
-	config := Config {
-		seed            = 21,
-		generator       = .Classic, // grass near the spawn
-		view_radius     = 4,
-		view_height     = 2,
-		max_players     = 2,
-		listen          = true,
-		everyone_cheats = true,
-	}
-	h := new(Harness)
-	defer free(h)
-	if !testing.expect(t, harness_start(h, config)) {return}
-	defer harness_stop(h)
-	c := new(Net_Client)
-	defer free(c)
-	net_connect(c, 0, "watcher", h = h)
-	defer net_close(c)
-	ok := net_wait(
-		t,
-		{c},
-		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && len(cs[0].chunks) > 200},
-	)
-	if !testing.expect(t, ok, "never landed") {return}
-	net_send(c, protocol.Command{"time noon"})
-	most := 0
-	for _ in 0 ..< 40 * game.TICK_RATE {
-		if len(c.entities) >= 3 {break}
-		net_pump(t, c)
-		most = max(most, len(c.entities))
-		harness_step(h)
-	}
-	testing.expectf(t, len(c.entities) >= 1, "no sheep came in daylight (most seen %d)", most)
-	for _ in 0 ..< 60 {
-		net_pump(t, c)
-		most = max(most, len(c.entities))
-		harness_step(h)
-	}
-	cap := game.kind_info(test_reg(), test_reg().engine.sheep).spawn.?.cap
-	testing.expectf(
-		t,
-		most <= cap + 2,
-		"%d sheep: the cap is %d (a herd may top it by 2)",
-		most,
-		cap,
-	)
-
-	// Night, and away: they go, and the watcher is told.
-	net_send(c, protocol.Command{"time midnight"})
-	net_send(c, protocol.Teleport{position = {0.5, 140, 400.5}})
-	ok = net_wait(t, {c}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 0}, 20)
-	testing.expect(t, ok, "sheep stayed known after the watcher left")
+	testing.expect(t, ok, "the saved dummy did not come back")
 }
 
 // Only entities.odin and entity_store.odin reach into the entity list; every
@@ -311,13 +259,12 @@ test_stale_handle_reads_defaults :: proc(t: ^testing.T) {
 	testing.expect_value(t, entity_id(w, h), 0)
 	testing.expect_value(t, entity_pos(w, h), [3]f64{})
 	testing.expect_value(t, entity_owner(w, h).client, -1)
-	testing.expect_value(t, entity_breeding(w, h).growth, game.LAMB_TICKS)
 	testing.expect(t, entity_stack(w, h).count == 0)
 	_, ok = entity_get(w, 1)
 	testing.expect(t, !ok)
 }
 
-// /summon sheep, a swing at it: bob sees alice's arch, alice sees her own.
+// /summon dummy, a swing at it: bob sees alice's arch, alice sees her own.
 @(test)
 test_swung_reaches_others :: proc(t: ^testing.T) {
 	h := new(Harness)
@@ -348,9 +295,9 @@ test_swung_reaches_others :: proc(t: ^testing.T) {
 		net_wait(t, both, proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])}),
 		"never landed",
 	) {return}
-	net_send(alice, protocol.Command{"summon sheep"})
+	net_send(alice, protocol.Command{"summon dummy"})
 	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
-	if !testing.expect(t, ok, "no sheep") {return}
+	if !testing.expect(t, ok, "no dummy") {return}
 	id: u32 = 0
 	for k in alice.entities {id = k}
 	p := alice.entities[id]

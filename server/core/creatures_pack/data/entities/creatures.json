@@ -1,5 +1,5 @@
 {
-	// A steered walker a sheep's size that is hit, saved and summoned: what the engine's
+	// A steered walker a dummy's size that is hit, saved and summoned: what the engine's
 	// tests walk, hurt and save.
 	"walker": {
 		"box": [0.8, 0.9],
@@ -10,7 +10,7 @@
 		"physics": "walker",
 		"walker": {"walk_speed": 1.4, "run_speed": 4.2, "jump": 1.2, "step": 0},
 		"brain": "steered",
-		"looks": ["shorn", "big"],
+		"looks": ["sad", "big"],
 		"model": {"box": [200, 200, 200]}
 	},
 	// The same with a brain of its game's (Game.think).

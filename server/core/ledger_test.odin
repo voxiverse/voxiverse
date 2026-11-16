@@ -140,34 +140,18 @@ script :: proc(s: ^Server, data: rawptr) {
 			if item_tick(w, e) {entity_gone(w, e)}
 			break
 		}
-		// A sheep: wheat fed to it, then it is shorn (by someone who must
-		// use up what they feed).
+		// Wheat spent on a use (fed to a creature) by someone who must use up what
+		// they feed.
 		for g in c.grants {delete(g.pattern)}
 		clear(&c.grants)
-		summon(s, c, test_reg().engine.sheep)
-		for e in entities_snapshot(w) {
-			if entity_kind(w, e) != test_reg().engine.sheep {continue}
-			for st, i in c.inventory.slots {
-				if st.item == wheat { 	// (to the hand: a move)
-					c.inventory.slots[i], c.inventory.slots[0] =
-						c.inventory.slots[0], c.inventory.slots[i]
-					break
-				}
-			}
-			c.inventory.selected = 0
-			sheep_use(s, c, e)
-			for i in 0 ..< game.HOTBAR_SLOTS {
-				if c.inventory.slots[i].item != wheat {c.inventory.selected = i}
-			}
-			sheep_use(s, c, e)
-		}
+		item_spend(s, c, wheat, 1)
 		// A world with no room for what is dropped: it is void.
 		ledger(s, w, .Give, stone, 5)
 		for entity_count(w) <
-		    MAX_ENTITIES {entity_spawn(w, test_reg().engine.sheep, {0, 100, 0}, false)}
+		    MAX_ENTITIES {entity_spawn(w, test_reg().engine.dummy, {0, 100, 0}, false)}
 		spawn_item(w, {0, 100, 0}, {stone, 5, 0, 0}, {}, -1)
 		for e in entities_snapshot(w) {
-			if entity_kind(w, e) == test_reg().engine.sheep {entity_gone(w, e)}
+			if entity_kind(w, e) == test_reg().engine.dummy {entity_gone(w, e)}
 		}
 		read_audit(s, r)
 	case 2:
@@ -233,7 +217,7 @@ test_ledger_session :: proc(t: ^testing.T) {
 
 	r = step(srv, "a", 1)
 	expect_balanced(t, r, "after the session")
-	stone, dirt, wool, wheat := r.rows[0], r.rows[1], r.rows[2], r.rows[3]
+	stone, dirt, _, wheat := r.rows[0], r.rows[1], r.rows[2], r.rows[3]
 	testing.expect_value(t, dirt[.Give], 100)
 	testing.expect_value(t, dirt[.Catalog], 64)
 	testing.expect_value(t, stone[.Catalog], 64)
@@ -244,7 +228,6 @@ test_ledger_session :: proc(t: ^testing.T) {
 	testing.expect_value(t, dirt[.Clear], -228) // (the kit's and what was given and taken)
 	testing.expect_value(t, wheat[.Give], 10)
 	testing.expect_value(t, wheat[.Use], -1)
-	testing.expect(t, wool[.Drop_Mob] >= 1 && wool[.Drop_Mob] <= 3, "no wool from the sheep")
 	expired: i64
 	for row in r.rows {expired += row[.Expire]}
 	testing.expect(t, expired < 0, "nothing expired")

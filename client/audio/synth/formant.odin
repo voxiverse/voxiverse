@@ -5,7 +5,7 @@ import "common:base"
 // Formant synthesis: a glottal pulse train (a Rosenberg pulse) or noise
 // through three band-pass formants that glide between vowel targets, with a
 // pitch contour, vibrato, jitter (random period) and shimmer (random
-// amplitude). A voice: a sheep's bleat, a creature's grunt.
+// amplitude). A voice: a creature's bleat or grunt.
 
 Vowel :: enum u8 {
 	A,

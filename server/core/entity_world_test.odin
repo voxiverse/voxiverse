@@ -16,7 +16,7 @@ test_spawn_tag_kill :: proc(t: ^testing.T) {
 	reg := test_registry()
 	if reg == nil {return}
 	defer game.registry_destroy(reg)
-	sheep, _ := game.registry_kind(reg, "dummy")
+	dummy, _ := game.registry_kind(reg, "dummy")
 	rocket, _ := game.registry_kind(reg, "rocket")
 
 	ew: Entity_World
@@ -30,7 +30,7 @@ test_spawn_tag_kill :: proc(t: ^testing.T) {
 	_, _, err = entity_world_spawn(&ew, reg, 99, {}, act)
 	testing.expect_value(t, err, Spawn_Error.Unknown_Kind)
 
-	id, h, e1 := entity_world_spawn(&ew, reg, sheep, {1, 2, 3}, act)
+	id, h, e1 := entity_world_spawn(&ew, reg, dummy, {1, 2, 3}, act)
 	testing.expect_value(t, e1, Spawn_Error.None)
 	testing.expect(t, id != 0)
 	game.store_apply(&ew.store)
@@ -61,7 +61,7 @@ test_spawn_tag_kill :: proc(t: ^testing.T) {
 	testing.expect(t, !entity_has_tag(&ew, h, "flock"))
 
 	// the 257th name is refused
-	other, oh, _ := entity_world_spawn(&ew, reg, sheep, {}, act)
+	other, oh, _ := entity_world_spawn(&ew, reg, dummy, {}, act)
 	_ = other
 	game.store_apply(&ew.store)
 	buf: [8]u8
@@ -83,7 +83,7 @@ test_spawn_tag_kill :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, made + 6, MAX_TAG_NAMES) // a, b, c, d, flock, x were interned first
 
-	// a sheep hurt by a rocket dies with it as killer; with none 11 s later
+	// a dummy hurt by a rocket dies with it as killer; with none 11 s later
 	rid, _, _ := entity_world_spawn(&ew, reg, rocket, {}, act)
 	game.store_apply(&ew.store)
 	entity_world_begin_tick(&ew)
@@ -91,7 +91,7 @@ test_spawn_tag_kill :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(ew.deaths), 1)
 	testing.expect_value(t, ew.deaths[0].killer, rid)
 	testing.expect_value(t, ew.deaths[0].id, id)
-	testing.expect_value(t, ew.deaths[0].kind, sheep)
+	testing.expect_value(t, ew.deaths[0].kind, dummy)
 	testing.expect_value(t, ew.deaths[0].cause, u8(7))
 	testing.expect_value(t, ew.deaths[0].position, [3]f64{1, 2, 3})
 	game.store_apply(&ew.store)
@@ -101,7 +101,7 @@ test_spawn_tag_kill :: proc(t: ^testing.T) {
 
 	entity_world_begin_tick(&ew)
 	testing.expect_value(t, len(ew.deaths), 0)
-	_, h2, _ := entity_world_spawn(&ew, reg, sheep, {}, act)
+	_, h2, _ := entity_world_spawn(&ew, reg, dummy, {}, act)
 	game.store_apply(&ew.store)
 	entity_hurt(&ew, h2, 1, act, rid)
 	for _ in 0 ..< 11 * game.TICK_RATE {entity_world_begin_tick(&ew)}
@@ -115,15 +115,15 @@ test_spawn_full :: proc(t: ^testing.T) {
 	reg := test_registry()
 	if reg == nil {return}
 	defer game.registry_destroy(reg)
-	sheep, _ := game.registry_kind(reg, "dummy")
+	dummy, _ := game.registry_kind(reg, "dummy")
 	ew: Entity_World
 	entity_world_init(&ew, 1, 4)
 	defer entity_world_destroy(&ew)
 	for _ in 0 ..< 4 {
-		_, _, err := entity_world_spawn(&ew, reg, sheep, {}, Act{})
+		_, _, err := entity_world_spawn(&ew, reg, dummy, {}, Act{})
 		testing.expect_value(t, err, Spawn_Error.None)
 	}
-	_, _, err := entity_world_spawn(&ew, reg, sheep, {}, Act{})
+	_, _, err := entity_world_spawn(&ew, reg, dummy, {}, Act{})
 	testing.expect_value(t, err, Spawn_Error.Full)
 	game.store_apply(&ew.store)
 	testing.expect_value(t, game.store_count(&ew.store), 4)
@@ -151,12 +151,12 @@ test_world_spawn_not_loaded :: proc(t: ^testing.T) {
 	if !testing.expect(t, harness_start(h, harness_world())) {return}
 	defer harness_stop(h)
 	w := h.srv.home
-	sheep, _ := game.registry_kind(h.srv.registry, "sheep")
-	_, _, err := world_entity_spawn(w, sheep, {1e6, 64, 1e6}, Act{})
+	dummy, _ := game.registry_kind(h.srv.registry, "dummy")
+	_, _, err := world_entity_spawn(w, dummy, {1e6, 64, 1e6}, Act{})
 	testing.expect_value(t, err, Spawn_Error.Not_Loaded)
 	testing.expect_value(t, game.store_count(&w.entity_world.store), 0)
 	// a kill nobody knew of records the death and sends nothing
-	id, eh, err2 := entity_world_spawn(w.entity_world, h.srv.registry, sheep, {1, 64, 1}, Act{})
+	id, eh, err2 := entity_world_spawn(w.entity_world, h.srv.registry, dummy, {1, 64, 1}, Act{})
 	testing.expect_value(t, err2, Spawn_Error.None)
 	game.store_apply(&w.entity_world.store)
 	world_entity_kill(w, eh, 3, Act{})
@@ -169,17 +169,17 @@ test_tag_near :: proc(t: ^testing.T) {
 	reg := test_registry()
 	if reg == nil {return}
 	defer game.registry_destroy(reg)
-	sheep, _ := game.registry_kind(reg, "dummy")
+	dummy, _ := game.registry_kind(reg, "dummy")
 	rocket, _ := game.registry_kind(reg, "rocket")
 	ew: Entity_World
 	entity_world_init(&ew, 1, 8)
 	defer entity_world_destroy(&ew)
-	_, near, _ := entity_world_spawn(&ew, reg, sheep, {1, 2, 3}, Act{})
-	_, far, _ := entity_world_spawn(&ew, reg, sheep, {100, 2, 3}, Act{})
+	_, near, _ := entity_world_spawn(&ew, reg, dummy, {1, 2, 3}, Act{})
+	_, far, _ := entity_world_spawn(&ew, reg, dummy, {100, 2, 3}, Act{})
 	_, rk, _ := entity_world_spawn(&ew, reg, rocket, {2, 2, 3}, Act{})
 	game.store_apply(&ew.store)
 
-	n, err := entity_tag_near(&ew, sheep, {0, 2, 3}, 10, true, "flock")
+	n, err := entity_tag_near(&ew, dummy, {0, 2, 3}, 10, true, "flock")
 	testing.expect_value(t, err, Tag_Error.None)
 	testing.expect_value(t, n, 1)
 	game.store_apply(&ew.store)
@@ -343,7 +343,7 @@ sync_probe :: proc(s: ^Server, data: rawptr) {
 
 // The spatial service follows the list: after every tick each listed
 // entity's spatial box is its own box where it now is (it was left where the
-// entity spawned, so queries saw a falling sheep in the air it left).
+// entity spawned, so queries saw a falling dummy in the air it left).
 @(test)
 test_spatial_follows_list :: proc(t: ^testing.T) {
 	h := new(Harness)
@@ -378,85 +378,7 @@ test_spatial_follows_list :: proc(t: ^testing.T) {
 		testing.expect_value(t, d.entries, 3)
 		testing.expect_value(t, d.at_rest, 3)
 	}
-	testing.expect(t, d.moved, "the sheep never fell: the test proves nothing")
-}
-
-Mate_Probe :: struct {
-	spawn_now: bool,
-	checked:   int, // sheep asked
-	found:     int, // of those, how many had a mate
-	wrong:     int, // answers that differ from the list's own nearest
-}
-
-@(private = "file")
-mate_probe :: proc(s: ^Server, data: rawptr) {
-	d := (^Mate_Probe)(data)
-	c := client_by_name(s, "a")
-	if c == nil {return}
-	w := c.world
-	if d.spawn_now {
-		d.spawn_now = false
-		for i in 0 ..< 6 {
-			p := c.player.position + {f64(i) * 1.5 - 4, 0, 4}
-			if ent := entity_spawn(w, test_reg().engine.sheep, p, false); ent != 0 {
-				entity_breeding(w, ent).love = 1000 if i % 3 != 2 else 0
-				entity_breeding(w, ent).growth = game.LAMB_TICKS if i != 4 else 0
-			}
-		}
-		return
-	}
-	for ent in entities_snapshot(w) {
-		if entity_kind(w, ent) != test_reg().engine.sheep {continue}
-		want: game.Entity_Handle
-		best := f64(game.BREED_RANGE * game.BREED_RANGE)
-		for o in entities_snapshot(w) {
-			if o == ent ||
-			   entity_kind(w, o) != test_reg().engine.sheep ||
-			   entity_breeding(w, o).love <= 0 {continue}
-			if entity_breeding(w, o).growth < game.LAMB_TICKS {continue}
-			v := entity_pos(w, o) - entity_pos(w, ent)
-			if dd := v.x * v.x + v.y * v.y + v.z * v.z; dd < best {want, best = o, dd}
-		}
-		d.checked += 1
-		if want != 0 {d.found += 1}
-		if mate_for(w, ent) != want {d.wrong += 1}
-	}
-}
-
-// mate_for asks the spatial service: for sheep in love and not, lambs among
-// them, falling and standing, it names the same mate a search of the list does.
-@(test)
-test_mate_for_matches_list :: proc(t: ^testing.T) {
-	h := new(Harness)
-	defer free(h)
-	config := harness_world()
-	config.listen = true
-	if !testing.expect(t, harness_start(h, config)) {return}
-	defer harness_stop(h)
-	a := new(Net_Client)
-	defer free(a)
-	net_connect(a, 0, "a", h = h)
-	defer net_close(a)
-	if !testing.expect(
-		t,
-		net_wait(
-			t,
-			{a},
-			proc(cs: []^Net_Client) -> bool {return cs[0].welcomed && cs[0].update.acked > 0},
-			30,
-		),
-		"never joined",
-	) {return}
-	d := Mate_Probe {
-		spawn_now = true,
-	}
-	call(&h.srv, mate_probe, &d)
-	for _ in 0 ..< 10 {
-		harness_step(h)
-		call(&h.srv, mate_probe, &d)
-	}
-	testing.expect_value(t, d.wrong, 0)
-	testing.expect(t, d.found > 0, "no sheep had a mate: the test proves nothing")
+	testing.expect(t, d.moved, "the dummy never fell: the test proves nothing")
 }
 
 // entity_matches_store: an entity has the store's transform, health and age.
@@ -479,7 +401,7 @@ test_store_copies_follow_the_list :: proc(t: ^testing.T) {
 	defer harness_stop(h)
 	w := h.srv.home
 	reg := w.server.registry
-	sheep := entity_spawn(w, reg.engine.dummy, {8.5, 40, 8.5}, true)
+	dummy := entity_spawn(w, reg.engine.dummy, {8.5, 40, 8.5}, true)
 	item := spawn_item(
 		w,
 		{10.5, 40, 8.5},
@@ -487,27 +409,27 @@ test_store_copies_follow_the_list :: proc(t: ^testing.T) {
 		{1, 2, 3},
 		-1,
 	)
-	testing.expect(t, sheep != 0 && item != 0)
-	if sheep == 0 || item == 0 {return}
+	testing.expect(t, dummy != 0 && item != 0)
+	if dummy == 0 || item == 0 {return}
 	// the components exist when the spawn returns
-	entity_matches_store(t, w, sheep)
+	entity_matches_store(t, w, dummy)
 	entity_matches_store(t, w, item)
-	testing.expect(t, entity_is_natural(w, sheep))
-	sheep_id, item_id := entity_id(w, sheep), entity_id(w, item)
+	testing.expect(t, entity_is_natural(w, dummy))
+	dummy_id, item_id := entity_id(w, dummy), entity_id(w, item)
 	for _ in 0 ..< 30 {
 		entities_tick(w)
-		a, _ := entity_find(w, sheep_id)
+		a, _ := entity_find(w, dummy_id)
 		b, _ := entity_find(w, item_id)
 		if a != 0 {entity_matches_store(t, w, a)}
 		if b != 0 {entity_matches_store(t, w, b)}
 	}
-	if a, _ := entity_find(w, sheep_id); a != 0 {
+	if a, _ := entity_find(w, dummy_id); a != 0 {
 		entity_attack(w, a, {0, 40, 0}, {amount = 1, kind = .Hit})
 		entity_matches_store(t, w, a)
 	}
 }
 
-// The exit test of the entity store: a sheep and an item go in through the
+// The exit test of the entity store: a dummy and an item go in through the
 // door and live, move, are hurt, age and despawn with every field read from
 // the store (Entity holds none of body, yaw, pitch, health, natural, age).
 @(test)
@@ -518,7 +440,7 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 	defer harness_stop(h)
 	w := h.srv.home
 	reg := w.server.registry
-	sheep := entity_spawn(w, reg.engine.dummy, {8.5, 40, 8.5}, false)
+	dummy := entity_spawn(w, reg.engine.dummy, {8.5, 40, 8.5}, false)
 	item := spawn_item(
 		w,
 		{10.5, 40, 8.5},
@@ -526,25 +448,25 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 		{1, 2, 3},
 		-1,
 	)
-	if !testing.expect(t, sheep != 0 && item != 0) {return}
-	sheep_id, item_id := entity_id(w, sheep), entity_id(w, item)
+	if !testing.expect(t, dummy != 0 && item != 0) {return}
+	dummy_id, item_id := entity_id(w, dummy), entity_id(w, item)
 	// spawned: in the store, with what the spawn gave
-	testing.expect_value(t, entity_pos(w, sheep), [3]f64{8.5, 40, 8.5})
+	testing.expect_value(t, entity_pos(w, dummy), [3]f64{8.5, 40, 8.5})
 	testing.expect_value(
 		t,
-		entity_health_of(w, sheep),
-		game.kind_info(reg, entity_kind(w, sheep)).health,
+		entity_health_of(w, dummy),
+		game.kind_info(reg, entity_kind(w, dummy)).health,
 	)
-	testing.expect_value(t, entity_age_of(w, sheep), 0)
-	testing.expect(t, !entity_is_natural(w, sheep))
+	testing.expect_value(t, entity_age_of(w, dummy), 0)
+	testing.expect(t, !entity_is_natural(w, dummy))
 	wild := entity_spawn(w, reg.engine.dummy, {20.5, 40, 8.5}, true)
 	testing.expect(t, wild != 0 && entity_is_natural(w, wild))
 	testing.expect_value(t, entity_velocity(w, item), [3]f32{1, 2, 3})
 	// moved: the store says where, and how fast
 	for _ in 0 ..< 5 {entities_tick(w)}
 	item, _ = entity_find(w, item_id)
-	sheep, _ = entity_find(w, sheep_id)
-	if !testing.expect(t, item != 0 && sheep != 0) {return}
+	dummy, _ = entity_find(w, dummy_id)
+	if !testing.expect(t, item != 0 && dummy != 0) {return}
 	entity_set_pos(w, item, {11.5, 41, 8.5})
 	entity_set_velocity(w, item, {4, 5, 6})
 	entity_set_on_ground(w, item, true)
@@ -552,26 +474,26 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 	testing.expect_value(t, entity_velocity(w, item), [3]f32{4, 5, 6})
 	testing.expect(t, entity_on_ground(w, item))
 	testing.expect_value(t, entity_age_of(w, item), 5)
-	testing.expect_value(t, entity_age_of(w, sheep), 5)
+	testing.expect_value(t, entity_age_of(w, dummy), 5)
 	// hurt: health and knockback are in the store
-	before := entity_health_of(w, sheep)
-	entity_attack(w, sheep, {0, 40, 0}, {amount = 1, kind = .Hit})
-	testing.expect(t, entity_health_of(w, sheep) < before, "health did not drop")
-	testing.expect(t, !entity_on_ground(w, sheep))
-	testing.expect(t, entity_velocity(w, sheep) != {}, "no knockback")
+	before := entity_health_of(w, dummy)
+	entity_attack(w, dummy, {0, 40, 0}, {amount = 1, kind = .Hit})
+	testing.expect(t, entity_health_of(w, dummy) < before, "health did not drop")
+	testing.expect(t, !entity_on_ground(w, dummy))
+	testing.expect(t, entity_velocity(w, dummy) != {}, "no knockback")
 	// aged: set, then read back
 	entity_set_age(w, item, 100)
 	testing.expect_value(t, entity_age_of(w, item), 100)
 	// despawned: gone from the store
-	entity_gone(w, sheep)
+	entity_gone(w, dummy)
 	game.store_apply(&w.entity_world.store)
-	_, found := game.store_find(&w.entity_world.store, game.Entity_Id(sheep_id))
-	testing.expect(t, !found, "the despawned sheep is still in the store")
+	_, found := game.store_find(&w.entity_world.store, game.Entity_Id(dummy_id))
+	testing.expect(t, !found, "the despawned dummy is still in the store")
 }
 
-// A sheep's wool, genes and breeding, a dropped stack and a rocket's owner
-// live in the store's components: written through the door, they are in the
-// component rows, and a rocket without wool reads the defaults.
+// A dropped stack and a rocket's owner live in the store's components: written through
+// the door, they are in the component rows, and a rocket without a stack reads the
+// defaults.
 @(test)
 test_plain_components_live_in_the_store :: proc(t: ^testing.T) {
 	h := new(Harness)
@@ -581,68 +503,20 @@ test_plain_components_live_in_the_store :: proc(t: ^testing.T) {
 	w := h.srv.home
 	reg := w.server.registry
 	st := &w.entity_world.store
-	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
 	item := spawn_item(w, {10.5, 40, 8.5}, {game.item_of_block(reg, .Wool), 3, 0, 0}, {}, 7)
 	rocket := entity_spawn(w, reg.engine.rocket, {12.5, 40, 8.5}, false)
-	if !testing.expect(t, sheep != 0 && item != 0 && rocket != 0) {return}
-	// the spawn's values
-	testing.expect_value(t, entity_breeding(w, sheep).growth, game.LAMB_TICKS)
-	testing.expect(t, !entity_wool(w, sheep).shorn)
+	if !testing.expect(t, item != 0 && rocket != 0) {return}
 	testing.expect_value(t, entity_owner(w, rocket).client, -1)
-	// shorn, bred (genes and a lamb's growth), picked up, owned: all in the rows
-	entity_wool(w, sheep).shorn = true
-	entity_genes(w, sheep).genes = game.WOOL_BLACK
-	entity_breeding(w, sheep).love = 9
 	entity_owner(w, rocket).client = 3
 	entity_owner(w, rocket).action = 42
-	wool := game.store_get(st, sheep, game.C_WOOL, game.Wool)
-	genes := game.store_get(st, sheep, game.C_GENES, game.Component_Genes)
-	breeding := game.store_get(st, sheep, game.C_BREEDING, game.Breeding)
 	stack := game.store_get(st, item, game.C_STACK, game.Component_Stack)
 	owner := game.store_get(st, rocket, game.C_OWNER, game.Owner)
-	if !testing.expect(
-		t,
-		wool != nil && genes != nil && breeding != nil && stack != nil && owner != nil,
-	) {return}
-	testing.expect(t, wool.shorn)
-	testing.expect_value(t, genes.genes, game.WOOL_BLACK)
-	testing.expect_value(t, breeding.love, 9)
+	if !testing.expect(t, stack != nil && owner != nil) {return}
 	testing.expect_value(t, stack.stack.count, 3)
 	testing.expect_value(t, owner.client, 3)
 	testing.expect_value(t, owner.action, 42)
 	testing.expect_value(t, entity_owner(w, item).client, 7)
-	// a rocket has no wool: reads give the default, and no row appears
-	testing.expect(t, !entity_wool(w, rocket).shorn)
-	testing.expect(t, game.store_get(st, rocket, game.C_WOOL, game.Wool) == nil)
-}
-
-// A sheep's brain is a store component: an attack sets Flee and the stun in
-// the row, and the next sheep in the same slot starts with a zeroed one.
-@(test)
-test_brain_lives_in_the_store :: proc(t: ^testing.T) {
-	h := new(Harness)
-	defer free(h)
-	if !testing.expect(t, harness_start(h, harness_world())) {return}
-	defer harness_stop(h)
-	w := h.srv.home
-	reg := w.server.registry
-	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
-	if !testing.expect(t, sheep != 0) {return}
-	row := game.store_get(&w.entity_world.store, sheep, C_BRAIN, Brain)
-	if !testing.expect(t, row != nil, "a sheep has no brain component") {return}
-	testing.expect_value(t, row.state, Brain_State.Idle)
-	testing.expect_value(t, row.timer, 0)
-	entity_attack(w, sheep, {0, 40, 0}, {amount = 1, kind = .Hit})
-	testing.expect_value(t, row.state, Brain_State.Flee)
-	testing.expect_value(t, row.hurt, HURT_TICKS)
-	testing.expect_value(t, entity_brain(w, sheep), row)
-	// the slot is free again: its next entity does not inherit the brain
-	entity_gone(w, sheep)
-	game.store_apply(&w.entity_world.store)
-	again := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
-	if !testing.expect(t, again != 0) {return}
-	b := entity_brain(w, again)
-	testing.expect_value(t, b.state, Brain_State.Idle)
-	testing.expect_value(t, b.timer, 0)
-	testing.expect_value(t, b.hurt, 0)
+	// a rocket has no stack: reads give the default, and no row appears
+	testing.expect_value(t, entity_stack(w, rocket).count, 0)
+	testing.expect(t, game.store_get(st, rocket, game.C_STACK, game.Component_Stack) == nil)
 }

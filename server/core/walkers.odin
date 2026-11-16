@@ -10,7 +10,7 @@ import "server:path"
 
 // Walkers a game steers: entities whose kind has `"brain": "steered"` (a walker
 // with no mind of its own) stand until their game sends them somewhere, and then
-// walk there by the shared body physics, as a sheep walks its own way:
+// walk there by the shared body physics:
 //
 //  - entity_go: to a point, by A* (server/path) within the tick's node budget, the
 //    way planned again when a changed block lies on it, when it runs out short of
@@ -25,7 +25,7 @@ import "server:path"
 //
 // The machinery is the engine's, not the game's: what a walker is (its box, its
 // speed, whether it jumps) is its kind's data; what it does is the game's choice
-// each tick. Sheep keep their own brain for now; this is the steering they would use.
+// each tick, from its tick or its creatures' mind (Game.think).
 
 MAX_ROUTES :: 16 // routes a world holds at once
 MAX_CHANGED_BOXES :: 64 // changed boxes kept a tick for the walkers (more: their bounds)
@@ -33,7 +33,7 @@ STUCK_TICKS :: game.TICK_RATE // a walker going nowhere this long plans again
 ARRIVED :: 0.35 // blocks from its point (horizontally) a walker has arrived
 
 // C_STEER: a steered walker's Steer (large: set at spawn).
-C_STEER :: game.FIRST_SERVER_COMPONENT + 2
+C_STEER :: game.FIRST_SERVER_COMPONENT + 1
 
 Route_Handle :: distinct u32
 
@@ -749,7 +749,7 @@ separation :: proc(w: ^World, h: game.Entity_Handle, info: ^game.Kind_Info) -> (
 }
 
 // plan_way: a new path from at to the walker's point, within the tick's node
-// budget (the sheep's too); false when the budget is spent (it waits a tick) or
+// budget; false when the budget is spent (it waits a tick) or
 // it stands nowhere a path starts.
 @(private = "file")
 plan_way :: proc(

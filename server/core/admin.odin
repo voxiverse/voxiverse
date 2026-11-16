@@ -107,7 +107,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"history", "<x y z>", {3, 3}, admin_history, "world.rollback"},
 	{"undo", "[n]", {0, 1}, admin_undo, "world.edit.undo"},
 	{"redo", "[n]", {0, 1}, admin_redo, "world.edit.undo"},
-	{"summon", "[kind] [count]", {0, 2}, admin_summon, "world.summon"},
+	{"summon", "<kind> [count]", {1, 2}, admin_summon, "world.summon"},
 	{"open_lan", "", {0, 0}, admin_open_lan, "server.open_lan"},
 	{"close_lan", "", {0, 0}, admin_close_lan, "server.open_lan"},
 	{"locate", "[biome|structure] <name>", {1, 2}, admin_locate, "teleport.locate"},
@@ -359,15 +359,13 @@ admin_sphere :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 @(private = "file")
 admin_summon :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	kind := s.registry.engine.sheep
-	if len(args) > 0 {
-		found := false
-		for &info, i in s.registry.kinds {
-			if game.kind_name(&info) == args[0] &&
-			   info.summonable {kind, found = game.Kind_Id(i + 1), true}
-		}
-		if !found {return false}
+	if len(args) == 0 {return false}
+	kind: game.Kind_Id
+	for &info, i in s.registry.kinds {
+		if (game.kind_name(&info) == args[0] || info.id == args[0]) &&
+		   info.summonable {kind = game.Kind_Id(i + 1)}
 	}
+	if kind == 0 {return false}
 	count := 1
 	if len(args) == 2 {
 		n, ok := parse_count(args[1])

@@ -231,13 +231,19 @@ test_walker_goes_to_a_point :: proc(t: ^testing.T) {
 	testing.expect(t, arrived, "the creep never arrived")
 	testing.expect(t, !through, "the creep walked into the pillar")
 
-	// A sheep is no steered walker; standing stops it.
+	// Standing stops a walker; a dropped stack is no steered walker.
 	testing.expect(t, entity_go(w, e, {-5.5, 0, 0.5}))
 	entity_stand(w, e)
 	harness_step(h, 10)
 	testing.expect(t, !entity_arrived(w, e))
-	sheep := entity_spawn(w, h.srv.registry.engine.sheep, {0.5, 0, 8.5}, false)
-	testing.expect(t, !entity_go(w, sheep, {0.5, 0, 0.5}), "steered a sheep")
+	stack := spawn_item(
+		w,
+		{0.5, 0, 8.5},
+		{game.item_of_block(h.srv.registry, .Stone), 1, 0, 0},
+		{},
+		-1,
+	)
+	testing.expect(t, !entity_go(w, stack, {0.5, 0, 0.5}), "steered a stack")
 }
 
 // entities_of: the creeps near a point, nearest first; one beyond the radius is not

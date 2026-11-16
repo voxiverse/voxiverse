@@ -1,5 +1,6 @@
-# The sheep: a bleat through three formants.
-sound sheep.hurt
+# A creature's cry: a bleat through three formants, the voice of every creature hurt
+# or dying.
+sound creature.hurt
   class creature_hurt
   length 0.5
   gain -5.5 dB
@@ -16,7 +17,7 @@ sound sheep.hurt
     level -22 dB
 end
 
-sound sheep.die
+sound creature.die
   class creature_die
   length 1.1
   gain -5.5 dB

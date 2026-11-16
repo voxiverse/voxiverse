@@ -15,7 +15,7 @@ import "common:base"
 // game mixes into the null device (audio.device_open_null: the real callback
 // path, paced by the wall clock, no sound card) for 30 seconds while a world
 // of our own stands about, and sounds are played into it as in a busy
-// session: footsteps, breaks, hurt sheep, explosions. Then it checks the
+// session: footsteps, breaks, hurt creatures, explosions. Then it checks the
 // mixer's own counters: no underruns, no non-finite samples, no dropped
 // commands, no late ones, the callback's worst case under three blocks, and the device really ran in real time (the frames mixed are the
 // seconds elapsed). The rolling capture is saved at the end and must replay.
