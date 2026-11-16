@@ -60,9 +60,10 @@ f9 :: proc(app: ^engine.App) {
 	handle_global_keys(app, &in_)
 }
 
-// Developer chat: F9 opens the chat, a message written there is kept (waiting while it
-// is not sent), Close closes it, and a reply that arrives while it is closed shows a
-// toast once.
+// Developer chat: no button on the title, with the setting or without (the title keeps
+// to its five); F9 opens the chat, a message written there is kept (waiting while it is
+// not sent), Close closes it, and a reply that arrives while it is closed shows a toast
+// once.
 @(test)
 test_devchat_screen :: proc(t: ^testing.T) {
 	app := ui_app(t)
@@ -79,6 +80,8 @@ test_devchat_screen :: proc(t: ^testing.T) {
 	app.devchat.running = true
 	defer collector.chat_close(&app.devchat.chat)
 	frame(app)
+	_, found := ui.find_widget(&app.ui, engine.tr(.Devchat_Title))
+	testing.expect(t, !found, "the title has a button for the chat")
 	f9(app)
 	frame(app)
 	testing.expect(t, engine.overlay_is_open(&app.overlays, .Devchat), "the chat did not open")

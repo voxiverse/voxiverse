@@ -1,6 +1,7 @@
 package engine
 
 import "client:ui"
+import "common:base"
 import "common:starmap"
 import "core:time"
 
@@ -26,6 +27,14 @@ Saves_Mode :: enum u8 {
 	Import, // asking for the file
 }
 
+// Last_Save: the title's Continue: the save played last (Settings.last_save) as last
+// looked at on the disk, so the title reads its universe.cfg once, not every frame.
+Last_Save :: struct {
+	checked: bool, // looked at, for name (universes_refresh clears it: a save renamed or gone)
+	name:    base.Var_Text,
+	game:    string, // the name of the game it plays ("": nothing to continue: gone, unreadable, or its game not in this build); constant data
+}
+
 // Singleplayer_Screen: the games, to choose one.
 Singleplayer_Screen :: struct {
 	list: ui.Scroll_List, // the game selected and the first in view
@@ -43,4 +52,5 @@ Universes_Screen :: struct {
 	name:       [dynamic]u8, // Edit's and New's name
 	path:       [dynamic]u8, // Import's file
 	message:    string, // why the last action failed (shown on the list)
+	last:       Last_Save, // the title's Continue
 }

@@ -20,6 +20,7 @@ import "common:worldgen"
 Settings :: struct {
 	name:              base.Var_Text, // the player's name ("": player_name and join_name say)
 	last_server:       base.Var_Text, // Direct Connection's last address
+	last_save:         base.Var_Text, // the save played last, its directory's name in the saves ("": none, or a name longer than a Var_Text): the title's Continue
 	share_data:        bool, // send anonymous play data to the collector (asked once)
 	share_asked:       bool, // the question was answered
 	collector:         base.Var_Text, // the collector's address ("": DEFAULT_COLLECTOR)
@@ -109,6 +110,7 @@ SETTINGS_VARS := [?]base.Var {
 		hint = DEFAULT_NAME,
 	},
 	{field = "last_server", help = "the address Direct Connection last joined"},
+	{field = "last_save", help = "the save played last (the title's Continue)"},
 	{
 		field = "share_data",
 		label = "Share play data",

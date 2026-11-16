@@ -1,6 +1,7 @@
 package main
 
 import "core:os"
+import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 import "core:testing"
@@ -8,6 +9,7 @@ import "core:testing"
 import "client:engine"
 import "client:screen"
 import "client:ui"
+import "common:base"
 import "common:game"
 import "generated:games"
 import games_client "generated:games/client"
@@ -55,6 +57,68 @@ test_title_buttons :: proc(t: ^testing.T) {
 		slice.contains(screen.splashes_parse(screen.SPLASHES), app.splash),
 		true,
 	)
+}
+
+// Continue: on the title, first, while the save played last is there to open, named by
+// its game and its own name; playing a save makes it the one; a save that is gone, one
+// that is unreadable, one whose game this build lacks, or none at all: no Continue, and
+// the title keeps to four buttons.
+@(test)
+test_title_continue :: proc(t: ^testing.T) {
+	dir := "build/test/title_continue"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	screen.saves_override = dir
+	defer screen.saves_override = ""
+	cfg :: proc(dir, name, text: string) {
+		save := filepath.join({dir, name}, context.temp_allocator) or_else ""
+		os.make_directory_all(save)
+		file := filepath.join({save, "universe.cfg"}, context.temp_allocator) or_else ""
+		_ = os.write_entire_file(file, transmute([]u8)text)
+	}
+	cfg(dir, "Factory 2", "format = 1\nseed = 1\ngame = foundry\n")
+	cfg(dir, "Elsewhere", "format = 1\nseed = 1\ngame = nonesuch\n")
+	os.make_directory_all(filepath.join({dir, "Empty"}, context.temp_allocator) or_else "")
+	app := ui_app(t)
+	defer ui_app_free(app)
+	defer screen.universes_destroy(&app.universes)
+	app.games, app.server_games = games_client.CLIENT, games.SERVER
+	app.screen = .Title
+	buttons :: proc(app: ^engine.App) -> (continue_label: string, n: int) {
+		ui_frame(app)
+		for label in ([]string{"Singleplayer", "Multiplayer", "Options", "Quit Game"}) {
+			if _, found := ui.find_widget(&app.ui, label); found {n += 1}
+		}
+		for text in app.ui.texts {
+			if strings.has_prefix(text, "Continue") {continue_label, n = text, n + 1}
+		}
+		return
+	}
+	label, n := buttons(app)
+	testing.expect_value(t, label, "")
+	testing.expect_value(t, n, 4)
+
+	// Played: the save is the one Continue opens.
+	screen.save_played(app, filepath.join({dir, "Factory 2"}, context.temp_allocator) or_else "")
+	label, n = buttons(app)
+	testing.expect_value(t, label, "Continue: Foundry, Factory 2")
+	testing.expect_value(t, n, 5)
+	r, _ := ui.find_widget(&app.ui, label)
+	single, _ := ui.find_widget(&app.ui, "Singleplayer")
+	testing.expect(t, r.y < single.y, "Continue is not first")
+
+	// Gone (deleted on its page: the saves read again): no Continue.
+	os.remove_all(filepath.join({dir, "Factory 2"}, context.temp_allocator) or_else "")
+	screen.universes_refresh(&app.universes)
+	label, n = buttons(app)
+	testing.expect_value(t, label, "")
+	testing.expect_value(t, n, 4)
+	for name in ([]string{"Empty", "Elsewhere", "../escape"}) {
+		base.var_text_set(&app.settings.last_save, name)
+		label, _ = buttons(app)
+		testing.expectf(t, label == "", "%s: %q", name, label)
+	}
+	free_all(context.temp_allocator)
 }
 
 // The splash is a stamp: dial glyphs resolving into the text from the left

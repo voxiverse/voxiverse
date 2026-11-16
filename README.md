@@ -147,6 +147,9 @@ played. From a game's page you can:
 
 A game whose rounds keep nothing between plays (Flood) has **Play** instead of saves.
 
+**Continue**, first on the title, opens the save you played last (it says which game and
+which save); it is not there when that save is gone.
+
 The game saves every minute and when you leave the world. Saves are stored in
 `voxiverse/saves` in your user data directory: `~/.local/share` on Linux, `%LOCALAPPDATA%` on
 Windows, and `~/Library/Application Support` on macOS.

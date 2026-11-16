@@ -17,6 +17,7 @@ Text :: enum u16 {
 	Options,
 	Title_Quit_Game,
 	Title_Version, // {0}: the version
+	Title_Continue, // {0}: the game, {1}: the save
 	Universes_New_Save, // a game page's New (sandbox's: Universes_New_Universe)
 	Universes_New_Save_Title,
 	Universes_Default_Name, // {0}: the game, {1}: a number
@@ -176,6 +177,7 @@ TEXT_EN := [Text]string {
 	.Options                                = "Options",
 	.Title_Quit_Game                        = "Quit Game",
 	.Title_Version                          = "Voxiverse {0}",
+	.Title_Continue                         = "Continue: {0}, {1}",
 	.Universes_New_Save                     = "New Save",
 	.Universes_New_Save_Title               = "New Save",
 	.Universes_Default_Name                 = "{0} {1}",

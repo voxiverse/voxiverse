@@ -235,5 +235,6 @@ creation_ignite :: proc(app: ^engine.App) {
 		game_id = page_game(&app.universes), // (sandbox's page: the creation screen is its New)
 	)
 	if app.session == nil {return} 	// (it could not start: the message says why)
+	save_played(app, plan.path)
 	ignite_start(app, c.stars, c.seed)
 }

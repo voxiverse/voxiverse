@@ -70,6 +70,7 @@ worlds_clear :: proc(w: ^engine.Universes_Screen) {
 universes_refresh :: proc(w: ^engine.Universes_Screen) {
 	worlds_clear(w)
 	w.mode, w.list = .List, {}
+	w.last.checked = false // (Continue looks again: a save may have gone)
 	message_set(w, "")
 	dir := saves_dir()
 	entries, err := os.read_all_directory_by_path(dir, context.temp_allocator)
@@ -94,6 +95,48 @@ universes_refresh :: proc(w: ^engine.Universes_Screen) {
 		w.entries[:],
 		proc(a, b: engine.Save_Entry) -> bool {return time.diff(b.played, a.played) > 0},
 	)
+}
+
+// save_played: the save at path is the one played last (the title's Continue). Kept in
+// the settings by its name; one too long for them is not kept, and Continue shows none.
+save_played :: proc(app: ^engine.App, path: string) {
+	if !base.var_text_set(&app.settings.last_save, filepath.base(path)) {
+		base.var_text_set(&app.settings.last_save, "")
+	}
+	engine.settings_changed(app)
+}
+
+// continue_save: the save played last, to continue: the name of the game it plays and
+// its own name; not ok when there is none, it is gone or unreadable, or its game is not in
+// this build. Read from the disk once, then as the saves change (Last_Save).
+continue_save :: proc(app: ^engine.App) -> (game_name, name: string, ok: bool) {
+	c := &app.universes.last
+	want := base.var_text(&app.settings.last_save)
+	if !c.checked || base.var_text(&c.name) != want {
+		c.checked, c.name, c.game = true, app.settings.last_save, ""
+		cfg :=
+			filepath.join({saves_dir(), want, "universe.cfg"}, context.temp_allocator) or_else ""
+		if want != "" && save_dir_name(want) == want && os.is_file(cfg) {
+			e: engine.Save_Entry
+			entry_read_config(&e, cfg)
+			id := entry_game(&e)
+			if g, known := engine.game_find(app.games, id);
+			   known && engine.game_hostable(app, id) {
+				c.game = g.name
+			}
+			delete(e.mode)
+			delete(e.game_id)
+		}
+	}
+	return c.game, base.var_text(&c.name), c.game != ""
+}
+
+// continue_play enters the save played last (continue_save).
+continue_play :: proc(app: ^engine.App) {
+	_, name, ok := continue_save(app)
+	if !ok {return}
+	path := filepath.join({saves_dir(), name}, context.temp_allocator) or_else name
+	if universe_enter(app, path) != "" {app.universes.last.checked = false}
 }
 
 // universes_open: the page of the game id (constant data), its saves read.
@@ -218,6 +261,7 @@ world_create :: proc(app: ^engine.App, name, seed_text: string, earth := false) 
 		earth,
 	)
 	engine.enter_world(app, plan.path, i64(plan.seed), mode = plan.mode, earth = plan.earth)
+	if app.session != nil {save_played(app, plan.path)}
 }
 
 // save_create makes a new save of the game id called name (a free variant of it) and
@@ -227,6 +271,7 @@ save_create :: proc(app: ^engine.App, id, name: string) {
 	plan := universe_plan(name, engine.SCRATCH_SEED, "creative")
 	log.infof("saves creating name=%q game=%s", filepath.base(plan.path), id)
 	engine.enter_world(app, plan.path, i64(plan.seed), game_id = id)
+	if app.session != nil {save_played(app, plan.path)}
 }
 
 // last_played: when a save was last played, as people say it.
@@ -505,6 +550,7 @@ universe_enter :: proc(app: ^engine.App, path: string) -> (why: string) {
 	id := entry_game(&e)
 	if !engine.game_hostable(app, id) {return engine.tr(.Universes_Game_Missing, id)}
 	engine.enter_world(app, path, 0, game_id = id)
+	if app.session != nil {save_played(app, path)}
 	return ""
 }
 
@@ -611,6 +657,7 @@ save_edit :: proc(app: ^engine.App, ctx: ^ui.Context) {
 				message_set(w, engine.tr(.Universes_Rename_Failed))
 				return
 			}
+			if base.var_text(&app.settings.last_save) == e.name {save_played(app, path)} 	// (Continue follows it)
 		}
 		universes_refresh(w)
 		return
