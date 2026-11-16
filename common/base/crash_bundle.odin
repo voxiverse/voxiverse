@@ -391,13 +391,6 @@ crash_bundle_write :: proc(what: string) -> string {
 	return name
 }
 
-// bundle_last: the directory the last bundle went to ("" if none).
-crash_bundle_last :: proc() -> string {
-	b := sync.atomic_load(&bundle)
-	if b == nil {return ""}
-	return string(b.last_dir[:b.last_len])
-}
-
 // crash_bundle_rearm lets a test write a second bundle.
 crash_bundle_rearm :: proc() {
 	if b := sync.atomic_load(&bundle); b != nil {sync.atomic_store(&b.written, 0)}
