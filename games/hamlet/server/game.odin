@@ -6,6 +6,7 @@ import "core:strconv"
 import "core:strings"
 
 import "common:game"
+import "common:protocol"
 import "games:hamlet"
 import "server:core"
 import "server:play"
@@ -316,7 +317,7 @@ put_records :: proc(s: ^core.Server) {
 				tiles = t.tiles[z],
 				happy = happy[z],
 			}
-			core.game_put(s, &cl, &row, game.key_entity(u32(z)))
+			core.game_put(s, &cl, &row, protocol.key_entity(u32(z)))
 		}
 		for &st, k in t.structures[:t.count] {
 			if !st.used {continue}
@@ -328,7 +329,7 @@ put_records :: proc(s: ^core.Server) {
 				workers  = u8(clamp(st.workers, 0, 255)),
 				people   = u8(clamp(st.people, 0, 255)),
 			}
-			core.game_put(s, &cl, &r, game.key_entity(u32(k)))
+			core.game_put(s, &cl, &r, protocol.key_entity(u32(k)))
 		}
 	}
 }

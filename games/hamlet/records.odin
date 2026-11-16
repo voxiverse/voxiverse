@@ -1,6 +1,7 @@
 package hamlet
 
 import "common:game"
+import "common:protocol"
 
 // What Hamlet tells its players besides the engine's kinds (docs/games.md): the town
 // (a singleton: its counts, its stock, its speed), each row of the map (its tiles and,
@@ -87,7 +88,7 @@ check_speed :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	return s == 0 || s == 1 || s == 2 || s == 4
 }
 
-KINDS :: game.Game_Kinds {
+KINDS :: protocol.Game_Kinds {
 	states   = {
 		{name = "hamlet.town", value = Town},
 		// (keyed by numbers of the game's own, a row, a structure: an Entity key is any u32)

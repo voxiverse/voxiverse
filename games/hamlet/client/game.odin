@@ -6,6 +6,7 @@ import "core:strconv"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:protocol"
 import "games:hamlet"
 
 // Hamlet's client part (the game: games/hamlet): a free camera over the village (no
@@ -100,7 +101,7 @@ ended :: proc(s: ^engine.Session) {
 	for &t in v.templates {delete(t.cells)}
 }
 
-received :: proc(s: ^engine.Session, r: game.Received) {
+received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if town, ok := engine.game_value(s, r, hamlet.Town); ok && town != nil {
 		v.town = town^
