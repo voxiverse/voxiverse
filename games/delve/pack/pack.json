@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "delve",
+	"version": "1.0.0",
+	"title": "Delve",
+	"description": "Delve's dungeon blocks, its creatures and chests, its weapons, potions and coins, and the delver's mode.",
+	"requires": ["voxiverse"]
+}

@@ -1,0 +1,17 @@
+{
+	// The dungeon's: never broken nor placed by a delver (the game refuses every edit).
+	"flagstone": {
+		"textures": {"all": "voxiverse:cobblestone"},
+		"sound": "voxiverse:stone"
+	},
+	"wall": {
+		"textures": {"side": "voxiverse:stone_bricks", "top": "voxiverse:bedrock", "bottom": "voxiverse:stone_bricks"},
+		"sound": "voxiverse:stone"
+	},
+	// The way down: it glows in the warden's room once the warden is dead.
+	"way_down": {
+		"textures": {"all": "voxiverse:gate_horizon"},
+		"light": 15,
+		"sound": "voxiverse:glass"
+	}
+}

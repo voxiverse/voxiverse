@@ -1,0 +1,43 @@
+{
+	// The weapons: their numbers are the plain ones; a rolled one's bonus is its stack's
+	// data (the game's harming hook adds it).
+	"sword": {
+		"model": "delve:sword",
+		"description": "Quick and sure. Swings in a wide arc.",
+		"stack": 1,
+		"melee": {"damage": 4, "reach": 2.6, "arc": 110, "cooldown": 0.45}
+	},
+	"axe": {
+		"model": "delve:axe",
+		"description": "Slow and heavy. Swings in a wider arc.",
+		"stack": 1,
+		"melee": {"damage": 7, "reach": 2.8, "arc": 150, "cooldown": 0.9}
+	},
+	"bow": {
+		"model": "delve:bow",
+		"description": "Shoots where you point. Thirty arrows, then restring.",
+		"stack": 1,
+		"weapon": {
+			"damage": 3,
+			"magazine": 30,
+			"fire_rate": 2.5,
+			"automatic": false,
+			"range": 30,
+			"headshot": 1.5,
+			"zoom": 0.0,
+			"reload_time": 1.5,
+			"spread": 0.0,
+			"sound": "pistol"
+		}
+	},
+	"potion": {
+		"model": "delve:potion",
+		"description": "Drink it (X) to heal.",
+		"stack": 16
+	},
+	"coin": {
+		"model": "delve:coin",
+		"description": "The dungeon's gold.",
+		"stack": 64
+	}
+}

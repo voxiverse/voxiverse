@@ -1,0 +1,100 @@
+{
+	// The creatures: walkers the game steers, each a shape of boxes. Their "attack" is
+	// their blow (and the spitters' and the warden's spit); what they do and when is
+	// the game's. Health and damage here are a first dungeon's: deeper ones scale them.
+	"biter": {
+		"box": [0.6, 0.6], "health": 4, "hittable": true, "physics": "walker",
+		"walker": {"walk_speed": 4.6, "run_speed": 4.6, "jump": 1.2, "step": 0},
+		"brain": "steered",
+		"attack": {"damage": 1, "reach": 0.7, "cooldown": 0.6},
+		"looks": ["striking"],
+		"model": {"parts": [
+			{"box": [-0.25, 0.2, -0.3, 0.25, 0.5, 0.3], "color": [92, 98, 84]},
+			{"box": [-0.18, 0.25, -0.52, 0.18, 0.52, -0.25], "color": [124, 132, 106], "skin": "head", "swing": "strike"},
+			{"box": [-0.22, 0, -0.25, -0.1, 0.22, -0.13], "color": [64, 66, 58], "skin": "legs", "swing": "walk"},
+			{"box": [0.1, 0, -0.25, 0.22, 0.22, -0.13], "color": [64, 66, 58], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.22, 0, 0.13, -0.1, 0.22, 0.25], "color": [64, 66, 58], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.1, 0, 0.13, 0.22, 0.22, 0.25], "color": [64, 66, 58], "skin": "legs", "swing": "walk"},
+			{"box": [-0.04, 0.36, 0.3, 0.04, 0.42, 0.58], "color": [64, 66, 58]}
+		]}
+	},
+	"husk": {
+		"box": [0.7, 1.8], "health": 12, "hittable": true, "physics": "walker",
+		"walker": {"walk_speed": 2.9, "run_speed": 2.9, "jump": 1.2, "step": 0},
+		"brain": "steered",
+		"attack": {"damage": 3, "reach": 0.9, "cooldown": 1.1},
+		"looks": ["striking"],
+		"model": {"parts": [
+			{"box": [-0.25, 0, -0.1, -0.03, 0.85, 0.1], "color": [70, 64, 52], "skin": "legs", "swing": "walk"},
+			{"box": [0.03, 0, -0.1, 0.25, 0.85, 0.1], "color": [70, 64, 52], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.3, 0.85, -0.15, 0.3, 1.45, 0.15], "color": [110, 120, 86]},
+			{"box": [-0.2, 1.45, -0.2, 0.2, 1.8, 0.2], "color": [150, 158, 120], "skin": "head"},
+			{"box": [-0.42, 0.75, -0.1, -0.3, 1.42, 0.1], "color": [130, 140, 104], "swing": "walk_back"},
+			{"box": [0.3, 0.75, -0.1, 0.42, 1.42, 0.1], "color": [130, 140, 104], "swing": "strike"}
+		]}
+	},
+	"spitter": {
+		"box": [0.7, 1.5], "health": 9, "hittable": true, "physics": "walker",
+		"walker": {"walk_speed": 2.6, "run_speed": 2.6, "jump": 1.2, "step": 0},
+		"brain": "steered",
+		"attack": {"damage": 2, "reach": 0.8, "cooldown": 1.6, "shot": "delve:spit"},
+		"looks": ["striking"],
+		"model": {"parts": [
+			{"box": [-0.25, 0, -0.1, -0.05, 0.5, 0.1], "color": [60, 40, 76], "skin": "legs", "swing": "walk"},
+			{"box": [0.05, 0, -0.1, 0.25, 0.5, 0.1], "color": [60, 40, 76], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.32, 0.5, -0.2, 0.32, 1.1, 0.25], "color": [98, 62, 120]},
+			{"box": [-0.2, 0.8, 0.25, 0.2, 1.2, 0.45], "color": [110, 170, 70]},
+			{"box": [-0.26, 1.0, -0.42, 0.26, 1.5, 0.05], "color": [140, 96, 170], "skin": "head", "swing": "strike"}
+		]}
+	},
+	"brute": {
+		"box": [1.2, 2.4], "health": 36, "hittable": true, "physics": "walker",
+		"walker": {"walk_speed": 1.8, "run_speed": 1.8, "jump": 1.2, "step": 0},
+		"brain": "steered",
+		"attack": {"damage": 7, "reach": 1.2, "cooldown": 1.8},
+		"looks": ["striking"],
+		"model": {"parts": [
+			{"box": [-0.45, 0, -0.15, -0.1, 1.0, 0.2], "color": [82, 50, 40], "skin": "legs", "swing": "walk"},
+			{"box": [0.1, 0, -0.15, 0.45, 1.0, 0.2], "color": [82, 50, 40], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.55, 1.0, -0.3, 0.55, 1.9, 0.3], "color": [128, 70, 52]},
+			{"box": [-0.25, 1.9, -0.28, 0.25, 2.4, 0.2], "color": [160, 100, 80], "skin": "head"},
+			{"box": [-0.8, 0.9, -0.18, -0.55, 1.85, 0.18], "color": [146, 84, 62], "swing": "walk_back"},
+			{"box": [0.55, 0.9, -0.18, 0.8, 1.85, 0.18], "color": [146, 84, 62], "swing": "strike"}
+		]}
+	},
+	"warden": {
+		"box": [1.6, 3.0], "health": 160, "hittable": true, "physics": "walker",
+		"walker": {"walk_speed": 2.2, "run_speed": 2.2, "jump": 1.2, "step": 0},
+		"brain": "steered",
+		"attack": {"damage": 9, "reach": 1.6, "cooldown": 1.5, "shot": "delve:spit"},
+		"looks": ["striking"],
+		"model": {"parts": [
+			{"box": [-0.6, 0, -0.2, -0.15, 1.2, 0.25], "color": [40, 42, 54], "skin": "legs", "swing": "walk"},
+			{"box": [0.15, 0, -0.2, 0.6, 1.2, 0.25], "color": [40, 42, 54], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.75, 1.2, -0.4, 0.75, 2.4, 0.4], "color": [52, 56, 72]},
+			{"box": [-0.5, 1.6, -0.45, 0.5, 2.2, -0.4], "color": [200, 170, 60]},
+			{"box": [-0.35, 2.4, -0.35, 0.35, 3.0, 0.3], "color": [70, 74, 96], "skin": "head"},
+			{"box": [-0.48, 2.75, -0.1, -0.35, 3.25, 0.02], "color": [200, 170, 60]},
+			{"box": [0.35, 2.75, -0.1, 0.48, 3.25, 0.02], "color": [200, 170, 60]},
+			{"box": [-1.05, 1.1, -0.25, -0.75, 2.35, 0.25], "color": [62, 66, 86], "swing": "walk_back"},
+			{"box": [0.75, 1.1, -0.25, 1.05, 2.35, 0.25], "color": [62, 66, 86], "swing": "strike"}
+		]}
+	},
+	// The spitters' and the warden's spit: it hurts what it hits by its spitter's damage.
+	"spit": {
+		"box": [0.3, 0.3], "physics": "projectile",
+		"projectile": {"speed": 13, "gravity": 0, "life": 2.5, "explode": 0},
+		"model": {"parts": [
+			{"box": [-0.15, 0, -0.15, 0.15, 0.3, 0.15], "color": [130, 210, 70]}
+		]}
+	},
+	// A chest: a blow breaks it open, and its loot spills out.
+	"chest": {
+		"box": [0.9, 0.8], "health": 1, "hittable": true,
+		"model": {"parts": [
+			{"box": [-0.45, 0, -0.35, 0.45, 0.55, 0.35], "color": [122, 84, 46]},
+			{"box": [-0.47, 0.55, -0.37, 0.47, 0.8, 0.37], "color": [96, 64, 34]},
+			{"box": [-0.08, 0.35, -0.39, 0.08, 0.65, -0.35], "color": [210, 170, 60]}
+		]}
+	}
+}

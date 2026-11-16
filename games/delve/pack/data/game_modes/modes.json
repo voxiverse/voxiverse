@@ -1,0 +1,13 @@
+{
+	// Delving: a body that can be hurt, nothing dropped at death (the game takes its toll),
+	// a sword, a bow and three potions to start with.
+	"delver": {
+		"abilities": ["health"],
+		"kit": [
+			{"item": "delve:sword", "count": 1, "slot": "hotbar"},
+			{"item": "delve:bow", "count": 1, "slot": "hotbar"},
+			{"item": "delve:potion", "count": 3, "slot": "pockets"}
+		],
+		"rules": {}
+	}
+}
