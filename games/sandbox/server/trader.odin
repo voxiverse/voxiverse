@@ -331,6 +331,12 @@ dry_land :: proc(w: ^core.World, x, z: i32) -> bool {
 	return c.height >= f32(params.sea_level) + 1 && c.river < 0.5 && lake < 0.5
 }
 
+// TOWN_NOT_EARTH: /town in a world not built on the planet: its peoples and their towns are
+// Earth's history, so such a world has none, however long one waits.
+TOWN_NOT_EARTH :: "No towns here: towns are Earth's, and this world is not Earth (make a universe on Earth)"
+// TOWN_NOT_YET: /town on Earth before its towns are worked out (a few seconds after arriving).
+TOWN_NOT_YET :: "The towns are still being worked out: try again in a few seconds"
+
 // town_command: `/town` takes the player to the nearest town with a market and dry land in
 // its radius, set down from above that land (the teleport permission; a planet world whose
 // towns are known).
@@ -341,12 +347,13 @@ town_command :: proc(s: ^core.Server, c: ^core.Client) -> bool {
 	}
 	w := c.world
 	we := world_of(w).economy
-	if w.params.planet == 0 || we == nil || !we.built {
-		core.notice(
-			s,
-			c,
-			"No towns are known here (a world on the planet knows them soon after you arrive)",
-		)
+	if w.params.planet == 0 {
+		// (a scratch world, `--game sandbox`, and a universe not made on Earth: never any)
+		core.notice(s, c, TOWN_NOT_EARTH)
+		return true
+	}
+	if we == nil || !we.built {
+		core.notice(s, c, TOWN_NOT_YET)
 		return true
 	}
 	o := economy_observer(c)

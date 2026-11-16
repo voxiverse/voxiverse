@@ -246,3 +246,21 @@ test_town_sets_a_player_down_on_land :: proc(t: ^testing.T) {
 	town, there := trader_where(r.w, c)
 	testing.expect(t, there && town == wet, "not set down in the town's market")
 }
+
+// /town in a world not built on the planet (a scratch world, a universe not made on Earth)
+// says there are no towns there, rather than to wait for them: none will come.
+@(test)
+test_town_says_a_world_off_earth_has_none :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, GAME) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	testing.expect_value(t, s.home.params.planet, 0) // (the harness's world is no planet)
+	for _ in 0 ..< 3 {
+		testing.expect(t, command(s, playtest.host(rig), "town", nil))
+		playtest.step(rig, playtest.ticks(2))
+	}
+	testing.expect(t, playtest.told(rig, TOWN_NOT_EARTH), "not told the world is not Earth")
+	testing.expect(t, world_of(s.home).economy == nil, "an economy made off Earth")
+}
