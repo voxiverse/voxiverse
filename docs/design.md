@@ -170,7 +170,9 @@ its own kinds as data, which follow the engine's in the session's schema
 
 ### Input
 Platform events (keyboard, mouse, gamepads) go through the action map (rebindable, per context:
-in the world, in a menu) to a per-tick input command. Analog values (sticks, triggers) are
+in the world, in a menu) to a per-tick input command. The game playing's own actions and keys
+are rebindable too, kept per game, and in the world a key bound to one of them is the game's
+alone ([games.md](games.md)). Analog values (sticks, triggers) are
 actions too. Text input is a separate event stream for UI and console.
 
 ### Console and variables

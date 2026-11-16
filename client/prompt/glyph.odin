@@ -205,9 +205,10 @@ prompt_glyph_for :: proc(
 	family: platform.Pad_Family,
 	action: engine.Action,
 	settings: ^engine.Settings,
+	game: ^engine.Game_Binds = nil, // the game playing's bindings (its actions' keys)
 ) -> engine.Prompt_Glyph {
 	if device == .Keyboard {
-		for k in engine.action_keys(&settings.keys, action) {
+		for k in engine.action_keys(&settings.keys, action, game) {
 			if k == .Unknown {continue}
 			#partial switch k {
 			case .Mouse_Left:
@@ -283,6 +284,7 @@ prompt_glyph :: proc(app: ^engine.App, action: engine.Action) -> engine.Prompt_G
 		app.actions.pad_family,
 		action,
 		&app.settings,
+		engine.game_binds(app),
 	)
 }
 

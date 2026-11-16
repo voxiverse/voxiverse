@@ -205,6 +205,7 @@ Session :: struct {
 	game:             Game, // the game the server plays (game.odin; zero: none)
 	game_state:       []byte, // its state (game_state), in the arena
 	game_screen:      bool, // the game's screen is open (game_screen_open; game.odin)
+	binds:            Game_Binds, // the keys of the game's actions and its own keys (game.odin)
 	game_keys:        [protocol.MAX_GAME_ACTIONS]Key_Label, // the keys bound to its actions, named (game_action_key)
 	game_pressed:     bit_set[0 ..< protocol.MAX_GAME_ACTIONS], // its actions pressed this frame (game_action_pressed)
 	game_key_pressed: bit_set[0 ..< MAX_GAME_KEYS], // its own keys pressed this frame (game_key_pressed)

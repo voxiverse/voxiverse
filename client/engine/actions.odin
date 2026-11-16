@@ -203,12 +203,18 @@ KEY_COVERED_BY :: [?]struct {
 	{.Section_Prev, "the player menu's keys switch sections"},
 	{.Section_Next, "the player menu's keys switch sections"},
 	{.Catalog, "the Catalog button"},
+	{.Game_1, "the game's own binding (Game_Binds: its group in the controls)"},
+	{.Game_2, "the game's own binding (Game_Binds: its group in the controls)"},
+	{.Game_3, "the game's own binding (Game_Binds: its group in the controls)"},
 }
 
 // action_key: the rebindable key of a, nil where it is fixed or none.
 action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 	switch a {
 	case .None,
+	     .Game_1,
+	     .Game_2,
+	     .Game_3,
 	     .Pause,
 	     .Menu_Up,
 	     .Menu_Down,
@@ -296,12 +302,6 @@ action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 		return &b.fullscreen
 	case .Dev_Chat:
 		return &b.dev_chat
-	case .Game_1:
-		return &b.game_1
-	case .Game_2:
-		return &b.game_2
-	case .Game_3:
-		return &b.game_3
 	}
 	return nil
 }
@@ -394,9 +394,13 @@ action_field :: proc(a: Action) -> string {
 	return strings.to_lower(name, context.temp_allocator)
 }
 
-// action_keys: every key (bound, then fixed) that makes a.
-action_keys :: proc(b: ^Bindings, a: Action) -> (out: [3]platform.Key) {
+// action_keys: every key (bound, then fixed) that makes a; a game action's from the
+// game's own bindings (nil: none playing).
+action_keys :: proc(b: ^Bindings, a: Action, game: ^Game_Binds = nil) -> (out: [3]platform.Key) {
 	if k := action_key(b, a); k != nil {out[0] = k^}
+	for g, i in GAME_ACTIONS {
+		if g == a && game != nil && i < game.actions_len {out[0] = game.actions[i]}
+	}
 	out[1], out[2] = ACTION_INFO[a].fixed_keys[0], ACTION_INFO[a].fixed_keys[1]
 	return
 }
@@ -412,6 +416,7 @@ action_pads :: proc(p: ^Pad_Bindings, a: Action) -> (out: [3]platform.Pad_Button
 binding_conflicts :: proc(
 	keys: ^Bindings,
 	pad: ^Pad_Bindings,
+	game: ^Game_Binds = nil,
 ) -> (
 	key_clash, pad_clash: bit_set[Action],
 ) {
@@ -425,7 +430,7 @@ binding_conflicts :: proc(
 			if (a == .Tab_Prev && b == .Section_Prev) || (a == .Tab_Next && b == .Section_Next) {
 				continue
 			}
-			ka, kb := action_keys(keys, a), action_keys(keys, b)
+			ka, kb := action_keys(keys, a, game), action_keys(keys, b, game)
 			for x in ka {
 				if x == .Unknown {continue}
 				for y in kb {
@@ -523,7 +528,9 @@ pad_merge :: proc(
 }
 
 // actions_update: this frame's actions from the input, in context ctx.
-// typing: a text field has the keyboard (bound keys then do nothing).
+// typing: a text field has the keyboard (bound keys then do nothing). game: the
+// bindings of the game playing (nil: none): its actions' keys, and in the world a
+// key of its is its alone (game_owns_key).
 actions_update :: proc(
 	a: ^Actions,
 	input: ^Input_State,
@@ -531,6 +538,7 @@ actions_update :: proc(
 	ctx: Action_Context,
 	typing: bool,
 	dt: f32,
+	game: ^Game_Binds = nil,
 ) {
 	// The merged pad and the triggers.
 	a.pad_buttons, a.pad_axes = pad_merge(&input.pads)
@@ -553,9 +561,12 @@ actions_update :: proc(
 	a.key_down, a.key_pressed = {}, {}
 	for act in Action {
 		if act == .None {continue}
-		keys := action_keys(&settings.keys, act)
+		keys := action_keys(&settings.keys, act, game)
+		is_game := act >= .Game_1 && act <= .Game_3
 		for k, i in keys {
 			if k == .Unknown || (typing && i == 0) {continue}
+			// In the world a key of the game's is the game's alone.
+			if ctx == .World && !is_game && game_owns_key(game, k) {continue}
 			if k in input.held {raw_down, a.key_down = raw_down + {act}, a.key_down + {act}}
 			if k in
 			   input.pressed {raw_pressed, a.key_pressed = raw_pressed + {act}, a.key_pressed + {act}}
@@ -585,6 +596,17 @@ actions_update :: proc(
 		if ctx in ACTION_INFO[act].contexts {in_ctx += {act}}
 	}
 	usable := in_ctx - a.latched
+	if ctx == .World && game != nil && game.no_hotbar {
+		usable -= {
+			.Hotbar_1,
+			.Hotbar_2,
+			.Hotbar_3,
+			.Hotbar_4,
+			.Hotbar_5,
+			.Hotbar_Next,
+			.Hotbar_Previous,
+		}
+	}
 	a.down = raw_down & usable
 	a.pressed = raw_pressed & usable
 	a.pad_acts = pad_raw_pressed & usable
@@ -704,7 +726,15 @@ HOTBAR_ACTIONS :: [5]Action{.Hotbar_1, .Hotbar_2, .Hotbar_3, .Hotbar_4, .Hotbar_
 // (zero time passes).
 actions_sync :: proc(app: ^App, dt: f32 = 0) {
 	ctx: Action_Context = .World if game_controls(app) else .Menu
-	actions_update(&app.actions, &app.input, &app.settings, ctx, app.ui.edit.active, dt)
+	actions_update(
+		&app.actions,
+		&app.input,
+		&app.settings,
+		ctx,
+		app.ui.edit.active,
+		dt,
+		game_binds(app),
+	)
 }
 
 // action_label: what to call action a on screen, for the device last used.
@@ -716,7 +746,7 @@ action_label :: proc(app: ^App, a: Action) -> string {
 			   .None {return pad_button_name(app.actions.pad_family, app.actions.pad_product, b)}
 		}
 	}
-	keys := action_keys(&app.settings.keys, a)
+	keys := action_keys(&app.settings.keys, a, game_binds(app))
 	for k in keys {
 		if k != .Unknown {return key_label(&app.window, k)}
 	}

@@ -1,12 +1,15 @@
 package main
 
+import "core:os"
 import "core:testing"
 
 import "client:engine"
 import "client:font"
 import "client:overlay"
+import "client:platform"
 import "client:testkit"
 import "client:ui"
+import "common:base"
 import "common:game"
 import "common:protocol"
 
@@ -123,7 +126,8 @@ test_a_games_actions_name_their_keys :: proc(t: ^testing.T) {
 	defer shop_fixture_destroy(&f)
 	app, s := f.app, f.s
 	s.game.actions = {"Shop", "Haggle"}
-	app.settings.keys.game_2 = .H
+	shop_frame(app) // (the game's bindings read: its defaults)
+	s.binds.actions[1] = .H
 	shop_frame(app)
 	testing.expect_value(t, engine.game_action_key(s, 0), "Z")
 	testing.expect_value(t, engine.game_action_key(s, 1), "H")
@@ -169,4 +173,150 @@ test_a_games_own_keys :: proc(t: ^testing.T) {
 	shop_frame(app)
 	shop_frame(app)
 	testing.expect(t, !engine.game_key_pressed(s, 0), "heard under its screen")
+}
+
+// A key goes to one consumer: in the world a key bound to the game's action or key is the
+// game's alone (the hotbar's slot on the same digit does not fire), rebound it is the
+// engine's again, and a game whose players hold no hotbar frees the hotbar's keys.
+@(test)
+test_a_games_key_is_its_alone :: proc(t: ^testing.T) {
+	f: Shop_Fixture
+	shop_fixture(t, &f)
+	defer shop_fixture_destroy(&f)
+	app, s := f.app, f.s
+	s.game.actions = {"Shop"}
+	s.game.keys = {{"Group 1", .Num_1}}
+	shop_frame(app)
+	press :: proc(app: ^engine.App, k: platform.Key) {
+		app.input.pressed, app.input.held = {k}, {k}
+		engine.actions_update(
+			&app.actions,
+			&app.input,
+			&app.settings,
+			.World,
+			false,
+			1.0 / 60,
+			engine.game_binds(app),
+		)
+		shop_frame(app)
+		app.input.pressed, app.input.held = {}, {}
+		engine.actions_update(
+			&app.actions,
+			&app.input,
+			&app.settings,
+			.World,
+			false,
+			1.0 / 60,
+			engine.game_binds(app),
+		)
+	}
+	press(app, .Num_1)
+	testing.expect(t, engine.game_key_pressed(s, 0), "the game's key not heard")
+	testing.expect(t, .Hotbar_1 not_in app.actions.pressed, "the hotbar heard the game's key")
+	// Without the game, the digit is the hotbar's.
+	app.input.pressed, app.input.held = {.Num_1}, {.Num_1}
+	engine.actions_update(&app.actions, &app.input, &app.settings, .World, false, 1.0 / 60)
+	testing.expect(t, .Hotbar_1 in app.actions.pressed)
+	app.input.pressed, app.input.held = {}, {}
+	engine.actions_update(&app.actions, &app.input, &app.settings, .World, false, 1.0 / 60)
+
+	// The game's action bound to a digit: the action fires, the hotbar's slot does not.
+	s.binds.actions[0] = .Num_2
+	s.binds.keys[0] = .G
+	app.input.pressed, app.input.held = {.Num_2}, {.Num_2}
+	engine.actions_update(
+		&app.actions,
+		&app.input,
+		&app.settings,
+		.World,
+		false,
+		1.0 / 60,
+		engine.game_binds(app),
+	)
+	testing.expect(t, .Game_1 in app.actions.pressed, "the game's action did not fire")
+	testing.expect(t, .Hotbar_2 not_in app.actions.pressed, "the hotbar heard the game's action")
+	app.input.pressed, app.input.held = {}, {}
+	engine.actions_update(
+		&app.actions,
+		&app.input,
+		&app.settings,
+		.World,
+		false,
+		1.0 / 60,
+		engine.game_binds(app),
+	)
+	// Rebound away from the digit: it is the hotbar's again.
+	app.input.pressed, app.input.held = {.Num_1}, {.Num_1}
+	engine.actions_update(
+		&app.actions,
+		&app.input,
+		&app.settings,
+		.World,
+		false,
+		1.0 / 60,
+		engine.game_binds(app),
+	)
+	testing.expect(t, .Hotbar_1 in app.actions.pressed, "a rebound key still the game's")
+	app.input.pressed, app.input.held = {}, {}
+	engine.actions_update(
+		&app.actions,
+		&app.input,
+		&app.settings,
+		.World,
+		false,
+		1.0 / 60,
+		engine.game_binds(app),
+	)
+
+	// A game with no hotbar: the hotbar's keys pick nothing.
+	s.game.no_hotbar = true
+	s.binds.loaded = false
+	shop_frame(app)
+	app.input.pressed, app.input.held = {.Num_3}, {.Num_3}
+	engine.actions_update(
+		&app.actions,
+		&app.input,
+		&app.settings,
+		.World,
+		false,
+		1.0 / 60,
+		engine.game_binds(app),
+	)
+	testing.expect(t, .Hotbar_3 not_in app.actions.pressed, "a hotbar key in a game with none")
+}
+
+// The keys a player binds to a game are kept for that game, and another game keeps its own.
+@(test)
+test_a_games_keys_are_saved_for_it :: proc(t: ^testing.T) {
+	saved := base.boot_info()
+	info := saved
+	info.env.settings = "build/test/game_keys_test/settings.cfg"
+	base.boot_install(info)
+	defer base.boot_install(saved)
+	defer os.remove_all("build/test/game_keys_test")
+
+	f: Shop_Fixture
+	shop_fixture(t, &f)
+	defer shop_fixture_destroy(&f)
+	app, s := f.app, f.s
+	s.game.actions = {"Shop"}
+	s.game.keys = {{"Group 1", .Num_1}, {"Stop", .S}}
+	shop_frame(app)
+	testing.expect_value(t, s.binds.keys[1], platform.Key.S) // (its default)
+	s.binds.actions[0], s.binds.keys[1] = .K, .Num_9
+	engine.game_binds_save(app)
+
+	// The same game again: as bound.
+	s.binds = {}
+	shop_frame(app)
+	testing.expect_value(t, s.binds.actions[0], platform.Key.K)
+	testing.expect_value(t, s.binds.keys[0], platform.Key.Num_1)
+	testing.expect_value(t, s.binds.keys[1], platform.Key.Num_9)
+	testing.expect_value(t, engine.game_key_label(s, 1), "9")
+	// Another game: its own defaults.
+	s.game.id = "other"
+	s.binds = {}
+	shop_frame(app)
+	testing.expect_value(t, s.binds.actions[0], platform.Key.Z)
+	testing.expect_value(t, s.binds.keys[1], platform.Key.S)
 }

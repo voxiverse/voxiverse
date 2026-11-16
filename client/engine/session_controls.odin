@@ -64,7 +64,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, a: ^Actions, dt: f32) {
 		a,
 		.Hotbar_Previous,
 	) {select = (s.inventory.selected - 1 + n_slots) % n_slots}
-	if input.wheel.y != 0 {
+	if input.wheel.y != 0 && !s.game.no_hotbar {
 		n := game.HOTBAR_SLOTS
 		select = (s.inventory.selected - int(math.sign(input.wheel.y)) + n) % n
 	}

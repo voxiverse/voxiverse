@@ -183,7 +183,7 @@ options_body :: proc(
 	// The tab's rows, scrolled by the wheel when they do not fit.
 	step := t.row_height + t.spacing
 	rows := len(OPTIONS_TABS[o.tab])
-	if o.tab == .Controls {rows += 2 + binding_row_count(app) + 1} 	// a gap, a heading, the table, Reset
+	if o.tab == .Controls {rows += 2 + binding_row_count(app) + game_row_count(app) + 1} 	// a gap, a heading, the tables, Reset
 	overflow := max(0, f32(rows) * step - column.h)
 	if ui.rect_contains(column, ctx.input.mouse) && ctx.input.wheel.y != 0 {
 		o.scroll -= ctx.input.wheel.y * step
@@ -213,6 +213,10 @@ options_body :: proc(
 		if ui.button(ctx, engine.tr(.Options_Reset_Keys), ui.cut_left(&reset, reset.w * 0.5)) {
 			app.settings.keys = engine.DEFAULT_BINDINGS
 			engine.settings_changed(app)
+			if b := engine.game_binds(app); b != nil {
+				engine.game_binds_reset(b, &app.session.game)
+				engine.game_binds_save(app)
+			}
 		}
 		if ui.button(ctx, engine.tr(.Options_Reset_Pad_Buttons), reset) {
 			app.settings.pad = engine.DEFAULT_PAD_BINDINGS
@@ -246,12 +250,15 @@ BINDING_GROUPS := [?]struct {
 	contexts: bit_set[engine.Action_Context],
 }{{"In the world", {.World}}, {"In menus", {.Menu}}, {"Anywhere", {.World, .Menu}}}
 
-// binding_rows: the actions with a source to rebind, by group.
+// binding_rows: the actions with a source to rebind, by group (not the hotbar's in a game
+// whose players hold none).
 binding_rows :: proc(app: ^engine.App, group: int) -> (out: [dynamic]engine.Action) {
 	out = make([dynamic]engine.Action, context.temp_allocator)
+	game := engine.game_binds(app)
 	for a in engine.Action {
 		if a == .None ||
 		   engine.ACTION_INFO[a].contexts != BINDING_GROUPS[group].contexts {continue}
+		if game != nil && game.no_hotbar && a >= .Hotbar_1 && a <= .Hotbar_Previous {continue}
 		if engine.action_key(&app.settings.keys, a) != nil ||
 		   engine.action_pad(&app.settings.pad, a) != nil {
 			append(&out, a)
@@ -267,6 +274,75 @@ binding_row_count :: proc(app: ^engine.App) -> int {
 		n += 1 + len(binding_rows(app, g))
 	}
 	return n
+}
+
+// game_row_count: the game's group (its heading and a row per action and key) while a game
+// with any plays.
+game_row_count :: proc(app: ^engine.App) -> int {
+	b := engine.game_binds(app)
+	if b == nil || b.actions_len + b.keys_len == 0 {return 0}
+	return 1 + b.actions_len + b.keys_len
+}
+
+// game_bind_clash: the game's binding i shares its key with another of the game's or with
+// an engine action read in the world (which then does not fire there: the key is the game's).
+game_bind_clash :: proc(app: ^engine.App, b: ^engine.Game_Binds, i: int) -> bool {
+	k, _ := engine.game_bind_key(b, &app.session.game, i)
+	if k == nil || k^ == .Unknown {return false}
+	for j in 0 ..< b.actions_len + b.keys_len {
+		if other, _ := engine.game_bind_key(b, &app.session.game, j); j != i && other^ == k^ {
+			return true
+		}
+	}
+	for a in engine.Action {
+		if a == .None || .World not_in engine.ACTION_INFO[a].contexts {continue}
+		if a >= .Game_1 && a <= .Game_3 {continue}
+		for x in engine.action_keys(&app.settings.keys, a) {if x == k^ {return true}}
+	}
+	return false
+}
+
+// game_bindings_list: the game's own actions and keys under its name, each a row with its
+// key's cell: pressing it listens (Escape: unchanged); the binding is saved for the game at
+// once. A key shared with another binding is framed.
+@(private = "file")
+game_bindings_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
+	if game_row_count(app) == 0 {return}
+	t := &ctx.theme
+	o := &app.options
+	b := engine.game_binds(app)
+	g := &app.session.game
+	ui.push_id(ctx, "game keys")
+	defer ui.pop_id(ctx)
+	if o.listening == .Game_1 && !o.listening_pad {
+		for k in platform.Key {
+			if k == .Unknown || k == .Escape || k not_in app.input.pressed {continue}
+			if slot, _ := engine.game_bind_key(b, g, o.listening_game); slot != nil {
+				slot^ = k
+				engine.game_binds_save(app)
+			}
+			o.listening = .None
+			break
+		}
+	}
+	ui.label(ctx, g.name, ui.next(ctx), .Center, t.text_muted)
+	for i in 0 ..< b.actions_len + b.keys_len {
+		slot, name := engine.game_bind_key(b, g, i)
+		r := ui.next(ctx)
+		ui.push_id_int(ctx, i)
+		defer ui.pop_id(ctx)
+		ui.label(ctx, name, ui.cut_left(&r, r.w * 0.4))
+		kr := ui.cut_left(&r, r.w * 0.5)
+		text := engine.key_label(&app.window, slot^)
+		if o.listening == .Game_1 && o.listening_game == i {text = fmt.tprintf("> %s <", text)}
+		if ui.button(ctx, text, kr, id = "key cell") {
+			o.listening, o.listening_pad, o.listening_game = .Game_1, false, i
+		}
+		if game_bind_clash(app, b, i) {ui.stroke_rect(ctx, ui.rect_shrink(kr, 3), 2, t.warning)}
+		// (no pad button: a game's own bindings are the keyboard's)
+		none := engine.pad_button_name(app.actions.pad_family, app.actions.pad_product, .None)
+		ui.button(ctx, none, r, disabled = true)
+	}
 }
 
 @(private = "file")
@@ -291,8 +367,8 @@ bindings_list :: proc(app: ^engine.App, ctx: ^ui.Context) -> (changed: bool) {
 	key_clash, pad_clash := engine.binding_conflicts(keys, pad)
 	ui.push_id(ctx, "keys")
 	defer ui.pop_id(ctx)
-	// Waiting for a button: the first pressed.
-	if o.listening != .None {
+	// Waiting for a button: the first pressed (the game's bindings wait in their own list).
+	if o.listening != .None && o.listening != .Game_1 {
 		field := engine.action_field(o.listening)
 		if o.listening_pad {
 			for b in platform.Pad_Button {
@@ -360,6 +436,7 @@ bindings_list :: proc(app: ^engine.App, ctx: ^ui.Context) -> (changed: bool) {
 			}
 		}
 	}
+	game_bindings_list(app, ctx)
 	if o.listening == .None {return}
 
 	// Waiting: a dialog over everything takes the clicks, so the button
@@ -375,7 +452,7 @@ bindings_list :: proc(app: ^engine.App, ctx: ^ui.Context) -> (changed: bool) {
 		engine.tr(
 			.Options_Press_For,
 			engine.tr(.Options_Button) if o.listening_pad else engine.tr(.Options_Key),
-			engine.ACTION_INFO[o.listening].label,
+			listening_name(app),
 		),
 		ui.cut_top(&inner, t.row_height),
 		.Center,
@@ -389,6 +466,19 @@ bindings_list :: proc(app: ^engine.App, ctx: ^ui.Context) -> (changed: bool) {
 	)
 	_ = ui.interact(ctx, ui.get_id(ctx, "listening"), ctx.screen)
 	return
+}
+
+// listening_name: what the binding waiting for its key is called.
+@(private = "file")
+listening_name :: proc(app: ^engine.App) -> string {
+	o := &app.options
+	if o.listening == .Game_1 {
+		if b := engine.game_binds(app); b != nil {
+			_, name := engine.game_bind_key(b, &app.session.game, o.listening_game)
+			return name
+		}
+	}
+	return engine.ACTION_INFO[o.listening].label
 }
 
 // var_widget draws one variable in the current layout: a button cycling

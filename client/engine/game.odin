@@ -4,6 +4,10 @@ import "core:fmt"
 import "core:log"
 import "core:mem"
 import "core:mem/virtual"
+import "core:os"
+import "core:path/filepath"
+import "core:reflect"
+import "core:strings"
 
 import "client:platform"
 import "client:ui"
@@ -31,20 +35,152 @@ Game :: struct {
 	actions:    []string, // its own actions' names (at most game.MAX_GAME_ACTIONS): keys Game_1.. press them, its server part's action hook hears them
 	screen:     proc(s: ^Session, ctx: ^ui.Context, top: bool), // its screen, every frame while it is open (game_screen_open): a panel over the world drawn with the UI kit; top: it has the focus
 	keys:       []Game_Key, // its client part's own keys (at most MAX_GAME_KEYS): a command panel's hotkeys, control groups; read with game_key_pressed and game_key_down, never sent
+	no_hotbar:  bool, // its players hold no hotbar: in its world the hotbar's keys and the wheel pick no slot, and the controls do not list them
 }
 
 // MAX_GAME_KEYS: the keys a game's client part may declare (Game.keys).
 MAX_GAME_KEYS :: 32
 
-// Game_Key: one of a game's own keys: what it does (shown in the controls' words of the
-// game's HUD) and the key that does it. Unlike its actions (Game.actions: rebindable,
-// sent to its server part), these are its client part's to read alone: a strategy game's
-// many hotkeys and its control groups on the number keys. While the world has the
-// keyboard, a game's key is the game's: an engine action on the same key (a hotbar slot
-// on a number) still fires as well, so a game that takes the number keys plays bodiless.
+// Game_Key: one of a game's own keys: what it does (shown in the controls under the game's
+// name and in the controls' words of the game's HUD) and the key that does it until the
+// player binds another. Unlike its actions (Game.actions: sent to its server part), these
+// are its client part's to read alone: a strategy game's many hotkeys and its control
+// groups on the number keys.
 Game_Key :: struct {
 	name: string,
 	key:  platform.Key,
+}
+
+// GAME_ACTION_KEYS: the keys of a game's actions until the player binds others.
+GAME_ACTION_KEYS :: [protocol.MAX_GAME_ACTIONS]platform.Key{.Z, .X, .B}
+
+// Game_Binds: the keys the player bound to the game playing's actions and its own keys,
+// saved per game (keys/<game>.cfg beside the settings file: `<name> = <key>` lines, the
+// names the game's), and listed under the game's name in the controls while it plays. In
+// the world a key of the game's is the game's alone: an engine action bound to the same
+// key does not fire there (game_owns_key; menus are unchanged), and a game whose players
+// hold no hotbar (Game.no_hotbar) frees the hotbar's keys and the wheel.
+Game_Binds :: struct {
+	loaded:      bool, // read for the session's game (game_binds_load)
+	no_hotbar:   bool, // the game's Game.no_hotbar
+	actions:     [protocol.MAX_GAME_ACTIONS]platform.Key, // by Game.actions
+	actions_len: int,
+	keys:        [MAX_GAME_KEYS]platform.Key, // by Game.keys
+	keys_len:    int,
+}
+
+// game_binds: the bindings of the game the session plays (nil: no session, or not read yet).
+game_binds :: proc(app: ^App) -> ^Game_Binds {
+	if app.session == nil || !app.session.binds.loaded {return nil}
+	return &app.session.binds
+}
+
+// game_owns_key: k is bound to one of the game's actions or keys (game: nil, none).
+game_owns_key :: proc(game: ^Game_Binds, k: platform.Key) -> bool {
+	if game == nil || k == .Unknown {return false}
+	for x in game.actions[:game.actions_len] {if x == k {return true}}
+	for x in game.keys[:game.keys_len] {if x == k {return true}}
+	return false
+}
+
+// game_binds_reset: the game's own defaults (GAME_ACTION_KEYS, its keys' keys).
+game_binds_reset :: proc(b: ^Game_Binds, g: ^Game) {
+	b.no_hotbar = g.no_hotbar
+	b.actions_len = min(len(g.actions), protocol.MAX_GAME_ACTIONS)
+	b.keys_len = min(len(g.keys), MAX_GAME_KEYS)
+	b.actions = GAME_ACTION_KEYS
+	for k, i in g.keys[:b.keys_len] {b.keys[i] = k.key}
+	b.loaded = true
+}
+
+// game_binds_path: where the player's bindings of a game are kept (false: nowhere).
+game_binds_path :: proc(id: string) -> (path: string, ok: bool) {
+	settings := settings_path() or_return
+	context.allocator = context.temp_allocator
+	name := strings.concatenate({id, ".cfg"})
+	return filepath.join({filepath.dir(settings), "keys", name}) or_else "", true
+}
+
+// game_binds_load: the game's defaults, then what the player bound (its file, if any:
+// a benchmark's or a check's run reads none). A line naming nothing of the game's, or no
+// key, is logged and skipped.
+game_binds_load :: proc(app: ^App, s: ^Session) {
+	b := &s.binds
+	game_binds_reset(b, &s.game)
+	if app.benchmark || app.checking {return}
+	path, ok := game_binds_path(s.game.id)
+	if !ok {return}
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {return}
+	text := string(data)
+	n := 0
+	for line in strings.split_lines_iterator(&text) {
+		n += 1
+		l := strings.trim_space(line)
+		if l == "" || l[0] == '#' {continue}
+		name, _, value := strings.partition(l, "=")
+		name, value = strings.trim_space(name), strings.trim_space(value)
+		k, known := key_named(value)
+		slot := game_bind_slot(b, &s.game, name)
+		if !known || slot == nil {
+			log.warnf("game keys line ignored path=%s line=%d text=%q", path, n, line)
+			continue
+		}
+		slot^ = k
+	}
+}
+
+// game_binds_save writes the game's bindings (not a script's, a benchmark's or a check's).
+game_binds_save :: proc(app: ^App) {
+	s := app.session
+	b := game_binds(app)
+	if b == nil || app.scripted || app.benchmark || app.checking {return}
+	path, ok := game_binds_path(s.game.id)
+	if !ok {return}
+	out := strings.builder_make(context.temp_allocator)
+	fmt.sbprintf(&out, "# The keys of %s (written by the game)\n\n", s.game.name)
+	for name, i in s.game.actions[:b.actions_len] {
+		fmt.sbprintf(&out, "%s = %s\n", name, key_name(b.actions[i]))
+	}
+	for k, i in s.game.keys[:b.keys_len] {
+		fmt.sbprintf(&out, "%s = %s\n", k.name, key_name(b.keys[i]))
+	}
+	os.make_directory_all(filepath.dir(path))
+	if err := os.write_entire_file(path, out.buf[:]); err != nil {
+		log.errorf("game keys cannot write path=%s error=%v", path, err)
+	}
+}
+
+// game_bind_key: the game's binding i, its actions then its keys (nil: none), and its name.
+game_bind_key :: proc(b: ^Game_Binds, g: ^Game, i: int) -> (^platform.Key, string) {
+	switch {
+	case i < 0:
+	case i < b.actions_len:
+		return &b.actions[i], g.actions[i]
+	case i < b.actions_len + b.keys_len:
+		return &b.keys[i - b.actions_len], g.keys[i - b.actions_len].name
+	}
+	return nil, ""
+}
+
+// game_bind_slot: the binding of the game's action or key called name (nil: none).
+game_bind_slot :: proc(b: ^Game_Binds, g: ^Game, name: string) -> ^platform.Key {
+	for a, i in g.actions[:b.actions_len] {if a == name {return &b.actions[i]}}
+	for k, i in g.keys[:b.keys_len] {if k.name == name {return &b.keys[i]}}
+	return nil
+}
+
+// key_name: a key as the settings file writes it ("num_1"); key_named reads it back.
+key_name :: proc(k: platform.Key) -> string {
+	name, _ := reflect.enum_name_from_value(k)
+	return strings.to_lower(name, context.temp_allocator)
+}
+
+key_named :: proc(text: string) -> (platform.Key, bool) {
+	for k in platform.Key {
+		if strings.equal_fold(key_name(k), text) {return k, true}
+	}
+	return .Unknown, false
 }
 
 // The game's screen: a panel of the game's own over the world (a town's market, a shop),
@@ -111,26 +247,29 @@ game_action_pressed :: proc(s: ^Session, index: int) -> bool {
 }
 
 // game_screen_sync (every frame): the overlay stack holds the game's screen while the
-// session playing has it open, and only then; the names of the keys bound to the game's
-// actions are taken from the settings (game_action_key), which were pressed from the
-// actions (game_action_pressed), and its own keys' state from the input (game_key_pressed).
+// session playing has it open, and only then; the game's bindings are read once
+// (game_binds_load), the names of the keys bound to its actions taken from them
+// (game_action_key), which were pressed from the actions (game_action_pressed), and its
+// own keys' state from the input (game_key_pressed).
 game_screen_sync :: proc(app: ^App) {
 	s := app.session
+	if s != nil && !s.binds.loaded {game_binds_load(app, s)}
 	if s != nil {
+		b := &s.binds
 		s.game_pressed = {}
 		for action, i in GAME_ACTIONS {
-			label := key_label(&app.window, action_key(&app.settings.keys, action)^)
+			label := key_label(&app.window, b.actions[i])
 			s.game_keys[i].len = u8(copy(s.game_keys[i].text[:], label))
 			if key_action_pressed(&app.actions, action) {s.game_pressed += {i}}
 		}
 		s.game_key_pressed, s.game_key_down = {}, {}
-		world := game_controls(app)
-		for k, i in s.game.keys[:min(len(s.game.keys), MAX_GAME_KEYS)] {
-			label := key_label(&app.window, k.key)
+		world := game_controls(app) && !app.ui.edit.active
+		for key, i in b.keys[:b.keys_len] {
+			label := key_label(&app.window, key)
 			s.game_key_labels[i].len = u8(copy(s.game_key_labels[i].text[:], label))
-			if !world || k.key == .Unknown {continue}
-			if k.key in app.input.pressed {s.game_key_pressed += {i}}
-			if k.key in app.input.held {s.game_key_down += {i}}
+			if !world || key == .Unknown {continue}
+			if key in app.input.pressed {s.game_key_pressed += {i}}
+			if key in app.input.held {s.game_key_down += {i}}
 		}
 	}
 	if s != nil && s.state != .Playing {s.game_screen = false} 	// (the world left: closed)

@@ -11,7 +11,8 @@ import "common:base"
 // button by its place on the keyboard (platform.Key), so WASD stays a
 // cluster on any layout. The bindings are settings ("key.jump = space" in
 // the settings file, `set key.jump space` in the console); F1-F4, F11's
-// neighbours, Escape and the console key stay fixed.
+// neighbours, Escape and the console key stay fixed. The game playing's own
+// actions and keys are bound per game (Game_Binds, game.odin).
 
 Bindings :: struct {
 	forward:         platform.Key,
@@ -51,9 +52,6 @@ Bindings :: struct {
 	dev_chat:        platform.Key, // developer chat (while the devchat setting is set)
 	tab_prev:        platform.Key, // menus: the tab before
 	tab_next:        platform.Key, // menus: the tab after
-	game_1:          platform.Key, // the game's own actions (Game.actions)
-	game_2:          platform.Key,
-	game_3:          platform.Key,
 }
 
 DEFAULT_BINDINGS :: Bindings {
@@ -92,9 +90,6 @@ DEFAULT_BINDINGS :: Bindings {
 	dev_chat     = .F9,
 	tab_prev     = .Q,
 	tab_next     = .E,
-	game_1       = .Z,
-	game_2       = .X,
-	game_3       = .B,
 }
 
 @(rodata)
@@ -196,21 +191,6 @@ BINDING_VARS := [?]base.Var {
 		help = "In menus with tabs, go to the tab before.",
 	},
 	{field = "tab_next", label = "Next tab", help = "In menus with tabs, go to the tab after."},
-	{
-		field = "game_1",
-		label = "Game action 1",
-		help = "The game's first action of its own (its name is the game's).",
-	},
-	{
-		field = "game_2",
-		label = "Game action 2",
-		help = "The game's second action of its own (its name is the game's).",
-	},
-	{
-		field = "game_3",
-		label = "Game action 3",
-		help = "The game's third action of its own (its name is the game's).",
-	},
 }
 
 // menu_tab_step: -1, +1 or 0 from the tab actions pressed this frame. Typing
