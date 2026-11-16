@@ -345,14 +345,6 @@ test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
 	dir :: "build/tmp/test_game_stats"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	config := harness_world()
-	config.listen = true
-	config.save_dir = dir
-	config.game = harness_creatures()
-	config.game.stats = {
-		{name = "herded", kind = .Count, xp = 2},
-		{name = "trotted", kind = .Distance},
-	}
 	h := new(Harness)
 	defer free(h)
 	standing :: proc(cs: []^Net_Client) -> bool {return(
@@ -360,7 +352,7 @@ test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
 			cs[0].update.state.on_ground \
 		)}
 	for round in 0 ..< 2 {
-		if !testing.expect(t, harness_start(h, config)) {return}
+		if !testing.expect(t, start_counting(h, dir)) {return}
 		c := new(Net_Client)
 		net_connect(c, 0, "herder", h = h)
 		if testing.expect(t, net_wait(t, {c}, standing), "never stood") {
@@ -382,4 +374,20 @@ test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
 		harness_step(h, 4)
 		testing.expect(t, harness_stop(h))
 	}
+}
+
+// start_counting: the creatures game counting two statistics on h, started from a call
+// that returns before they are counted (the session keeps its own copy of the game's
+// list, not the caller's).
+@(private = "file")
+start_counting :: proc(h: ^Harness, dir: string) -> bool {
+	config := harness_world()
+	config.listen = true
+	config.save_dir = dir
+	config.game = harness_creatures()
+	config.game.stats = {
+		{name = "herded", kind = .Count, xp = 2},
+		{name = "trotted", kind = .Distance},
+	}
+	return harness_start(h, config)
 }

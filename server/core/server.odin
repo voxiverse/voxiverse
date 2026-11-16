@@ -8,6 +8,7 @@ import "core:mem/virtual"
 import "core:net"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -325,6 +326,9 @@ start :: proc(s: ^Server, config: Config, local: protocol.Endpoint) -> bool {
 	s.config.password = strings.clone(config.password, arena)
 	s.config.name = strings.clone(config.name, arena)
 	s.config.capture = strings.clone(config.capture, arena)
+	// (a game's list is a constant's, made where its Game was copied: the session keeps
+	// its own, so a Game given from a call that has returned is still whole)
+	s.config.game.stats = slice.clone(config.game.stats, arena)
 	s.home = world_make(s)
 	append(&s.worlds, s.home)
 	// A saved world's seed and rules replace the config's.
