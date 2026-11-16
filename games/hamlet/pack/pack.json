@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "hamlet",
+	"version": "1.0.0",
+	"title": "Hamlet",
+	"description": "Hamlet's planner (a camera with no body) and its citizens.",
+	"requires": ["voxiverse"]
+}

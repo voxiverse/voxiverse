@@ -1,0 +1,9 @@
+{
+	// The planner: no body in the village (the camera's focus moves over it freely, is
+	// not drawn and is in nobody's way), nothing to lose.
+	"planner": {
+		"abilities": ["bodiless", "invulnerable"],
+		"kit": [],
+		"rules": {}
+	}
+}

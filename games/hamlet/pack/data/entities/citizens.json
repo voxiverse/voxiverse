@@ -1,0 +1,18 @@
+{
+	// A citizen: a small walker the game steers along the roads (it glides: the game
+	// knows its roads are walkable). Shirt and trousers, a head with a hat.
+	"citizen": {
+		"box": [0.5, 1.3],
+		"health": 10,
+		"physics": "walker",
+		"walker": {"walk_speed": 3, "run_speed": 3, "jump": 0, "step": 0},
+		"brain": "steered",
+		"model": {"parts": [
+			{"box": [-0.18, 0, -0.08, -0.02, 0.55, 0.08], "color": [70, 60, 50], "skin": "legs", "swing": "walk"},
+			{"box": [0.02, 0, -0.08, 0.18, 0.55, 0.08], "color": [70, 60, 50], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.2, 0.55, -0.12, 0.2, 1.0, 0.12], "color": [180, 120, 60]},
+			{"box": [-0.14, 1.0, -0.14, 0.14, 1.26, 0.14], "color": [230, 190, 150], "skin": "head"},
+			{"box": [-0.17, 1.24, -0.17, 0.17, 1.32, 0.17], "color": [120, 90, 40]}
+		]}
+	}
+}
