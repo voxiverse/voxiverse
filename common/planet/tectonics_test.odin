@@ -43,27 +43,6 @@ test_relief_generate_deterministic :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_relief_generate_land_fraction :: proc(t: ^testing.T) {
-	for n in 0 ..< 6 {
-		a := address_n(u64(n))
-		r := relief_generate(a, 7)
-		defer relief_destroy(&r)
-		ch := relief_character(a)
-		share := land_share(r)
-		testing.expectf(
-			t,
-			abs(share - ch.land_fraction) < 0.05,
-			"world %d: land %.3f, target %.3f",
-			n,
-			share,
-			ch.land_fraction,
-		)
-		testing.expect(t, ch.plates >= 8 && ch.plates <= 20)
-		free_all(context.temp_allocator)
-	}
-}
-
-@(test)
 test_relief_generate_mountains_by_convergent_boundaries :: proc(t: ^testing.T) {
 	for n in 0 ..< 3 {
 		a := address_n(u64(100 + n))
@@ -105,36 +84,83 @@ test_relief_generate_mountains_by_convergent_boundaries :: proc(t: ^testing.T) {
 	}
 }
 
+// GENERATED_WORLDS: the worlds relief_world_check builds, one test each.
+GENERATED_WORLDS :: 20
 @(test)
-test_relief_generate_climates_0 :: proc(t: ^testing.T) {relief_climates_check(t, 0, 5)}
+test_relief_generate_world_00 :: proc(t: ^testing.T) {relief_world_check(t, 0)}
 @(test)
-test_relief_generate_climates_1 :: proc(t: ^testing.T) {relief_climates_check(t, 5, 10)}
+test_relief_generate_world_01 :: proc(t: ^testing.T) {relief_world_check(t, 1)}
 @(test)
-test_relief_generate_climates_2 :: proc(t: ^testing.T) {relief_climates_check(t, 10, 15)}
+test_relief_generate_world_02 :: proc(t: ^testing.T) {relief_world_check(t, 2)}
 @(test)
-test_relief_generate_climates_3 :: proc(t: ^testing.T) {relief_climates_check(t, 15, 20)}
+test_relief_generate_world_03 :: proc(t: ^testing.T) {relief_world_check(t, 3)}
+@(test)
+test_relief_generate_world_04 :: proc(t: ^testing.T) {relief_world_check(t, 4)}
+@(test)
+test_relief_generate_world_05 :: proc(t: ^testing.T) {relief_world_check(t, 5)}
+@(test)
+test_relief_generate_world_06 :: proc(t: ^testing.T) {relief_world_check(t, 6)}
+@(test)
+test_relief_generate_world_07 :: proc(t: ^testing.T) {relief_world_check(t, 7)}
+@(test)
+test_relief_generate_world_08 :: proc(t: ^testing.T) {relief_world_check(t, 8)}
+@(test)
+test_relief_generate_world_09 :: proc(t: ^testing.T) {relief_world_check(t, 9)}
+@(test)
+test_relief_generate_world_10 :: proc(t: ^testing.T) {relief_world_check(t, 10)}
+@(test)
+test_relief_generate_world_11 :: proc(t: ^testing.T) {relief_world_check(t, 11)}
+@(test)
+test_relief_generate_world_12 :: proc(t: ^testing.T) {relief_world_check(t, 12)}
+@(test)
+test_relief_generate_world_13 :: proc(t: ^testing.T) {relief_world_check(t, 13)}
+@(test)
+test_relief_generate_world_14 :: proc(t: ^testing.T) {relief_world_check(t, 14)}
+@(test)
+test_relief_generate_world_15 :: proc(t: ^testing.T) {relief_world_check(t, 15)}
+@(test)
+test_relief_generate_world_16 :: proc(t: ^testing.T) {relief_world_check(t, 16)}
+@(test)
+test_relief_generate_world_17 :: proc(t: ^testing.T) {relief_world_check(t, 17)}
+@(test)
+test_relief_generate_world_18 :: proc(t: ^testing.T) {relief_world_check(t, 18)}
+@(test)
+test_relief_generate_world_19 :: proc(t: ^testing.T) {relief_world_check(t, 19)}
+#assert(GENERATED_WORLDS == 20) // a test above for each
 
-// relief_climates_check: generated worlds from..<to each have at least four
-// Köppen groups on land. (Twenty worlds in four tests, so the runner's threads
-// build them side by side: one test of twenty outlasted macOS CI's limit.)
+// relief_world_check: generated world n (of GENERATED_WORLDS), built once and held to
+// what a generated world promises: its land is its character's share, its plates number
+// 8 to 20, and its land has at least four Köppen groups. (One test a world, so the
+// runner's threads build them side by side: one test of twenty outlasted macOS CI's
+// limit, and four of five bounded the whole suite.)
 @(private = "file")
-relief_climates_check :: proc(t: ^testing.T, from, to: int) {
-	for n in from ..< to {
-		a := address_n(u64(200 + n))
-		r := relief_generate(a, 5)
-		p := planet_build(r)
-		groups: [256]bool
-		count := 0
-		for k, idx in p.koppen {
-			if !p.land.is_land[idx] {continue}
-			g := koppen_group(k)
-			if !groups[g] {groups[g] = true; count += 1}
-		}
-		testing.expectf(t, count >= 4, "world %d has %d Köppen groups", n, count)
-		planet_destroy(&p)
-		relief_destroy(&r)
-		free_all(context.temp_allocator)
+relief_world_check :: proc(t: ^testing.T, n: int) {
+	a := address_n(u64(200 + n))
+	r := relief_generate(a, 5)
+	defer relief_destroy(&r)
+
+	ch := relief_character(a)
+	share := land_share(r)
+	testing.expectf(
+		t,
+		abs(share - ch.land_fraction) < 0.05,
+		"world %d: land %.3f, target %.3f",
+		n,
+		share,
+		ch.land_fraction,
+	)
+	testing.expect(t, ch.plates >= 8 && ch.plates <= 20)
+
+	p := planet_build(r)
+	defer planet_destroy(&p)
+	groups: [256]bool
+	count := 0
+	for k, idx in p.koppen {
+		if !p.land.is_land[idx] {continue}
+		g := koppen_group(k)
+		if !groups[g] {groups[g] = true; count += 1}
 	}
+	testing.expectf(t, count >= 4, "world %d has %d Köppen groups", n, count)
 }
 
 @(test)
