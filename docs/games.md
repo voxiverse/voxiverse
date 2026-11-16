@@ -15,6 +15,7 @@ games/<game>/
   rules.odin       package <game>: INFO, its constants and rules (both sides')
   records.odin     package <game>: what the server tells the players (KINDS)
   pack.odin        package <game>: PACK, its pack's files #load'ed (if it has a pack)
+  text.odin        package <game>: Text, TEXT_EN and tr: what its HUD says, by key
   pack/            its pack: entities, items, blocks, modes as data (packs.md)
   server/          package <game>_server: GAME :: core.Game{...}, its hooks; *_test.odin
   client/          package <game>_client: GAME :: engine.Game{...}, its hooks; *_test.odin
@@ -325,7 +326,25 @@ number and no cast.
 Under a free pointer (a top-down or free camera) the HUD a game draws is clickable: a click
 goes to the UI when the pointer was over a widget or a panel (`ui.panel`,
 `ui.block_pointer`) when the UI was last drawn, and to the world (`pointer_tool`) otherwise.
-A game's HUD writes its English in place; it has no table of its own yet.
+
+### What a game's HUD says
+
+What a game's HUD and banners say is the game's own text, not the engine's table
+(`client/engine/text.odin`), so adding a game edits no shared file. The game declares it in
+its shared package (`text.odin`), as the engine does its own: an enum of keys, the English
+table, and a `tr` that formats one with `base.text_format` (`{0}`, `{1}`: the arguments by
+position):
+
+```odin
+// games/flood/text.odin (package flood)
+Text :: enum u8 {Status_Waiting, Round_Title, Made_It, ...}
+TEXT_EN := [Text]string{.Status_Waiting = "FLOOD  waiting for players", .Round_Title = "ROUND {0}", .Made_It = "{0} of {1} made it", ...}
+tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}
+```
+
+A test holds every key to its text (`base.text_missing(TEXT_EN)`); a translation is another
+table of the same keys beside it. `games/flood` is the model; the other games still write
+their HUDs' English in place, and the server's notices and announcements are English.
 
 ## Which game a session plays
 
