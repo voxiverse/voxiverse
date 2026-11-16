@@ -210,7 +210,7 @@ the engine commit that makes it for games, documented where it is declared.
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
 | `request_value(s, r, T)` | One of its requests, in its `request` hook, as its type ([below](#requests)) |
 | `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
-| `Game_Stat`, `Stat_Kind`, `stat_count(s, c, name, amount)`, `stat_world(s, w, name, amount)` | The game's own statistics (`Game.stats`: each a name and whether it counts, or measures a distance in centimetres or a time in seconds): a player's (with its character and its world) or the world's alone, kept and shown with the engine's ([below](#the-games-state)) |
+| `Game_Stat`, `Stat_Kind`, `stat_count(s, c, name, amount)`, `stat_world(s, w, name, amount)` | The game's own statistics (`Game.stats`: each a name, whether it counts or measures a distance in centimetres or a time in seconds, and the experience a player earns for each one counted): a player's (with its character and its world) or the world's alone, kept and shown with the engine's ([below](#the-games-state)) |
 | `client_name(c)`, `allowed(s, c, node)`, `player_id(s, c)` | A player's name; whether it holds a permission; its id (its seat): the key of a record about it (`protocol.key_player`), the same on every side |
 | `player_ref(s, c)`, `player_of(s, ref)`, `Player_Ref` | A player held past the moment (who built a tower, whose kill a shot is): `player_of` gives the player still playing in that seat, or nil once it left |
 | `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |

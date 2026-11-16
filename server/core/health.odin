@@ -98,10 +98,8 @@ xp_for :: proc(kind: telemetry.Kind) -> u64 {
 	#partial switch kind {
 	case .Block_Mined, .Block_Placed, .Entity_Hit:
 		return 1
-	case .Item_Used, .Sheep_Fed:
+	case .Item_Used:
 		return 2
-	case .Sheep_Sheared:
-		return 5
 	case .Entity_Killed:
 		return 10
 	case .Gate_Dial:
@@ -124,7 +122,11 @@ level_of :: proc(xp: u64) -> u64 {
 
 // award_xp: an event of kind happened to c: its experience, and a level if it is one.
 award_xp :: proc(s: ^Server, c: ^Client, kind: telemetry.Kind) {
-	gain := xp_for(kind)
+	award_xp_amount(s, c, xp_for(kind))
+}
+
+// award_xp_amount: c earns gain experience (a level gained is told as one).
+award_xp_amount :: proc(s: ^Server, c: ^Client, gain: u64) {
 	if gain == 0 {return}
 	stat_add(c, "xp", gain)
 	xp := c.stats["xp"]

@@ -199,6 +199,7 @@ event_for :: proc(
 Game_Stat :: struct {
 	name: string,
 	kind: Stat_Kind,
+	xp:   u64, // experience a player earns for each one counted (0: none)
 }
 
 Stat_Kind :: enum u8 {
@@ -267,6 +268,7 @@ stat_count :: proc(s: ^Server, c: ^Client, name: string, amount := 1) {
 	e.has_pos, e.pos = true, {i32(c.position.x), i32(c.position.y), i32(c.position.z)}
 	emit_event(s, e)
 	stat_add(c, counter, u64(amount))
+	award_xp_amount(s, c, stat.xp * u64(amount))
 }
 
 // stat_world: amount added to one of the game's statistics for world w, with no player to

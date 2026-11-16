@@ -317,15 +317,31 @@ test_an_entity_is_told_where_harm_came_from :: proc(t: ^testing.T) {
 // engine's, each once.
 @(test)
 test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
-	testing.expect_value(t, game_stats_valid({{"herded", .Count}, {"trotted", .Distance}}), "")
-	testing.expect(t, game_stats_valid({{"xp", .Count}}) != "", "the engine's xp was taken")
+	testing.expect_value(
+		t,
+		game_stats_valid({{name = "herded", kind = .Count}, {name = "trotted", kind = .Distance}}),
+		"",
+	)
 	testing.expect(
 		t,
-		game_stats_valid({{"blocks.herded", .Count}}) != "",
+		game_stats_valid({{name = "xp", kind = .Count}}) != "",
+		"the engine's xp was taken",
+	)
+	testing.expect(
+		t,
+		game_stats_valid({{name = "blocks.herded", kind = .Count}}) != "",
 		"the engine's blocks were taken",
 	)
-	testing.expect(t, game_stats_valid({{"Herded", .Count}}) != "", "a capital was taken")
-	testing.expect(t, game_stats_valid({{"a", .Count}, {"a", .Time}}) != "", "a name twice")
+	testing.expect(
+		t,
+		game_stats_valid({{name = "Herded", kind = .Count}}) != "",
+		"a capital was taken",
+	)
+	testing.expect(
+		t,
+		game_stats_valid({{name = "a", kind = .Count}, {name = "a", kind = .Time}}) != "",
+		"a name twice",
+	)
 	dir :: "build/tmp/test_game_stats"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
@@ -333,7 +349,10 @@ test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
 	config.listen = true
 	config.save_dir = dir
 	config.game = harness_creatures()
-	config.game.stats = {{"herded", .Count}, {"trotted", .Distance}}
+	config.game.stats = {
+		{name = "herded", kind = .Count, xp = 2},
+		{name = "trotted", kind = .Distance},
+	}
 	h := new(Harness)
 	defer free(h)
 	standing :: proc(cs: []^Net_Client) -> bool {return(
@@ -348,7 +367,9 @@ test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
 			s := &h.srv
 			player := client_by_name(s, "herder")
 			if round == 0 {
+				xp := player.stats["xp"]
 				stat_count(s, player, "herded", 3)
+				testing.expect_value(t, player.stats["xp"], xp + 6)
 				stat_count(s, player, "trotted", 250)
 				stat_world(s, s.home, "herded")
 			}

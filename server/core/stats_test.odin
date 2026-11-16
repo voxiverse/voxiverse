@@ -170,7 +170,7 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 		`"k":"block_placed"`,
 		`"k":"block_mined"`,
 	}
-	for what in ([]string{`"k":"item_dropped"`, `"k":"sheep_sheared"`, `"k":"entity_hit"`}) {
+	for what in ([]string{`"k":"item_dropped"`, `"k":"entity_hit"`}) {
 		testing.expectf(t, strings.contains(text, what), "the log lacks %s", what)
 	}
 	// (shearing and the hit wait for their inputs, the drop does not: their order is not fixed)

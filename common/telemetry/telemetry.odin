@@ -40,9 +40,6 @@ Kind :: enum u16 {
 	Command, // text: name
 	Teleport, // text: how (tp, home, warp, spawn, back, travel, gate)
 	Gate_Dial, // text: result
-	Sheep_Fed,
-	Sheep_Sheared,
-	Sheep_Born,
 	Position_Sample, // text: state (walking, flying, swimming, falling); every 10 s
 	Tick_Summary, // n0: players online, n1: tick time p50 in us, n2: worst in us; every minute
 	Client_Info, // from a client at join: text: OS; n0: view distance, n1: fov, n2: ms from launch to playing
@@ -121,9 +118,6 @@ KIND_INFO := [Kind]Kind_Info {
 	.Command = {name = "command", text_name = "name", counter = "commands.%t"},
 	.Teleport = {name = "teleport", text_name = "how", counter = "teleports.%t"},
 	.Gate_Dial = {name = "gate_dial", text_name = "result", counter = "gates.dials"},
-	.Sheep_Fed = {name = "sheep_fed", counter = "sheep.fed"},
-	.Sheep_Sheared = {name = "sheep_sheared", counter = "sheep.sheared"},
-	.Sheep_Born = {name = "sheep_born", counter = "sheep.born"},
 	.Position_Sample = {name = "position_sample", text_name = "state"},
 	.Tick_Summary = {name = "tick_summary", n_names = {"online", "p50_us", "worst_us"}},
 	.Client_Info = {

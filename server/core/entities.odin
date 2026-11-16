@@ -207,7 +207,10 @@ sheep_use :: proc(s: ^Server, c: ^Client, h: game.Entity_Handle) -> bool {
 			return false
 		}
 		record(s, c, .Item_Used, "wheat")
-		if !lamb {record(s, c, .Sheep_Fed)}
+		if !lamb {
+			stat_add(c, "sheep.fed", 1)
+			award_xp_amount(s, c, 2)
+		}
 		if !has_ability(s, c, .Infinite_Items) {
 			ledger(s, w, .Use, held.item, -1)
 			c.inventory.slots[c.inventory.selected].count -= 1
@@ -218,7 +221,8 @@ sheep_use :: proc(s: ^Server, c: ^Client, h: game.Entity_Handle) -> bool {
 	}
 	if entity_wool(w, h).shorn || lamb {return false}
 	entity_wool(w, h).shorn = true
-	record(s, c, .Sheep_Sheared)
+	stat_add(c, "sheep.sheared", 1)
+	award_xp_amount(s, c, 5)
 	r := &w.entities.rng
 	wool := game.item_of_block(
 		s.registry,
@@ -288,7 +292,7 @@ breed :: proc(w: ^World, a, b: game.Entity_Handle) {
 		game.BREED_WAIT_TICKS, game.BREED_WAIT_TICKS
 	if lamb := entity_spawn(w, w.server.registry.engine.sheep, at, false); lamb != 0 {
 		entity_genes(w, lamb).genes, entity_breeding(w, lamb).growth = genes, 0
-		record_world(w.server, w, .Sheep_Born)
+		counter_add(&w.stats, "sheep.born", 1)
 	}
 }
 
