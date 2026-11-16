@@ -1,9 +1,11 @@
 package sandbox_server
 
+import "core:fmt"
 import "core:math"
 import "core:strconv"
 import "core:strings"
 
+import "common:worldgen"
 import "games:sandbox"
 import "server:core"
 
@@ -283,4 +285,42 @@ market_ask :: proc(s: ^core.Server, c: ^core.Client) {
 	core.game_put(s, c, &v)
 	open := sandbox.Market_Open{v.town}
 	core.game_event(s, c, &open)
+}
+
+// TOWN_DROP: the height a player taken to a town is set down from (it lands on the ground).
+TOWN_DROP :: 200
+
+// town_command: `/town` takes the player to the nearest town with a market, set down from
+// above it (the teleport permission; a planet world whose towns are known).
+town_command :: proc(s: ^core.Server, c: ^core.Client) -> bool {
+	if !core.allowed(s, c, "teleport.tp") {
+		core.notice(s, c, "You may not teleport here")
+		return true
+	}
+	w := c.world
+	we := world_of(w).economy
+	if w.params.planet == 0 || we == nil || !we.built {
+		core.notice(
+			s,
+			c,
+			"No towns are known here (a world on the planet knows them soon after you arrive)",
+		)
+		return true
+	}
+	o := economy_observer(c)
+	best, nearest := f64(-1), -1
+	for tw, i in we.economy.towns {
+		if tw.market == {} {continue}
+		d := sandbox.km_between(tw.lat, tw.lon, f32(o.x), f32(o.y))
+		if nearest < 0 || d < best {best, nearest = d, i}
+	}
+	if nearest < 0 {
+		core.notice(s, c, "No town here has a market")
+		return true
+	}
+	tw := we.economy.towns[nearest]
+	x, z := worldgen.planet_block_of(f64(tw.lat), f64(tw.lon))
+	core.teleport(s, c, {f64(x) + 0.5, TOWN_DROP, f64(z) + 0.5}, {0, 0})
+	core.notice(s, c, fmt.tprintf("To %s, %.0f km away", market_town_name(tw), best))
+	return true
 }

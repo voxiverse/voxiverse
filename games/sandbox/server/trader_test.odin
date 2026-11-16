@@ -196,3 +196,22 @@ test_market_and_trade_over_the_wire :: proc(t: ^testing.T) {
 	testing.expect_value(t, trader(r.s, far).cash, STARTING_PURSE)
 	testing.expect_value(t, trader(r.s, far).cargo[sandbox.Good.Grain], 0)
 }
+
+// /town takes a player to the nearest town with a market.
+@(test)
+test_town_takes_a_player_to_a_market :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, GAME) {return}
+	defer playtest.stop(rig)
+	r, ok := economy_rig(t, rig)
+	if !ok {return}
+	tw := world_of(r.w).economy.economy.towns[r.town]
+	c := playtest.host(rig)
+	stand_at(c, tw.lat + 0.3, tw.lon) // (33 km off)
+	testing.expect(t, command(r.s, c, "town", nil))
+	playtest.step(rig, playtest.ticks(3)) // (set down, and the market there in detail)
+	testing.expect(t, playtest.told(rig, "To Town "), "not told where")
+	_, there := trader_where(r.w, c)
+	testing.expect(t, there, "not in a town")
+}

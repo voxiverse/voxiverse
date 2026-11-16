@@ -57,7 +57,8 @@ cargo of each good, and the prices it saw where it stood. Standing in a town (wi
 it) the HUD says `Market of <town>`; the game's action (`Market`, Z by default) opens the
 market's screen there: each good's price, stock, what you carry and how old the news behind
 the price is; pick a good and a quantity, buy or sell. Walking out of the town closes it. The
-server judges every trade (where you stand, your silver, your cargo, the stock).
+server judges every trade (where you stand, your silver, your cargo, the stock). `/town` takes you to the nearest
+town with a market, set down from above it (the teleport permission, `teleport.tp`).
 
 A world's interventions log (`sandbox.interventions.vxi`: what players did that its history
 carries forward; a settlement founded is a town of the history from then on) is listed by
