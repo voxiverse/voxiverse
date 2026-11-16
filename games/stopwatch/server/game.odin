@@ -2,6 +2,8 @@ package stopwatch_server
 
 import "core:fmt"
 import "core:log"
+import "core:strconv"
+import "core:strings"
 
 import "common:game"
 import "games:stopwatch"
@@ -23,6 +25,8 @@ GAME :: core.Game {
 	joined       = joined,
 	left         = left,
 	command      = command,
+	save         = save,
+	load         = load,
 }
 
 // Watch: the game's state for the session.
@@ -125,6 +129,26 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 		core.notice(s, c, "Your time runs from zero again")
 	case:
 		core.notice(s, c, "Usage: stopwatch [reset]")
+	}
+	return true
+}
+
+// save: the record is kept with the universe (game.cfg), so it is still there to beat
+// after a restart: "record = <ticks>".
+save :: proc(s: ^core.Server, out: ^strings.Builder) {
+	fmt.sbprintfln(out, "record = %d", watch(s).record)
+}
+
+// load: the record the universe kept; any other line is not Stopwatch's.
+load :: proc(s: ^core.Server, text: string) -> bool {
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		if strings.trim_space(line) == "" {continue}
+		key, _, value := strings.partition(line, "=")
+		if strings.trim_space(key) != "record" {return false}
+		record, ok := strconv.parse_u64(strings.trim_space(value), 10)
+		if !ok {return false}
+		watch(s).record = record
 	}
 	return true
 }

@@ -4,8 +4,8 @@ import "common:game"
 
 // Stopwatch: the smallest game, and the model for the next (docs/games.md). It is
 // played in survival: every player's time in the world runs from when they join,
-// the longest stay of anyone who left is the record to beat, and /stopwatch tells a
-// player their time and the record.
+// the longest stay of anyone who left is the record to beat (kept with the
+// universe), and /stopwatch tells a player their time and the record.
 //
 // This is its shared package: what both of its sides use, its records among them
 // (records.odin). The server part (games/stopwatch/server) runs the game; the client

@@ -1,6 +1,7 @@
 package stopwatch_server
 
 import "core:log"
+import "core:os"
 import "core:strings"
 import "core:testing"
 
@@ -134,4 +135,36 @@ keep_line :: proc(
 	location := #caller_location,
 ) {
 	append((^[dynamic]string)(data), strings.clone(text))
+}
+
+// The record is kept with the universe: a player's stay set it, the server stopped, and
+// the next session over the same universe has it to beat.
+@(test)
+test_stopwatch_record_survives_a_restart :: proc(t: ^testing.T) {
+	dir := "build/test/stopwatch_record"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	sess := new(core.Session)
+	defer free(sess)
+	config := core.harness_world()
+	config.game = GAME
+	config.save_dir = dir
+	if !testing.expect(t, core.session_start(sess, {}, false, with = config)) {return}
+	welcomed :: proc(data: rawptr) -> bool {return (^core.Session)(data).mirror.welcomed}
+	_, ok := core.harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok, "the player never joined") {
+		core.session_stop(sess)
+		return
+	}
+	core.harness_step(&sess.h, 3 * game.TICK_RATE)
+	core.mirror_send(&sess.mirror, core.test_hello("stopwatch")) // (leaves: the record)
+	core.harness_step(&sess.h, 1)
+	record := watch(&sess.h.srv).record
+	testing.expect(t, record >= 3 * game.TICK_RATE, "leaving set no record")
+	core.session_stop(sess)
+
+	sess^ = {}
+	if !testing.expect(t, core.session_start(sess, {}, false, with = config)) {return}
+	defer core.session_stop(sess)
+	testing.expect_value(t, watch(&sess.h.srv).record, record)
 }

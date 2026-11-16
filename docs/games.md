@@ -174,7 +174,8 @@ alone, so the dedicated server links no client code. The dedicated server runs o
 Adding a game is a folder `games/<game>/` holding its shared package, a `server` package
 that exports `GAME :: core.Game{...}` and a `client` package that exports `GAME ::
 engine.Game{...}`, with their tests beside them: nothing else. `games/stopwatch` is the
-model: the smallest game that uses every hook of the server's, a client part with its state,
+model: the smallest game that uses every hook of the server's but those of harm (`hurt`,
+`died`, `respawned`), its record kept with the universe (`save`, `load`), a client part with its state,
 records, HUD, F3 line and command, and a record and an event of its own. Its server part's
 tests run it on a stepped server with the harness's mirror client; its client part's tests
 play it whole, a session joining the server part over the harness's network and drawing its
