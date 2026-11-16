@@ -379,6 +379,19 @@ number and no cast.
 | `game_request(s, &value)` | Send the server part one of the game's requests ([below](#requests)) |
 | `Seats(T)`, `seats_received(s, &seats, r)`, `seat_mine(s, &seats)`, `seats_ranked(&seats, before)` | What the game keeps of each player from a record of its keyed by the player (`key_player`, with a `name`): the last value by seat, its name copied out of the message, forgotten when the server stops putting it; the player's own; the seats told of in order (ties by name), a scoreboard's rows |
 
+### Commanding from above: `client:overview`
+
+What a strategy game's client part (a city builder's, a tower defence's) needs to see and
+command its side from above is `client/overview`, built on the calls above:
+
+| Name | What it is for |
+|---|---|
+| `Selection`, `selection_update(&sel, s, ctx, team)`, `selection_draw(&sel, ctx)`, `selected(&sel)`, `is_selected`, `selection_add`, `selection_remove`, `selection_clear`, `selection_prune` | The entities of the player's side it has picked with the free pointer: a click picks one (Shift adds or takes away), a click on nothing clears, a double click picks every one of that kind on the screen, a drag picks every one in the box drawn; those the session no longer knows (dead, out of sight) fall out. Kept in the game's state, sent to its server part only as the ids of its orders (requests of a fixed array of ids and a count, several when there are more than one request holds) |
+| `group_keep(&sel, n)`, `group_pick(&sel, n)`, `MAX_GROUPS` | Control groups: the picked set kept under a number (the game's keys, Ctrl and a digit) and picked again by it |
+| `rings_draw(&sel, s, radius, color)`, `ring_draw(s, id, radius, color)` | A ring on the ground under each picked entity, eight lines each |
+| `Fog`, `fog_init(&f, lo, hi, y_lo, y_hi)`, `fog_update(&f, s, team)`, `fog_draw(&f, s, unseen, unexplored)`, `fog_sees`, `fog_explored` | The fog of war as the side sees it ([sides](#sides)): from its entities' vision, the map's cells it sees now and has ever seen; the rest darkened on the ground, a quad a cell |
+| `Minimap`, `Mark`, `minimap_init`, `minimap_ground(&m, s)`, `minimap_draw(&m, s, ctx, r, &fog, marks, unseen, unexplored) -> (at, pointed)`, `minimap_jump(s, at, height)` | The map from above in a corner: its ground in its blocks' colours (read a few rows a frame), the fog over it, the game's marks, the camera's focus framed; pressed, the point of the map the pointer is on (the game jumps its camera there, or sends its units) |
+
 Under a free pointer (a top-down or free camera) the HUD a game draws is clickable: a click
 goes to the UI when the pointer was over a widget or a panel (`ui.panel`,
 `ui.block_pointer`) when the UI was last drawn, and to the world (`pointer_tool`) otherwise.

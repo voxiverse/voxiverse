@@ -153,6 +153,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/steam` | The client's Steam: one interface over the run-time-loaded Steamworks flat API and a fake, and the Workshop (subscribed packs, publishing) | `*.odin` |
 | `client/starfield` | The starfield backdrop | `*.odin` |
 | `client/testkit` | Helpers the packages' tests share (the base registry, a mode by name); only tests import it | `*.odin` |
+| `client/overview` | Seeing and commanding from above, for a game's client part: a selection of its side's entities (click, double click, box, control groups, rings on the ground), the fog of war its side sees, the minimap | `*.odin` |
 | `client/playtest` | A game's client tests' rig: its server part on a stepped server, a session playing it over the harness's network and an App drawing its HUD; only tests import it | `*.odin` |
 | `client/ui` | The UI toolkit | `*.odin` |
 | `common/access` | Who a player is and what it may do: accounts (key pairs, proofs of a nonce), the admins' list, permission nodes and grants | `*.odin` |
