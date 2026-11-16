@@ -119,12 +119,15 @@ loot :: proc(s: ^core.Server, at: [3]f64, luck, coins: int, weapon_chance: f64) 
 	d := state(s)
 	w := s.home
 	r := &d.rng
+	// (each piece a little apart, so their names do not lie on each other)
 	above := at + {0, 0.5, 0}
-	if coins > 0 {core.item_drop(s, w, above, {d.coin, coins, 0, 0})}
-	if base.rng_f64(r) < 0.15 + 0.15 * f64(luck) {core.item_drop(s, w, above, {d.potion, 1, 0, 0})}
+	if coins > 0 {core.item_drop(s, w, above + {-0.6, 0, 0}, {d.coin, coins, 0, 0})}
+	if base.rng_f64(r) < 0.15 + 0.15 * f64(luck) {
+		core.item_drop(s, w, above + {0.6, 0, -0.4}, {d.potion, 1, 0, 0})
+	}
 	if base.rng_f64(r) < weapon_chance {
 		weapon, data := delve.loot_roll(r, d.depth, luck)
-		core.item_drop(s, w, above, {d.weapons[weapon], 1, 0, data})
+		core.item_drop(s, w, above + {0, 0, 0.7}, {d.weapons[weapon], 1, 0, data})
 	}
 }
 

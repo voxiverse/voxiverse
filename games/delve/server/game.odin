@@ -354,8 +354,8 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 		}
 		core.notice(s, c, "Usage: delve spawn <biter|husk|spitter|brute|warden> [elite]")
 	case len(args) == 1 && args[0] == "loot":
-		loot(s, c.player.position + {1.5, 0, 0}, 3, 25, 1)
-		loot(s, c.player.position + {-1.5, 0, 1}, 1, 7, 1)
+		loot(s, c.player.position + {2.5, 0, -1.5}, 3, 25, 1)
+		loot(s, c.player.position + {-2.5, 0, 1.5}, 1, 7, 1)
 	case:
 		core.notice(
 			s,
