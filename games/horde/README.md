@@ -42,7 +42,7 @@ game's actions):
 
 ```sh
 ./build.sh run -- --game horde
-./build.sh run -- --game horde --exec "singleplayer; wait_world; /open_lan"
+./build.sh run -- --game horde --exec "wait_world; /open_lan"
 ./build.sh serve -- --game horde --universe build/horde-universe
 ```
 
