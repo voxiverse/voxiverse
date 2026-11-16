@@ -124,7 +124,7 @@ mirror_pump :: proc(sess: ^Session) {
 		if m.heard != nil {append(m.heard, slice.clone(p, runtime.heap_allocator()))}
 		msg, ok := protocol.decode_server(p, m.scratch, m.rx.reg)
 		if !ok {
-			append(&sess.failures, "the mirror could not decode a message")
+			append(&sess.failures, strings.clone("the mirror could not decode a message"))
 			continue
 		}
 		#partial switch v in msg {
@@ -153,7 +153,7 @@ mirror_pump :: proc(sess: ^Session) {
 			if v.pos not_in m.layers {m.layers[v.pos] = {}}
 			l := &m.layers[v.pos]
 			if game.layers_from_wire(l, &m.pools, m.rx.reg.channels, v.channels) != nil {
-				append(&sess.failures, "the mirror is out of channel pages")
+				append(&sess.failures, strings.clone("the mirror is out of channel pages"))
 			}
 		case protocol.Unload_Chunk:
 			if old, had := &m.chunks[v.pos]; had {
@@ -167,13 +167,19 @@ mirror_pump :: proc(sess: ^Session) {
 		case protocol.State_Message:
 			got := make([dynamic]protocol.Received, context.temp_allocator)
 			if !protocol.receive_state(&m.rx, v.data, &got) {
-				append(&sess.failures, "the mirror could not decode a State message")
+				append(
+					&sess.failures,
+					strings.clone("the mirror could not decode a State message"),
+				)
 			}
 			mirror_apply(sess, got[:])
 		case protocol.Snapshot_Message:
 			got := make([dynamic]protocol.Received, context.temp_allocator)
 			if !protocol.receive_snapshot(&m.rx, v.data, &got) {
-				append(&sess.failures, "the mirror could not decode a Snapshot message")
+				append(
+					&sess.failures,
+					strings.clone("the mirror could not decode a Snapshot message"),
+				)
 			}
 			mirror_apply(sess, got[:])
 		case protocol.Edit_Result:
@@ -233,7 +239,7 @@ mirror_apply :: proc(sess: ^Session, got: []protocol.Received) {
 					   v,
 				   ) !=
 				   nil {
-					append(&sess.failures, "the mirror is out of channel pages")
+					append(&sess.failures, strings.clone("the mirror is out of channel pages"))
 				}
 			}
 		case .Own_Player:
