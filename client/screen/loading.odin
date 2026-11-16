@@ -139,7 +139,17 @@ world_progress :: proc(s: ^engine.Session, columns: []f32) -> (ready, total: int
 	return
 }
 
-// loading_screen: what is happening, the bar, the map, Cancel.
+LOADING_HEADING :: 80 // the game's name, over the rest
+
+// loading_game_name: the name of the game the world plays: the session's, once the
+// server has said it, else the one our own server starts with ("": not known yet).
+loading_game_name :: proc(s: ^engine.Session) -> string {
+	if s.game.name != "" {return s.game.name}
+	if engine.session_hosting(s) {return s.config.host_game.name}
+	return ""
+}
+
+// loading_screen: the game's name, what is happening, the bar, the map, Cancel.
 loading_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "loading")
 	defer ui.pop_id(ctx)
@@ -168,7 +178,15 @@ loading_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 
 	MAP_CELL :: 6
 	map_size := f32(side) * MAP_CELL if s.state == .Playing else 0
-	column := ui.rect_center(ctx.screen, 420, map_size + 3 * t.row_height + 4 * t.spacing + 40)
+	column := ui.rect_center(
+		ctx.screen,
+		420,
+		LOADING_HEADING + map_size + 3 * t.row_height + 4 * t.spacing + 40,
+	)
+	// The game it plays, over the rest (a server we join names its game only once it
+	// has welcomed us).
+	heading := ui.cut_top(&column, LOADING_HEADING)
+	if name := loading_game_name(s); name != "" {ui.title(ctx, name, heading)}
 	ui.label(ctx, words, ui.cut_top(&column, t.row_height), .Center)
 	ui.cut_top(&column, t.spacing)
 	// The bar: whole pixels, filled as chunks are ready.

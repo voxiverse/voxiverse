@@ -1156,3 +1156,29 @@ test_game_menu_entries :: proc(t: ^testing.T) {
 	)
 	free_all(context.temp_allocator)
 }
+
+// The loading screen says which game is coming: our own server's from the start, a
+// server we join once it has named its game.
+@(test)
+test_loading_names_the_game :: proc(t: ^testing.T) {
+	r := rig_make(t)
+	defer rig_free(r)
+	app, s := r.app, r.s
+	app.session, app.screen = s, .Game
+	s.state, s.loading = .Connecting, engine.Loading{} // (long since begun: shown)
+	says :: proc(app: ^engine.App, text: string) -> bool {
+		ui.begin_frame(&app.ui, {}, {1280, 720}, 1)
+		screen.loading_screen(app, &app.ui)
+		ui.end_frame(&app.ui)
+		for said in app.ui.texts {if said == text {return true}}
+		return false
+	}
+	s.config.host_game.name = "Foundry"
+	testing.expect(t, says(app, "Foundry"), "hosting: the game's name is not shown")
+	testing.expect(t, says(app, "Starting the world"))
+	s.remote, s.config.host_game = true, {}
+	testing.expect(t, says(app, "Connecting to the server"))
+	s.game.name = "Rally"
+	testing.expect(t, says(app, "Rally"), "joined: the server's game is not shown")
+	free_all(context.temp_allocator)
+}
