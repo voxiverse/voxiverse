@@ -199,8 +199,8 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	// A second player sees a small lamb and a black sheep.
 	lambs, blacks := 0, 0
 	for _, f in b.sheep {
-		if .Lamb in f {lambs += 1}
-		if .Black in f {blacks += 1}
+		if sheep_look(f, "lamb") {lambs += 1}
+		if sheep_look(f, "black") {blacks += 1}
 	}
 	testing.expect_value(t, lambs, 1)
 	testing.expect_value(t, blacks, 1)
@@ -245,7 +245,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	sheep_set(srv, lamb)
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 2)
 	for s in sheep_list(srv) {if s.id == lamb.id {testing.expect(t, s.growth == game.LAMB_TICKS, "the lamb did not grow up")}}
-	for _, f in b.sheep {testing.expect(t, .Lamb not_in f, "the lamb still looks small")}
+	for _, f in b.sheep {testing.expect(t, !sheep_look(f, "lamb"), "the lamb still looks small")}
 
 	// Kept: genes, growth, love and wait through save and load.
 	keep := Sheep_Info{plain.id, game.Genes{.Wool_A, .Coat_B}, 1234, 77, 4321, true}

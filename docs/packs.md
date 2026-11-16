@@ -61,22 +61,30 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   ([games.md](games.md#walkers)); `game` its game's, the game's `think` hook each tick, then
   steered as `steered` is,
   `with` (`wool`, `genes`, `breeding`),
-  `looks` (at most 16; each is computed from a component the kind must have in `with`, but
-  `striking`, which is its attack's: a blow or a shot a moment ago).
+  `looks` (at most 16 names of `a-z` and `_`: bit i of what a client is told of how one looks
+  is its i-th; its game shows them, `core.entity_show`, and the engine shows `striking` while
+  its attack does, a blow or a shot a moment ago).
 - `attack` (a `steered` or `game` walker's): `{"damage": n, "reach": blocks, "cooldown": seconds}` and,
   for a shooter, `"shot"`: a projectile kind's id. The game says when and at whom
   (`entity_strike`, `entity_shoot`: [games.md](games.md#walkers)); a blow lands within `reach`
   of the target's box, a shot flies straight at its point and, with `explode` 0, hurts what it
   hits by the damage instead of going off.
 - `fields`: at most 8 saved numbers, `{"name": {"type": "u8"|"u16", "min": n, "max": n}}`.
-- `model`: `sheep`, `rocket`, `item`, `player`, `{"box": [r, g, b]}` (one box, the kind's size)
+- `model`: `rocket`, `item`, `player`, `{"box": [r, g, b]}` (one box, the kind's size)
   or `{"parts": [...]}`, a shape of at most 16 boxes in the creature's own space (blocks from
   the middle of its feet, `-z` its front): each `{"box": [x0, y0, z0, x1, y1, z1], "color":
   [r, g, b]}` with an optional `skin` (`body`, `legs`, `head`: the entity pass's shading; a
-  head has eyes) and `swing` (`none`; `walk` and `walk_back`, to and fro with the stride, the
-  other leg the other way; `strike`, forward while the kind shows `striking`, else as `walk`).
-  A part turns about the middle of its top (a hip, a shoulder). The client draws it
-  (`shaped` in `client/engine/entities.odin`); nothing about it is sent.
+  head has eyes), `swing` (`none`; `walk` and `walk_back`, to and fro with the stride, the
+  other leg the other way; `strike`, forward while the kind shows `striking`, else as `walk`;
+  `pitch`, up and down as the server's pitch says: a grazing head), `hinge` (`[x, y, z]`, what
+  it turns about; the middle of its top, a hip or a shoulder, by default), `shown` (looks
+  that must all show for it to be drawn), `hidden` (looks any of which hides it) and `colors`
+  (`{"<look>": [r, g, b]}`, at most 2: its colour while that look shows). Beside `parts`,
+  `scale` (`{"<look>": factor}`: the whole model sized about its feet while the look shows,
+  a lamb at half) and `puffs` (`{"<look>": {"color": [r, g, b], "chance": 0..1, "height":
+  blocks}}`: specks rising from it each frame by the chance while the look shows). The client
+  draws it (`shaped` in `client/engine/entities.odin`) from this alone, knowing no creature;
+  nothing about it is sent but the looks' bits.
 - `spawn`: natural spawning (`on` a block matcher, `day` fractions, `every` ticks, `chance`, `cap`
   of the kind within `within` blocks of a player, `distance` from it, `group`), all required, and
   optional `sky` (only under the open sky) and `despawn` (blocks from every player of its world

@@ -9,10 +9,11 @@ import "common:base"
 import "common:game"
 
 // Entities as the client shows them: interpolated like the other players
-// (players.odin), drawn as boxes in the entity pass. A sheep has a body,
-// a head that grazes and looks about (the server's pitch), and four legs
-// that swing as fast as it walks; it flashes red when hit and bursts into a
-// puff of pixels when it dies.
+// (players.odin), drawn as boxes in the entity pass. A creature is its kind's parts
+// (its pack's model): legs that swing as fast as it walks, a head that pitches as the
+// server's pitch says, parts shown, hidden, coloured and sized by its looks, specks that
+// rise from it by a look; it flashes red when hit and bursts into a puff of pixels when
+// it dies. Nothing here knows any particular creature.
 
 HURT_FLASH :: 250 * time.Millisecond
 PUFF_SECONDS :: 0.7
@@ -45,20 +46,6 @@ SMOKE :: [4]u8{70, 68, 66, 255}
 FLAME :: [4]u8{255, 170, 60, 255}
 
 @(private = "file")
-WOOL :: [4]u8{232, 222, 200, 255}
-@(private = "file")
-WOOL_BLACK :: [4]u8{36, 34, 40, 255}
-@(private = "file")
-WOOL_DARK :: [4]u8{70, 62, 60, 255}
-@(private = "file")
-WOOL_LIGHT :: [4]u8{200, 196, 190, 255}
-@(private = "file")
-HEART :: [4]u8{236, 84, 118, 255}
-@(private = "file")
-SHORN :: [4]u8{204, 160, 152, 255}
-@(private = "file")
-HIDE :: [4]u8{122, 92, 70, 255}
-@(private = "file")
 HURT :: [4]u8{236, 84, 72, 255}
 
 // entities_draw adds the entities and puffs to the entity pass and moves
@@ -77,12 +64,6 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 		info := game.kind_info(s.reg, e.kind)
 		if info == nil {continue}
 		switch info.model {
-		case .Sheep:
-			looks := game.kind_looks(info, e.looks)
-			sheep(d, v, e.stride, hurt, looks)
-			if .In_Love in looks &&
-			   base.rng_f32(base.cosmetic_rng()) <
-				   0.06 {hearts(s, v.position + {0, f64(1.2 * (0.5 if .Lamb in looks else 1)), 0})}
 		case .Rocket:
 			rocket(s, d, v)
 		case .Item:
@@ -100,7 +81,8 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 				.Body,
 			)
 		case .Parts:
-			shaped(d, v, info, e.stride, hurt, game.kind_looks(info, e.looks))
+			shaped(d, v, info, e.stride, hurt, e.looks)
+			look_puffs(s, v, info, e.looks)
 		case .Player: // (players are drawn as players, not from here)
 		}
 	}
@@ -123,9 +105,10 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 // STRIKE_RAISE: radians a striking part swings forward (a raised arm, a lunging head).
 STRIKE_RAISE :: 1.5
 
-// shaped: a kind's own boxes (its model's parts), turned with it; a part that swings
-// turns about the middle of its top: to and fro with the stride, forward while it
-// strikes. Red while hurt.
+// shaped: a kind's own boxes (its model's parts), turned with it, sized by its looks
+// about its feet; a part a look hides (or one not shown) is left out, and a look may
+// colour it. A part that swings turns about its hinge: to and fro with the stride, forward
+// while it strikes, up and down with its pitch. Red while hurt.
 @(private)
 shaped :: proc(
 	d: ^render.Entity_Draw,
@@ -133,11 +116,13 @@ shaped :: proc(
 	info: ^game.Kind_Info,
 	stride: f32,
 	hurt: bool,
-	looks: game.Entity_Looks,
+	looks: u16,
 ) {
 	walk := math.sin(stride * 4) * 0.7
+	k := f32(1)
+	if info.scale.look != 0 && looks & info.scale.look != 0 {k = info.scale.factor}
 	for part in info.parts {
-		hinge := [3]f32{(part.lo.x + part.hi.x) / 2, part.hi.y, (part.lo.z + part.hi.z) / 2}
+		if looks & part.shown != part.shown || looks & part.hidden != 0 {continue}
 		angle: f32
 		switch part.swing {
 		case .None:
@@ -146,9 +131,15 @@ shaped :: proc(
 		case .Walk_Back:
 			angle = -walk
 		case .Strike:
-			angle = STRIKE_RAISE if .Striking in looks else walk
+			angle = STRIKE_RAISE if looks & info.striking != 0 else walk
+		case .Pitch:
+			angle = v.pitch
 		}
-		color := [4]u8{part.color[0], part.color[1], part.color[2], 255}
+		rgb := part.color
+		for c in part.recolor {
+			if c.look != 0 && looks & c.look != 0 {rgb = c.color; break}
+		}
+		color := [4]u8{rgb[0], rgb[1], rgb[2], 255}
 		skin := [game.Part_Skin]render.Entity_Part {
 			.Body = .Body,
 			.Legs = .Legs,
@@ -156,116 +147,40 @@ shaped :: proc(
 		}
 		render.entity_box(
 			d,
-			v.position + turn_yaw(hinge, v.yaw),
+			v.position + turn_yaw(part.hinge * k, v.yaw),
 			v.yaw,
 			angle,
-			part.lo - hinge,
-			part.hi - hinge,
+			(part.lo - part.hinge) * k,
+			(part.hi - part.hinge) * k,
 			HURT if hurt else color,
 			skin[part.skin],
 		)
 	}
 }
 
-// sheep: a body, a head on a neck that pitches, four legs that swing; black
-// wool, dark spots and a lamb's half size by its looks (flags).
+// look_puffs: the specks a creature's looks let rise (a heart over one in love), each
+// frame by its chance, from its height (sized with it).
 @(private = "file")
-sheep :: proc(
-	d: ^render.Entity_Draw,
-	v: Other_View,
-	stride: f32,
-	hurt: bool,
-	flags: game.Entity_Looks,
-) {
-	wool, hide := WOOL, HIDE
-	if .Black in flags {wool = WOOL_BLACK}
-	if hurt {wool, hide = HURT, HURT}
-	k := f32(0.5) if .Lamb in flags else 1 // everything scaled about its feet
-	p := v.position
-	if .Shorn in flags {
-		// The bare body: smaller, pink-grey, inside where the wool was.
-		render.entity_box(
-			d,
-			p,
-			v.yaw,
-			0,
-			{-0.27, 0.4, -0.42} * k,
-			{0.27, 0.78, 0.38} * k,
-			HURT if hurt else SHORN,
-			.Body,
-		)
-	} else {
-		render.entity_box(
-			d,
-			p,
-			v.yaw,
-			0,
-			{-0.35, 0.35, -0.5} * k,
-			{0.35, 0.85, 0.45} * k,
-			wool,
-			.Body,
-		)
-		if .Spotted in flags && !hurt {
-			// Patches of the other colour a hair proud of the wool (on its sides and back).
-			patch := WOOL_DARK if .Black not_in flags else WOOL_LIGHT
-			for at in ([3][2]f32{{-0.1, 0.2}, {0.15, -0.3}, {-0.05, -0.45}}) {
-				render.entity_box(
-					d,
-					p,
-					v.yaw,
-					0,
-					{at.x - 0.12, 0.6, at.y - 0.1} * k,
-					{at.x + 0.12, 0.87, at.y + 0.1} * k,
-					patch,
-					.Body,
-				)
-			}
-			render.entity_box(
-				d,
-				p,
-				v.yaw,
-				0,
-				{0.34, 0.5, -0.3} * k,
-				{0.37, 0.8, 0.05} * k,
-				patch,
-				.Body,
-			)
-			render.entity_box(
-				d,
-				p,
-				v.yaw,
-				0,
-				{-0.37, 0.4, 0.0} * k,
-				{-0.34, 0.7, 0.3} * k,
-				patch,
-				.Body,
-			)
-		}
-	}
-	neck := p + turn_yaw(k * [3]f32{0, 0.72, -0.45}, v.yaw)
-	render.entity_box(
-		d,
-		neck,
-		v.yaw,
-		v.pitch,
-		{-0.2, -0.2, -0.38} * k,
-		{0.2, 0.2, 0.02} * k,
-		hide,
-		.Head,
-	)
-	swing := math.sin(stride * 5) * 0.6 // radians, as it walks
-	for leg in ([4][3]f32{{-0.22, 0.38, -0.32}, {0.22, 0.38, -0.32}, {-0.22, 0.38, 0.3}, {0.22, 0.38, 0.3}}) {
-		hip := p + turn_yaw(leg * k, v.yaw)
-		phase := swing if (leg.x < 0) == (leg.z < 0) else -swing
-		render.entity_box(
-			d,
-			hip,
-			v.yaw,
-			phase,
-			{-0.08, -0.38, -0.08} * k,
-			{0.08, 0, 0.08} * k,
-			hide,
-			.Legs,
+look_puffs :: proc(s: ^Session, v: Other_View, info: ^game.Kind_Info, looks: u16) {
+	k := f32(1)
+	if info.scale.look != 0 && looks & info.scale.look != 0 {k = info.scale.factor}
+	for p in info.puffs {
+		if looks & p.look == 0 || base.rng_f32(base.cosmetic_rng()) >= p.chance {continue}
+		puff_add(
+			s,
+			Puff {
+				position = v.position +
+				{
+						base.rng_f64_range(base.cosmetic_rng(), -0.3, 0.3),
+						f64(p.height * k),
+						base.rng_f64_range(base.cosmetic_rng(), -0.3, 0.3),
+					},
+				velocity = {0, 0.9, 0},
+				life = 1.1,
+				size = 0.09,
+				drag = 0.5,
+				color = {p.color[0], p.color[1], p.color[2], 255},
+			},
 		)
 	}
 }
@@ -379,9 +294,20 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 	append(&s.sounds, Sound_Event{.Explosion, .Air, center, 1})
 }
 
-// entity_died: its puff and its last sound.
+// entity_died: its puff, of its own colours (its model's first part's mostly, its last
+// part's the rest), and its last sound.
 entity_died :: proc(s: ^Session, e: ^Other_Entity) {
 	at := e.last_seen
+	most, rest := [4]u8{128, 128, 128, 255}, [4]u8{96, 96, 96, 255}
+	if info := game.kind_info(s.reg, e.kind); info != nil {
+		if len(info.parts) > 0 {
+			first, last := info.parts[0].color, info.parts[len(info.parts) - 1].color
+			most, rest = {first[0], first[1], first[2], 255}, {last[0], last[1], last[2], 255}
+		} else if info.model == .Box {
+			most = {info.color[0], info.color[1], info.color[2], 255}
+			rest = most
+		}
+	}
 	for _ in 0 ..< PUFF_PIECES {
 		angle := base.rng_f32_range(base.cosmetic_rng(), 0, math.TAU)
 		speed := base.rng_f32_range(base.cosmetic_rng(), 1.5, 3.5)
@@ -402,7 +328,7 @@ entity_died :: proc(s: ^Session, e: ^Other_Entity) {
 				life = PUFF_SECONDS,
 				size = 0.07,
 				gravity = 18,
-				color = WOOL if base.rng_f32(base.cosmetic_rng()) < 0.7 else HIDE,
+				color = most if base.rng_f32(base.cosmetic_rng()) < 0.7 else rest,
 			},
 		)
 	}
@@ -494,25 +420,4 @@ debris_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
 		if c.a != 0 {return {c.r, c.g, c.b, 255}}
 	}
 	return {128, 128, 128, 255}
-}
-
-// hearts: a sheep in love lets a heart (a pink puff) float up.
-@(private = "file")
-hearts :: proc(s: ^Session, at: [3]f64) {
-	puff_add(
-		s,
-		Puff {
-			position = at +
-			{
-					base.rng_f64_range(base.cosmetic_rng(), -0.3, 0.3),
-					0,
-					base.rng_f64_range(base.cosmetic_rng(), -0.3, 0.3),
-				},
-			velocity = {0, 0.9, 0},
-			life = 1.1,
-			size = 0.09,
-			drag = 0.5,
-			color = HEART,
-		},
-	)
 }

@@ -123,7 +123,7 @@ Entity_Record :: struct {
 Entity_Motion :: struct {
 	position:   [3]f64,
 	yaw, pitch: f32, // body turn; head up/down
-	looks:      u16, // bit i: the kind's i-th look (kind_looks)
+	looks:      u16, // bit i: the kind's i-th look (Kind_Info.looks)
 }
 
 // Block_Record: a block that changed. heard: another player's edit (a sound);

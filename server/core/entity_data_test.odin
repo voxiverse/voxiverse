@@ -7,8 +7,8 @@ import "common:game"
 import "common:protocol"
 
 // A game's creature survives a restart whole, without its game making it again: its
-// kind, place, health and most health, the way it was going and the game's own record on
-// it (Game.entity_data: CREATURES_GAME's Creature_Data).
+// kind, place, health and most health, the way it was going, the looks its game set and
+// the game's own record on it (Game.entity_data: CREATURES_GAME's Creature_Data).
 @(test)
 test_a_games_creature_survives_a_restart :: proc(t: ^testing.T) {
 	dir :: "build/tmp/test_game_creature"
@@ -42,6 +42,9 @@ test_a_games_creature_survives_a_restart :: proc(t: ^testing.T) {
 	entity_set_health(s.home, e, 6)
 	entity_set_speed(s.home, e, 2.5)
 	entity_go(s.home, e, {20.5, 1, 3.5})
+	testing.expect(t, entity_show(s.home, e, "big", true))
+	testing.expect(t, !entity_show(s.home, e, "tall", true), "a look the kind has not")
+	testing.expect_value(t, entity_looks(s.home, s.registry, e), 2)
 	testing.expect(t, harness_stop(h))
 
 	if !testing.expect(t, harness_start(h, config)) {return}
@@ -53,6 +56,7 @@ test_a_games_creature_survives_a_restart :: proc(t: ^testing.T) {
 	testing.expect_value(t, entity_health_of(s.home, back), 6)
 	testing.expect_value(t, entity_max_health(s.home, back), 9)
 	testing.expect_value(t, entity_data(s.home, back, Creature_Data)^, want)
+	testing.expect_value(t, entity_looks(s.home, s.registry, back), 2)
 	st := entity_steer(s.home, back)
 	if !testing.expect(t, st != nil) {return}
 	testing.expect_value(t, st.mode, Steer_Mode.Go)

@@ -33,7 +33,7 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	testing.expect_value(t, s.brain, Entity_Brain.Grazer)
 	testing.expect_value(t, s.with, Entity_Parts{.Wool, .Genes, .Breeding})
 	testing.expect_value(t, len(s.looks), 5)
-	testing.expect_value(t, s.model, Entity_Model.Sheep)
+	testing.expect_value(t, s.model, Entity_Model.Parts)
 	rule, spawns := s.spawn.?
 	testing.expect(t, spawns)
 	grass, _ := registry_block(reg, "grass")
@@ -117,7 +117,7 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 		{
 			"unknown model",
 			`{"k": {"box": [1, 1], "model": "cow"}}`,
-			`testpack/data/entities/k.json:1:32: model is one of "sheep", "rocket", "item", "player" or {"box": [r, g, b]}; got "cow"`,
+			`testpack/data/entities/k.json:1:32: model is one of "rocket", "item", "player" or {"box": [r, g, b]}; got "cow"`,
 		},
 		{
 			"grazer without walker",
@@ -130,9 +130,9 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 			`testpack/data/entities/k.json:1:32: brain "steered" needs physics "walker"`,
 		},
 		{
-			"black without genes",
-			`{"k": {"box": [1, 1], "looks": ["black"], "model": "item"}}`,
-			`testpack/data/entities/k.json:1:33: look "black" is computed from "genes"; add it to "with"`,
+			"a look named twice",
+			`{"k": {"box": [1, 1], "looks": ["black", "black"], "model": "item"}}`,
+			`testpack/data/entities/k.json:1:42: look "black" is named twice`,
 		},
 		{
 			"a box of 5",
@@ -251,7 +251,12 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 		{
 			"a part that swings oddly",
 			`{"k": {"box": [1, 1], "model": {"parts": [{"box": [0, 0, 0, 0.5, 0.5, 0.5], "color": [1, 2, 3], "swing": "wave"}]}}}`,
-			`testpack/data/entities/k.json:1:106: swing is one of "none", "walk", "walk_back", "strike"; got "wave"; did you mean "walk"?`,
+			`testpack/data/entities/k.json:1:106: swing is one of "none", "walk", "walk_back", "strike", "pitch"; got "wave"; did you mean "walk"?`,
+		},
+		{
+			"a part shown by a look the kind has not",
+			`{"k": {"box": [1, 1], "looks": ["shorn"], "model": {"parts": [{"box": [0, 0, 0, 1, 1, 1], "color": [1, 2, 3], "shown": ["lamb"]}]}}}`,
+			`testpack/data/entities/k.json:1:121: not one of the kind's looks (its "looks")`,
 		},
 		{
 			"an unknown field",

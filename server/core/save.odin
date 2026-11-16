@@ -717,7 +717,7 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 // entities.cfg: one line per saved entity: its kind, x y z yaw health natural, then what
 // else it has as `name=value` fields: `max` (its most health, when a game set another than
 // its kind's), a dropped stack's `item count action stack_data`, a sheep's `shorn genes
-// growth love wait`, a steered walker's way (`speed`; `go=x,y,z`, `keep=x,y,z,near,far` or
+// growth love wait`, the looks its game set (`looks`, their bits), a steered walker's way (`speed`; `go=x,y,z`, `keep=x,y,z,near,far` or
 // `glide=x,y,z/x,y,z/...`: a route it followed is the game's to give it again) and the
 // game's record (`data.<field>`, Game.entity_data). A field at its default is left out.
 @(private = "file")
@@ -766,6 +766,8 @@ write_entities :: proc(w: ^World) -> bool {
 				entity_breeding(w, e).wait,
 			)
 		}
+		if looks := game.store_get(&w.entity_world.store, e, C_LOOKS, Looks);
+		   looks != nil && looks.bits != 0 {fmt.sbprintf(&b, " looks=%d", looks.bits)}
 		if st := entity_steer(w, e); st != nil {steer_write(&b, st)}
 		if data := game.store_get(&w.entity_world.store, e, C_GAME_DATA, game.Entity_Data);
 		   data != nil {
@@ -949,6 +951,10 @@ entity_fields_read :: proc(
 			entity_breeding(w, e).wait = i32(
 				int_of(fields, name, 0, game.BREED_WAIT_TICKS) or_return,
 			)
+		case name == "looks":
+			looks := game.store_get(&w.entity_world.store, e, C_LOOKS, Looks)
+			if looks == nil {return false}
+			looks.bits = u16(int_of(fields, name, 0, 65535) or_return)
 		case name == "speed" || name == "go" || name == "keep" || name == "glide":
 			steer_read(w, e, name, value) or_return
 		case strings.has_prefix(name, "data."):

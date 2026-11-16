@@ -32,7 +32,7 @@ Other_Entity :: struct {
 	stack:      game.Stack, // a dropped item's
 	health:     u16, // as the server last said (Entity_Record)
 	max_health: u16, // ... its most (0: none)
-	looks:      u16, // bit i: the kind's i-th look (game.kind_looks)
+	looks:      u16, // bit i: the kind's i-th look (Kind_Info.looks)
 	track:      Track,
 	hurt_at:    time.Tick, // when it was last hit (flash)
 	stride:     f32, // blocks walked, for its legs

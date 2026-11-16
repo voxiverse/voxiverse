@@ -17,7 +17,7 @@ A label names the pass in validation messages and GPU captures, and times it on 
 | `cull` | The world's culling pass (compute, before rendering): the draw commands of the opaque and cutout layers. |
 | `world` | Opaque and cutout terrain. |
 | `depth pyramid` | The depth pyramid, from the world's depth (compute, between the two halves of the frame's rendering). |
-| `entities` | Avatars, sheep, items, projectiles. |
+| `entities` | Avatars, creatures (their kinds' parts), items, projectiles. |
 | `held` | The item in hand, in third person (`held_draw_world`) and first person (`held_draw_view`). |
 | `sky` | The sky, after the world, at the far plane. |
 | `water` | Translucent terrain, sorted. |

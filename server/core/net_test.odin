@@ -41,7 +41,7 @@ Net_Client :: struct {
 	changed:                     [dynamic]Net_Block,
 	entities:                    map[u32][3]f64, // known entities, where last seen
 	shorn:                       map[u32]bool, // sheep as last told shorn or not
-	sheep:                       map[u32]game.Entity_Looks, // and what else about their looks
+	sheep:                       map[u32]u16, // and what else about their looks (their bits)
 	stats_text:                  string, // the last Stats_Page's lines (heap)
 	market:                      protocol.Market_View, // the last Market_View (its town is market_town)
 	market_town:                 string, // (heap)
@@ -287,15 +287,8 @@ net_apply :: proc(c: ^Net_Client, got: []protocol.Received) {
 			v := (^protocol.Entity_Motion)(g.value)
 			if protocol.replica_get(&c.rx.live, int(protocol.State_Kind.Entity), g.key) != nil {
 				c.entities[id] = v.position
-				looks := game.kind_looks(
-					game.kind_info(
-						test_reg(),
-						(^protocol.Entity_Record)(protocol.replica_get(&c.rx.live, int(protocol.State_Kind.Entity), g.key)).kind,
-					),
-					v.looks,
-				)
-				c.shorn[id] = .Shorn in looks
-				c.sheep[id] = looks
+				c.shorn[id] = sheep_look(v.looks, "shorn")
+				c.sheep[id] = v.looks
 			}
 		case .Block:
 			v := (^protocol.Block_Record)(g.value)
@@ -524,6 +517,11 @@ at_rest :: proc(c: ^Net_Client) -> bool {
 }
 
 @(private)
+// sheep_look: a sheep's looks as told (their bits) include the named one.
+sheep_look :: proc(bits: u16, name: string) -> bool {
+	return bits & game.kind_look(game.kind_info(test_reg(), test_reg().engine.sheep), name) != 0
+}
+
 landed :: proc(c: ^Net_Client) -> bool {
 	return c.welcomed && c.update.state.on_ground && c.update.acked > 0 && len(c.chunks) > 50
 }

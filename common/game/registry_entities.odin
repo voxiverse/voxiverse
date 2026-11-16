@@ -52,56 +52,19 @@ Entity_Parts :: bit_set[Entity_Part;u8]
 ENTITY_PART_LIST := [?]string{"wool", "genes", "breeding"}
 #assert(len(ENTITY_PART_LIST) == len(Entity_Part))
 
-// Entity_Look: something the client draws by, computed by the engine from components.
-Entity_Look :: enum u8 {
-	Shorn, // Wool
-	Lamb, // Breeding
-	Black, // Genes
-	Spotted, // Genes
-	In_Love, // Breeding
-	Striking, // its attack: a blow or a shot was just made (a kind with an "attack")
-}
-ENTITY_LOOK_LIST := [?]string{"shorn", "lamb", "black", "spotted", "in_love", "striking"}
-#assert(len(ENTITY_LOOK_LIST) == len(Entity_Look))
+// A kind's looks are names (at most MAX_KIND_LOOKS, its pack's "looks"): bit i of a
+// replicated entity's looks (Entity_Motion.looks) is its i-th. Its game sets them
+// (core.entity_show); the engine sets "striking" while a creature's attack shows. Its
+// model's parts are shown, hidden, coloured and sized by them (read_model_parts), so the
+// client draws a creature from its data alone.
 
-// Entity_Looks: a set of looks. On the wire a kind's looks are bit i for its i-th look
-// (Entity_Motion.looks); kind_looks turns those bits into this.
-Entity_Looks :: bit_set[Entity_Look;u8]
-
-// kind_looks: the looks a replicated entity of this kind shows. A bit past the kind's
-// looks means nothing and is dropped.
-kind_looks :: proc(info: ^Kind_Info, bits: u16) -> (set: Entity_Looks) {
-	for look, i in info.looks {
-		if bits & (1 << u16(i)) != 0 {set += {look}}
-	}
-	return
-}
-
-// look_bits: the wire bits for a set of looks of this kind (the inverse of kind_looks).
-look_bits :: proc(info: ^Kind_Info, set: Entity_Looks) -> (bits: u16) {
-	for look, i in info.looks {
-		if look in set {bits |= 1 << u16(i)}
-	}
-	return
-}
-
-// entity_look_part: the component a look is computed from (false: none of the parts;
-// Striking is its kind's attack's).
-entity_look_part :: proc(l: Entity_Look) -> (Entity_Part, bool) {
-	switch l {
-	case .Shorn:
-		return .Wool, true
-	case .Lamb, .In_Love:
-		return .Breeding, true
-	case .Black, .Spotted:
-		return .Genes, true
-	case .Striking:
-	}
-	return .Wool, false
+// kind_look: the bit of a kind's look by its name (0: the kind has no such look).
+kind_look :: proc(info: ^Kind_Info, name: string) -> u16 {
+	for l, i in info.looks {if l == name {return 1 << u16(i)}}
+	return 0
 }
 
 Entity_Model :: enum u8 {
-	Sheep,
 	Rocket,
 	Item,
 	Player,
@@ -120,25 +83,54 @@ Part_Skin :: enum u8 {
 PART_SKIN_LIST := [?]string{"body", "legs", "head"}
 #assert(len(PART_SKIN_LIST) == len(Part_Skin))
 
-// Part_Swing: how a part moves, turning about the middle of its top (a hip, a shoulder).
+// Part_Swing: how a part moves, turning about its hinge (the middle of its top unless it
+// names one: a hip, a shoulder, a neck).
 Part_Swing :: enum u8 {
 	None,
 	Walk, // to and fro as the creature walks
 	Walk_Back, // the same, the other way (the other leg, the arm opposite)
-	Strike, // forward while it strikes (the Striking look), else as Walk
+	Strike, // forward while it strikes (its "striking" look), else as Walk
+	Pitch, // up and down as the creature looks (its pitch: a grazing head)
 }
-PART_SWING_LIST := [?]string{"none", "walk", "walk_back", "strike"}
+PART_SWING_LIST := [?]string{"none", "walk", "walk_back", "strike", "pitch"}
 #assert(len(PART_SWING_LIST) == len(Part_Swing))
 
 // Model_Part: a box of a shaped model, in the creature's own space (blocks from the middle
 // of its feet; -z is its front), with its colour, its shading and its swing.
 Model_Part :: struct {
-	lo, hi: [3]f32,
-	color:  [3]u8,
-	skin:   Part_Skin,
-	swing:  Part_Swing,
+	lo, hi:  [3]f32,
+	color:   [3]u8,
+	skin:    Part_Skin,
+	swing:   Part_Swing,
+	hinge:   [3]f32, // what it turns about
+	shown:   u16, // looks that must all show for it to be drawn (0: always)
+	hidden:  u16, // looks any of which hides it
+	recolor: [MAX_PART_COLORS]Look_Color, // another colour while a look shows (the first that does)
 }
-ENTITY_MODEL_LIST := [?]string{"sheep", "rocket", "item", "player"}
+
+MAX_PART_COLORS :: 2
+
+// Look_Color: a part's colour while a look shows (look 0: none).
+Look_Color :: struct {
+	look:  u16,
+	color: [3]u8,
+}
+
+// Look_Scale: a whole model's size while a look shows (a lamb at half size), about its feet.
+Look_Scale :: struct {
+	look:   u16,
+	factor: f32,
+}
+
+// Look_Puff: specks a model lets rise while a look shows (hearts over one in love): the
+// chance a frame, their colour, and the height they start at (scaled with the model).
+Look_Puff :: struct {
+	look:   u16,
+	chance: f32,
+	color:  [3]u8,
+	height: f32,
+}
+ENTITY_MODEL_LIST := [?]string{"rocket", "item", "player"}
 
 Kind_Field_Type :: enum u8 {
 	U8,
@@ -218,11 +210,14 @@ Kind_Info :: struct {
 	item:       Kind_Item_Info,
 	brain:      Entity_Brain,
 	with:       Entity_Parts,
-	looks:      []Entity_Look, // look i is bit i of a replicated entity's looks
+	looks:      []string, // look i is bit i of a replicated entity's looks
+	striking:   u16, // its "striking" look's bit (0: none), which the engine sets
 	fields:     []Kind_Field,
 	model:      Entity_Model,
 	color:      [3]u8, // model Box
 	parts:      []Model_Part, // model Parts
+	scale:      Look_Scale, // model Parts: its size by a look
+	puffs:      []Look_Puff, // model Parts: what rises from it by a look
 	spawn:      Maybe(Kind_Spawn_Rule),
 	attack:     Maybe(Kind_Attack_Info), // it fights (a steered walker)
 }
@@ -566,47 +561,24 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 				fmt.aprintf("%d looks; the limit is %d", len(f.value.items), MAX_KIND_LOOKS),
 			)
 		} else {
-			looks := make([dynamic]Entity_Look)
+			looks := make([dynamic]string)
 			for e in f.value.items {
-				if e.kind != .String {
-					fail_field(b, f, e, "a look is a name such as \"shorn\"")
+				if e.kind != .String || !look_name_ok(e.s) {
+					fail_field(b, f, e, "a look is a name of a-z and _ such as \"shorn\"")
 					continue
 				}
-				at := slice.linear_search(ENTITY_LOOK_LIST[:], e.s) or_else -1
-				if at < 0 {
-					fail_field(
-						b,
-						f,
-						e,
-						fmt.aprintf(
-							"\"%s\" is not a look%s",
-							e.s,
-							suggestion(e.s, ENTITY_LOOK_LIST[:]),
-						),
-					)
+				if slice.contains(looks[:], e.s) {
+					fail_field(b, f, e, fmt.aprintf("look \"%s\" is named twice", e.s))
 					continue
 				}
-				look := Entity_Look(at)
-				if part, has := entity_look_part(look); has && part not_in info.with {
-					fail_field(
-						b,
-						f,
-						e,
-						fmt.aprintf(
-							"look \"%s\" is computed from \"%s\"; add it to \"with\"",
-							e.s,
-							ENTITY_PART_LIST[part],
-						),
-					)
-					continue
-				}
-				if look == .Striking && info.attack == nil {
+				if e.s == "striking" && info.attack == nil {
 					fail_field(b, f, e, "look \"striking\" is its attack's; add an \"attack\"")
 					continue
 				}
-				append(&looks, look)
+				append(&looks, strings.clone(e.s))
 			}
 			info.looks = looks[:]
+			info.striking = kind_look(&info, "striking")
 		}
 	}
 	if f := field_of(m, "fields"); f != nil {
@@ -809,8 +781,23 @@ read_entity_model :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) {
 		info.model = Entity_Model(at)
 		return
 	}
-	if v.kind == .Object && len(v.members) == 1 && v.members[0].key == "parts" {
+	if v.kind == .Object && len(v.members) >= 1 && v.members[0].key == "parts" {
 		read_model_parts(b, f, v.members[0].value, info)
+		for m in v.members[1:] {
+			switch m.key {
+			case "scale":
+				read_model_scale(b, f, m.value, info)
+			case "puffs":
+				read_model_puffs(b, f, m.value, info)
+			case:
+				fail_field(
+					b,
+					f,
+					m.value,
+					fmt.aprintf("\"%s\" is not a model's field (parts, scale, puffs)", m.key),
+				)
+			}
+		}
 		return
 	}
 	ok := v.kind == .Object && len(v.members) == 1 && v.members[0].key == "box"
@@ -836,12 +823,128 @@ read_entity_model :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) {
 	info.model = .Box
 }
 
+// look_name_ok: a look's name is a-z and _, at most 32 bytes.
+@(private)
+look_name_ok :: proc(name: string) -> bool {
+	if len(name) == 0 || len(name) > 32 {return false}
+	for c in transmute([]u8)name {if (c < 'a' || c > 'z') && c != '_' {return false}}
+	return true
+}
+
+// read_looks_mask: a list of the kind's looks by name, as their bits.
+@(private)
+read_looks_mask :: proc(
+	b: ^Reg_Build,
+	f: ^Def_Field,
+	v: Json_Value,
+	info: ^Kind_Info,
+) -> (
+	mask: u16,
+	ok: bool,
+) {
+	if v.kind != .Array {
+		fail_field(b, f, v, "a list of the kind's looks, such as [\"shorn\"]")
+		return
+	}
+	for e in v.items {
+		bit := kind_look(info, e.s) if e.kind == .String else 0
+		if bit == 0 {
+			fail_field(b, f, e, "not one of the kind's looks (its \"looks\")")
+			return
+		}
+		mask |= bit
+	}
+	return mask, true
+}
+
+// read_look_of: one of the kind's looks by name, as its bit.
+@(private)
+read_look_of :: proc(
+	b: ^Reg_Build,
+	f: ^Def_Field,
+	key: string,
+	v: Json_Value,
+	info: ^Kind_Info,
+) -> u16 {
+	bit := kind_look(info, key)
+	if bit == 0 {fail_field(b, f, v, fmt.aprintf("\"%s\" is not one of the kind's looks", key))}
+	return bit
+}
+
+// read_model_scale: {"<look>": factor}: the whole model's size while the look shows.
+@(private)
+read_model_scale :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, info: ^Kind_Info) {
+	x, is_number := 0.0, false
+	if v.kind == .Object && len(v.members) == 1 {x, is_number = json_number(v.members[0].value)}
+	if !is_number || x < 0.1 || x > 4 {
+		fail_field(b, f, v, `scale is {"<look>": factor}, the factor 0.1..4`)
+		return
+	}
+	info.scale = {read_look_of(b, f, v.members[0].key, v, info), f32(x)}
+}
+
+// read_model_puffs: {"<look>": {"color": [r, g, b], "chance": 0..1, "height": blocks}}: what
+// rises from the model while a look shows.
+@(private)
+read_model_puffs :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, info: ^Kind_Info) {
+	USAGE :: `puffs is {"<look>": {"color": [r, g, b], "chance": 0..1, "height": blocks}}`
+	if v.kind != .Object {
+		fail_field(b, f, v, USAGE)
+		return
+	}
+	puffs := make([dynamic]Look_Puff)
+	for m in v.members {
+		p := Look_Puff {
+			look = read_look_of(b, f, m.key, m.value, info),
+		}
+		ok := m.value.kind == .Object
+		if ok {
+			for n in m.value.members {
+				switch n.key {
+				case "color":
+					p.color, ok = read_color(n.value)
+				case "chance":
+					x, is_number := json_number(n.value)
+					ok = is_number && x >= 0 && x <= 1
+					p.chance = f32(x)
+				case "height":
+					x, is_number := json_number(n.value)
+					ok = is_number && x >= 0 && x <= 8
+					p.height = f32(x)
+				case:
+					ok = false
+				}
+				if !ok {break}
+			}
+		}
+		if !ok {
+			fail_field(b, f, m.value, USAGE)
+			return
+		}
+		append(&puffs, p)
+	}
+	info.puffs = puffs[:]
+}
+
+// read_color: [r, g, b], each a whole number 0..255.
+@(private)
+read_color :: proc(v: Json_Value) -> (color: [3]u8, ok: bool) {
+	if v.kind != .Array || len(v.items) != 3 {return}
+	for c, k in v.items {
+		if c.kind != .Int || c.i < 0 || c.i > 255 {return}
+		color[k] = u8(c.i)
+	}
+	return color, true
+}
+
 // read_model_parts: a shaped model's parts, [{"box": [x0, y0, z0, x1, y1, z1], "color":
 // [r, g, b], "skin": "body" | "legs" | "head", "swing": "none" | "walk" | "walk_back" |
-// "strike"}, ...] (skin and swing optional: body, none).
+// "strike" | "pitch", "hinge": [x, y, z], "shown": [looks], "hidden": [looks], "colors":
+// {"<look>": [r, g, b]}}, ...] (all but box and color optional: body, none, the middle of
+// its top, always shown, its own colour).
 @(private)
 read_model_parts :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, info: ^Kind_Info) {
-	USAGE :: `parts is a list of at most 16 {"box": [x0, y0, z0, x1, y1, z1], "color": [r, g, b], "skin", "swing"}`
+	USAGE :: `parts is a list of at most 16 {"box": [x0, y0, z0, x1, y1, z1], "color": [r, g, b], "skin", "swing", "hinge", "shown", "hidden", "colors"}`
 	if v.kind != .Array || len(v.items) == 0 || len(v.items) > MAX_MODEL_PARTS {
 		fail_field(b, f, v, USAGE)
 		return
@@ -853,7 +956,7 @@ read_model_parts :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, info: ^Kin
 			fail_field(b, f, e, USAGE)
 			return
 		}
-		seen_box, seen_color := false, false
+		seen_box, seen_color, seen_hinge := false, false, false
 		for m in e.members {
 			switch m.key {
 			case "box":
@@ -902,12 +1005,52 @@ read_model_parts :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, info: ^Kin
 				p.skin = Part_Skin(choice_of(b, f, m.value, "skin", PART_SKIN_LIST[:], 0))
 			case "swing":
 				p.swing = Part_Swing(choice_of(b, f, m.value, "swing", PART_SWING_LIST[:], 0))
+			case "hinge":
+				ok := m.value.kind == .Array && len(m.value.items) == 3
+				for c, k in m.value.items {
+					x, is_number := json_number(c)
+					if !ok || !is_number || x < -4 || x > 4 {
+						ok = false
+						break
+					}
+					p.hinge[k] = f32(x)
+				}
+				if !ok {
+					fail_field(b, f, m.value, "a part's hinge is [x, y, z], each -4..4")
+					return
+				}
+				seen_hinge = true
+			case "shown", "hidden":
+				mask, ok := read_looks_mask(b, f, m.value, info)
+				if !ok {return}
+				if m.key == "shown" {p.shown = mask} else {p.hidden = mask}
+			case "colors":
+				if m.value.kind != .Object || len(m.value.members) > MAX_PART_COLORS {
+					fail_field(b, f, m.value, `colors is {"<look>": [r, g, b]}, at most 2`)
+					return
+				}
+				for c, k in m.value.members {
+					color, ok := read_color(c.value)
+					if !ok {
+						fail_field(
+							b,
+							f,
+							c.value,
+							"a colour is [r, g, b], each a whole number 0..255",
+						)
+						return
+					}
+					p.recolor[k] = {read_look_of(b, f, c.key, c.value, info), color}
+				}
 			case:
 				fail_field(
 					b,
 					f,
 					m.value,
-					fmt.aprintf("\"%s\" is not a part's field (box, color, skin, swing)", m.key),
+					fmt.aprintf(
+						"\"%s\" is not a part's field (box, color, skin, swing, hinge, shown, hidden, colors)",
+						m.key,
+					),
 				)
 				return
 			}
@@ -916,6 +1059,7 @@ read_model_parts :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, info: ^Kin
 			fail_field(b, f, e, "a part needs a \"box\" and a \"color\"")
 			return
 		}
+		if !seen_hinge {p.hinge = {(p.lo.x + p.hi.x) / 2, p.hi.y, (p.lo.z + p.hi.z) / 2}}
 	}
 	info.parts = parts
 	info.model = .Parts

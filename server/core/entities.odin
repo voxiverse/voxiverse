@@ -141,32 +141,51 @@ entities_sync_spatial :: proc(w: ^World) {
 	}
 }
 
-// entity_looks: what clients are told about how an entity looks: bit i is the kind's
-// i-th look, each computed from the components it names.
+// entity_looks: what clients are told about how an entity looks: bit i is its kind's i-th
+// look, as its game set it (entity_show), "striking" while its attack shows, and the
+// sheep's, computed from their components.
 entity_looks :: proc(w: ^World, reg: ^game.Registry, h: game.Entity_Handle) -> (bits: u16) {
 	info := game.kind_info(reg, entity_kind(w, h))
 	if info == nil {return}
+	if set := game.store_get(&w.entity_world.store, h, C_LOOKS, Looks);
+	   set != nil {bits = set.bits}
+	if info.striking != 0 && entity_striking(w, h) {bits |= info.striking}
 	for look, i in info.looks {
 		on: bool
 		switch look {
-		case .Shorn:
+		case "shorn":
 			on = entity_wool(w, h).shorn
-		case .Lamb:
+		case "lamb":
 			on = entity_breeding(w, h).growth < game.LAMB_TICKS
-		case .Black:
+		case "black":
 			on = game.genes_black(entity_genes(w, h).genes)
-		case .Spotted:
+		case "spotted":
 			on = game.genes_spotted(entity_genes(w, h).genes)
-		case .In_Love:
+		case "in_love":
 			on = entity_breeding(w, h).love > 0
-		case .Striking:
-			on = entity_striking(w, h)
+		case:
+			continue
 		}
-		if on {bits |= 1 << u16(i)}
+		if on {bits |= 1 << u16(i)} else {bits &~= 1 << u16(i)}
 	}
 	return
 }
 
+// Looks: the looks a game set on an entity (entity_show), bit i its kind's i-th.
+Looks :: struct {
+	bits: u16,
+}
+
+// entity_show: a look of the entity's kind (its pack's "looks", by name) shown or not:
+// told to the players who know it, drawn as the kind's model says (a part shown or
+// hidden, a colour, a size). False when its kind has no such look.
+entity_show :: proc(w: ^World, h: game.Entity_Handle, look: string, on: bool) -> bool {
+	bit := game.kind_look(game.kind_info(w.server.registry, entity_kind(w, h)), look)
+	set := game.store_get(&w.entity_world.store, h, C_LOOKS, Looks)
+	if bit == 0 || set == nil {return false}
+	if on {set.bits |= bit} else {set.bits &~= bit}
+	return true
+}
 
 // sheep_use: wheat feeds it (an adult becomes ready to breed; a lamb grows
 // up a tenth sooner), anything else shears an adult by hand: 1 to 3 wool
@@ -1287,6 +1306,7 @@ HURT_KEPT_TICKS :: game.TICK_RATE * 10 // how long Hurt_By names a killer
 C_SPATIAL_LINK :: game.FIRST_SERVER_COMPONENT
 C_BRAIN :: game.FIRST_SERVER_COMPONENT + 1 // a grazer's Brain (large: set at spawn)
 C_GAME_DATA :: game.FIRST_SERVER_COMPONENT + 3 // the game's record on an entity of its kinds (entity_data)
+C_LOOKS :: game.FIRST_SERVER_COMPONENT + 4 // the looks its game set (a kind with looks)
 
 // Spatial_Link: the entity's entry in the spatial service. Releasing it (the
 // entity despawned) removes the entry.
@@ -1328,7 +1348,7 @@ Entity_World :: struct {
 	next_player_id: u32, // entities.odin: the ids of player entities
 	tag_names:      [dynamic]string, // tag i is tag_names[i-1]
 	deaths:         [dynamic]Entity_Death, // this tick's
-	infos:          [game.FIRST_SERVER_COMPONENT + 4]game.Component_Info,
+	infos:          [game.FIRST_SERVER_COMPONENT + 5]game.Component_Info,
 }
 
 @(private = "file")
@@ -1359,6 +1379,12 @@ entity_world_init :: proc(ew: ^Entity_World, seed: u64, max_entities := MAX_ENTI
 		type  = Steer,
 		size  = size_of(Steer),
 		align = align_of(Steer),
+	}
+	ew.infos[C_LOOKS] = game.Component_Info {
+		name  = "looks",
+		type  = Looks,
+		size  = size_of(Looks),
+		align = align_of(Looks),
 	}
 	ew.infos[C_GAME_DATA] = game.Component_Info {
 		name  = "game_data",
@@ -1434,6 +1460,7 @@ entity_world_spawn :: proc(
 	if info.hittable {set += {int(game.C_HURT_BY)}}
 	if info.model == .Player {set += {int(game.C_PLAYER_LINK)}}
 	if len(info.fields) > 0 {set += {int(game.C_FIELDS)}}
+	if len(info.looks) > 0 {set += {int(C_LOOKS)}}
 	if natural {set += {int(game.C_NATURAL)}}
 
 	serr: game.Store_Error
