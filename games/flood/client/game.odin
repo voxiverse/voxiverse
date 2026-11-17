@@ -18,6 +18,20 @@ GAME :: engine.Game {
 	received = received,
 	hud      = hud,
 	debug    = debug,
+	look     = LOOK,
+}
+
+// LOOK: an overcast day before the rain: a grey-blue sky, flat light, the far walls lost in
+// a damp haze, the colours washed out.
+LOOK :: engine.Look {
+	time = 0.5,
+	zenith = {0.30, 0.34, 0.40},
+	horizon = {0.48, 0.52, 0.56},
+	sun_light = {0.72, 0.76, 0.82},
+	fog = 110,
+	fog_near = 0.25,
+	no_sun = true,
+	grade = {tint = {0.95, 0.99, 1.04}, saturation = -0.35, contrast = -0.08},
 }
 
 // View: what the session knows of the round.
