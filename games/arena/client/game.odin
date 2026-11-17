@@ -23,6 +23,14 @@ GAME :: engine.Game {
 	hud        = hud,
 	debug      = debug,
 	scoreboard = scoreboard,
+	look       = LOOK,
+}
+
+// LOOK: a late afternoon over the arena: a low golden sun, warm stone, a little more
+// contrast, the corners dimmed towards the fight.
+LOOK :: engine.Look {
+	time = 0.7,
+	grade = {tint = {1.10, 0.98, 0.84}, saturation = 0.08, contrast = 0.14, vignette = 0.25},
 }
 
 FEED_LINES :: 5
