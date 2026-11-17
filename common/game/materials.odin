@@ -88,8 +88,45 @@ MATERIALS := [?]Material_Def {
 	{name = "slate_tiles", family = .Stone, side = "slate_tiles", sound = "stone"},
 	{name = "polished_slate", family = .Stone, side = "polished_slate", sound = "stone"},
 	// Wood.
+	{
+		name = "birch_log",
+		family = .Wood,
+		side = "birch_log",
+		top = "birch_log_end",
+		sound = "wood",
+	},
+	{name = "birch_planks", family = .Wood, side = "birch_planks", sound = "wood"},
+	{name = "birch_panel", family = .Wood, side = "birch_panel", sound = "wood"},
 	{name = "oak_log", family = .Wood, side = "log_side", top = "log_top", sound = "wood"},
 	{name = "oak_planks", family = .Wood, side = "planks", sound = "wood"},
+	{name = "oak_panel", family = .Wood, side = "oak_panel", sound = "wood"},
+	{
+		name = "spruce_log",
+		family = .Wood,
+		side = "spruce_log_side",
+		top = "spruce_log_end",
+		sound = "wood",
+	},
+	{name = "spruce_planks", family = .Wood, side = "spruce_planks", sound = "wood"},
+	{name = "spruce_panel", family = .Wood, side = "spruce_panel", sound = "wood"},
+	{
+		name = "redwood_log",
+		family = .Wood,
+		side = "redwood_log",
+		top = "redwood_log_end",
+		sound = "wood",
+	},
+	{name = "redwood_planks", family = .Wood, side = "redwood_planks", sound = "wood"},
+	{name = "redwood_panel", family = .Wood, side = "redwood_panel", sound = "wood"},
+	{
+		name = "weathered_log",
+		family = .Wood,
+		side = "weathered_log",
+		top = "weathered_log_end",
+		sound = "wood",
+	},
+	{name = "weathered_planks", family = .Wood, side = "weathered_planks", sound = "wood"},
+	{name = "weathered_panel", family = .Wood, side = "weathered_panel", sound = "wood"},
 	// Built and industrial.
 	{
 		name = "glass",
@@ -151,26 +188,26 @@ materials_doc :: proc(allocator := context.temp_allocator) -> string {
 }
 
 // seed_material_textures: a texture for each face of every material that the base pack
-// does not define (voxiverse:<generator>), after every pack's textures, so a block of a
-// material resolves its faces like any other texture.
+// does not define (voxiverse:<generator>), after every pack's textures and in generator
+// order, so a block of a material resolves its faces like any other texture.
 @(private)
 seed_material_textures :: proc(b: ^Reg_Build) {
-	for m in MATERIALS {
-		for generator in material_faces(m) {
-			id := strings.concatenate({BASE_NAMESPACE, ":", generator})
-			if id in b.index[.Texture] {continue}
-			b.index[.Texture][id] = len(b.defs[.Texture])
-			field := Def_Field {
-				name = "generator",
-				value = {kind = .String, s = generator},
-				file = "materials",
-			}
-			def := Merged_Def {
-				id   = id,
-				file = "materials",
-			}
-			append(&def.fields, field)
-			append(&b.defs[.Texture], def)
+	faces := make(map[string]bool, allocator = context.temp_allocator)
+	for m in MATERIALS {for generator in material_faces(m) {faces[generator] = true}}
+	for generator in TEXTURE_GENERATOR_NAMES {
+		id := strings.concatenate({BASE_NAMESPACE, ":", generator})
+		if generator not_in faces || id in b.index[.Texture] {continue}
+		b.index[.Texture][id] = len(b.defs[.Texture])
+		field := Def_Field {
+			name = "generator",
+			value = {kind = .String, s = generator},
+			file = "materials",
 		}
+		def := Merged_Def {
+			id   = id,
+			file = "materials",
+		}
+		append(&def.fields, field)
+		append(&b.defs[.Texture], def)
 	}
 }

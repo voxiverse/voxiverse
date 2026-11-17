@@ -32,7 +32,8 @@ TILING := [?]struct {
 	{.Planks, true, true},
 	{.Farmland_Top, true, true},
 	{.Farmland_Moist_Top, true, true},
-	// The kit's (a polished slab is framed, a block each: it does not tile).
+	// The kit's (a polished slab and a panel are framed, one a block: they do not tile;
+	// nor does a log's round end).
 	{.Stone_Tiles, true, true},
 	{.Basalt, true, true},
 	{.Basalt_Cobble, true, true},
@@ -49,6 +50,13 @@ TILING := [?]struct {
 	{.Slate_Cobble, true, true},
 	{.Slate_Bricks, true, true},
 	{.Slate_Tiles, true, true},
+	{.Birch_Log, true, true},
+	{.Birch_Planks, true, true},
+	{.Spruce_Planks, true, true},
+	{.Redwood_Log, true, true},
+	{.Redwood_Planks, true, true},
+	{.Weathered_Log, true, true},
+	{.Weathered_Planks, true, true},
 }
 
 // A texture that tiles shows no seam: the mean step in brightness from its

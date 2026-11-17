@@ -50,6 +50,39 @@ kit_pixel :: proc(g: Generator, seed: u32, x, y: int) -> (Rgba, bool) {
 		return tiles(SLATE_ROCK, seed, x, y), true
 	case .Polished_Slate:
 		return polished(SLATE_ROCK, seed, x, y), true
+	// Wood.
+	case .Oak_Panel:
+		return panel_of(OAK, seed, x, y), true
+	case .Birch_Log:
+		return bark_of(BIRCH, seed, x, y), true
+	case .Birch_Log_End:
+		return rings_of(BIRCH, seed, x, y), true
+	case .Birch_Planks:
+		return planks_of(BIRCH, seed, x, y), true
+	case .Birch_Panel:
+		return panel_of(BIRCH, seed, x, y), true
+	case .Spruce_Log_End:
+		return rings_of(SPRUCE, seed, x, y), true
+	case .Spruce_Planks:
+		return planks_of(SPRUCE, seed, x, y), true
+	case .Spruce_Panel:
+		return panel_of(SPRUCE, seed, x, y), true
+	case .Redwood_Log:
+		return bark_of(REDWOOD, seed, x, y), true
+	case .Redwood_Log_End:
+		return rings_of(REDWOOD, seed, x, y), true
+	case .Redwood_Planks:
+		return planks_of(REDWOOD, seed, x, y), true
+	case .Redwood_Panel:
+		return panel_of(REDWOOD, seed, x, y), true
+	case .Weathered_Log:
+		return bark_of(WEATHERED, seed, x, y), true
+	case .Weathered_Log_End:
+		return rings_of(WEATHERED, seed, x, y), true
+	case .Weathered_Planks:
+		return planks_of(WEATHERED, seed, x, y), true
+	case .Weathered_Panel:
+		return panel_of(WEATHERED, seed, x, y), true
 	}
 	return {}, false
 }

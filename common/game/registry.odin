@@ -105,6 +105,22 @@ TEXTURE_GENERATOR_NAMES := [?]string {
 	"slate_bricks",
 	"slate_tiles",
 	"polished_slate",
+	"oak_panel",
+	"birch_log",
+	"birch_log_end",
+	"birch_planks",
+	"birch_panel",
+	"spruce_log_end",
+	"spruce_planks",
+	"spruce_panel",
+	"redwood_log",
+	"redwood_log_end",
+	"redwood_planks",
+	"redwood_panel",
+	"weathered_log",
+	"weathered_log_end",
+	"weathered_planks",
+	"weathered_panel",
 }
 @(rodata)
 SOUND_GENERATOR_NAMES := [?]string {

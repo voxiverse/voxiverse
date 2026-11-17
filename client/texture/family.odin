@@ -50,7 +50,15 @@ family :: proc(g: Generator) -> Family {
 		return .Plant
 	case .Wheat_0, .Wheat_1, .Wheat_2, .Wheat_3, .Wheat_4, .Wheat_5, .Wheat_6, .Wheat_7:
 		return .Crop
-	case .Log_Side, .Log_Top, .Spruce_Log_Side, .Planks:
+	case .Log_Side, .Log_Top, .Spruce_Log_Side, .Planks, .Oak_Panel:
+		return .Wood
+	case .Birch_Log, .Birch_Log_End, .Birch_Planks, .Birch_Panel:
+		return .Wood
+	case .Spruce_Log_End, .Spruce_Planks, .Spruce_Panel:
+		return .Wood
+	case .Redwood_Log, .Redwood_Log_End, .Redwood_Planks, .Redwood_Panel:
+		return .Wood
+	case .Weathered_Log, .Weathered_Log_End, .Weathered_Planks, .Weathered_Panel:
 		return .Wood
 	case .Cobblestone, .Stone_Bricks, .Stone_Tiles, .Polished_Stone:
 		return .Masonry

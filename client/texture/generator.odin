@@ -81,6 +81,22 @@ Generator :: enum u32 {
 	Slate_Bricks,
 	Slate_Tiles,
 	Polished_Slate,
+	Oak_Panel,
+	Birch_Log,
+	Birch_Log_End,
+	Birch_Planks,
+	Birch_Panel,
+	Spruce_Log_End,
+	Spruce_Planks,
+	Spruce_Panel,
+	Redwood_Log,
+	Redwood_Log_End,
+	Redwood_Planks,
+	Redwood_Panel,
+	Weathered_Log,
+	Weathered_Log_End,
+	Weathered_Planks,
+	Weathered_Panel,
 }
 
 // generate fills pixels (SIZE² values, row by row) for t.
