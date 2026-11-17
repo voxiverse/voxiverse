@@ -59,6 +59,7 @@ OPTIONS_TABS := [engine.Options_Tab][]string {
 		"reduce_motion",
 		"sprint_fov_kick",
 		"view_bobbing",
+		"screen_shake",
 		"prompt_bar",
 		"chat_text_size",
 	},

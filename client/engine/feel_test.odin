@@ -29,19 +29,19 @@ feel_free :: proc(s: ^Session) {
 test_feel_clock_follows_the_ticks_heard :: proc(t: ^testing.T) {
 	s := feel_session()
 	defer feel_free(s)
-	feel_advance(s, 0.5)
+	feel_advance(s, {}, 0.5)
 	testing.expect_value(t, s.feel.clock, 0.5 * game.TICK_RATE) // (nothing heard: the frames alone)
 	clock_heard(&s.render_clock, 100)
-	feel_advance(s, 0.05)
+	feel_advance(s, {}, 0.05)
 	testing.expect_value(t, s.feel.clock, 100 - FEEL_LAG)
-	for _ in 0 ..< 20 {feel_advance(s, 0.05)} 	// the server stopped: the clock waits
+	for _ in 0 ..< 20 {feel_advance(s, {}, 0.05)} 	// the server stopped: the clock waits
 	testing.expect_value(t, s.feel.clock, 100 + FEEL_LEAD)
 	before := s.feel.clock
 	clock_heard(&s.render_clock, 101)
-	feel_advance(s, 0)
+	feel_advance(s, {}, 0)
 	testing.expect_value(t, s.feel.clock, before) // (never back)
 	clock_heard(&s.render_clock, 600) // a hurry: caught up
-	feel_advance(s, 0.05)
+	feel_advance(s, {}, 0.05)
 	testing.expect_value(t, s.feel.clock, 600 - FEEL_LAG)
 	s.rx.tick = 650
 	testing.expect_value(t, feel_now(s), 650) // an effect of a message taken starts at its tick
@@ -87,7 +87,7 @@ test_bursts_are_capped :: proc(t: ^testing.T) {
 	d: render.Entity_Draw
 	render.entity_draw_init(&d)
 	defer render.entity_draw_destroy(&d)
-	feel_advance(s, 2) // longer than any burst lives
+	feel_advance(s, {}, 2) // longer than any burst lives
 	entities_draw(s, &d)
 	testing.expect_value(t, s.feel.burst_puffs, 0)
 	testing.expect_value(t, len(s.puffs), 1)
@@ -111,14 +111,67 @@ test_entity_flash :: proc(t: ^testing.T) {
 	entity_flash(s, 8, {255, 255, 255, 255}) // (one not known: nothing)
 	color, on := entity_flashing(s, &s.entities[7])
 	testing.expect(t, on && color == {255, 255, 255, 255})
-	feel_advance(s, ENTITY_FLASH_SECONDS / 2)
+	feel_advance(s, {}, ENTITY_FLASH_SECONDS / 2)
 	_, on = entity_flashing(s, &s.entities[7])
 	testing.expect(t, on)
-	feel_advance(s, ENTITY_FLASH_SECONDS)
+	feel_advance(s, {}, ENTITY_FLASH_SECONDS)
 	_, on = entity_flashing(s, &s.entities[7])
 	testing.expect(t, !on)
 	testing.expect(
 		t,
 		math.abs(f32(s.feel.clock) - 1.5 * ENTITY_FLASH_SECONDS * game.TICK_RATE) < 1e-4,
 	)
+}
+
+// Shakes die away and add up to a whole one at most; a fifth takes the place of the one with
+// least left. With the setting off, or Reduce motion on, nothing moves the view at all.
+@(test)
+test_shakes_combine_decay_and_obey_the_setting :: proc(t: ^testing.T) {
+	s := feel_session()
+	defer feel_free(s)
+	full := Settings {
+		screen_shake = 1,
+	}
+	feel_advance(s, full, 0.1)
+	move, turn := feel_view(&s.feel)
+	testing.expect(t, move == {} && turn == {}, "nothing under way: still")
+	shake(s, 0.3, 0.5)
+	testing.expect(t, abs(feel_shaking(&s.feel) - 0.3) < 1e-5)
+	shake(s, 0.3, 0.5)
+	testing.expect(t, abs(feel_shaking(&s.feel) - 0.6) < 1e-5, "two add up")
+	for _ in 0 ..< 4 {shake(s, 0.9, 1)}
+	testing.expect_value(t, feel_shaking(&s.feel), 1) // (capped)
+	feel_advance(s, full, 0.2)
+	moved: f32
+	for _ in 0 ..< 5 {
+		feel_advance(s, full, 0.01)
+		move, turn = feel_view(&s.feel)
+		moved = max(moved, abs(move.x) + abs(move.y) + abs(move.z))
+	}
+	testing.expect(t, moved > 0 && moved <= 3 * SHAKE_MOVE, "it moves, within a whole shake")
+	feel_advance(s, full, 1)
+	testing.expect_value(t, feel_shaking(&s.feel), 0) // (over)
+
+	kick(s, 3)
+	feel_advance(s, full, KICK_PEAK)
+	_, turn = feel_view(&s.feel)
+	testing.expect(t, abs(turn.y - 3 * math.RAD_PER_DEG) < 1e-4, "a kick peaks at its degrees")
+	for _ in 0 ..< 6 {kick(s, 4)}
+	_, turn = feel_view(&s.feel)
+	testing.expect(t, turn.y <= KICK_CAP * math.RAD_PER_DEG + 1e-5, "kicks are capped")
+	half := full
+	half.screen_shake = 0.5
+	feel_advance(s, half, 0)
+	_, low := feel_view(&s.feel)
+	testing.expect(t, abs(low.y - turn.y / 2) < 1e-5, "the setting scales them")
+
+	shake(s, 1, 2)
+	for off in ([]Settings{{}, {screen_shake = 1, reduce_motion = true}}) {
+		feel_advance(s, off, 0.01)
+		move, turn = feel_view(&s.feel)
+		testing.expect(t, move == {} && turn == {}, "off: the view stands")
+	}
+	feel_advance(s, full, 4)
+	_, turn = feel_view(&s.feel)
+	testing.expect(t, abs(turn.y) < 1e-3, "and settles")
 }

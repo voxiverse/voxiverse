@@ -354,6 +354,8 @@ The types these name:
 - `burst :: proc(s: ^Session, at: [3]f64, kind: Burst, color := [4]u8{}, scale: f32 = 1)`: a burst of particles at `at` as the preset kind looks, in color (zero: the preset's own; a material's dust: block_colour), scale times as far and as big (a boss's death); fewer pieces, or none, when bursts have MAX_BURST_PUFFS alive already.
 - `Burst :: enum u8 {Impact, Sparks, Smoke, Sparkle, Death, Splash}`: what a burst of particles looks like (burst).
 - `MAX_BURST_PUFFS :: 256`: the puffs bursts may have alive at once, of the MAX_PUFFS every effect shares: a burst past it makes fewer pieces, or none, so no game can crowd out the engine's own effects or slow the frame.
+- `shake :: proc(s: ^Session, amount: f32, seconds: f32)`: the view shakes, `amount` hard (0 ..= 1: 0.15 a blow taken, 0.4 a blast near, 1 the most there is) for `seconds`, dying away.
+- `kick :: proc(s: ^Session, degrees: f32)`: the view jolts up by `degrees` (down below 0) and settles, in a few tenths of a second: a gun's recoil, a landing, a collision.
 - `entity_flash :: proc(s: ^Session, id: u32, color: [4]u8)`: the entity drawn in color for a moment (ENTITY_FLASH_SECONDS): red as every creature is when hurt, white for a critical blow, gold for a level gained.
 - `HURT :: [4]u8 {...}`: what a hurt creature flashes (Entity_Hurt: entity_flash).
 - `game_request :: proc(s: ^Session, value: ^$T)`: game_request sends the game's server part one of its requests (Game_Kinds.requests: value of the request kind's type), after the last input sent; the server checks it and its request hook judges it.

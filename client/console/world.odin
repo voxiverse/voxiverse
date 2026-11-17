@@ -130,7 +130,7 @@ register_world_commands :: proc(c: ^engine.Console) {
 		c,
 		{
 			"feel",
-			"feel burst <impact|sparks|smoke|sparkle|death|splash> <x> <y> <z>: one of the feel kit's effects, here, for a picture (a development build's)",
+			"feel burst <impact|sparks|smoke|sparkle|death|splash> <x> <y> <z> | shake <amount> <seconds> | kick <degrees>: one of the feel kit's effects, for a picture (a development build's)",
 			feel_command,
 		},
 		args = {1, 8},
@@ -162,6 +162,18 @@ feel_command :: proc(app: ^engine.App, args: []string) {
 					return
 				}
 			}
+		}
+	case "shake":
+		amount, a_ok := strconv.parse_f32(args[1] if len(args) == 3 else "")
+		seconds, s_ok := strconv.parse_f32(args[2] if len(args) == 3 else "")
+		if a_ok && s_ok {
+			engine.shake(s, amount, seconds)
+			return
+		}
+	case "kick":
+		if degrees, ok := strconv.parse_f32(args[1] if len(args) == 2 else ""); ok {
+			engine.kick(s, degrees)
+			return
 		}
 	}
 	engine.console_print(&app.console, "feel: see `help feel`", .Warning)

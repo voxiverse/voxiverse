@@ -511,7 +511,7 @@ session_update :: proc(
 		receive(s)
 		world_changes_settle(&s.world)
 	}
-	feel_advance(s, dt)
+	feel_advance(s, settings, dt)
 	defer {
 		base.profile_scope("send messages")
 		flush(s)

@@ -23,12 +23,18 @@ FEEL_LAG :: 1 // ... and behind it (it catches up at once: a hurried server)
 Feel :: struct {
 	clock:       f64, // ticks: the feel clock (feel_advance)
 	burst_puffs: int, // live puffs bursts made (at most MAX_BURST_PUFFS)
+	shaking:     f32, // how much the view shakes and kicks: the Screen shake setting, 0 under Reduce motion
+	still:       bool, // Reduce motion: what eases in is simply there, what floats up stands
+	shakes:      [MAX_SHAKES]Shake,
+	kicks:       [MAX_KICKS]Kick,
 }
 
 // feel_advance: a frame of dt seconds on the feel clock (session_update, after the messages
-// are taken: the newest tick heard bounds it).
-feel_advance :: proc(s: ^Session, dt: f32) {
+// are taken: the newest tick heard bounds it), and the player's settings for the feel.
+feel_advance :: proc(s: ^Session, settings: Settings, dt: f32) {
 	f := &s.feel
+	f.still = settings.reduce_motion
+	f.shaking = 0 if settings.reduce_motion else clamp(settings.screen_shake, 0, 1)
 	f.clock += f64(dt) * game.TICK_RATE
 	if c := &s.render_clock; c.heard {
 		newest := f64(c.newest)
@@ -210,4 +216,103 @@ entity_flash :: proc(s: ^Session, id: u32, color: [4]u8) {
 entity_flashing :: proc(s: ^Session, e: ^Other_Entity) -> (color: [4]u8, ok: bool) {
 	if e.flash_color.a == 0 || feel_age(s, e.flash_at) >= ENTITY_FLASH_SECONDS {return}
 	return e.flash_color, true
+}
+
+// ---------------------------------------------------------------------------
+// The view: shakes and kicks
+// ---------------------------------------------------------------------------
+
+MAX_SHAKES :: 4 // shakes under way at once (one more takes the place of the one with least left)
+SHAKE_MOVE :: 0.16 // blocks the view moves at a whole shake
+SHAKE_TURN :: 1.1 * math.RAD_PER_DEG // ... and turns
+MAX_KICKS :: 4
+KICK_PEAK :: 0.05 // seconds a kick takes to its height (it settles over a few times that)
+KICK_CAP :: 5.0 // degrees the kicks under way add up to at most
+
+// Shake: a shake of the view under way: how hard (0 ..= 1), for how long, since when.
+Shake :: struct {
+	amount:  f32,
+	seconds: f32,
+	born:    f64,
+}
+
+// Kick: a jolt of the view's pitch under way: degrees up (down below 0), since when.
+Kick :: struct {
+	degrees: f32,
+	born:    f64,
+}
+
+// shake: the view shakes, `amount` hard (0 ..= 1: 0.15 a blow taken, 0.4 a blast near, 1 the
+// most there is) for `seconds`, dying away. Shakes under way add up, to a whole shake at
+// most; the player's Screen shake setting scales them, and Reduce motion stills them.
+shake :: proc(s: ^Session, amount: f32, seconds: f32) {
+	if amount <= 0 || seconds <= 0 {return}
+	f := &s.feel
+	slot, least := 0, f32(max(f32))
+	for sh, i in f.shakes {
+		left := shake_amount(f, sh)
+		if left < least {slot, least = i, left}
+	}
+	f.shakes[slot] = {min(amount, 1), seconds, feel_now(s)}
+}
+
+// kick: the view jolts up by `degrees` (down below 0) and settles, in a few tenths of a
+// second: a gun's recoil, a landing, a collision. Kicks under way add up to KICK_CAP at most;
+// the Screen shake setting scales them, and Reduce motion stills them.
+kick :: proc(s: ^Session, degrees: f32) {
+	f := &s.feel
+	slot, oldest := 0, f64(max(f64))
+	for k, i in f.kicks {
+		if k.born < oldest {slot, oldest = i, k.born}
+	}
+	f.kicks[slot] = {degrees, feel_now(s)}
+}
+
+// shake_amount: what is left of a shake now, its amount dying away as the square of the time
+// it has left (0: over).
+@(private)
+shake_amount :: proc(f: ^Feel, sh: Shake) -> f32 {
+	if sh.seconds <= 0 {return 0}
+	age := f32(max(f.clock - sh.born, 0) / game.TICK_RATE)
+	left := 1 - age / sh.seconds
+	return sh.amount * left * left if left > 0 else 0
+}
+
+// kick_curve: a kick's height t seconds on, as a fraction of its degrees: up to 1 at
+// KICK_PEAK, then settling (t/peak · e^(1 - t/peak)).
+@(private)
+kick_curve :: proc(t: f32) -> f32 {
+	x := t / KICK_PEAK
+	return x * math.exp(1 - x)
+}
+
+// feel_shaking: how much the shakes under way add up to now (0 ..= 1).
+feel_shaking :: proc(f: ^Feel) -> f32 {
+	sum: f32
+	for sh in f.shakes {sum += shake_amount(f, sh)}
+	return min(sum, 1)
+}
+
+// feel_view: what the shakes and kicks under way do to the view now, scaled by the setting
+// (0: nothing at all): a move (blocks) and a turn (yaw, pitch, roll: radians).
+feel_view :: proc(f: ^Feel) -> (move: [3]f32, turn: [3]f32) {
+	if f.shaking <= 0 {return}
+	t := f32(f.clock / game.TICK_RATE)
+	if amount := feel_shaking(f) * f.shaking; amount > 0 {
+		// Sines at frequencies that do not line up: it reads as a tremble, not a sway.
+		n := [3]f32 {
+			math.sin(t * 37.1) * 0.6 + math.sin(t * 23.3 + 1.7) * 0.4,
+			math.sin(t * 41.9 + 0.6) * 0.6 + math.sin(t * 29.7 + 2.9) * 0.4,
+			math.sin(t * 33.7 + 4.1) * 0.6 + math.sin(t * 19.1 + 0.3) * 0.4,
+		}
+		move = n * SHAKE_MOVE * amount
+		turn = {n.z, n.x, n.y} * SHAKE_TURN * amount
+	}
+	degrees: f32
+	for k in f.kicks {
+		if k.degrees == 0 {continue}
+		degrees += k.degrees * kick_curve(f32(max(f.clock - k.born, 0) / game.TICK_RATE))
+	}
+	turn.y += clamp(degrees, -KICK_CAP, KICK_CAP) * f.shaking * math.RAD_PER_DEG
+	return
 }

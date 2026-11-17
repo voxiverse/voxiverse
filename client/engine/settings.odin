@@ -66,9 +66,10 @@ Settings :: struct {
 	keys:              Bindings, // (their own table: bindings_table)
 	pad:               Pad_Bindings, // gamepad buttons (pad_bindings_table)
 	// Accessibility
-	reduce_motion:     bool, // still the menus' stars, the view bobbing, the sprint FOV kick and Ignite's zoom
+	reduce_motion:     bool, // still the menus' stars, the view bobbing, the sprint FOV kick, Ignite's zoom and the screen shake
 	sprint_fov_kick:   bool, // the view widens a little while sprinting
 	view_bobbing:      bool, // the first-person view sways while walking
+	screen_shake:      f32, // 0 ..= 1: how much a game's shakes and kicks move the view (Reduce motion: none)
 	chat_text_size:    f32, // times the UI's text size
 	prompt_bar:        bool, // the bar of button prompts along the bottom of menus (off by default)
 }
@@ -100,6 +101,7 @@ SETTINGS_DEFAULTS := Settings {
 	chat_text_size    = 1,
 	sprint_fov_kick   = true,
 	view_bobbing      = true,
+	screen_shake      = 1,
 }
 
 @(rodata)
@@ -357,7 +359,7 @@ SETTINGS_VARS := [?]base.Var {
 	},
 	{
 		field = "reduce_motion",
-		help = "Keeps the moving backgrounds still.",
+		help = "Keeps the moving backgrounds still, and the view from bobbing or shaking.",
 		choices = {{0, "Off"}, {1, "On"}},
 	},
 	{
@@ -371,6 +373,14 @@ SETTINGS_VARS := [?]base.Var {
 		label = "View bobbing",
 		help = "The first-person view sways a little while you walk. Reduce motion turns it off too.",
 		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "screen_shake",
+		label = "Screen shake",
+		help = "The view shakes and jolts a little when something hits hard. Reduce motion turns it off too.",
+		min = 0,
+		max = 1,
+		choices = {{0, "Off"}, {0.5, "Low"}, {1, "Full"}},
 	},
 	{
 		field = "prompt_bar",

@@ -219,7 +219,8 @@ camera_release :: proc(s: ^Session) {
 
 // camera_update makes s.view from s.camera for this frame (session_update,
 // after the eyes are placed): the mode, the pull-in, the bobbing, the
-// sprint's widening; a camera placed (camera_place) stands where it was put.
+// sprint's widening, the feel kit's shakes and kicks; a camera placed (camera_place)
+// stands where it was put (and shakes too: a picture shows the shake).
 camera_update :: proc(
 	s: ^Session,
 	actions: ^Actions,
@@ -293,6 +294,12 @@ camera_update :: proc(
 	weapon_tick(s, actions, look, dt)
 	grapple_rope(s)
 	if s.camera_mode == .First {s.view.pitch = min(s.view.pitch + s.recoil, game.PITCH_LIMIT)}
+	// The feel kit's shakes and kicks (feel.odin), on whatever camera it is.
+	move, turn := feel_view(&s.feel)
+	s.view.position += {f64(move.x), f64(move.y), f64(move.z)}
+	s.view.yaw += turn.x
+	s.view.pitch = clamp(s.view.pitch + turn.y, -game.PITCH_LIMIT, game.PITCH_LIMIT)
+	s.view.roll += turn.z
 }
 
 // camera_fov: the field of view to draw with, in degrees.

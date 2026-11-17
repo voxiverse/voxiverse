@@ -350,13 +350,13 @@ test_entity_death_puff :: proc(t: ^testing.T) {
 	d: render.Entity_Draw
 	render.entity_draw_init(&d)
 	defer render.entity_draw_destroy(&d)
-	engine.feel_advance(s, 0.1)
+	engine.feel_advance(s, {}, 0.1)
 	engine.entities_draw(s, &d)
 	testing.expect_value(t, len(d.boxes), engine.PUFF_PIECES)
 	for p in s.puffs {testing.expect(t, p.position != {10, 64, 10} || p.velocity != {})}
 	for _ in 0 ..< 10 {
 		clear(&d.boxes)
-		engine.feel_advance(s, 0.1)
+		engine.feel_advance(s, {}, 0.1)
 		engine.entities_draw(s, &d)
 	}
 	testing.expect_value(t, len(s.puffs), 0)

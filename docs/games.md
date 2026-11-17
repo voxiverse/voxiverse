@@ -500,6 +500,7 @@ number and no cast.
 | `machine_shown(s, p, T)` | What the game's machine at `p` shows, as its type (`Game.machine_shown`, the server part's): nil where the session holds none ([machines](#machines)) |
 | `puff_add(s, puff)` | A speck that drifts and fades (a tower's tracer, a blast's smoke), aged on the feel clock ([feel](#feel)) |
 | `burst(s, at, kind, color, scale)`, `Burst`, `MAX_BURST_PUFFS` | A handful of puffs flung out of a point as a preset looks (`.Impact`, `.Sparks`, `.Smoke`, `.Sparkle`, `.Death`, `.Splash`), in a colour (zero: the preset's; a material's: `block_colour`), at most `MAX_BURST_PUFFS` alive from every burst ([feel](#feel)) |
+| `shake(s, amount, seconds)`, `kick(s, degrees)` | The view shaken (`amount` 0 ..= 1, dying away over `seconds`; shakes add up to a whole one at most) or jolted up by degrees (down below 0) and settling; scaled by the player's Screen shake, none under Reduce motion ([feel](#feel)) |
 | `entity_flash(s, id, color)`, `HURT` | An entity drawn in one colour for a moment: `HURT` red as every creature is when hurt, white for a critical blow ([feel](#feel)) |
 | `game_request(s, &value)` | Send the server part one of the game's requests ([below](#requests)) |
 | `Seats(T)`, `seats_received(s, &seats, r)`, `seat_mine(s, &seats)`, `seats_ranked(&seats, before)` | What the game keeps of each player from a record of its keyed by the player (`key_player`, with a `name`): the last value by seat, its name copied out of the message, forgotten when the server stops putting it; the player's own; the seats told of in order (ties by name), a scoreboard's rows |
@@ -515,6 +516,10 @@ presentation alone: nothing is sent, saved or simulated.
   a material's colour; `.Sparks`, `.Smoke`, `.Sparkle`, `.Death`, `.Splash` the others.
 - `engine.entity_flash(s, id, {255, 255, 255, 255})`: a creature lit white for a moment (a
   critical blow); the engine flashes every hurt one `engine.HURT` itself.
+- `engine.shake(s, 0.15, 0.25)`: the view trembles and dies away (0.15 a blow taken, 0.4 a
+  blast near); `engine.kick(s, -1.5)`: it dips a degree and a half and settles (a landing,
+  a collision; up for a recoil). The player's Options > Accessibility > Screen shake (Off,
+  Low, Full) scales both, and Reduce motion stills them: a game never needs to ask.
 
 **Restraint.** An effect is short (under a second) and small (a fraction of a block, a few
 pieces), and it never hides what the player must see: enemies, pickups, the path. Bursts
