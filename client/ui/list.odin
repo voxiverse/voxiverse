@@ -100,9 +100,9 @@ list_first_at :: proc(track: Rect, count, visible: int, y: f32) -> int {
 	return int(share * f32(most) + 0.5)
 }
 
-// list_begin starts a list of count rows of row_h in area (its fill and frame drawn,
-// its rows clipped to it); draw the rows view.first ..< view.last with list_row, then
-// call list_end.
+// list_begin starts a list of count rows of row_h in area (its frame drawn, filled with
+// the theme's background so nothing behind it shows through its text, its rows clipped
+// to it); draw the rows view.first ..< view.last with list_row, then call list_end.
 list_begin :: proc(
 	ctx: ^Context,
 	text: string,
@@ -115,7 +115,7 @@ list_begin :: proc(
 	view: List_View,
 ) {
 	t := &ctx.theme
-	fill_rect(ctx, area, t.list_fill)
+	fill_rect(ctx, area, t.background)
 	stroke_rect(ctx, area, 1, t.list_border)
 	view.state, view.row_h, view.count = state, row_h, count
 	view.rows = area
@@ -208,11 +208,13 @@ list_row :: proc(
 		view.state.selected = i
 		ctx.focused = view.id
 	}
-	// Hovered or selected: a faint fill; selected: the white outline too (the text on it
-	// stays as it reads on black).
-	if it.hovered || view.state.selected == i {fill_rect(ctx, r, t.row_selected)}
+	// Selected: a faint fill and the white outline; hovered only: half that fill, no
+	// outline (the text on either stays as it reads on black).
 	if view.state.selected == i {
+		fill_rect(ctx, r, t.row_selected)
 		stroke_rect(ctx, rect_shrink(r, 1), 1, t.text)
+	} else if it.hovered {
+		fill_rect(ctx, r, with_alpha(t.row_selected, t.row_selected.a / 2))
 	}
 	return
 }
