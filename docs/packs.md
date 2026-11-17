@@ -73,7 +73,8 @@ pack's texture of its name (`voxiverse:basalt_bricks`, made by the registry when
 has none), so any pack, one from a server too, can make a block of any material without the
 base pack defining one. A pack that names a material this client does not have is refused
 where it names it, with the nearest name (`./build.sh packs` says so too). `./build.sh sheet`
-draws them all, by family, with their names. The materials, by family:
+draws them all, by family, with their names (`build/sheets/materials.png`). The materials, by
+family:
 
 <!-- materials: written from common/game/materials.odin (materials_doc) -->
 - **stone and masonry** (4): `stone`, `cobblestone`, `stone_bricks`, `sandstone`

@@ -13,8 +13,10 @@ import "common:game"
 import "server:packs"
 
 // Draws the block textures where a person (or an agent) can look at them:
-// build/sheets/<pack>.png for the base pack and each game's pack, and
-// all.png, the lot one under another. A sheet has two parts:
+// build/sheets/materials.png, every material (game.MATERIALS) by family,
+// each face tiled 3 x 3 at 4x and named by its material;
+// build/sheets/<pack>.png for the base pack and each game's pack; and
+// all.png, the lot one under another. A pack's sheet has two parts:
 //
 //   - the pack's own textures, each large (8x, nearest neighbour) with its
 //     name, grouped by family (texture.Family; a pack's PNGs are "images");
@@ -55,9 +57,11 @@ WORLD :: Grid {
 // Entry: a texture on a sheet.
 Entry :: struct {
 	texture: int, // its index in Registry.textures
-	family:  int, // texture.Family, or len(Family) for a pack's image
+	family:  int, // what it is grouped by: texture.Family (len(Family) for a pack's image), or game.Material_Family
+	group:   string, // the family's name
 	label:   string,
 	note:    string, // the second line: the blocks that use it
+	order:   int, // within its family (else by texture)
 }
 
 main :: proc() {
@@ -76,16 +80,21 @@ main :: proc() {
 	all := Canvas {
 		width = PAGE_WIDTH,
 	}
-	sheet :: proc(all: ^Canvas, reg: ^game.Registry, ns: string, pen: ^Pen) {
-		c := sheet_draw(reg, ns, pen)
-		write_png(&c, fmt.tprintf("%s.png", ns))
+	add :: proc(all: ^Canvas, c: ^Canvas, name: string) {
+		write_png(c, fmt.tprintf("%s.png", name))
 		at := all.height
 		grow(all, at + c.height)
 		copy(all.pixels[at * PAGE_WIDTH:], c.pixels[:])
 		fill(all, 0, all.height - 2, PAGE_WIDTH, 2, DIM) // a rule between packs
 	}
+	sheet :: proc(all: ^Canvas, reg: ^game.Registry, ns: string, pen: ^Pen) {
+		c := sheet_draw(reg, ns, pen)
+		add(all, &c, ns)
+	}
 	reg, errs := game.registry_build({base})
 	if reg == nil {fail(errs)}
+	materials := materials_draw(reg, &pen)
+	add(&all, &materials, "materials")
 	sheet(&all, reg, game.BASE_NAMESPACE, &pen)
 	for dir in game_pack_dirs() {
 		src, read_errs := packs.pack_read_dir(dir)
@@ -195,18 +204,90 @@ sheet_draw :: proc(reg: ^game.Registry, ns: string, pen: ^Pen) -> Canvas {
 	return c
 }
 
+// materials_draw draws the materials' sheet: every material by family, each face of it
+// tiled as in the world and named by the material.
+materials_draw :: proc(reg: ^game.Registry, pen: ^Pen) -> Canvas {
+	c := Canvas {
+		width = PAGE_WIDTH,
+	}
+	y := MARGIN
+	draw_text(&c, pen, MARGIN, y, "materials", TITLE_SIZE, ACCENT)
+	counts := make([dynamic]string)
+	for family in game.Material_Family {
+		n := 0
+		for m in game.MATERIALS {if m.family == family {n += 1}}
+		append(&counts, fmt.tprintf("%s %d", game.MATERIAL_FAMILY_NAMES[family], n))
+	}
+	summary := fmt.tprintf("%d materials: %s", len(game.MATERIALS), strings.join(counts[:], ", "))
+	draw_text(
+		&c,
+		pen,
+		MARGIN + text_width(pen, "materials", TITLE_SIZE) + 20,
+		y + 8,
+		fit(pen, summary, LABEL_SIZE, PAGE_WIDTH - 2 * MARGIN - 160),
+		LABEL_SIZE,
+		DIM,
+	)
+	y += line_height(pen, TITLE_SIZE) + 16
+	y = part_draw(
+		&c,
+		pen,
+		y,
+		reg,
+		"By family (tiled 3 x 3, 4x), each named by its material and the face where they differ",
+		material_entries(reg),
+		WORLD,
+	)
+	grow(&c, y + MARGIN)
+	return c
+}
+
 // entry: texture i of reg as a sheet shows it.
 entry :: proc(reg: ^game.Registry, i: int, ns, note: string) -> Entry {
 	tex := reg.textures[i]
-	family := len(texture.Family)
+	family, group := len(texture.Family), "images"
 	if int(tex.layer) < len(game.TEXTURE_GENERATOR_NAMES) {
-		family = int(texture.family(texture.Generator(tex.layer)))
+		f := texture.family(texture.Generator(tex.layer))
+		family, group = int(f), texture.FAMILY_NAMES[f]
 	}
 	label := strings.trim_prefix(tex.id, strings.concatenate({ns, ":"}))
 	if game.BASE_NAMESPACE != ns && strings.has_prefix(tex.id, game.BASE_NAMESPACE) {
 		label = strings.trim_prefix(tex.id, strings.concatenate({game.BASE_NAMESPACE, ":"}))
 	}
-	return {texture = i, family = family, label = label, note = note}
+	return {texture = i, family = family, group = group, label = label, note = note, order = i}
+}
+
+// material_entries: every material's faces, by material family: its side, then its top
+// and its bottom where they differ, each named by the material (and the face).
+material_entries :: proc(reg: ^game.Registry) -> []Entry {
+	FACE_NAMES := [3]string{"side", "top", "bottom"}
+	out := make([dynamic]Entry)
+	for m, mi in game.MATERIALS {
+		faces := game.material_faces(m)
+		for generator, k in faces {
+			if k > 0 && generator == faces[k - 1] {continue}
+			if k == 2 && generator == faces[0] {continue}
+			note := FACE_NAMES[k]
+			if k == 0 && faces[1] == faces[0] && faces[2] == faces[0] {note = ""}
+			append(
+				&out,
+				Entry {
+					texture = material_texture(reg, generator),
+					family = int(m.family),
+					group = game.MATERIAL_FAMILY_NAMES[m.family],
+					label = m.name,
+					note = note,
+					order = mi * 3 + k,
+				},
+			)
+		}
+	}
+	return out[:]
+}
+
+// material_texture: the base pack's texture of a material's face's generator.
+material_texture :: proc(reg: ^game.Registry, generator: string) -> int {
+	return int(reg.ids[.Texture][strings.concatenate({game.BASE_NAMESPACE, ":", generator})])
 }
 
 // part_draw draws a heading and its entries, by family, each family's from
@@ -225,7 +306,7 @@ part_draw :: proc(
 	y += line_height(pen, HEADING_SIZE) + 12
 	slice.sort_by(entries, proc(a, b: Entry) -> bool {
 		if a.family != b.family {return a.family < b.family}
-		return a.texture < b.texture
+		return a.order < b.order
 	})
 	side := texture.SIZE * grid.scale * grid.tiles
 	label := line_height(pen, LABEL_SIZE)
@@ -236,9 +317,7 @@ part_draw :: proc(
 		family := entries[start].family
 		end := start
 		for end < len(entries) && entries[end].family == family {end += 1}
-		name :=
-			"images" if family == len(texture.Family) else texture.FAMILY_NAMES[texture.Family(family)]
-		draw_text(c, pen, MARGIN, y, name, LABEL_SIZE, ACCENT)
+		draw_text(c, pen, MARGIN, y, entries[start].group, LABEL_SIZE, ACCENT)
 		y += label + 6
 		for e, k in entries[start:end] {
 			x := MARGIN + (k % columns) * grid.cell_width
