@@ -3,6 +3,6 @@
 	"namespace": "sandbox",
 	"version": "1.0.0",
 	"title": "Sandbox",
-	"description": "The sandbox's animals: the sheep.",
+	"description": "The sandbox's animals, the sheep, and a block of every material.",
 	"requires": ["voxiverse"]
 }

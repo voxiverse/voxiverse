@@ -76,6 +76,20 @@ What it tells its players: `sandbox.market` (the market of the town a player sta
 none), the events `sandbox.trade_refused` (why) and `sandbox.market_open`; what they ask:
 `sandbox.trade`.
 
+## Its materials
+
+The sandbox has a block of every material of the kit (`sandbox:basalt_bricks`, ...: its pack's
+`data/blocks/kit.json`, one line each; [docs/packs.md](../../docs/packs.md#materials)), so a
+builder has them all. `/showroom <stone|wood|metal|built|domestic|natural|fantasy> [x y z]`
+(the bulk edit permission, `world.edit.bulk`; `showroom.odin`) sets every material of a
+family up to look at, at the player's feet or at x y z: each a wall three blocks square, eight
+to a row, the rows one above another, on a floor of concrete slabs with a walkway in front.
+The kit's pictures in the world are taken from it:
+
+```sh
+./build.sh shot materials --game sandbox -- "wait_world; /time set noon; key f1 down; wait 2; key f1 up; /showroom metal 56 10 40; ticks 20; camera at 72 17 64 0 -10; wait_world; screenshot materials_metal; quit"
+```
+
 ## Its files
 
 What the sandbox keeps of a world beside the engine's files ([docs/saves.md](../../docs/saves.md)),
@@ -108,7 +122,8 @@ engine's files and the character's `trader`: the save migration made them the sa
 ## The code
 
 `rules.odin` (its name and description), `genetics.odin` (the sheep's genes), `pack.odin`
-(its pack: `pack/data/entities/sheep.json`, the sheep's body, looks, model and spawn rule),
+(its pack: `pack/data/entities/sheep.json`, the sheep's body, looks, model and spawn rule;
+`pack/data/blocks/kit.json`, a block of every material),
 the markets' model (above), `records.odin` (what it replicates) and `text.odin`
 (what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
 and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and

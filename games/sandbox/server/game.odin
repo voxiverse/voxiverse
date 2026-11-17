@@ -122,9 +122,11 @@ request :: proc(s: ^core.Server, c: ^core.Client, r: core.Request) {
 // command: `/sheep [lamb] [shorn] [black] [spotted]` sets a sheep of those looks down in
 // front of the player (north of it, each further along; the summoning permission);
 // `/interventions [radius]` lists the world's interventions (interventions.odin); `/town`
-// takes the player to the nearest town with a market (trader.odin).
+// takes the player to the nearest town with a market (trader.odin); `/showroom <family>`
+// sets every material of a family up to look at (showroom.odin).
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
 	if name == "interventions" {return interventions_command(s, c, args)}
+	if name == "showroom" {return showroom_command(s, c, args)}
 	if name == "town" && len(args) == 0 {return town_command(s, c)}
 	if name != "sheep" {return false}
 	if !core.allowed(s, c, "world.summon") {
