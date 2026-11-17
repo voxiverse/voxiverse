@@ -15,6 +15,7 @@ GAME :: engine.Game {
 	received = received,
 	hud      = hud,
 	look     = LOOK,
+	// seen  = seen, // the engine's events (a hit, a death, a wound), made felt: see below
 }
 
 // LOOK: the game's atmosphere (docs/games.md, "A game's look"). Every field's zero is the
@@ -46,3 +47,20 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	rest := ctx.screen
 	engine.top_bar(ctx, &rest, @id@.tr(.Points_Line, view(s).points.points))
 }
+
+// The feel kit (docs/games.md, "Feel"): a line an effect, short and small, never hiding a
+// creature, a pickup or the path. Uncomment `seen` above and this, and give the game's own
+// news (its records and events, in received) the same:
+//
+//	seen :: proc(s: ^engine.Session, e: engine.Seen) {
+//		#partial switch v in e {
+//		case engine.Seen_Hurt: // a creature hit: chips, and the damage rising
+//			engine.burst(s, v.at, .Impact)
+//			if v.amount > 0 {engine.float_text(s, v.at, fmt.tprint(v.amount), {255, 236, 160, 255})}
+//		case engine.Seen_Death:
+//			engine.shake(s, 0.1, 0.2)
+//		case engine.Seen_Harm: // the player hurt: the edges flush red
+//			engine.pulse(s, {220, 40, 36, 90})
+//			engine.kick(s, -1)
+//		}
+//	}
