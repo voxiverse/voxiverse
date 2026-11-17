@@ -251,18 +251,26 @@ commands; `help` lists them, and `server <command>` sends a server command.
 
 ## Multiplayer
 
+### Joining
+
+**Multiplayer** lists the servers you keep (**Add Server**, **Remove Server**; kept in
+`servers.txt` beside `settings.cfg`) and those it finds on your network, each with the game
+it plays, its players and whether it answers. A server running another version, or a game
+this version does not have, is listed with why it cannot be joined. **Direct Connection**
+joins an address once.
+
 ### Opening your own world
 
-Pause, then choose **Open to LAN**. Others on your network see the world listed under
-**Multiplayer**, or can join `your-address:27315` by **Direct Connection**.
+Pause, then choose **Open to LAN**. Others on your network see the world, and its game,
+under **Multiplayer**, or can join `your-address:27315` by **Direct Connection**.
 
 ### Running a dedicated server
 
 ```sh
-./build.sh serve -- --universe universes/home --password secret
+./build.sh serve -- --game foundry --universe universes/factory --password secret
 ```
 
-Run `build/voxiverse-server --help` for every flag (port, name, seats, view distance,
+Run `build/voxiverse-server --help` for every flag (game, port, name, seats, view distance,
 permissions). Ctrl+C saves the universe and stops the server.
 
 ### Playing over the internet

@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import "core:log"
 import "core:mem/virtual"
+import "core:net"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -20,6 +21,7 @@ import "client:testkit"
 import "client:ui"
 import "common:base"
 import "common:game"
+import "common:netcode"
 import "common:protocol"
 import "common:starmap"
 import games_client "generated:games/client"
@@ -308,6 +310,132 @@ test_multiplayer_screen :: proc(t: ^testing.T) {
 	testing.expect_value(t, app.multiplayer.mode, engine.Multiplayer_Mode.List)
 	click(t, app, "Back")
 	testing.expect_value(t, app.screen, engine.Screen.Title)
+	free_all(context.temp_allocator)
+}
+
+// server_info_bytes: a server's info as it answers a Discover.
+@(private = "file")
+server_info_bytes :: proc(info: protocol.Server_Info) -> []u8 {
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	protocol.encode_server_info(&w, info)
+	return w.buf[:]
+}
+
+// The servers list: the saved servers first, in their order, each with what answered at
+// its address (the game by this build's name, its players), or that it does not answer,
+// or that its host is not found; then the servers found on the network that are not one
+// of them. One on another version, or playing a game this build does not have, is listed
+// and cannot be joined, saying why; an older server's info (no game) is another version.
+@(test)
+test_server_rows :: proc(t: ^testing.T) {
+	near := net.Endpoint{net.IP4_Loopback, 30000}
+	quiet := net.Endpoint{net.IP4_Loopback, 30001}
+	saved := []engine.Saved_Server {
+		{address = "localhost:30000", endpoint = near},
+		{address = "quiet.example:30001", endpoint = quiet},
+		{address = "nowhere.invalid"}, // (its host not found)
+	}
+	d: netcode.Discovery
+	d.found = make([dynamic]netcode.Found_Server, context.temp_allocator)
+	d.asked = make([dynamic]netcode.Asked_Server, context.temp_allocator)
+	append(&d.asked, netcode.Asked_Server{near, 1}, netcode.Asked_Server{quiet, 0})
+	v := u32(protocol.PROTOCOL_VERSION)
+	old := game.Writer{}
+	game.writer_init(&old, context.temp_allocator)
+	game.write_u32(&old, 50)
+	game.write_string(&old, "Old server")
+	game.write_u8(&old, 1)
+	game.write_u8(&old, 8)
+	game.write_u8(&old, 0)
+	append(
+		&d.found,
+		netcode.Found_Server {
+			1,
+			near,
+			server_info_bytes({v, "Factory night", 2, 8, false, "foundry", "Foundry"}),
+			{},
+		},
+		netcode.Found_Server {
+			2,
+			{net.IP4_Address{192, 168, 1, 20}, 27315},
+			server_info_bytes({v, "Bob's", 0, 4, true, "sandbox", "Sandbox"}),
+			{},
+		},
+		netcode.Found_Server {
+			3,
+			{net.IP4_Address{192, 168, 1, 21}, 27315},
+			server_info_bytes({v, "Elsewhere", 1, 8, false, "moonbase", "Moon Base"}),
+			{},
+		},
+		netcode.Found_Server{4, {net.IP4_Address{192, 168, 1, 22}, 27315}, old.buf[:], {}},
+		netcode.Found_Server{5, {net.IP4_Address{192, 168, 1, 23}, 27315}, {1, 2, 3}, {}}, // (not a server's)
+	)
+	rows := screen.server_rows(saved, &d, games_client.CLIENT)
+	if !testing.expect_value(t, len(rows), 6) {return}
+
+	testing.expect_value(t, rows[0].name, "Factory night")
+	testing.expect_value(t, rows[0].address, "localhost:30000")
+	testing.expect_value(t, rows[0].saved, 0)
+	testing.expect_value(t, rows[0].game, "Foundry")
+	testing.expect(t, rows[0].answered && rows[0].found && rows[0].why_not == "")
+	testing.expect_value(t, rows[0].players, 2)
+	testing.expect_value(t, rows[0].max_players, 8)
+
+	testing.expect_value(t, rows[1].name, "quiet.example:30001")
+	testing.expect_value(t, rows[1].saved, 1)
+	testing.expect(t, rows[1].found && !rows[1].answered && rows[1].game == "")
+
+	testing.expect_value(t, rows[2].saved, 2)
+	testing.expect(t, !rows[2].found && !rows[2].answered)
+
+	testing.expect_value(t, rows[3].name, "Bob's")
+	testing.expect_value(t, rows[3].address, "192.168.1.20:27315")
+	testing.expect_value(t, rows[3].saved, -1)
+	testing.expect_value(t, rows[3].game, "Sandbox")
+	testing.expect(t, rows[3].password && rows[3].why_not == "")
+
+	testing.expect_value(t, rows[4].game, "Moon Base") // (the server's name for it)
+	testing.expect_value(t, rows[4].why_not, "This version has no game moonbase")
+
+	testing.expect_value(t, rows[5].name, "Old server")
+	testing.expect_value(t, rows[5].game, "")
+	testing.expect_value(t, rows[5].why_not, "Runs another version of Voxiverse")
+	free_all(context.temp_allocator)
+}
+
+// Add Server keeps an address in the list (a row of its own, asked at once); Remove
+// Server forgets the selected one; a server the LAN's list found cannot be removed.
+@(test)
+test_multiplayer_saved_servers :: proc(t: ^testing.T) {
+	app := ui_app(t)
+	defer ui_app_free(app)
+	defer screen.multiplayer_destroy(&app.multiplayer)
+	base.var_text_set(&app.settings.name, "alice")
+	screen.multiplayer_open(app)
+	ui_frame(app)
+	_, removable := ui.find_widget(&app.ui, "Remove Server")
+	testing.expect(t, !removable, "Remove Server is on with nothing saved")
+	click(t, app, "Add Server")
+	testing.expect_value(t, app.multiplayer.mode, engine.Multiplayer_Mode.Add)
+	append(&app.multiplayer.address, " 127.0.0.1:30002 ")
+	ui_frame(app)
+	click(t, app, "Save")
+	testing.expect_value(t, app.multiplayer.mode, engine.Multiplayer_Mode.List)
+	if testing.expect_value(t, len(app.multiplayer.saved), 1) {
+		s := app.multiplayer.saved[0]
+		testing.expect_value(t, s.address, "127.0.0.1:30002")
+		testing.expect_value(t, s.endpoint, net.Endpoint{net.IP4_Loopback, 30002})
+		testing.expect(t, netcode.discovery_asked(&app.multiplayer.discovery, s.endpoint) == -1)
+		testing.expect_value(t, len(app.multiplayer.discovery.asked), 1)
+	}
+	ui_frame(app)
+	_, listed := ui.find_widget(&app.ui, "127.0.0.1:30002")
+	testing.expect(t, listed, "the saved server has no row")
+	testing.expect_value(t, app.multiplayer.list.selected, 0)
+	click(t, app, "Remove Server")
+	testing.expect_value(t, len(app.multiplayer.saved), 0)
+	testing.expect_value(t, len(app.multiplayer.discovery.asked), 0)
 	free_all(context.temp_allocator)
 }
 
