@@ -328,6 +328,7 @@ apply_event :: proc(s: ^Session, g: protocol.Received) {
 	case .Explosion:
 		x := (^protocol.Explosion)(g.value)
 		explosion_effects(s, x.position, f64(x.radius))
+		game_seen(s, Seen_Blast{x.position, x.radius})
 	case .Damage_Hit:
 		s.hurt = (^protocol.Damage_Hit)(g.value)^
 		s.hurts += 1

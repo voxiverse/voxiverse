@@ -279,14 +279,21 @@ test_seen_hook :: proc(t: ^testing.T) {
 	health(s, {14, 20, false})
 	health(s, {0, 20, true})
 	health(s, {20, 20, false}) // (a respawn: no heal)
+	for len(s.puffs) < MAX_PUFFS {append(&s.puffs, Puff{life = 10})} 	// (no room for debris: no world to break)
+	blast := protocol.Explosion{{0, 64, 0}, 4}
+	event(s, .Explosion, &blast)
 
-	if !testing.expect_value(t, len(seen_log), 5) {return}
+	if !testing.expect_value(t, len(seen_log), 6) {return}
 	testing.expect_value(t, seen_log[0].(Seen_Hurt).amount, 3)
 	testing.expect_value(t, seen_log[0].(Seen_Hurt).at, [3]f64{1, 2.5, 3})
 	testing.expect_value(t, seen_log[1].(Seen_Death).amount, 7)
 	testing.expect_value(t, seen_log[2].(Seen_Harm).amount, 1.5)
 	testing.expect(t, seen_log[3].(Seen_Hit).kill)
 	testing.expect_value(t, seen_log[4].(Seen_Heal).amount, 4)
+	testing.expect_value(t, seen_log[5].(Seen_Blast).radius, 4)
+	testing.expect_value(t, blast_shake({0, 64, 0}, {3, 64, 0}, 4), 1)
+	testing.expect_value(t, blast_shake({0, 64, 0}, {10, 64, 0}, 4), 0.5)
+	testing.expect_value(t, blast_shake({0, 64, 0}, {20, 64, 0}, 4), 0)
 	color, flashing := entity_flashing(s, &s.entities[5])
 	testing.expect(t, flashing && color == HURT, "a hurt creature flashes red")
 }

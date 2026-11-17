@@ -39,7 +39,7 @@ Game :: struct {
 	no_hotbar:     bool, // its players hold no hotbar: in its world the hotbar's keys and the wheel pick no slot, and the controls do not list them
 	machine_shown: typeid, // what its machines show (its server part's Game.machine_shown): machine_shown reads it
 	look:          Look, // its atmosphere: sky, fog, light and the picture's colour, as data (zero: the engine's own)
-	seen:          proc(s: ^Session, e: Seen), // the engine showed something worth feeling (an entity hurt or dead, the player hurt or healed, its shot hitting): the game's own feedback (feel.odin)
+	seen:          proc(s: ^Session, e: Seen), // the engine showed something worth feeling (an entity hurt or dead, the player hurt or healed, its shot hitting, a blast): the game's own feedback (feel.odin)
 }
 
 // Look: a game's atmosphere (render.Look, docs/games.md): its sky, fog, light and the

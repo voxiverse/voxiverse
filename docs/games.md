@@ -460,7 +460,7 @@ the frame.
 | `camera(s) -> Game_Camera` | Every frame: the camera the game wants. `.Player` (the player's own, <kbd>F5</kbd>), `.First`, `.Third`; `.Top_Down` (over the head, `distance` away, `angle` degrees down along `heading`, the world cut `cut` blocks above the feet): the pointer aims (`s.aim`, `s.aim_entity`, `s.pointer`), the avatar faces it, the movement keys move across the screen; `.Free` (no avatar, for a mode with `game.Ability.Bodiless`): looks at the player's focus from `distance`, zoomed between `near` and `far`, panned by the movement keys, the screen's edge and the middle button; `pointer_tool(s)` says what the pointer is over and each button's press, drag and release |
 | `look` | Its atmosphere, as data: the sky, the fog, the light and the picture's colour its world is drawn in ([below](#a-games-look)); zero: the engine's own |
 | `screen(s, ctx, top)` | Every frame while the game's screen is open: a panel of its own over the world (a town's market, a shop) drawn with the UI kit (`top`: it has the focus). The game opens it with `game_screen_open(s)` (from a record, an event, its action's answer) and closes it with `game_screen_close(s)`; the player closes it as any screen over the world, Escape or the pad's Back, and it closes with the world. While open it takes the keyboard, the pointer and the pad's navigation (the world runs on); `game_screen_shown(s)` says whether it is open |
-| `seen(s, e)` | The engine showed something worth feeling, as the server told it: an entity hurt (`Seen_Hurt`: its id, kind, the middle of its box and the health it lost) or dead (`Seen_Death`: what it had left), the player hurt (`Seen_Harm`) or healed (`Seen_Heal`: not a respawn), its shot hitting another player (`Seen_Hit`). The game gives it its own feedback ([feel](#feel)); what the engine shows of each already (a red flash, a puff, the hit marker, the damage arc) it shows anyway |
+| `seen(s, e)` | The engine showed something worth feeling, as the server told it: an entity hurt (`Seen_Hurt`: its id, kind, the middle of its box and the health it lost) or dead (`Seen_Death`: what it had left), the player hurt (`Seen_Harm`) or healed (`Seen_Heal`: not a respawn), its shot hitting another player (`Seen_Hit`), a blast (`Seen_Blast`: `blast_shake` says how hard it shakes a view at a distance). The game gives it its own feedback ([feel](#feel)); what the engine shows of each already (a red flash, a puff, the hit marker, the damage arc) it shows anyway |
 
 **Its keys.** While a game plays, the controls (Options > Controls) list its actions and its
 keys under its name, each rebindable as the engine's are; what the player binds is kept for
@@ -502,7 +502,7 @@ number and no cast.
 | `machine_shown(s, p, T)` | What the game's machine at `p` shows, as its type (`Game.machine_shown`, the server part's): nil where the session holds none ([machines](#machines)) |
 | `puff_add(s, puff)` | A speck that drifts and fades (a tower's tracer, a blast's smoke), aged on the feel clock ([feel](#feel)) |
 | `burst(s, at, kind, color, scale)`, `Burst`, `MAX_BURST_PUFFS` | A handful of puffs flung out of a point as a preset looks (`.Impact`, `.Sparks`, `.Smoke`, `.Sparkle`, `.Death`, `.Splash`), in a colour (zero: the preset's; a material's: `block_colour`), at most `MAX_BURST_PUFFS` alive from every burst ([feel](#feel)) |
-| `shake(s, amount, seconds)`, `kick(s, degrees)` | The view shaken (`amount` 0 ..= 1, dying away over `seconds`; shakes add up to a whole one at most) or jolted up by degrees (down below 0) and settling; scaled by the player's Screen shake, none under Reduce motion ([feel](#feel)) |
+| `shake(s, amount, seconds)`, `kick(s, degrees)`, `blast_shake(at, eyes, radius)` | The view shaken (`amount` 0 ..= 1, dying away over `seconds`; shakes add up to a whole one at most) or jolted up by degrees (down below 0) and settling; scaled by the player's Screen shake, none under Reduce motion ([feel](#feel)) |
 | `float_text(s, at, text, color, scale)` | A few words over a point of the world (a hit's damage, "+5") that pop, rise a block and fade in under a second, `MAX_FLOATS` at once, the oldest giving way ([feel](#feel)) |
 | `pulse(s, color)` | The screen's edges glowing a moment in a colour, its alpha how strong: red for harm taken, green for a heal ([feel](#feel)) |
 | `Tween`, `tween_start(&t, s)`, `tween_value(&t, s, seconds, curve)` | A HUD element's moment of easing in, started by its news and read each frame as 0 .. 1 along a `ui.Ease` curve (`ui.ease(curve, fraction)`): a score that pops, a line that slides in; done at once under Reduce motion ([feel](#feel)) |
@@ -520,7 +520,7 @@ presentation alone: nothing is sent, saved or simulated.
 What to feel comes from what the client part is told: its records and events (a wave's news,
 a purse that grew, a hit's damage a game sends), and the engine's own, which its `seen` hook
 hears without the server part repeating them (an entity hurt or dead, with the health it
-lost; the player hurt or healed; its shot hitting).
+lost; the player hurt or healed; its shot hitting; a blast).
 
 - `engine.burst(s, at, .Impact, engine.block_colour(s, block))`: chips where a blow lands, in
   a material's colour; `.Sparks`, `.Smoke`, `.Sparkle`, `.Death`, `.Splash` the others.

@@ -71,6 +71,7 @@ Seen :: union {
 	Seen_Harm,
 	Seen_Heal,
 	Seen_Hit,
+	Seen_Blast,
 }
 
 // Seen_Hurt: an entity the player knows was hurt (it flashes red): where its middle is
@@ -108,6 +109,22 @@ Seen_Heal :: struct {
 Seen_Hit :: struct {
 	kill:     bool,
 	headshot: bool,
+}
+
+// Seen_Blast: something blew up (its smoke, debris and boom shown): where, and how far it
+// reached (blocks).
+Seen_Blast :: struct {
+	at:     [3]f64,
+	radius: f32,
+}
+
+// blast_shake: how hard a blast at `at` of `radius` shakes a view at `eyes` (0 ..= 1): a
+// whole shake within its reach, dying away to nothing at four times it.
+blast_shake :: proc(at, eyes: [3]f64, radius: f32) -> f32 {
+	d := eyes - at
+	distance := f32(math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z))
+	reach := max(radius, 1)
+	return clamp(1 - (distance - reach) / (3 * reach), 0, 1)
 }
 
 // game_seen: the game's seen hook, if it has one.
