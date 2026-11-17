@@ -35,9 +35,11 @@ Last_Save :: struct {
 	game:    string, // the name of the game it plays ("": nothing to continue: gone, unreadable, or its game not in this build); constant data
 }
 
-// Singleplayer_Screen: the games, to choose one.
+// Singleplayer_Screen: the games, to choose one; to play alone, or to host (Multiplayer's
+// Host: the same list and the same pages, and the world they start opens to the LAN).
 Singleplayer_Screen :: struct {
 	list: ui.Scroll_List, // the game selected and the first in view
+	host: bool, // chosen to host: the world started from the list or a game's page opens to the LAN
 }
 
 // Universes_Screen: a game's page, its saves. It lists every save on the disk and shows

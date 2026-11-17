@@ -24,6 +24,7 @@ import "common:game"
 import "common:netcode"
 import "common:protocol"
 import "common:starmap"
+import "generated:games"
 import games_client "generated:games/client"
 
 // A UI test's app: the font, the UI and the base registry (a screen's
@@ -437,6 +438,66 @@ test_multiplayer_saved_servers :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.multiplayer.saved), 0)
 	testing.expect_value(t, len(app.multiplayer.discovery.asked), 0)
 	free_all(context.temp_allocator)
+}
+
+// Host opens the games to host one: the same list, titled so and saying what hosting
+// does, then the game's page, its Play now Host; Back returns from the page to the games
+// still hosting, and from them to Multiplayer. Singleplayer from the title plays alone.
+@(test)
+test_multiplayer_host :: proc(t: ^testing.T) {
+	dir := "build/test/saves-host"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	screen.saves_override = dir
+	defer screen.saves_override = ""
+	app := ui_app(t)
+	defer ui_app_free(app)
+	defer screen.multiplayer_destroy(&app.multiplayer)
+	defer screen.universes_destroy(&app.universes)
+	app.games, app.server_games = games_client.CLIENT, games.SERVER
+	base.var_text_set(&app.settings.name, "alice")
+	screen.multiplayer_open(app)
+	ui_frame(app)
+	click(t, app, "Host")
+	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
+	testing.expect(t, app.singleplayer.host)
+	testing.expect(t, !app.multiplayer.searching, "Multiplayer still looks for servers")
+	testing.expect(t, said(app, "Host a Game"), "the games are not titled for hosting")
+	testing.expect(t, said(app, engine.tr(.Multiplayer_Host_Note)))
+
+	click(t, app, "Flood") // (a game whose rounds keep nothing: Play alone on its page)
+	testing.expect_value(t, app.screen, engine.Screen.Universes)
+	testing.expect_value(t, app.universes.game, "flood")
+	testing.expect(t, said(app, engine.tr(.Multiplayer_Host_Note)))
+	_, play := ui.find_widget(&app.ui, "Play")
+	testing.expect(t, !play, "the hosting page says Play")
+	click(t, app, "Host")
+	testing.expect_value(t, app.launch, "flood") // (the frame starts it, opened to the LAN)
+	app.launch = ""
+
+	click(t, app, "Back")
+	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
+	testing.expect(t, app.singleplayer.host)
+	click(t, app, "Back")
+	testing.expect_value(t, app.screen, engine.Screen.Multiplayer)
+	click(t, app, "Back")
+	testing.expect_value(t, app.screen, engine.Screen.Title)
+
+	click(t, app, "Singleplayer")
+	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
+	testing.expect(t, !app.singleplayer.host)
+	testing.expect(t, said(app, "Singleplayer"))
+	click(t, app, "Flood")
+	_, play = ui.find_widget(&app.ui, "Play")
+	testing.expect(t, play, "the page to play alone has no Play")
+	free_all(context.temp_allocator)
+}
+
+// said: the screen drew text this frame.
+@(private = "file")
+said :: proc(app: ^engine.App, text: string) -> bool {
+	for s in app.ui.texts {if s == text {return true}}
+	return false
 }
 
 // No developer word on a player's screen: every menu screen and Options

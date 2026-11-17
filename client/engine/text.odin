@@ -110,6 +110,9 @@ Text :: enum u16 {
 	Multiplayer_Add_Server,
 	Multiplayer_Remove_Server,
 	Multiplayer_Save,
+	Multiplayer_Host,
+	Multiplayer_Host_Title, // the games' list, to host one
+	Multiplayer_Host_Note, // under it, and on a game's page while hosting
 	Multiplayer_Players, // {0} playing, {1} at most
 	Multiplayer_Password,
 	Multiplayer_No_Answer,
@@ -282,6 +285,9 @@ TEXT_EN := [Text]string {
 	.Multiplayer_Add_Server                 = "Add Server",
 	.Multiplayer_Remove_Server              = "Remove Server",
 	.Multiplayer_Save                       = "Save",
+	.Multiplayer_Host                       = "Host",
+	.Multiplayer_Host_Title                 = "Host a Game",
+	.Multiplayer_Host_Note                  = "Players on your network can join the world you start",
 	.Multiplayer_Players                    = "{0} of {1} players",
 	.Multiplayer_Password                   = "password",
 	.Multiplayer_No_Answer                  = "No answer",

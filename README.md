@@ -261,8 +261,10 @@ joins an address once.
 
 ### Opening your own world
 
-Pause, then choose **Open to LAN**. Others on your network see the world, and its game,
-under **Multiplayer**, or can join `your-address:27315` by **Direct Connection**.
+**Multiplayer > Host** lists the games as Singleplayer does: pick one, then a save or New,
+and the world opens to your network as it starts. In a world, pause and choose **Open to
+LAN**. Others on your network see the world, and its game, under **Multiplayer**, or can
+join `your-address:27315` by **Direct Connection**.
 
 ### Running a dedicated server
 

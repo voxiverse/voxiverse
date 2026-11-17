@@ -6,7 +6,9 @@ import "common:game"
 
 // Singleplayer: every game this build has, in a list that scrolls (the default first,
 // then by folder), each its name, its one line and how many saves it has. Choosing one
-// opens its page (universes.odin): that game's saves, and only that game's.
+// opens its page (universes.odin): that game's saves, and only that game's. Multiplayer's
+// Host opens the same list to host a game (Singleplayer_Screen.host): titled so, its page
+// the same, and the world started from it opens to the LAN; Back returns to Multiplayer.
 
 SINGLEPLAYER_WIDTH :: 600 // (a game's one line is at most TITLE_WIDTH: a test holds each to it)
 GAME_ROW :: 60
@@ -24,10 +26,21 @@ singleplayer_games :: proc(app: ^engine.App) -> []^engine.Game {
 	return list[:]
 }
 
-// singleplayer_open: the list of the games, the saves read (each game's count).
-singleplayer_open :: proc(app: ^engine.App) {
+// singleplayer_open: the list of the games, the saves read (each game's count); host: to
+// host one (Multiplayer's Host).
+singleplayer_open :: proc(app: ^engine.App, host := false) {
 	universes_refresh(&app.universes)
+	app.singleplayer.host = host
 	app.screen = .Singleplayer
+}
+
+// singleplayer_back: Back from the games: to the title, or to Multiplayer when hosting.
+singleplayer_back :: proc(app: ^engine.App) {
+	if app.singleplayer.host {
+		multiplayer_open(app)
+	} else {
+		app.screen = .Title
+	}
 }
 
 singleplayer_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
@@ -36,7 +49,21 @@ singleplayer_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	t := &ctx.theme
 	games := singleplayer_games(app)
 	area := ui.rect_center(ctx.screen, SINGLEPLAYER_WIDTH, ctx.screen.h - 60)
-	ui.title(ctx, engine.tr(.Title_Singleplayer), ui.cut_top(&area, 70))
+	if app.singleplayer.host {
+		ui.title(ctx, engine.tr(.Multiplayer_Host_Title), ui.cut_top(&area, 60))
+		note := ui.cut_top(&area, 24)
+		ui.draw_text(
+			ctx,
+			note,
+			engine.tr(.Multiplayer_Host_Note),
+			t.font_size * GAME_ABOUT,
+			t.text_muted,
+			.Center,
+		)
+		ui.cut_top(&area, t.spacing)
+	} else {
+		ui.title(ctx, engine.tr(.Title_Singleplayer), ui.cut_top(&area, 70))
+	}
 	back := ui.cut_bottom(&area, t.row_height)
 	ui.cut_bottom(&area, 2 * t.spacing)
 	// The list as tall as its games, no taller than the room.
@@ -71,7 +98,7 @@ singleplayer_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		ctx,
 		engine.tr(.Credits_Back),
 		ui.rect_center(back, 200, t.row_height),
-	) {app.screen = .Title}
+	) {singleplayer_back(app)}
 }
 
 // saves_of: how many saves of the game id are on the disk (as last read).

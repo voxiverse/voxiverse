@@ -322,6 +322,7 @@ enter_world :: proc(
 	mode := "creative", // a new universe's default game mode
 	earth := false, // a new universe's home world is Earth
 	game_id := "", // the game it plays ("": App.game, the command line's)
+	open_lan := false, // open it to the LAN as soon as it plays (Multiplayer's Host)
 ) {
 	view_radius, view_height := view_size(app)
 	start_session(
@@ -341,15 +342,17 @@ enter_world :: proc(
 			trace = app.debug.net_trace,
 			upload = upload_target(app),
 			host_game = host_game(app, game_id if game_id != "" else app.game),
+			open_lan = open_lan,
 		},
 	)
 }
 
 // play_game starts a world of our own playing the game id: a scratch world (nothing
 // saved), as `singleplayer` starts one for App.game: --game, and the Play of a game whose
-// rounds keep nothing (client/screen/universes.odin).
-play_game :: proc(app: ^App, id: string) {
-	enter_world(app, "", SCRATCH_SEED, game_id = id)
+// rounds keep nothing (client/screen/universes.odin); open_lan: opened to the LAN as soon
+// as it plays (that page while hosting).
+play_game :: proc(app: ^App, id: string, open_lan := false) {
+	enter_world(app, "", SCRATCH_SEED, game_id = id, open_lan = open_lan)
 }
 
 // host_game: the server part of the game id a world of our own plays. A game this

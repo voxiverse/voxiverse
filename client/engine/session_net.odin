@@ -269,6 +269,7 @@ welcome :: proc(s: ^Session, w: protocol.Welcome) {
 	}
 	s.state = .Playing
 	if t, ok := s.teleport.?; ok {send_message(s, t)} 	// (the server says no if it may not)
+	if s.config.open_lan && !s.remote {send_message(s, protocol.Command{"open_lan"})} 	// (Host: as the dialog's Open)
 	log.infof("session joined view=%dx%d capacity=%d", w.view_radius, w.view_height, capacity)
 	session_game_started(s)
 }

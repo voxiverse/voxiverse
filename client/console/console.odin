@@ -259,6 +259,8 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 					}
 				case "singleplayer":
 					screen.singleplayer_open(app)
+				case "host":
+					screen.singleplayer_open(app, host = true) // (Multiplayer's Host)
 				case "universes":
 					id := "" // (the default game's page)
 					if then != "" && then != "create" {
@@ -273,6 +275,7 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 						}
 						id = g.id // (the page keeps the id: the game's own, not the line's)
 					}
+					app.singleplayer.host = false // (a page to play alone)
 					screen.universes_open(app, id)
 					if then == "create" {screen.creation_open(app)}
 				case "multiplayer":
@@ -287,7 +290,7 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 				case:
 					engine.console_print(
 						&app.console,
-						"screen: title, game, menu, inventory, stats, options, credits, singleplayer, universes, multiplayer or quit",
+						"screen: title, game, menu, inventory, stats, options, credits, singleplayer, host, universes, multiplayer or quit",
 						.Warning,
 					)
 				}

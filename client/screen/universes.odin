@@ -27,7 +27,9 @@ import "server:store"
 // a save, a double-click (or Confirm) plays it; Play, Rename, Delete (asked first) and
 // Export act on the selected one, Import brings an exported save in, Back returns to the
 // games. A game whose rounds keep nothing (engine.game_keeps) has a page with Play
-// alone. Players see "universe" in sandbox; the code says universe for every save.
+// alone. Players see "universe" in sandbox; the code says universe for every save. Chosen
+// to host (Multiplayer's Host: Singleplayer_Screen.host), the page says so under its line
+// and its Play is Host: the world it starts opens to the LAN as soon as it plays.
 
 DOUBLE_CLICK :: 400 * time.Millisecond // (the multiplayer list's)
 
@@ -131,12 +133,17 @@ continue_save :: proc(app: ^engine.App) -> (game_name, name: string, ok: bool) {
 	return c.game, base.var_text(&c.name), c.game != ""
 }
 
-// continue_play enters the save played last (continue_save).
+// continue_play enters the save played last (continue_save), alone.
 continue_play :: proc(app: ^engine.App) {
 	_, name, ok := continue_save(app)
 	if !ok {return}
 	path := filepath.join({saves_dir(), name}, context.temp_allocator) or_else name
 	if universe_enter(app, path) != "" {app.universes.last.checked = false}
+}
+
+// page_back: Back from a game's page: to the games, to host one still if it was hosting.
+page_back :: proc(app: ^engine.App) {
+	singleplayer_open(app, app.singleplayer.host)
 }
 
 // universes_open: the page of the game id (constant data), its saves read.
@@ -266,11 +273,11 @@ world_create :: proc(app: ^engine.App, name, seed_text: string, earth := false) 
 
 // save_create makes a new save of the game id called name (a free variant of it) and
 // enters it: a game other than sandbox, on the world the game is made on (the scratch
-// world's seed), as its Play in a scratch world was.
-save_create :: proc(app: ^engine.App, id, name: string) {
+// world's seed), as its Play in a scratch world was; open_lan: opened to the LAN.
+save_create :: proc(app: ^engine.App, id, name: string, open_lan := false) {
 	plan := universe_plan(name, engine.SCRATCH_SEED, "creative")
 	log.infof("saves creating name=%q game=%s", filepath.base(plan.path), id)
-	engine.enter_world(app, plan.path, i64(plan.seed), game_id = id)
+	engine.enter_world(app, plan.path, i64(plan.seed), game_id = id, open_lan = open_lan)
 	if app.session != nil {save_played(app, plan.path)}
 }
 
@@ -345,7 +352,23 @@ page_heading :: proc(app: ^engine.App, ctx: ^ui.Context, area: ^ui.Rect) {
 	}
 	ui.title(ctx, name, ui.cut_top(area, 60))
 	ui.draw_text(ctx, ui.cut_top(area, 24), about, t.font_size * GAME_ABOUT, t.text_muted, .Center)
+	if app.singleplayer.host {
+		ui.draw_text(
+			ctx,
+			ui.cut_top(area, 24),
+			engine.tr(.Multiplayer_Host_Note),
+			t.font_size * GAME_ABOUT,
+			t.text,
+			.Center,
+		)
+	}
 	ui.cut_top(area, 2 * t.spacing)
+}
+
+// play_text: what the page's Play says: Host while hosting.
+@(private = "file")
+play_text :: proc(app: ^engine.App) -> string {
+	return engine.tr(.Multiplayer_Host if app.singleplayer.host else .Universes_Play)
 }
 
 // play_page: the page of a game whose rounds keep nothing: Play, in a world kept
@@ -357,7 +380,7 @@ play_page :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	area := ui.rect_center(
 		ctx.screen,
 		SAVES_WIDTH,
-		84 + 2 * t.spacing + 4 * t.row_height + 3 * t.spacing,
+		84 + 24 + 2 * t.spacing + 4 * t.row_height + 3 * t.spacing,
 	)
 	page_heading(app, ctx, &area)
 	name := page_game(w)
@@ -376,14 +399,14 @@ play_page :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.begin_column(ctx, column)
 	defer ui.end_column(ctx)
 	ui.default_focus(ctx)
-	if ui.button(ctx, engine.tr(.Universes_Play), ui.next(ctx)) {
+	if ui.button(ctx, play_text(app), ui.next(ctx)) {
 		if engine.game_hostable(app, page_game(w)) {
 			app.launch = page_game(w) // (the frame starts it: play_game)
 		} else {
 			message_set(w, engine.tr(.Universes_Game_Missing, page_game(w)))
 		}
 	}
-	if ui.button(ctx, engine.tr(.Credits_Back), ui.next(ctx)) {singleplayer_open(app)}
+	if ui.button(ctx, engine.tr(.Credits_Back), ui.next(ctx)) {page_back(app)}
 }
 
 @(private = "file")
@@ -475,12 +498,7 @@ saves_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	quarter := (buttons.w - 2 * t.spacing) / 4
 	top := ui.cut_top(&buttons, t.row_height)
 	ui.cut_top(&buttons, t.spacing)
-	if ui.button(
-		ctx,
-		engine.tr(.Universes_Play),
-		ui.cut_left(&top, 2 * quarter),
-		disabled = none,
-	) {
+	if ui.button(ctx, play_text(app), ui.cut_left(&top, 2 * quarter), disabled = none) {
 		save_play(app, selected)
 		return
 	}
@@ -518,7 +536,7 @@ saves_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		message_set(w, "")
 	}
 	ui.cut_left(&buttons, t.spacing)
-	if ui.button(ctx, engine.tr(.Credits_Back), buttons) {singleplayer_open(app)}
+	if ui.button(ctx, engine.tr(.Credits_Back), buttons) {page_back(app)}
 }
 
 // card_click: a click on save i at now. One click selects it; a second on the same save
@@ -529,18 +547,20 @@ card_click :: proc(w: ^engine.Universes_Screen, i: int, now: time.Tick) -> (play
 	return false
 }
 
-// save_play opens the save at i in entries (universe_enter); why it could not is said on
-// the page.
+// save_play opens the save at i in entries (universe_enter), hosted when the page is;
+// why it could not is said on the page.
 save_play :: proc(app: ^engine.App, i: int) {
 	w := &app.universes
 	if i < 0 || i >= len(w.entries) {return}
-	if why := universe_enter(app, w.entries[i].path); why != "" {message_set(w, why)}
+	why := universe_enter(app, w.entries[i].path, open_lan = app.singleplayer.host)
+	if why != "" {message_set(w, why)}
 }
 
 // universe_enter plays the saved universe at path with the game it records (one from
-// before games were recorded played the engine's world: the default game, sandbox);
-// why not (temp allocator) if this build lacks that game.
-universe_enter :: proc(app: ^engine.App, path: string) -> (why: string) {
+// before games were recorded played the engine's world: the default game, sandbox),
+// opened to the LAN as soon as it plays if open_lan; why not (temp allocator) if this
+// build lacks that game.
+universe_enter :: proc(app: ^engine.App, path: string, open_lan := false) -> (why: string) {
 	e: engine.Save_Entry
 	defer {
 		delete(e.mode)
@@ -549,7 +569,7 @@ universe_enter :: proc(app: ^engine.App, path: string) -> (why: string) {
 	entry_read_config(&e, filepath.join({path, "universe.cfg"}, context.temp_allocator) or_else "")
 	id := entry_game(&e)
 	if !engine.game_hostable(app, id) {return engine.tr(.Universes_Game_Missing, id)}
-	engine.enter_world(app, path, 0, game_id = id)
+	engine.enter_world(app, path, 0, game_id = id, open_lan = open_lan)
 	if app.session != nil {save_played(app, path)}
 	return ""
 }
@@ -588,7 +608,7 @@ save_new_dialog :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			w.mode = .List
 			return
 		}
-		save_create(app, page_game(w), string(w.name[:]))
+		save_create(app, page_game(w), string(w.name[:]), open_lan = app.singleplayer.host)
 		w.mode = .List
 		return
 	}

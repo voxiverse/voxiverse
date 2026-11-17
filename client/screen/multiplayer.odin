@@ -20,8 +20,9 @@ import "common:protocol"
 // game it plays as this build names it, its players and whether it answers; a server
 // that runs another version, or a game this build does not have, is listed and cannot be
 // joined, the row saying why. One selected is joined (or double-clicked); Direct
-// Connection joins an address; Add Server keeps one, Remove Server forgets the selected.
-// The player's name lives in Options; the first visit without one asks for it.
+// Connection joins an address; Add Server keeps one, Remove Server forgets the selected;
+// Host opens the games to host one (singleplayer.odin). The player's name lives in
+// Options; the first visit without one asks for it.
 
 MULTIPLAYER_WIDTH :: 640
 SERVER_ROW :: 56 // a server's row: its name and its game, its players or why not
@@ -71,6 +72,12 @@ multiplayer_back :: proc(app: ^engine.App) {
 	}
 	multiplayer_close(m)
 	app.screen = .Title
+}
+
+// host_open: Host: the games, to host one (the same list and pages as Singleplayer).
+host_open :: proc(app: ^engine.App) {
+	multiplayer_close(&app.multiplayer)
+	singleplayer_open(app, host = true)
 }
 
 multiplayer_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
@@ -245,21 +252,25 @@ servers_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	}
 
 	third := (buttons.w - 2 * t.spacing) / 3
-	half := (buttons.w - t.spacing) / 2
 	top := ui.cut_top(&buttons, t.row_height)
 	ui.cut_top(&buttons, t.spacing)
 	if ui.button(
 		ctx,
 		engine.tr(.Multiplayer_Join_Server),
-		ui.cut_left(&top, half),
+		ui.cut_left(&top, third),
 		disabled = !can_join,
 	) {
 		server_join(app, chosen)
 		return
 	}
 	ui.cut_left(&top, t.spacing)
-	if ui.button(ctx, engine.tr(.Multiplayer_Direct_Connection), top) {
+	if ui.button(ctx, engine.tr(.Multiplayer_Direct_Connection), ui.cut_left(&top, third)) {
 		form_open(app, .Direct, base.var_text(&app.settings.last_server))
+	}
+	ui.cut_left(&top, t.spacing)
+	if ui.button(ctx, engine.tr(.Multiplayer_Host), top) {
+		host_open(app)
+		return
 	}
 	if ui.button(ctx, engine.tr(.Multiplayer_Add_Server), ui.cut_left(&buttons, third)) {
 		form_open(app, .Add, "")
