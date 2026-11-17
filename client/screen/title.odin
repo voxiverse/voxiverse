@@ -205,7 +205,9 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			t.text_muted,
 		)
 	}
-	if !app.scene.menu {update_notice(app, ctx)}
+	when update.ENABLED {
+		if !app.scene.menu {update_notice(app, ctx)}
+	}
 	if !app.settings.reduce_motion {
 		holiday_front(app, ctx, holiday, app.last_frame_ms / 1000)
 	}
@@ -216,7 +218,6 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 // then "Update available: 0.5.3" with Update, the download's progress, Restart to
 // update once it is installed, or why it failed. Nothing while there is nothing to say.
 update_notice :: proc(app: ^engine.App, ctx: ^ui.Context) {
-	when !update.ENABLED {return}
 	u := &app.updater
 	if app.settings.updates {update.check(u)}
 	s := update.status(u)

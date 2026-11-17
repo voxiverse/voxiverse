@@ -92,7 +92,11 @@ Updater :: struct {
 // to read instead of GitHub's). What an update left in the install folder is cleaned up.
 init :: proc(u: ^Updater, exe_dir: string, allowed: bool) {
 	_ = virtual.arena_init_growing(&u.arena)
-	when !ENABLED {return}
+	when ENABLED {init_enabled(u, exe_dir, allowed)}
+}
+
+@(private = "file")
+init_enabled :: proc(u: ^Updater, exe_dir: string, allowed: bool) {
 	a := virtual.arena_allocator(&u.arena)
 	u.exe_dir = strings.clone(exe_dir, a)
 	u.source, u.proto = GITHUB, "=https"

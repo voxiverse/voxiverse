@@ -121,8 +121,8 @@ and no link; after, the unpacked tree is walked (without following links) for th
 for the files every package has.
 
 **Turning it off.** The player: Options, Profile, **Check for updates** (the setting
-`updates`, on by default). A build: `-define:VX_UPDATER=false` leaves the updater out
-entirely (no check, no setting), for a store such as Steam that
+`updates`, on by default). A build: `build package --no-updater` (or `build --no-updater`:
+`-define:VX_UPDATER=false`, which `check` also compiles) leaves the updater out entirely (no check, no setting), for a store such as Steam that
 updates the game itself. It never checks in a development build (a version with a commit,
 or `0.0.0-dev`) or in a run that does one thing (`--exec` and so `build shot`,
 `--benchmark`, `--check`, `--scene`). For testing, a development build checks as the version

@@ -338,7 +338,7 @@ main :: proc() {
 	case "build":
 		_, ok = build_game(args[1:])
 	case "package":
-		ok = package_game()
+		ok = package_game(args[1:])
 	case "run":
 		ok = run_game(args[1:])
 	case "serve":
@@ -525,7 +525,12 @@ usage :: proc() {
 	fmt.println(
 		"              --profile    writing a Spall trace (with --release for real numbers)",
 	)
-	fmt.println("  package   a release package for this platform in build/dist/")
+	fmt.println(
+		"              --no-updater without the updater (a store's build: it updates the game)",
+	)
+	fmt.println(
+		"  package   a release package for this platform in build/dist/ (--no-updater: without the updater)",
+	)
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
 	fmt.println("  serve     build, then run the dedicated server; arguments after -- go to it")
 	fmt.println(
@@ -558,7 +563,7 @@ build_game :: proc(
 	ok: bool,
 ) {
 	profile := Profile.Dev
-	symbols, sanitize, trace := false, false, false
+	symbols, sanitize, trace, no_updater := false, false, false, false
 	for arg in args {
 		switch arg {
 		case "--debug":
@@ -571,6 +576,8 @@ build_game :: proc(
 			sanitize = true
 		case "--profile":
 			trace = true
+		case "--no-updater":
+			no_updater = true
 		case:
 			fmt.eprintfln("build: unknown option '%s'", arg)
 			return "", false
@@ -596,6 +603,8 @@ build_game :: proc(
 		if symbols {append(&mode, "-debug", "-define:VX_DEV=false")}
 	}
 	if trace {append(&mode, "-define:VX_PROFILE=true")}
+	// A build for a store that updates the game itself (Steam): no updater compiled in.
+	if no_updater {append(&mode, "-define:VX_UPDATER=false")}
 	v := version_of()
 	append(&mode, ..version_defines(v))
 	if client {
@@ -912,6 +921,11 @@ BUILD_CONFIGS :: []Build_Config {
 		GAME_PACKAGE,
 		"release --profile",
 		{"-define:VX_DEV=false", "-define:VX_EMBED_SHADERS=true", "-define:VX_PROFILE=true"},
+	},
+	{
+		GAME_PACKAGE,
+		"release --no-updater",
+		{"-define:VX_DEV=false", "-define:VX_EMBED_SHADERS=true", "-define:VX_UPDATER=false"},
 	},
 	{SERVER_PACKAGE, "dev", {"-define:VX_DEV=true"}},
 	{SERVER_PACKAGE, "dev --profile", {"-define:VX_DEV=true", "-define:VX_PROFILE=true"}},

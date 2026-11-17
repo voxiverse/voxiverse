@@ -162,10 +162,20 @@ PACKAGE_README :: #load("package_readme.txt", string)
 // voxiverse-<version>-<os>-<arch>.zip on Windows and macOS (where the game is
 // Voxiverse.app, macos_app.odin) or .tar.gz elsewhere (tar keeps the
 // executable bit). A development build's name carries its commit
-// too: builds between releases are told apart by name.
-package_game :: proc() -> bool {
+// too: builds between releases are told apart by name. args: --no-updater leaves the
+// updater out (a store's build: the store updates the game; docs/platforms.md).
+package_game :: proc(args: []string) -> bool {
+	for arg in args {
+		if arg != "--no-updater" {
+			fmt.eprintfln("build: package: unknown option '%s' (there is --no-updater)", arg)
+			return false
+		}
+	}
 	v := version_of()
-	build_game({"--release"}, windowed = true) or_return
+	options := make([dynamic]string, context.temp_allocator)
+	append(&options, "--release")
+	append(&options, ..args)
+	build_game(options[:], windowed = true) or_return
 	os_name := "windows" when ODIN_OS == .Windows else "macos" when ODIN_OS == .Darwin else "linux"
 	arch := "arm64" when ODIN_ARCH == .arm64 else "x64"
 	label := v.version
