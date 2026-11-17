@@ -25,6 +25,19 @@ GAME :: engine.Game {
 	screen        = screen,
 	actions       = {"Craft", "Turn"},
 	machine_shown = foundry.Shown,
+	look          = LOOK,
+}
+
+// LOOK: hazy industrial daylight: a low sun through smoke, the far works fading into a warm
+// haze, the greens taken down so the machines and their belts lead.
+LOOK :: engine.Look {
+	time = 0.38,
+	zenith = {0.20, 0.30, 0.48},
+	horizon = {0.66, 0.58, 0.44},
+	sun_light = {1.0, 0.93, 0.80},
+	fog = 160,
+	fog_near = 0.2,
+	grade = {tint = {1.03, 1.0, 0.93}, saturation = -0.4, contrast = 0.06},
 }
 
 CRAFT_ACTION :: 0
