@@ -220,8 +220,9 @@ Nothing in the console duplicates a key, the UI or a server command.
 
 Scripts (`--exec "cmd; cmd"`) are console input typed at startup, with the additional
 commands `ticks <n>` (until the server has run n more ticks: our own server runs them back
-to back, as fast as it can, so `ticks 600`, half a minute of play, takes a second or two;
-someone else's server keeps its time), `wait <frames>`, `sleep <seconds>` (the clock's
+to back, as fast as it can, so `ticks 600`, twenty seconds of play, takes a second or two,
+and the script goes on once the session has heard the last of them; someone else's server
+keeps its time), `wait <frames>`, `sleep <seconds>` (the clock's
 time: for what the clock decides, a fade, a toast; play is `ticks`), `wait_world` (until
 the world has loaded and meshed; a missing or failed world fails the run) and `wait_joined`
 (until the session plays, its world perhaps still loading; likewise). They exist to

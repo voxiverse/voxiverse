@@ -12,9 +12,11 @@ import "core:time"
 // Startup scripts (--exec "cmd; cmd; ..."): console commands run in order,
 // one batch per frame, with script-only commands that pause it:
 //
-//	ticks <n>        resume once the server has run n more ticks: our own server
-//	                 runs them back to back, as fast as it can (core.hurry), so
-//	                 `ticks 600` (half a minute of play) takes a second or two;
+//	ticks <n>        resume once the server has run n more ticks and the session
+//	                 has heard them: our own server runs them back to back, as
+//	                 fast as it can (core.hurry), so `ticks 600` (twenty seconds of
+//	                 play) takes a second or two, and what they did (an effect
+//	                 begun, a creature moved) is here when the script goes on;
 //	                 someone else's keeps its time (n ticks of the clock)
 //	wait <frames>    resume after that many frames
 //	sleep <seconds>  resume after that much time (frame counts vary with vsync):
@@ -60,7 +62,11 @@ script_run :: proc(app: ^engine.App, s: ^engine.Script) {
 		s.until = {}
 	}
 	if s.hurried {
-		if app.session != nil && engine.server_hurrying(app.session) {return}
+		if app.session != nil && app.session.state != .Failed {
+			if engine.server_hurrying(app.session) {return}
+			heard := app.session.render_clock.newest
+			if app.session.render_clock.heard && i32(s.heard - heard) > 0 {return}
+		}
 		s.hurried = false
 	}
 	if s.wait_world || s.wait_joined {
@@ -98,6 +104,7 @@ script_run :: proc(app: ^engine.App, s: ^engine.Script) {
 			}
 			if app.session != nil && engine.server_hurry(app.session, n) {
 				s.hurried = true
+				s.heard = app.session.render_clock.newest + u32(n)
 			} else {
 				s.until = time.tick_add(time.tick_now(), time.Duration(n) * game.TICK_DURATION)
 			}

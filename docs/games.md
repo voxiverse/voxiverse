@@ -886,8 +886,9 @@ lavapipe under `xvfb-run` at 1280x720 ([debugging.md](debugging.md)): the script
 `--exec` takes, its lines separated by `;` (with `--game` the run goes straight into a
 scratch world of that game, as without a script, and the script runs there; without it the
 title shows, where `singleplayer` starts a world), with `wait_world` (the world is there and
-meshed), `ticks <n>` (the server runs n ticks, as fast as it can: the game played on to where
-the picture is), `wait <frames>`, `sleep <seconds>` (the clock's time, for a fade; play is
+meshed), `ticks <n>` (the server runs n ticks, as fast as it can, and the session hears
+them: the game played on to where the picture is, its effects as far through as the ticks
+put them), `wait <frames>`, `sleep <seconds>` (the clock's time, for a fade; play is
 `ticks`), any console command (`camera at x y z yaw pitch` for the camera, `/tp x y z yaw
 pitch` for the player, `/<game> ...` for the game's own, `hold <item>`, `key <key>
 down|up`, `pointer <x> <y>`, `type <text>` into the field that has the focus, `set
@@ -895,7 +896,7 @@ down|up`, `pointer <x> <y>`, `type <text>` into the field that has the focus, `s
 universe on Earth, kept with the run's state, not the player's saves) and `screenshot
 <file>`, which writes `build/screenshots/<file>.png`; it ends with `quit`.
 
-Time a script by ticks, not seconds: at `game.TICK_RATE` (20) a second of play is 20 ticks,
+Time a script by ticks, not seconds: at `game.TICK_RATE` (30) a second of play is 30 ticks,
 and `ticks` waits for exactly those, however slow lavapipe draws, so a run takes what its
 ticks cost to simulate rather than a guess of the clock. Put the camera where the picture is
 with `camera at` (a development build's, as a shot is): it stands there whatever the
@@ -907,7 +908,7 @@ top-down or free camera neither aims at a corner nor pans at an edge. A game's s
 with the game where it should be:
 
 ```sh
-# Foundry's demo line, half a minute after it is built, from above and south of it.
+# Foundry's demo line, twenty seconds after it is built, from above and south of it.
 ./build.sh shot foundry_line --game foundry -- "wait_world; /foundry demo; ticks 600; camera at 56.5 5 50 0 -30; wait_world; screenshot foundry_line; quit"
 ./build.sh shot horde_shop --game horde -- "wait_world; ticks 80; /horde restart; ticks 40; /horde purse 60; /tp 15 1 18.5 -90 -12; key z down; wait 2; key z up; sleep 0.8; screenshot horde_shop; quit"
 ./build.sh shot launcher -- "wait 60; screenshot launcher; quit"
