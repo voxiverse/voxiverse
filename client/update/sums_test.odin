@@ -20,6 +20,8 @@ test_sums_find :: proc(t: ^testing.T) {
 	testing.expect(t, !ok, "a name the file does not have")
 	_, ok = sums_find(SUMS_SAMPLE, "")
 	testing.expect(t, !ok)
+	d, _ = sums_find(SUMS_SAMPLE, "voxiverse-0.5.1-linux-x64.tar.gz")
+	testing.expect_value(t, digest_text(d), SUMS_SAMPLE[:64])
 }
 
 // Anything but sha256sum's lines refuses the whole file, and so does a name given twice.

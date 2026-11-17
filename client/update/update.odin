@@ -291,10 +291,11 @@ check_main :: proc(u: ^Updater) {
 		digest  = digest,
 	}
 	log.infof(
-		"update available version=%s url=%s size=%d",
+		"update available version=%s url=%s size=%d sha256=%s",
 		u.found.version,
 		u.found.url,
 		u.found.size,
+		digest_text(digest),
 	)
 	phase = .Available
 }

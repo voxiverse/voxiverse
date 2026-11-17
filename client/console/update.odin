@@ -27,15 +27,13 @@ update_command :: proc(app: ^engine.App, args: []string) {
 			),
 		)
 		if s.phase >= .Available {
-			b := strings.builder_make(context.temp_allocator)
-			for d in u.found.digest {fmt.sbprintf(&b, "%02x", d)}
 			say(
 				app,
 				fmt.tprintf(
 					"update: %s size=%d sha256=%s",
 					u.found.url,
 					u.found.size,
-					strings.to_string(b),
+					update.digest_text(u.found.digest),
 				),
 			)
 		}

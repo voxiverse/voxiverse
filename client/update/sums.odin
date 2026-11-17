@@ -42,6 +42,16 @@ sums_find :: proc(text: string, name: string) -> (digest: Digest, ok: bool) {
 	return digest, found
 }
 
+// digest_text: d as sha256sum writes it (temp allocator).
+digest_text :: proc(d: Digest) -> string {
+	hex := "0123456789abcdef"
+	out := make([]u8, 64, context.temp_allocator)
+	for b, i in d {
+		out[2 * i], out[2 * i + 1] = hex[b >> 4], hex[b & 15]
+	}
+	return string(out)
+}
+
 // hex_digest: 64 hexadecimal digits as the 32 bytes they spell.
 hex_digest :: proc(text: string) -> (d: Digest, ok: bool) {
 	if len(text) != 64 {return}
