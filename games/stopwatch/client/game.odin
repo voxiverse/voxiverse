@@ -26,6 +26,12 @@ GAME :: engine.Game {
 			command,
 		},
 	},
+	look     = LOOK,
+}
+
+// LOOK: dawn: the sun just up, the sky glowing in the east, long gold light on the wood.
+LOOK :: engine.Look {
+	time = 0.262,
 }
 
 // View: what the session knows of the game.
