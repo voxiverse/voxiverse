@@ -35,6 +35,14 @@ GAME :: engine.Game {
 	scoreboard = scoreboard,
 	keys       = KEYS,
 	no_hotbar  = true, // (a commander is bodiless: its digits are the control groups)
+	look       = LOOK,
+}
+
+// LOOK: a war table: a cool, even, slightly grey light, the colours held down and the
+// contrast up so the armies' colours stand out from the ground.
+LOOK :: engine.Look {
+	time = 0.46,
+	grade = {tint = {0.94, 0.99, 1.06}, saturation = -0.25, contrast = 0.2, vignette = 0.25},
 }
 
 SMALL_UNIT :: 16 // pixels: a unit drawn shorter than this gets its side's square
