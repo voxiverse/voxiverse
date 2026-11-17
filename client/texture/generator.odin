@@ -1,7 +1,5 @@
 package texture
 
-import "core:math"
-
 // The block textures drawn by code: one generator per texture, each a pure
 // procedure of the pixel. They run at build time (tools/atlas makes the
 // atlas the client carries); the registry names them (game.
@@ -66,477 +64,207 @@ Generator :: enum u32 {
 // generate fills pixels (SIZE² values, row by row) for t.
 // Deterministic: the same on every machine and every run.
 //
-// The look is crunchy pixel art: each material has a ramp of five hand-
-// picked shades, and noise only chooses among them, so pixels form crisp
-// clusters instead of smooth gradients.
+// Each material is a ramp of five hand-picked shades (ramp.odin) and the
+// toolkit (toolkit.odin) only says how light a pixel is, so pixels form
+// crisp clusters of a few tones. The materials with form, the rock, soil,
+// wood and masonry, are drawn in material.odin.
 generate :: proc(t: Generator, pixels: []Rgba) {
 	assert(len(pixels) == SIZE * SIZE)
 	seed := u32(t) * 0x9e37_79b9
 	for y in 0 ..< SIZE {
 		for x in 0 ..< SIZE {
-			// Pixel noise and a 4-pixel cell noise, both tiling.
-			fine := hash01(seed, x, y)
-			coarse := value_noise(seed ~ 0x5bd1_e995, x, y, 4)
-			c: Rgba
-			switch t {
-			case .Stone:
-				v := 0.25 + 0.45 * coarse + 0.30 * fine
-				if hash01(seed ~ 7, x, y) > 0.92 {v = 0} 	// dark specks
-				c = shade(STONE, v)
-			case .Dirt:
-				c = dirt(seed, x, y, fine, coarse)
-			case .Grass_Top:
-				c = shade(GRASS, 0.15 + 0.45 * coarse + 0.45 * fine)
-			case .Grass_Side:
-				// Grass hangs 2-4 pixels over the dirt, with a ragged, shadowed edge.
-				edge := 2 + int(hash01(seed ~ 3, x, 0) * 2.99)
-				switch {
-				case y < edge:
-					c = shade(GRASS, 0.2 + 0.4 * coarse + 0.45 * fine)
-				case y == edge:
-					c = GRASS[0]
-				case:
-					c = dirt(seed, x, y, fine, coarse)
-				}
-			case .Sand:
-				c = shade(SAND, 0.2 + 0.3 * coarse + 0.55 * fine)
-			case .Gravel:
-				// Pebbles: cells of one tone each, with dark gaps.
-				v := value_noise(seed ~ 11, x, y, 3) * 0.8 + 0.25 * fine
-				if hash01(seed ~ 13, x, y) > 0.82 {v = 0}
-				c = shade(GRAVEL, v)
-			case .Bedrock:
-				// Dark, coarse, cracked: obviously the end of the world.
-				v := value_noise(seed ~ 17, x, y, 2) * 0.9 + 0.2 * fine
-				if hash01(seed ~ 19, x, y) > 0.8 {v = 0}
-				c = shade(BEDROCK, v)
-			case .Lamp:
-				// A framed panel: dark rim, a grid of warm cells, hot centres.
-				edge := x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1
-				seam := x % 5 == 0 || y % 5 == 0
-				switch {
-				case edge:
-					c = LAMP[0]
-				case seam:
-					c = LAMP[1]
-				case (x % 5 == 2 || x % 5 == 3) && (y % 5 == 2 || y % 5 == 3):
-					c = LAMP[4]
-				case:
-					c = shade(LAMP, 0.45 + 0.3 * fine)
-				}
-			case .Water:
-				// Ripples: soft horizontal bands; see-through (alpha).
-				band := value_noise(seed ~ 23, x + y / 3, y, 4)
-				c = shade(WATER, 0.25 + 0.5 * band + 0.25 * fine)
-			case .Snow:
-				c = shade(SNOW, 0.45 + 0.25 * coarse + 0.3 * fine)
-			case .Ice:
-				c = shade(ICE, 0.35 + 0.3 * coarse + 0.2 * fine)
-				if (x + y) % 7 == 0 && hash01(seed ~ 29, x / 3, y / 3) > 0.5 {c = ICE[4]} 	// cracks
-			case .Clay:
-				c = shade(CLAY, 0.3 + 0.35 * coarse + 0.3 * fine)
-			case .Sandstone_Side:
-				// Layers, a darker seam every few rows.
-				v := 0.35 + 0.25 * value_noise(seed ~ 31, 0, y, 2) + 0.25 * fine
-				if y % 5 == 4 {v = 0.1}
-				c = shade(SAND, v)
-			case .Sandstone_Top:
-				c = shade(SAND, 0.3 + 0.25 * coarse + 0.3 * fine)
-				if x == 0 || y == 0 {c = SAND[1]}
-			case .Log_Side, .Spruce_Log_Side:
-				// Bark: vertical ridges.
-				ridge := value_noise(seed ~ 37, x, y / 4, 2)
-				ramp := BARK if t == .Log_Side else SPRUCE_BARK
-				c = shade(ramp, 0.15 + 0.6 * ridge + 0.3 * fine)
-			case .Log_Top:
-				// Rings round the middle, bark at the rim.
-				dx, dy := f32(x) - 7.5, f32(y) - 7.5
-				r := int(math.sqrt(dx * dx + dy * dy))
-				c = shade(WOOD, 0.35 + 0.25 * f32(r % 2) + 0.2 * fine)
-				if r >= 7 {c = shade(BARK, 0.3 + 0.4 * fine)}
-			case .Leaves, .Spruce_Leaves:
-				ramp := LEAVES if t == .Leaves else SPRUCE_LEAVES
-				c = shade(ramp, 0.1 + 0.55 * coarse + 0.4 * fine)
-				if hash01(seed ~ 41, x, y) > 0.78 {c = {}} 	// gaps to see through
-			case .Coal_Ore, .Iron_Ore, .Copper_Ore:
-				c = shade(STONE, 0.25 + 0.45 * coarse + 0.30 * fine)
-				if value_noise(seed ~ 43, x, y, 3) > 0.62 {
-					ramp := COAL if t == .Coal_Ore else (IRON if t == .Iron_Ore else COPPER)
-					c = shade(ramp, 0.2 + 0.7 * fine)
-				}
-			case .Tall_Grass:
-				// Blades of different heights from the bottom edge.
-				height := int(6 + hash01(seed ~ 47, x, 0) * 10)
-				c = {}
-				if hash01(seed ~ 53, x, 0) > 0.2 && y >= SIZE - height {
-					// Darker at the root, lighter towards the tip.
-					c = shade(GRASS, 0.15 + 0.7 * f32(SIZE - y) / f32(height) + 0.15 * fine)
-				}
-			case .Poppy, .Dandelion:
-				c = flower(t, x, y, fine)
-			case .Cactus_Side:
-				// Ribs with pale spines.
-				c = shade(CACTUS, 0.25 + 0.3 * f32(x % 4 == 1 ? 1 : 0) + 0.25 * fine)
-				if x % 4 == 3 && y % 4 == 1 {c = SAND[4]}
-				if x == 0 || x == SIZE - 1 {c = CACTUS[0]}
-			case .Cobblestone:
-				// Rounded stones of their own tones, dark mortar between.
-				cell := value_noise(seed ~ 59, x, y, 4)
-				v := 0.25 + 0.6 * hash01(seed ~ 61, int(cell * 7), 0) + 0.2 * fine
-				if cell > 0.45 && cell < 0.52 {v = 0}
-				c = shade(STONE, v)
-			case .Stone_Bricks:
-				// Courses of four rows, the joints staggered course to course.
-				course := y / 4
-				offset := 4 if course % 2 == 1 else 0
-				brick := (x + offset) / 8
-				v := 0.35 + 0.35 * hash01(seed ~ 67, brick, course) + 0.2 * fine
-				if y % 4 == 3 || (x + offset) % 8 == 7 {v = 0.05}
-				c = shade(STONE, v)
-			case .Planks:
-				// Boards four rows wide, end joints here and there.
-				board := y / 4
-				v :=
-					0.35 +
-					0.3 * hash01(seed ~ 71, 0, board) +
-					0.25 * value_noise(seed ~ 73, x, y, 2) +
-					0.1 * fine
-				if y % 4 == 3 {v = 0.05}
-				if x == int(hash01(seed ~ 79, board, 1) * 15) {v = 0.1}
-				c = shade(WOOD, v)
-			case .Glass:
-				// A pale frame and two streaks; clear between.
-				edge := x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1
-				streak := (x + y == 9 || x + y == 10) && x > 2 && x < 9
-				c = {}
-				if edge {c = ICE[3]}
-				if streak {c = ICE[4]}
-			case .Gate_Ring:
-				// Dark metal plates, grooves between, a few engraved strokes.
-				seam := x % 8 == 0 || y % 8 == 0
-				v := 0.3 + 0.3 * coarse + 0.2 * fine
-				if seam {v = 0}
-				if hash01(seed ~ 29, x / 2, y) > 0.93 {v = 1}
-				c = shade(GATE, v)
-			case .Gate_Chevron, .Gate_Chevron_Lit:
-				// A V on the ring's metal: dim, or glowing.
-				ramp := CHEVRON_LIT if t == .Gate_Chevron_Lit else CHEVRON
-				dx := abs(x - SIZE / 2)
-				in_v := y >= 3 + dx / 2 && y <= 6 + dx / 2 && dx < 7
-				c = shade(ramp, 0.5 + 0.4 * fine) if in_v else shade(GATE, 0.2 + 0.3 * coarse)
-			case .Gate_Horizon:
-				// Rippling blue light; see-through.
-				ripple := value_noise(seed ~ 31, x + y / 2, y + x / 3, 3)
-				c = shade(HORIZON, 0.3 + 0.5 * ripple + 0.2 * fine)
-			case .Farmland_Top, .Farmland_Moist_Top:
-				// Furrows: rows of tilled earth, darker where it is wet.
-				ramp := FARMLAND_WET if t == .Farmland_Moist_Top else FARMLAND
-				v := 0.45 + 0.25 * coarse + 0.2 * fine
-				if y % 4 == 0 {v -= 0.3}
-				if y % 4 == 1 {v += 0.1}
-				c = shade(ramp, clamp(v, 0, 1))
-			case .Wheat_0, .Wheat_1, .Wheat_2, .Wheat_3, .Wheat_4, .Wheat_5, .Wheat_6, .Wheat_7:
-				c = wheat_pixel(int(t) - int(Generator.Wheat_0), seed, x, y)
-			case .Chest_Side, .Chest_Top:
-				// Boards, banded with iron at the rim; the side has a latch.
-				board := y / 4
-				v := 0.3 + 0.25 * hash01(seed ~ 83, 0, board) + 0.2 * fine
-				if y % 4 == 3 {v = 0.05}
-				c = shade(WOOD, v)
-				rim := x < 2 || x >= SIZE - 2 || y < 2 || y >= SIZE - 2
-				latch := t == .Chest_Side && abs(x - SIZE / 2) < 2 && y >= 5 && y < 9
-				if rim || latch {c = shade(IRON, 0.3 + 0.4 * fine)}
-			case .Wool_Black:
-				v := 0.45 + 0.3 * coarse + 0.25 * fine
-				if y % 4 == 3 {v -= 0.2}
-				if (x + (y / 4) * 2) % 4 == 3 {v -= 0.12}
-				c = shade(WOOL_BLACK, clamp(v, 0, 1))
-			case .Wool:
-				// Woven: soft cream tufts in rows, a thread's shadow between.
-				v := 0.45 + 0.3 * coarse + 0.25 * fine
-				if y % 4 == 3 {v -= 0.2}
-				if (x + (y / 4) * 2) % 4 == 3 {v -= 0.12}
-				c = shade(WOOL, clamp(v, 0, 1))
-			case .Ladder:
-				// Two rails and four rungs; clear between.
-				rail := (x >= 2 && x <= 3) || (x >= 12 && x <= 13)
-				rung := x >= 4 && x <= 11 && (y % 4 == 1 || y % 4 == 2)
-				c = {}
-				if rail ||
-				   rung {c = shade(WOOD, 0.3 + 0.35 * hash01(seed ~ 89, x / 2, y / 2) + 0.2 * fine)}
-			case .Door_Lower, .Door_Upper:
-				// Planks in a frame; the upper half has a window.
-				board := x / 4
-				v := 0.3 + 0.25 * hash01(seed ~ 97, board, 0) + 0.2 * fine
-				if x % 4 == 3 {v = 0.05}
-				c = shade(WOOD, v)
-				frame := x < 2 || x >= SIZE - 2 || y < 2 || y >= SIZE - 2
-				if frame {c = shade(WOOD, 0.1 + 0.2 * fine)}
-				if t == .Door_Upper && x >= 4 && x < 12 && y >= 4 && y < 11 {
-					c = shade(WINDOW, 0.4 + 0.4 * coarse)
-				}
-				knob := t == .Door_Lower && x >= 11 && x < 13 && y >= 7 && y < 9
-				if knob {c = shade(IRON, 0.5 + 0.4 * fine)}
-			case .Cactus_Top:
-				c = shade(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
-				if x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1 {c = CACTUS[0]}
-			}
-			pixels[y * SIZE + x] = c
+			pixels[y * SIZE + x] = pixel(t, seed, x, y)
 		}
 	}
 }
 
-// Ramps, darkest first (sRGB).
-@(private = "file", rodata)
-STONE := [5]Rgba {
-	{74, 76, 84, 255},
-	{101, 103, 110, 255},
-	{124, 126, 132, 255},
-	{146, 148, 153, 255},
-	{170, 171, 176, 255},
-}
-@(private = "file", rodata)
-DIRT := [5]Rgba {
-	{74, 50, 34, 255},
-	{99, 68, 45, 255},
-	{121, 85, 57, 255},
-	{143, 103, 70, 255},
-	{166, 124, 86, 255},
-}
-@(private = "file", rodata)
-GRASS := [5]Rgba {
-	{52, 92, 38, 255},
-	{68, 117, 45, 255},
-	{86, 140, 52, 255},
-	{104, 160, 60, 255},
-	{128, 182, 74, 255},
-}
-@(private = "file", rodata)
-SAND := [5]Rgba {
-	{196, 172, 120, 255},
-	{212, 190, 138, 255},
-	{224, 204, 152, 255},
-	{234, 217, 167, 255},
-	{244, 230, 186, 255},
-}
-@(private = "file", rodata)
-GRAVEL := [5]Rgba {
-	{70, 66, 64, 255},
-	{104, 99, 95, 255},
-	{128, 122, 116, 255},
-	{150, 144, 136, 255},
-	{176, 170, 160, 255},
+// seed_of: g's seed; an ore stands in the rock of stone's, so the two meet
+// without a seam.
+seed_of :: proc(g: Generator) -> u32 {
+	return u32(g) * 0x9e37_79b9
 }
 
-@(private = "file", rodata)
-BEDROCK := [5]Rgba {
-	{22, 22, 26, 255},
-	{40, 40, 46, 255},
-	{58, 58, 64, 255},
-	{80, 80, 86, 255},
-	{104, 104, 110, 255},
-}
-
-@(private = "file", rodata)
-LAMP := [5]Rgba {
-	{58, 44, 30, 255},
-	{150, 104, 52, 255},
-	{232, 176, 92, 255},
-	{250, 214, 140, 255},
-	{255, 246, 214, 255},
-}
-
-@(private = "file", rodata)
-WATER := [5]Rgba {
-	{28, 62, 128, 170},
-	{36, 78, 150, 170},
-	{46, 96, 170, 170},
-	{62, 116, 188, 170},
-	{96, 148, 210, 170},
-}
-@(private = "file", rodata)
-SNOW := [5]Rgba {
-	{196, 206, 220, 255},
-	{214, 222, 234, 255},
-	{228, 234, 242, 255},
-	{238, 242, 248, 255},
-	{250, 252, 255, 255},
-}
-@(private = "file", rodata)
-GATE := [5]Rgba {
-	{22, 24, 30, 255},
-	{40, 43, 52, 255},
-	{58, 62, 72, 255},
-	{78, 82, 94, 255},
-	{120, 126, 140, 255},
-}
-@(private = "file", rodata)
-CHEVRON := [5]Rgba {
-	{60, 30, 18, 255},
-	{84, 42, 22, 255},
-	{104, 54, 26, 255},
-	{126, 66, 30, 255},
-	{150, 80, 36, 255},
-}
-@(private = "file", rodata)
-CHEVRON_LIT := [5]Rgba {
-	{220, 110, 30, 255},
-	{240, 140, 40, 255},
-	{255, 170, 60, 255},
-	{255, 200, 100, 255},
-	{255, 230, 170, 255},
-}
-@(private = "file", rodata)
-HORIZON := [5]Rgba {
-	{40, 90, 200, 150},
-	{60, 120, 230, 150},
-	{90, 150, 245, 160},
-	{140, 190, 255, 170},
-	{210, 235, 255, 180},
-}
-@(private = "file", rodata)
-ICE := [5]Rgba {
-	{120, 160, 206, 255},
-	{140, 178, 220, 255},
-	{160, 194, 232, 255},
-	{182, 210, 240, 255},
-	{214, 232, 250, 255},
-}
-@(private = "file", rodata)
-CLAY := [5]Rgba {
-	{120, 124, 138, 255},
-	{136, 140, 154, 255},
-	{150, 154, 168, 255},
-	{164, 168, 180, 255},
-	{180, 184, 194, 255},
-}
-@(private = "file", rodata)
-BARK := [5]Rgba {
-	{52, 38, 24, 255},
-	{72, 54, 34, 255},
-	{92, 70, 44, 255},
-	{110, 86, 56, 255},
-	{130, 104, 70, 255},
-}
-@(private = "file", rodata)
-SPRUCE_BARK := [5]Rgba {
-	{38, 26, 18, 255},
-	{54, 38, 26, 255},
-	{70, 50, 34, 255},
-	{86, 62, 42, 255},
-	{102, 76, 52, 255},
-}
-@(private = "file", rodata)
-WOOD := [5]Rgba {
-	{120, 92, 54, 255},
-	{148, 116, 70, 255},
-	{170, 136, 86, 255},
-	{190, 156, 102, 255},
-	{208, 176, 120, 255},
-}
-@(private = "file", rodata)
-LEAVES := [5]Rgba {
-	{34, 74, 28, 255},
-	{46, 94, 34, 255},
-	{60, 114, 40, 255},
-	{76, 134, 48, 255},
-	{98, 154, 60, 255},
-}
-@(private = "file", rodata)
-SPRUCE_LEAVES := [5]Rgba {
-	{22, 50, 38, 255},
-	{30, 64, 48, 255},
-	{40, 80, 58, 255},
-	{52, 96, 68, 255},
-	{68, 112, 80, 255},
-}
-@(private = "file", rodata)
-COAL := [5]Rgba {
-	{16, 16, 18, 255},
-	{28, 28, 32, 255},
-	{40, 40, 44, 255},
-	{54, 54, 58, 255},
-	{70, 70, 74, 255},
-}
-@(private = "file", rodata)
-WINDOW := [5]Rgba {
-	{52, 78, 104, 255},
-	{70, 102, 132, 255},
-	{92, 128, 160, 255},
-	{118, 154, 184, 255},
-	{150, 184, 210, 255},
-}
-@(private = "file", rodata)
-IRON := [5]Rgba {
-	{150, 110, 88, 255},
-	{176, 134, 108, 255},
-	{198, 156, 128, 255},
-	{216, 178, 150, 255},
-	{232, 200, 174, 255},
-}
-@(private = "file", rodata)
-COPPER := [5]Rgba {
-	{150, 80, 40, 255},
-	{182, 102, 52, 255},
-	{206, 124, 64, 255},
-	{96, 160, 120, 255}, // a little verdigris
-	{230, 150, 86, 255},
-}
-@(private = "file", rodata)
-WOOL := [5]Rgba {
-	{176, 170, 160, 255},
-	{200, 195, 186, 255},
-	{220, 216, 208, 255},
-	{236, 233, 226, 255},
-	{248, 246, 240, 255},
-}
-@(private = "file", rodata)
-WOOL_BLACK := [5]Rgba {
-	{14, 14, 18, 255},
-	{26, 26, 32, 255},
-	{40, 40, 48, 255},
-	{56, 56, 66, 255},
-	{74, 74, 86, 255},
-}
-@(private = "file", rodata)
-FARMLAND := [5]Rgba {
-	{58, 38, 26, 255},
-	{78, 52, 34, 255},
-	{96, 64, 42, 255},
-	{114, 78, 52, 255},
-	{134, 94, 62, 255},
-}
-@(private = "file", rodata)
-FARMLAND_WET := [5]Rgba {
-	{36, 24, 18, 255},
-	{50, 33, 24, 255},
-	{62, 42, 30, 255},
-	{76, 52, 36, 255},
-	{90, 62, 44, 255},
-}
-@(private = "file", rodata)
-WHEAT_GREEN := [5]Rgba {
-	{40, 96, 36, 255},
-	{56, 124, 44, 255},
-	{78, 150, 52, 255},
-	{104, 172, 62, 255},
-	{132, 192, 76, 255},
-}
-@(private = "file", rodata)
-WHEAT_GOLD := [5]Rgba {
-	{150, 110, 40, 255},
-	{184, 140, 52, 255},
-	{208, 166, 64, 255},
-	{226, 188, 84, 255},
-	{240, 208, 112, 255},
-}
-@(private = "file", rodata)
-CACTUS := [5]Rgba {
-	{30, 84, 40, 255},
-	{40, 104, 48, 255},
-	{52, 124, 58, 255},
-	{66, 142, 68, 255},
-	{86, 162, 82, 255},
+@(private = "file")
+pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
+	// Pixel grit and a 4 x 4 noise, both tiling.
+	fine := hash01(seed, x, y)
+	coarse := noise(seed ~ 0x5bd1_e995, x, y, 4, 4)
+	switch t {
+	case .Stone:
+		return rock(STONE, seed, x, y)
+	case .Clay:
+		return clay(seed, x, y)
+	case .Gravel:
+		return gravel(seed, x, y)
+	case .Bedrock:
+		return bedrock(seed, x, y)
+	case .Cobblestone:
+		return cobble(seed, x, y)
+	case .Stone_Bricks:
+		return stone_brick(seed, x, y)
+	case .Coal_Ore:
+		c, _ := ore(COAL, seed, x, y, 4, 1.8, 0.4)
+		return c
+	case .Iron_Ore:
+		c, _ := ore(IRON_ORE, seed, x, y, 4, 1.4, 0.35)
+		return c
+	case .Copper_Ore:
+		c, inside := ore(COPPER, seed, x, y, 4, 1.5, 0.4)
+		if inside && hash01(seed ~ 7, x, y) > 0.8 {return VERDIGRIS}
+		return c
+	case .Dirt:
+		return dirt(seed, x, y)
+	case .Grass_Top:
+		return grass(seed, x, y)
+	case .Grass_Side:
+		// Grass hangs 2-4 pixels over the dirt, a blade further here and
+		// there, with a shadow under it.
+		edge := 2 + int(hash01(seed ~ 3, x, 0) * 2.99)
+		if hash01(seed ~ 4, x, 0) > 0.8 {edge += 2}
+		switch {
+		case y < edge:
+			return grass(seed, x, y)
+		case y == edge:
+			return GRASS[0]
+		case y == edge + 1:
+			return DIRT[0] if fine > 0.5 else DIRT[1]
+		}
+		return dirt(seed, x, y)
+	case .Farmland_Top, .Farmland_Moist_Top:
+		// Furrows: rows of tilled earth, lit on their tops, darker where wet.
+		ramp := FARMLAND_WET if t == .Farmland_Moist_Top else FARMLAND
+		v := 0.4 + 0.25 * coarse + 0.2 * (fine - 0.5)
+		if y % 4 == 0 {v -= 0.3}
+		if y % 4 == 1 {v += 0.2}
+		return dither(ramp, v, x, y)
+	case .Sand:
+		return sand(seed, x, y)
+	case .Sandstone_Side:
+		return sandstone_side(seed, x, y)
+	case .Sandstone_Top:
+		// A cut face: smooth, its edges catching the light at the top left.
+		v := 0.45 + 0.25 * fbm(seed, x, y, 2, 3) + 0.15 * (fine - 0.5)
+		v += 0.22 * bevel(x, y, SIZE, SIZE)
+		return dither(SANDSTONE, v, x, y)
+	case .Snow:
+		// Soft drifts, blue in their hollows, a glint here and there.
+		v := 0.3 + 0.6 * fbm(seed, x, y, 2, 3)
+		if fine > 0.97 {return SNOW[4]}
+		return dither(SNOW, v, x, y)
+	case .Ice:
+		// Clear blue, cloudy patches, long white fracture lines here and there.
+		crack := wrap(x - 2 * y) == 3 || wrap(2 * x + y) == 11
+		if crack && noise(seed ~ 30, x, y, 4, 4) > 0.5 {return ICE[4]}
+		return dither(ICE, 0.2 + 0.55 * fbm(seed, x, y, 2, 3), x, y)
+	case .Water:
+		// Ripples: soft horizontal bands; see-through (alpha).
+		band := noise(seed ~ 23, x + y / 3, y, 4, 4)
+		return pick(WATER, 0.25 + 0.5 * band + 0.25 * fine)
+	case .Lamp:
+		// A framed panel: dark rim, a grid of warm cells, hot centres.
+		edge := x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1
+		seam := x % 5 == 0 || y % 5 == 0
+		switch {
+		case edge:
+			return LAMP[0]
+		case seam:
+			return LAMP[1]
+		case (x % 5 == 2 || x % 5 == 3) && (y % 5 == 2 || y % 5 == 3):
+			return LAMP[4]
+		}
+		return pick(LAMP, 0.45 + 0.3 * fine)
+	case .Log_Side:
+		return bark(BARK, seed, x, y, 6, 3)
+	case .Spruce_Log_Side:
+		// Spruce: darker, finer furrows broken into scales.
+		c := bark(SPRUCE_BARK, seed, x, y, 8, 5)
+		if wrap(y + int(hash01(seed ~ 5, x / 2, 0) * 16)) % 5 == 0 && fine > 0.3 {
+			return SPRUCE_BARK[0]
+		}
+		return c
+	case .Log_Top:
+		return rings(seed, x, y)
+	case .Planks:
+		return plank(seed, x, y)
+	case .Leaves, .Spruce_Leaves:
+		ramp := LEAVES if t == .Leaves else SPRUCE_LEAVES
+		if hash01(seed ~ 41, x, y) > 0.78 {return {}} 	// gaps to see through
+		return pick(ramp, 0.1 + 0.55 * coarse + 0.4 * fine)
+	case .Tall_Grass:
+		// Blades of different heights from the bottom edge.
+		height := int(6 + hash01(seed ~ 47, x, 0) * 10)
+		if hash01(seed ~ 53, x, 0) > 0.2 && y >= SIZE - height {
+			// Darker at the root, lighter towards the tip.
+			return pick(GRASS, 0.15 + 0.7 * f32(SIZE - y) / f32(height) + 0.15 * fine)
+		}
+		return {}
+	case .Poppy, .Dandelion:
+		return flower(t, x, y, fine)
+	case .Cactus_Side:
+		// Ribs with pale spines.
+		if x == 0 || x == SIZE - 1 {return CACTUS[0]}
+		if x % 4 == 3 && y % 4 == 1 {return SAND[4]}
+		return pick(CACTUS, 0.25 + 0.3 * f32(x % 4 == 1 ? 1 : 0) + 0.25 * fine)
+	case .Cactus_Top:
+		if x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1 {return CACTUS[0]}
+		return pick(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
+	case .Wheat_0, .Wheat_1, .Wheat_2, .Wheat_3, .Wheat_4, .Wheat_5, .Wheat_6, .Wheat_7:
+		return wheat_pixel(int(t) - int(Generator.Wheat_0), seed, x, y)
+	case .Glass:
+		// A pale frame and two streaks; clear between.
+		if x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1 {return ICE[3]}
+		if (x + y == 9 || x + y == 10) && x > 2 && x < 9 {return ICE[4]}
+		return {}
+	case .Gate_Ring:
+		// Dark metal plates, grooves between, a few engraved strokes.
+		if hash01(seed ~ 29, x / 2, y) > 0.93 {return GATE[4]}
+		if x % 8 == 0 || y % 8 == 0 {return GATE[0]}
+		return pick(GATE, 0.3 + 0.3 * coarse + 0.2 * fine)
+	case .Gate_Chevron, .Gate_Chevron_Lit:
+		// A V on the ring's metal: dim, or glowing.
+		ramp := CHEVRON_LIT if t == .Gate_Chevron_Lit else CHEVRON
+		dx := abs(x - SIZE / 2)
+		in_v := y >= 3 + dx / 2 && y <= 6 + dx / 2 && dx < 7
+		return pick(ramp, 0.5 + 0.4 * fine) if in_v else pick(GATE, 0.2 + 0.3 * coarse)
+	case .Gate_Horizon:
+		// Rippling blue light; see-through.
+		ripple := noise(seed ~ 31, x + y / 2, y + x / 3, 5, 5)
+		return pick(HORIZON, 0.3 + 0.5 * ripple + 0.2 * fine)
+	case .Chest_Side, .Chest_Top:
+		// Boards, banded with iron at the rim; the side has a latch.
+		rim := x < 2 || x >= SIZE - 2 || y < 2 || y >= SIZE - 2
+		latch := t == .Chest_Side && abs(x - SIZE / 2) < 2 && y >= 5 && y < 9
+		if rim || latch {return pick(IRON, 0.3 + 0.4 * fine)}
+		if y % 4 == 3 {return WOOD[0]}
+		return pick(WOOD, 0.45 + 0.4 * (grain(seed, x, y) - 0.5) + 0.12 * bevel(x, y % 4, SIZE, 3))
+	case .Wool, .Wool_Black:
+		// Woven: soft tufts in rows, a thread's shadow between.
+		ramp := WOOL_BLACK if t == .Wool_Black else WOOL
+		v := 0.45 + 0.3 * coarse + 0.25 * fine
+		if y % 4 == 3 {v -= 0.2}
+		if (x + (y / 4) * 2) % 4 == 3 {v -= 0.12}
+		return pick(ramp, clamp(v, 0, 1))
+	case .Ladder:
+		// Two rails and four rungs; clear between.
+		rail := (x >= 2 && x <= 3) || (x >= 12 && x <= 13)
+		rung := x >= 4 && x <= 11 && (y % 4 == 1 || y % 4 == 2)
+		if !rail && !rung {return {}}
+		lit: f32 = 0.15 if x == 2 || x == 12 || (rung && y % 4 == 1) else 0
+		return pick(WOOD, 0.3 + 0.35 * hash01(seed ~ 89, x / 2, y / 2) + 0.15 * fine + lit)
+	case .Door_Lower, .Door_Upper:
+		// Planks in a frame; the upper half has a window.
+		frame := x < 2 || x >= SIZE - 2 || y < 2 || y >= SIZE - 2
+		if frame {return pick(WOOD, 0.1 + 0.2 * fine + (0.2 if x == 0 || y == 0 else 0))}
+		if t == .Door_Upper && x >= 4 && x < 12 && y >= 4 && y < 11 {
+			return pick(WINDOW, 0.4 + 0.4 * coarse)
+		}
+		if t == .Door_Lower && x >= 11 && x < 13 && y >= 7 && y < 9 {
+			return pick(IRON, 0.5 + 0.4 * fine) // the knob
+		}
+		if x % 4 == 3 {return WOOD[0]}
+		return pick(WOOD, 0.45 + 0.4 * (grain(seed, y, x) - 0.5) + 0.1 * bevel(x % 4, y, 3, SIZE))
+	}
+	return {}
 }
 
 // flower: a stem with leaves, and a head (poppy red, dandelion yellow) on
@@ -560,34 +288,6 @@ flower :: proc(t: Generator, x, y: int, fine: f32) -> Rgba {
 	return {}
 }
 
-// shade picks the ramp entry for v in 0..1.
-@(private = "file")
-shade :: proc(ramp: [5]Rgba, v: f32) -> Rgba {
-	return ramp[clamp(int(v * 5), 0, 4)]
-}
-
-@(private = "file")
-dirt :: proc(seed: u32, x, y: int, fine, coarse: f32) -> Rgba {
-	v := 0.2 + 0.4 * coarse + 0.4 * fine
-	if hash01(seed ~ 5, x, y) > 0.9 {v = 1} 	// small stones
-	return shade(DIRT, v)
-}
-
-// value_noise interpolates hash01 on a grid of cell pixels, wrapping at the
-// texture size so the texture tiles.
-@(private = "file")
-value_noise :: proc(seed: u32, x, y, cell: int) -> f32 {
-	cells := SIZE / cell
-	gx, gy := x / cell, y / cell
-	fx, fy := f32(x % cell) / f32(cell), f32(y % cell) / f32(cell)
-	at :: proc(seed: u32, gx, gy, cells: int) -> f32 {
-		return hash01(seed, gx % cells, gy % cells)
-	}
-	a := at(seed, gx, gy, cells) * (1 - fx) + at(seed, gx + 1, gy, cells) * fx
-	b := at(seed, gx, gy + 1, cells) * (1 - fx) + at(seed, gx + 1, gy + 1, cells) * fx
-	return a * (1 - fy) + b * fy
-}
-
 // wheat_pixel: stage 0..7 of wheat on a crossed plane: rows of stalks that
 // grow taller (2 pixels of sprout, up to 14), turn from green to gold, and
 // carry a head of grain at the end.
@@ -603,12 +303,13 @@ wheat_pixel :: proc(stage: int, seed: u32, x, y: int) -> (c: Rgba) {
 	fine := hash01(seed, x, y)
 	if stage >= 4 && y < top + 3 + int(stage) / 3 && (x % 4 == 3 || y > top) {
 		// The head of grain: gold once ripe.
-		return(
-			shade(WHEAT_GOLD, 0.3 + 0.5 * ripeness + 0.2 * fine) if stage >= 6 else shade(WHEAT_GREEN, 0.5 + 0.3 * fine) \
-		)
+		if stage >= 6 {return pick(WHEAT_GOLD, 0.3 + 0.5 * ripeness + 0.2 * fine)}
+		return pick(WHEAT_GREEN, 0.5 + 0.3 * fine)
 	}
-	if stage == 7 {return shade(WHEAT_GOLD, 0.2 + 0.4 * fine)}
-	if stage >=
-	   5 {return shade(WHEAT_GREEN, 0.3 + 0.3 * ripeness) if fine < 0.5 else shade(WHEAT_GOLD, 0.2 + 0.3 * fine)}
-	return shade(WHEAT_GREEN, 0.25 + 0.5 * f32(y - top) / f32(max(height, 1)) + 0.2 * fine)
+	if stage == 7 {return pick(WHEAT_GOLD, 0.2 + 0.4 * fine)}
+	if stage >= 5 {
+		if fine < 0.5 {return pick(WHEAT_GREEN, 0.3 + 0.3 * ripeness)}
+		return pick(WHEAT_GOLD, 0.2 + 0.3 * fine)
+	}
+	return pick(WHEAT_GREEN, 0.25 + 0.5 * f32(y - top) / f32(max(height, 1)) + 0.2 * fine)
 }
