@@ -85,7 +85,7 @@ be written; download it from voxiverse.net") and leaves the installed game as it
 
 | | Windows | macOS | Linux |
 |---|---|---|---|
-| Fetches with | `curl.exe` in the system folder (Windows 10 and later) | `/usr/bin/curl` | `/usr/bin/curl` or `/bin/curl` |
+| Fetches with | `curl.exe` in the system folder (Windows 10 and later), started with no console window (`limited.start_hidden`) | `/usr/bin/curl` | `/usr/bin/curl` or `/bin/curl` |
 | Unpacks with | `tar.exe` in the system folder (it reads zips) | `/usr/bin/ditto -x -k` (listed with `/usr/bin/tar`) | `tar` in `/usr/bin` or `/bin` |
 | What is swapped | Every entry of the package in the install folder. A running `.exe` cannot be deleted but can be renamed: the old one is renamed aside | `Voxiverse.app` and the package's other files beside it; an app dragged out on its own (to Applications) is swapped alone | Every entry of the package in the install folder |
 | Restarts with | the new `voxiverse.exe` | `open -n Voxiverse.app --args ...` | the new `voxiverse` |
@@ -133,5 +133,5 @@ installs, restarts or fakes a phase for screenshots.
 **Tested.** The readers, the choice, the listing and tree checks, the swap and its undo are
 unit tests on every OS that runs them; the whole update (check, download, checksum,
 unpack, swap) runs from a folder of releases in `client/update`'s tests on Linux. Windows'
-renames of a running executable, `tar.exe` on a zip, and macOS's `ditto` and `open` have
-not been run.
+renames of a running executable, `tar.exe` on a zip, the console-less start of `curl.exe`,
+and macOS's `ditto` and `open` have not been run.

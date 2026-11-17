@@ -229,7 +229,12 @@ set_phase :: proc(u: ^Updater, phase: Phase, failure := Failure.None) {
 @(private = "file")
 fetch_text :: proc(u: ^Updater, url: string, max: i64) -> (text: string, ok: bool) {
 	cmd := curl_command(u.tools, {url = url, proto = u.proto, max = max, seconds = 30})
-	state, stdout, stderr, err := limited.exec({command = cmd}, context.allocator, &u.stop)
+	state, stdout, stderr, err := limited.exec(
+		{command = cmd},
+		context.allocator,
+		&u.stop,
+		hidden = true,
+	)
 	defer delete(stderr)
 	if err != nil || !state.exited || state.exit_code != 0 || i64(len(stdout)) > max {
 		log.warnf(
@@ -348,7 +353,12 @@ install_staged :: proc(u: ^Updater, install: Install, staging: string) -> Failur
 		u.tools,
 		{url = f.url, proto = u.proto, max = ARCHIVE_SIZE_MAX, seconds = 3600, out = archive},
 	)
-	state, _, stderr, err := limited.exec({command = cmd}, context.temp_allocator, &u.stop)
+	state, _, stderr, err := limited.exec(
+		{command = cmd},
+		context.temp_allocator,
+		&u.stop,
+		hidden = true,
+	)
 	{
 		sync.guard(&u.mutex)
 		u.partial = ""
@@ -401,7 +411,7 @@ install_staged :: proc(u: ^Updater, install: Install, staging: string) -> Failur
 
 @(private = "file")
 run_text :: proc(cmd: []string) -> (string, bool) {
-	state, stdout, _, err := limited.exec({command = cmd}, context.temp_allocator)
+	state, stdout, _, err := limited.exec({command = cmd}, context.temp_allocator, hidden = true)
 	return string(stdout), err == nil && state.exited && state.exit_code == 0
 }
 
