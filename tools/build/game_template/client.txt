@@ -14,6 +14,18 @@ GAME :: engine.Game {
 	state    = View,
 	received = received,
 	hud      = hud,
+	look     = LOOK,
+}
+
+// LOOK: the game's atmosphere (docs/games.md, "A game's look"). Every field's zero is the
+// engine's own, so as it stands this is the sandbox's look: give the game an air of its own,
+// and keep its creatures, pickups and paths easy to see.
+LOOK :: engine.Look {
+	// time      = 0.5, // a time of day that stands (0.25 sunrise .. 0.75 sunset; 0: the clock)
+	// horizon   = {0.42, 0.60, 0.88}, // the sky at the horizon, and the fog's colour
+	// sun_light = {1, 1, 1}, // full daylight's colour
+	// fog       = 96, // blocks to a whole fog (0: the view's edge)
+	// grade     = {tint = {1, 1, 1}, saturation = 0, contrast = 0, vignette = 0},
 }
 
 // View: what the session knows of the game.

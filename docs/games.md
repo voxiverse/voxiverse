@@ -54,7 +54,8 @@ the trace tools the server's.
 `./build.sh new-game <id>` stamps out the smallest working game in `games/<id>/`, the shape
 above with one rule: its shared package (`INFO`, a record `Points`, a text table), its
 server part (a `start` hook, and `block_changed` scoring a point for each block a player
-breaks), its client part (a line of HUD with the points), a test beside each and a README;
+breaks), its client part (a line of HUD with the points, and a `LOOK` whose fields are all
+commented out: the sandbox's look, [below](#a-games-look)), a test beside each and a README;
 the name players read is the id's words capitalised (`ice_race`: "Ice Race"). Its files
 are known to git (`git add --intent-to-add`), so right after it `./build.sh check` and
 `./build.sh test games/<id> games/<id>/server games/<id>/client` pass and `./build.sh run --
