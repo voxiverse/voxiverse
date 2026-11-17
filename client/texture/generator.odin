@@ -573,16 +573,6 @@ dirt :: proc(seed: u32, x, y: int, fine, coarse: f32) -> Rgba {
 	return shade(DIRT, v)
 }
 
-// hash01 is a well-mixed hash of (seed, x, y) in 0..1.
-@(private = "file")
-hash01 :: proc(seed: u32, x, y: int) -> f32 {
-	h := seed ~ u32(x) * 0x27d4_eb2d ~ u32(y) * 0x1656_67b1
-	h = (h ~ h >> 15) * 0x85eb_ca6b
-	h = (h ~ h >> 13) * 0xc2b2_ae35
-	h ~= h >> 16
-	return f32(h >> 8) / f32(1 << 24)
-}
-
 // value_noise interpolates hash01 on a grid of cell pixels, wrapping at the
 // texture size so the texture tiles.
 @(private = "file")
