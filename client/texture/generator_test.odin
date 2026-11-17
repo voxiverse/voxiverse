@@ -57,6 +57,17 @@ TILING := [?]struct {
 	{.Redwood_Planks, true, true},
 	{.Weathered_Log, true, true},
 	{.Weathered_Planks, true, true},
+	// (A plate a block across, a panel, a screen or a vent is framed too.)
+	{.Iron_Plate, true, true},
+	{.Copper, true, true},
+	{.Verdigris_Copper, true, true},
+	{.Pipes, true, true},
+	{.Concrete, true, true},
+	{.Stained_Concrete, true, false},
+	{.Concrete_Tiles, true, true},
+	{.Asphalt, true, true},
+	{.Red_Bricks, true, true},
+	{.Conveyor_Top, true, true},
 }
 
 // A texture that tiles shows no seam: the mean step in brightness from its

@@ -83,6 +83,56 @@ kit_pixel :: proc(g: Generator, seed: u32, x, y: int) -> (Rgba, bool) {
 		return planks_of(WEATHERED, seed, x, y), true
 	case .Weathered_Panel:
 		return panel_of(WEATHERED, seed, x, y), true
+	// Metal.
+	case .Iron_Plate:
+		return plate(STEEL, seed, x, y, .Quarters), true
+	case .Riveted_Iron:
+		return plate(STEEL, seed, x, y, .Riveted), true
+	case .Iron_Grating:
+		return grating(STEEL, x, y), true
+	case .Rusted_Iron:
+		return rusted(seed, x, y), true
+	case .Dark_Steel:
+		return plate(DARK_STEEL, seed, x, y, .Halves), true
+	case .Copper:
+		return plate(COPPER, seed, x, y, .Quarters), true
+	case .Verdigris_Copper:
+		return verdigris(seed, x, y), true
+	case .Brass:
+		return brass(seed, x, y), true
+	case .Hazard_Stripes:
+		return hazard(seed, x, y), true
+	case .Pipes:
+		return pipes(seed, x, y), true
+	// Built and industrial.
+	case .Concrete:
+		return concrete(seed, x, y), true
+	case .Stained_Concrete:
+		return stained(seed, x, y), true
+	case .Concrete_Tiles:
+		return slabs(seed, x, y), true
+	case .Asphalt:
+		return asphalt(seed, x, y), true
+	case .Red_Bricks:
+		return bricks(RED_BRICK_ROCK, seed, x, y, 8, 4), true
+	case .Painted_Red:
+		return painted(PAINT_RED, seed, x, y), true
+	case .Painted_Blue:
+		return painted(PAINT_BLUE, seed, x, y), true
+	case .Painted_Yellow:
+		return painted(PAINT_YELLOW, seed, x, y), true
+	case .Painted_White:
+		return painted(PAINT_WHITE, seed, x, y), true
+	case .Tinted_Glass:
+		return tinted(x, y), true
+	case .Screen:
+		return screen(seed, x, y), true
+	case .Vent:
+		return vent(x, y), true
+	case .Conveyor_Top:
+		return conveyor_top(seed, x, y), true
+	case .Conveyor_Side:
+		return conveyor_side(seed, x, y), true
 	}
 	return {}, false
 }

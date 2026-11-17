@@ -79,7 +79,8 @@ family:
 <!-- materials: written from common/game/materials.odin (materials_doc) -->
 - **stone and masonry** (25): `stone`, `cobblestone`, `stone_bricks`, `stone_tiles`, `polished_stone`, `basalt`, `basalt_cobble`, `basalt_bricks`, `basalt_tiles`, `polished_basalt`, `sandstone`, `sandstone_cobble`, `sandstone_bricks`, `sandstone_tiles`, `polished_sandstone`, `limestone`, `limestone_cobble`, `limestone_bricks`, `limestone_tiles`, `polished_limestone`, `slate`, `slate_cobble`, `slate_bricks`, `slate_tiles`, `polished_slate`
 - **wood** (15): `birch_log`, `birch_planks`, `birch_panel`, `oak_log`, `oak_planks`, `oak_panel`, `spruce_log`, `spruce_planks`, `spruce_panel`, `redwood_log`, `redwood_planks`, `redwood_panel`, `weathered_log`, `weathered_planks`, `weathered_panel`
-- **built and industrial** (2): `glass`, `lamp`
+- **metal** (10): `iron_plate`, `riveted_iron`, `iron_grating`, `rusted_iron`, `dark_steel`, `copper`, `verdigris_copper`, `brass`, `hazard_stripes`, `pipes`
+- **built and industrial** (15): `concrete`, `stained_concrete`, `concrete_tiles`, `asphalt`, `red_bricks`, `painted_red`, `painted_blue`, `painted_yellow`, `painted_white`, `glass`, `tinted_glass`, `lamp`, `screen`, `vent`, `conveyor`
 - **soft and domestic** (2): `white_wool`, `black_wool`
 - **natural** (7): `dirt`, `grass`, `sand`, `gravel`, `clay`, `snow`, `ice`
 <!-- end of materials -->

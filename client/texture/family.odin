@@ -14,6 +14,8 @@ Family :: enum u8 {
 	Wood,
 	Masonry,
 	Cloth,
+	Metal,
+	Built,
 	Fixture,
 	Gate,
 }
@@ -29,6 +31,8 @@ FAMILY_NAMES := [Family]string {
 	.Wood          = "wood",
 	.Masonry       = "masonry",
 	.Cloth         = "cloth",
+	.Metal         = "metal",
+	.Built         = "built",
 	.Fixture       = "fixtures",
 	.Gate          = "the gate",
 }
@@ -72,6 +76,16 @@ family :: proc(g: Generator) -> Family {
 		return .Masonry
 	case .Wool, .Wool_Black:
 		return .Cloth
+	case .Iron_Plate, .Riveted_Iron, .Iron_Grating, .Rusted_Iron, .Dark_Steel:
+		return .Metal
+	case .Copper, .Verdigris_Copper, .Brass, .Hazard_Stripes, .Pipes:
+		return .Metal
+	case .Concrete, .Stained_Concrete, .Concrete_Tiles, .Asphalt, .Red_Bricks:
+		return .Built
+	case .Painted_Red, .Painted_Blue, .Painted_Yellow, .Painted_White:
+		return .Built
+	case .Tinted_Glass, .Screen, .Vent, .Conveyor_Top, .Conveyor_Side:
+		return .Fixture
 	case .Lamp, .Glass, .Chest_Side, .Chest_Top, .Ladder, .Door_Lower, .Door_Upper:
 		return .Fixture
 	case .Gate_Ring, .Gate_Chevron, .Gate_Chevron_Lit, .Gate_Horizon:

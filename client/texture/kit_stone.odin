@@ -11,6 +11,7 @@ Grain :: enum u8 {
 	Bedded, // sandstone: layers of sand of their own tones
 	Fossil, // limestone: soft, pale, a shell's arc here and there
 	Laminated, // slate: thin sheets split along their planes
+	Fired, // brick: clay, even, a dark fleck here and there
 }
 
 // Rock: a stone's ramp, the colour of its mortar (or the grout of its tiles) and its grain.
@@ -149,6 +150,8 @@ grain_step :: proc(rock: Rock, seed: u32, x, y: int) -> int {
 		if h > 0.97 {return -1}
 	case .Laminated:
 		if wrap(y) % 4 == 2 && h > 0.5 {return -1}
+	case .Fired:
+		if h > 0.95 {return -1}
 	}
 	return 0
 }
@@ -186,7 +189,7 @@ bricks :: proc(rock: Rock, seed: u32, x, y, w, h: int) -> Rgba {
 	edge := bevel(b.u, b.v, w - 1, h - 1)
 	if edge > 0 {s += 1}
 	if edge < 0 {s -= 1}
-	if edge != 0 && hash01(seed ~ 3, x, y) > 0.9 {return rock.mortar} 	// a chip
+	if edge != 0 && hash01(seed ~ 3, x, y) > 0.92 {return rock.ramp[0]} 	// a chip
 	return step(rock.ramp, s + max(grain_step(rock, seed, x, y), -1))
 }
 
@@ -217,7 +220,7 @@ polished :: proc(rock: Rock, seed: u32, x, y: int) -> Rgba {
 	switch rock.grain {
 	case .Fossil, .Bedded:
 		if vein {s -= 1}
-	case .Speckled, .Vesicular, .Laminated:
+	case .Speckled, .Vesicular, .Laminated, .Fired:
 		h := hash01(seed ~ 4, x, y)
 		if h > 0.94 {s -= 1}
 		if h < 0.03 {s += 1}
