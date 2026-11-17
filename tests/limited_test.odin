@@ -42,6 +42,25 @@ test_run_limited_results :: proc(t: ^testing.T) {
 	}
 }
 
+// exec stops a child when asked (the updater's download when the game quits): it is
+// killed with its children and ends as a failure, at once.
+@(test)
+test_exec_stops_when_asked :: proc(t: ^testing.T) {
+	when ODIN_OS == .Windows {
+		return
+	}
+	stop: b32 = true
+	start := time.tick_now()
+	state, _, _, err := limited.exec(
+		{command = {"sh", "-c", "sleep 30 & wait"}},
+		context.temp_allocator,
+		&stop,
+	)
+	testing.expect_value(t, err, nil)
+	testing.expect(t, !(state.exited && state.exit_code == 0), "a stopped child succeeded")
+	testing.expect(t, time.duration_seconds(time.tick_since(start)) < 10, "the stop took too long")
+}
+
 // A panic on a thread the test started (a server's worker) once spun the Odin runner at
 // full CPU for ever (voxiverse#54). The fixture package panics on purpose in a job worker
 // with a server running; the run must fail, not time out, within seconds.

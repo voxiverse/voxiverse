@@ -86,9 +86,12 @@ capture :: proc(cmd: []string) -> (output: string, ok: bool) {
 // a lock, so a child that writes and exits between the two looks (now and then, under
 // load) like one that wrote nothing: `git tag --list` exited 0 and its tags were never
 // read. Here a hang-up is read too, until the read itself says the pipe is empty.
+// When stop is given and becomes true while it runs, the child is killed with its
+// children (it then ends as a failure).
 exec :: proc(
 	desc: os.Process_Desc,
 	allocator := context.allocator,
+	stop: ^b32 = nil,
 ) -> (
 	state: os.Process_State,
 	stdout, stderr: []u8,
@@ -116,7 +119,12 @@ exec :: proc(
 	}
 	pipes := [2]Pipe{{out_r, &out, false}, {err_r, &errs, false}}
 	buf: [4096]u8
+	killed := false
 	for !pipes[0].done || !pipes[1].done {
+		if stop != nil && !killed && intrinsics.atomic_load(stop) {
+			kill_tree(child.pid) // (its pipes close: the loop reads to their end)
+			killed = true
+		}
 		read_any := false
 		for &p in pipes {
 			if p.done {continue}
@@ -132,6 +140,17 @@ exec :: proc(
 	}
 	state, err = os.process_wait(child)
 	return state, out[:], errs[:], err
+}
+
+// start starts cmd and does not wait for it: a program that goes on after this one
+// ends (the game restarting into its update). Its standard streams go nowhere.
+start :: proc(cmd: []string) -> bool {
+	_, err := os.process_start(os.Process_Desc{command = cmd})
+	if err != nil {
+		fmt.eprintfln("could not start '%s': %v", cmd[0], err)
+		return false
+	}
+	return true
 }
 
 // Job is one command of run_parallel's.
