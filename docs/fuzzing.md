@@ -100,6 +100,8 @@ we hand it.
 | `script.generated` | a program run straight, in slices of 1..97, in slices of 13 with a snapshot and restore at every suspension, and under `gc_stress` | well-formed programs in the common subset of Lua 5.4 (mixed arithmetic at its edges, strings, tables, closures over loop variables, every metamethod, `pcall`, varargs, coroutines), each ending with a digest of its values | the outputs equal; the heaps of the first three equal; `-- --lua <exe>` also runs each unmodified generated program (its first line's hash holds) under that Lua and compares |
 | `script.bytecode` | a program compiled, then one to four of its instructions changed (bits, opcode, operands, swaps) from the input's hash, `verify_proto`, then a run | the generated programs | `verify_proto` refuses, or the code runs to any end; `heap_check` after |
 | `script.snapshot` | `restore_unchecked` (no checksum, so a mutation reaches the validation), then up to 21 slices | a generated program's snapshot at a suspension | refused with a message, or restored and run to any end; `heap_check` after |
+| `update.releases` | the updater's `releases_read` of GitHub's list of releases, then `offer_choose` for 0.5.0 on Linux | a list of up to four releases with notes, nested objects and their assets (a SHA256SUMS and two packages) at GitHub's addresses | the caps on releases and assets hold; an offer is newer, its package and sums at GitHub's addresses of its tag, its size within the cap |
+| `update.sums` | `sums_find` of a SHA256SUMS for a package's name | two `sha256sum` lines | |
 
 The stateful targets (`net.server_session`, `commands.player`) keep one server across cases and
 build it again every 50 cases or when a case ended the seat: they run under the server's own

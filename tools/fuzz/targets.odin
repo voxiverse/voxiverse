@@ -1,6 +1,7 @@
 package fuzz_tool
 
 import "client:engine"
+import "client:update"
 import "common:base/fuzz"
 import "common:game"
 import "common:netcode"
@@ -22,5 +23,6 @@ every_target :: proc() -> []fuzz.Target {
 	append(&out, ..script.script_fuzz_targets())
 	append(&out, ..core.server_fuzz_targets())
 	append(&out, ..store.store_fuzz_targets())
+	append(&out, ..update.update_fuzz_targets())
 	return out[:]
 }
