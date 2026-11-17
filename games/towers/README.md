@@ -60,7 +60,10 @@ time to the next wave; a banner as a wave sets out or is held; a health bar over
 creep; the gate's and the core's names. With a piece in hand, an outline shows where it
 would go: green where you may build it and can pay, red where not (whether it would shut
 the way is the server's to say). Hold <kbd>P</kbd> for the builders (kills, coins, coins
-spent). F3 shows the run, the wave and the field's seed.
+spent). F3 shows the run, the wave and the field's seed. A creep struck throws chips, a
+cannon ball lands in smoke and sparks, a kill's bounty rises from its creep, and a creep
+reaching the core sparks there, shakes the view and flushes its edges red (the engine's
+feel kit).
 
 Server commands (the console, `~`):
 

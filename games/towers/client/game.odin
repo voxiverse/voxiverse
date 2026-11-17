@@ -5,7 +5,6 @@ import "core:math"
 
 import "client:engine"
 import "client:ui"
-import "common:base"
 import "common:game"
 import "common:protocol"
 import "games:towers"
@@ -16,7 +15,9 @@ import "games:towers"
 // or is held and at the run's end, a health bar over each hurt creep, the gate's and the
 // core's names over them, an outline where the piece in hand would go (lit if it may,
 // red if not), each tower's shot as a tracer, the builders while the player list's key
-// is held, and a line in F3.
+// is held, and a line in F3. With the feel kit: chips where a creep is struck, a
+// cannon ball's landing in smoke and sparks, a kill's bounty rising from the creep, and
+// a leak at the core sparking there, shaking the view and flushing the edges red.
 
 GAME :: engine.Game {
 	info       = towers.INFO,
@@ -28,7 +29,16 @@ GAME :: engine.Game {
 	debug      = debug,
 	scoreboard = scoreboard,
 	look       = LOOK,
+	seen       = seen,
 }
+
+// The feel's colours, inside the morning's: the coin's gold, the core's sparks, the
+// edges' red, a cannon ball's smoke and its fire.
+COIN :: [4]u8{255, 214, 96, 255}
+CORE_SPARKS :: [4]u8{255, 120, 90, 255}
+LEAK :: [4]u8{220, 40, 36, 80}
+SMOKE :: [4]u8{90, 86, 80, 255}
+FIRE :: [4]u8{255, 170, 60, 255}
 
 // LOOK: a fresh morning with a mist on the far fields: a pale sky, the walls and the
 // creeps' way sharp nearby, the greens rich and a touch cool.
@@ -49,6 +59,8 @@ View :: struct {
 	pieces:   [towers.Piece]game.Item, // what each piece's item is in this registry
 	kinds:    [towers.Creep]game.Kind_Id,
 	shots:    int, // seen (tests)
+	kills:    u32, // yours, as last told
+	pending:  u32, // kills told whose creeps' deaths are not yet felt (seen; the HUD forgets them)
 }
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
@@ -70,9 +82,16 @@ started :: proc(s: ^engine.Session) {
 received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if run, ok := engine.game_value(s, r, towers.Run); ok && run != nil {
+		before := v.run
 		v.run = run^
+		if run.run == before.run && run.phase == .Wave && run.lives < before.lives {leaked(s)}
 	}
-	if engine.seats_received(s, &v.builders, r) {return}
+	if engine.seats_received(s, &v.builders, r) {
+		me := mine(s)
+		if me.kills > v.kills {v.pending += me.kills - v.kills}
+		v.kills = me.kills
+		return
+	}
 	if wave, ok := engine.game_value(s, r, towers.Wave); ok && wave != nil {
 		if wave.done {
 			engine.flash(&v.flash, s, towers.tr(.Wave_Held, wave.wave), .Good)
@@ -85,8 +104,50 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 		from := [3]f64{f64(shot.from.x), f64(shot.from.y), f64(shot.from.z)}
 		to := [3]f64{f64(shot.to.x), f64(shot.to.y), f64(shot.to.z)}
 		streak(s, from, to, shot.piece)
-		if shot.piece == .Cannon {blast(s, to)}
+		if shot.piece == .Cannon {
+			engine.burst(s, to, .Smoke, SMOKE, 0.8)
+			engine.burst(s, to, .Sparks, FIRE)
+		}
 	}
+}
+
+// leaked: a creep reached the core: it sparks, the view shakes and the edges flush red.
+leaked :: proc(s: ^engine.Session) {
+	core := [3]f64{f64(towers.CORE_X) + 1, 3.1, f64(towers.MID_Z)} // (its top)
+	engine.burst(s, core, .Sparks, CORE_SPARKS, 1.5)
+	engine.shake(s, 0.2, 0.35)
+	engine.pulse(s, LEAK)
+}
+
+// seen: a creep struck throws chips of its colour; one of the player's kills floats its
+// bounty up from it.
+seen :: proc(s: ^engine.Session, e: engine.Seen) {
+	v := view(s)
+	#partial switch x in e {
+	case engine.Seen_Hurt:
+		if _, ours := creep_of(v, x.kind); ours {
+			engine.burst(s, x.at, .Impact, kind_colour(s, x.kind), 0.8)
+		}
+	case engine.Seen_Death:
+		creep, ours := creep_of(v, x.kind)
+		if !ours || v.pending == 0 {break}
+		v.pending -= 1
+		engine.float_text(s, x.at, towers.tr(.Bounty, towers.CREEPS[creep].bounty), COIN)
+	}
+}
+
+// creep_of: which of the game's creeps a kind is (false: none of them).
+creep_of :: proc(v: ^View, kind: game.Kind_Id) -> (towers.Creep, bool) {
+	for k, c in v.kinds {if k != 0 && k == kind {return c, true}}
+	return {}, false
+}
+
+// kind_colour: a creep's colour, its model's first part's (its body's).
+kind_colour :: proc(s: ^engine.Session, kind: game.Kind_Id) -> [4]u8 {
+	info := game.kind_info(s.reg, kind)
+	if info == nil || len(info.parts) == 0 {return {}}
+	c := info.parts[0].color
+	return {c[0], c[1], c[2], 255}
 }
 
 // STREAK_SECONDS: how long a tower's shot hangs in the air (longer than a gun's tracer:
@@ -113,31 +174,6 @@ streak :: proc(s: ^engine.Session, from, to: [3]f64, piece: towers.Piece) {
 	}
 }
 
-// blast: a cannon's shot lands: a puff of smoke and sparks.
-blast :: proc(s: ^engine.Session, at: [3]f64) {
-	r := base.cosmetic_rng()
-	for i in 0 ..< 12 {
-		a := f32(i) * math.TAU / 12
-		speed := base.rng_f32_range(r, 1.5, 3.5)
-		engine.puff_add(
-			s,
-			{
-				position = at,
-				velocity = {
-					f32(base.cos(f64(a))) * speed,
-					base.rng_f32_range(r, 1, 3),
-					f32(base.sin(f64(a))) * speed,
-				},
-				life = 0.5,
-				size = 0.09,
-				gravity = 6,
-				drag = 2,
-				color = {90, 86, 80, 255} if i % 3 != 0 else {255, 170, 60, 255},
-			},
-		)
-	}
-}
-
 // status: the line at the top of the screen.
 status :: proc(s: ^engine.Session) -> string {
 	v := view(s)
@@ -159,6 +195,7 @@ status :: proc(s: ^engine.Session) -> string {
 
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	v := view(s)
+	v.pending = 0 // (a kill whose creep was not seen dying: out of sight)
 	t := &ctx.theme
 	rest := ctx.screen
 	engine.top_bar(ctx, &rest, status(s))
