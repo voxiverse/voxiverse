@@ -25,6 +25,7 @@ Text :: enum u8 {
 	Board_Over, // {0}: the match
 	Column_Frags,
 	Column_Deaths,
+	Frag, // a frag of yours, under the crosshair
 }
 
 TEXT_EN := [Text]string {
@@ -46,6 +47,7 @@ TEXT_EN := [Text]string {
 	.Board_Over      = "Arena: match {0} is over",
 	.Column_Frags    = "Frags",
 	.Column_Deaths   = "Deaths",
+	.Frag            = "+1 FRAG",
 }
 
 tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}

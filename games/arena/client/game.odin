@@ -13,7 +13,10 @@ import "games:arena"
 // score and the last kills as the server told them, and shows them: a line at the top
 // of the HUD (the time left, your frags, the leader), the kill feed under it on the
 // right, the countdown and the results big in the middle, the scoreboard while the
-// player list's key is held, and a line in F3.
+// player list's key is held, and a line in F3. With the feel kit: each second of the
+// countdown and the result pop in, a frag of yours pops under the crosshair, a wound
+// flushes the edges red and jolts the view, and a rocket's blast shakes it as near as it
+// went off.
 
 GAME :: engine.Game {
 	info       = arena.INFO,
@@ -24,7 +27,11 @@ GAME :: engine.Game {
 	debug      = debug,
 	scoreboard = scoreboard,
 	look       = LOOK,
+	seen       = seen,
 }
+
+// HARM: the edges' red when hurt, warm as the afternoon.
+HARM :: [4]u8{215, 45, 25, 85}
 
 // LOOK: a late afternoon over the arena: a low golden sun, warm stone, a little more
 // contrast, the corners dimmed towards the fight.
@@ -42,6 +49,9 @@ View :: struct {
 	scores: engine.Seats(arena.Score), // by player id
 	feed:   [FEED_LINES]Feed_Line, // a ring, newest at feed_next - 1
 	next:   int,
+	frags:  i16, // yours, as last told (a new one pops: frag)
+	frag:   engine.Flash, // "+1 FRAG" under the crosshair
+	pop:    engine.Tween, // the countdown's second, the result: popping in
 }
 
 // Feed_Line: a kill as the feed says it, and when it came (the match's phase and its
@@ -59,10 +69,22 @@ view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if m, ok := engine.game_value(s, r, arena.Match); ok && m != nil {
+		before := v.match
 		v.match = m^
 		v.match.winner = string(v.winner[:copy(v.winner[:], m.winner)])
+		ticking := m.phase == .Countdown && m.left != before.left
+		if ticking || (m.phase == .Results && before.phase != .Results) {
+			engine.tween_start(&v.pop, s)
+		}
 	}
-	if engine.seats_received(s, &v.scores, r) {return}
+	if engine.seats_received(s, &v.scores, r) {
+		me := engine.seat_mine(s, &v.scores)
+		if me.frags > v.frags && v.match.phase == .Playing {
+			engine.flash(&v.frag, s, arena.tr(.Frag), .Good, 1.2)
+		}
+		v.frags = me.frags
+		return
+	}
 	if kill, ok := engine.game_value(s, r, arena.Kill); ok && kill != nil {
 		line := &v.feed[v.next % FEED_LINES]
 		v.next += 1
@@ -154,10 +176,11 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 		)
 	}
 
+	pop := 0.6 + 0.4 * engine.tween_value(&v.pop, s, 0.3, .Out_Back)
 	#partial switch m.phase {
 	case .Countdown:
 		engine.banner(ctx, -140, arena.tr(.Match_Title, m.match), 1.5, t.focus_ring)
-		engine.banner(ctx, -60, fmt.tprintf("%d", m.left), 1.5, t.text)
+		engine.banner(ctx, -60, fmt.tprintf("%d", m.left), 1.5 * pop, t.text)
 		rules := arena.tr(.Rules, m.frag_limit)
 		engine.banner(ctx, 40, rules, 0.6, t.text)
 	case .Results:
@@ -166,10 +189,27 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			head = arena.tr(.Wins, strings.to_upper(m.winner, context.temp_allocator))
 			color = t.success if engine.seat_mine(s, &v.scores).name == m.winner else t.log_warn
 		}
-		engine.banner(ctx, -160, head, 1.5, color)
+		engine.banner(ctx, -160, head, 1.5 * pop, color)
 		engine.banner(ctx, -80, arena.frags_text(int(m.top_frags)), 0.8, t.text)
 		next := arena.tr(.Next_Match, m.left)
 		engine.banner(ctx, 100, next, 0.6, t.text)
+	case .Playing:
+		engine.flash_draw(ctx, &v.frag, s, 70, 0.5)
+	}
+}
+
+// seen: the fight felt: a wound flushes the edges red, shakes the view as hard as it hit
+// and jolts it down; a blast shakes it as near as it went off.
+seen :: proc(s: ^engine.Session, e: engine.Seen) {
+	#partial switch x in e {
+	case engine.Seen_Harm:
+		engine.pulse(s, HARM)
+		engine.shake(s, min(0.08 + x.amount * 0.015, 0.3), 0.25)
+		engine.kick(s, -1)
+	case engine.Seen_Blast:
+		if near := engine.blast_shake(x.at, s.camera.position, x.radius); near > 0 {
+			engine.shake(s, 0.5 * near, 0.5)
+		}
 	}
 }
 
