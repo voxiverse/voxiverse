@@ -794,7 +794,8 @@ meshed), `ticks <n>` (the server runs n ticks, as fast as it can: the game playe
 the picture is), `wait <frames>`, `sleep <seconds>` (the clock's time, for a fade; play is
 `ticks`), any console command (`camera at x y z yaw pitch` for the camera, `/tp x y z yaw
 pitch` for the player, `/<game> ...` for the game's own, `hold <item>`, `key <key>
-down|up`, `pointer <x> <y>`, `set <variable> <value>`, `universe --earth <name>` for a
+down|up`, `pointer <x> <y>`, `type <text>` into the field that has the focus, `set
+<variable> <value>`, `universe --earth <name>` for a
 universe on Earth, kept with the run's state, not the player's saves) and `screenshot
 <file>`, which writes `build/screenshots/<file>.png`; it ends with `quit`.
 

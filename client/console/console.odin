@@ -703,6 +703,20 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		console_register(
 			c,
 			{
+				"type",
+				"type <text>: the text typed, as the keyboard would, into the field that has the focus (a script fills a form)",
+				proc(app: ^engine.App, args: []string) {
+					for word, i in args {
+						if i > 0 {append(&app.injected, platform.Text_Event{' '})}
+						for r in word {append(&app.injected, platform.Text_Event{r})}
+					}
+				},
+			},
+			args = {1, -1},
+		)
+		console_register(
+			c,
+			{
 				"crash",
 				"crash the game (tests the crash handler)",
 				proc(app: ^engine.App, args: []string) {
