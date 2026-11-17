@@ -27,6 +27,18 @@ GAME :: engine.Game {
 	hud        = hud,
 	debug      = debug,
 	scoreboard = scoreboard,
+	look       = LOOK,
+}
+
+// LOOK: a fresh morning with a mist on the far fields: a pale sky, the walls and the
+// creeps' way sharp nearby, the greens rich and a touch cool.
+LOOK :: engine.Look {
+	time = 0.35,
+	zenith = {0.16, 0.36, 0.74},
+	horizon = {0.74, 0.82, 0.90},
+	fog = 120,
+	fog_near = 0.35,
+	grade = {tint = {0.97, 1.02, 1.0}, saturation = 0.15, contrast = 0.05},
 }
 
 // View: what the session knows of the run.
