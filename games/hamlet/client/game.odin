@@ -35,6 +35,17 @@ GAME :: engine.Game {
 			command,
 		},
 	},
+	look      = LOOK,
+}
+
+// LOOK: a warm late morning in the country: soft sunlight, a hazy far, the greens and the
+// thatch a little warmer.
+LOOK :: engine.Look {
+	time = 0.42,
+	horizon = {0.62, 0.70, 0.84},
+	sun_light = {1.04, 0.98, 0.86},
+	fog_near = 0.45,
+	grade = {tint = {1.07, 1.0, 0.88}, saturation = 0.12, contrast = -0.05},
 }
 
 CAMERA :: engine.Game_Camera {
