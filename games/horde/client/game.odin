@@ -1,6 +1,7 @@
 package horde_client
 
 import "core:fmt"
+import "core:math"
 
 import "client:engine"
 import "client:ui"
@@ -13,7 +14,10 @@ import "games:horde"
 // the creatures, your coins and rounds, the best), the countdown and the wave's news as
 // banners, the shop's wares and prices while it is open, a health bar over each hurt
 // creature and the shop's name over its counter, the survivors while the player list's
-// key is held, and a line in F3.
+// key is held, and a line in F3. It makes the fight felt with the feel kit: chips where a
+// creature is hit, a kill's bounty rising from it, a shake for a big one falling and the
+// matriarch's coming, red edges and a jolt when hurt, green when healed, a sparkle at the
+// counter when something is bought.
 
 GAME :: engine.Game {
 	info       = horde.INFO,
@@ -26,6 +30,7 @@ GAME :: engine.Game {
 	scoreboard = scoreboard,
 	actions    = horde.ACTIONS,
 	look       = LOOK,
+	seen       = seen,
 }
 
 // LOOK: a cold moonlit night that never ends, the fog close and heavy beyond the walls;
@@ -48,7 +53,24 @@ View :: struct {
 	flash:     engine.Flash, // a wave set out or held
 	kinds:     [horde.Foe]game.Kind_Id,
 	round:     game.Item,
+	felt:      Felt,
 }
+
+// Felt: the player's purse and kills as last told, to tell a purchase and its own kills:
+// a kill counted in a record comes with its creature's death in the same message, so
+// what is pending is felt by the death or forgotten by the next frame's HUD.
+Felt :: struct {
+	run:     u16, // the run they are of (a new run: kills from 0, the purse not yet told)
+	coins:   u32,
+	told:    bool, // coins was told this run
+	kills:   u32,
+	pending: u32, // kills counted and not yet felt
+}
+
+// The feel's colours, inside the night's: the coin's gold, the edges' red and green.
+COIN :: [4]u8{255, 214, 96, 255}
+HARM :: [4]u8{210, 30, 30, 80}
+HEAL :: [4]u8{70, 210, 110, 70}
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
@@ -71,18 +93,96 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	v := view(s)
 	if run, ok := engine.game_value(s, r, horde.Run); ok && run != nil {
 		v.run = run^
+		if v.felt.run != run.run {v.felt = {
+				run = run.run,
+			}}
 	}
-	if engine.seats_received(s, &v.survivors, r) {return}
+	if engine.seats_received(s, &v.survivors, r) {
+		purse_felt(s)
+		return
+	}
 	if news, ok := engine.game_value(s, r, horde.Wave_News); ok && news != nil {
 		switch {
 		case news.held:
 			engine.flash(&v.flash, s, horde.tr(.Wave_Held, news.wave), .Good)
 		case news.boss:
 			engine.flash(&v.flash, s, horde.tr(.Wave_Boss, news.wave), .Bad)
+			engine.shake(s, 0.3, 0.8) // (she is coming)
 		case:
 			engine.flash(&v.flash, s, horde.tr(.Wave_Sets_Out, news.wave, news.size), .Warn)
 		}
 	}
+}
+
+// purse_felt: the player's purse as the server now tells it: coins gone at the counter (a
+// purchase: the shop is open) sparkle there, the cost rising; kills counted wait for their
+// creatures' deaths (seen).
+purse_felt :: proc(s: ^engine.Session) {
+	v := view(s)
+	me, f := mine(s), &v.felt
+	if f.told && me.coins < f.coins && (v.run.phase == .Break || v.run.phase == .Countdown) {
+		counter := [3]f64{horde.MID, 2.2, horde.MID}
+		engine.burst(s, counter, .Sparkle, COIN)
+		engine.float_text(s, counter, horde.tr(.Spent, f.coins - me.coins), COIN, 0.9)
+	}
+	if me.kills > f.kills {f.pending += me.kills - f.kills}
+	f.coins, f.told, f.kills = me.coins, true, me.kills
+}
+
+// seen: the fight felt. A creature hit throws chips of its own colour; one of the player's
+// kills floats its bounty up, a hulk falling shakes the yard a little and the matriarch's
+// fall more; harm taken flushes the edges red and jolts the view, a heal flushes them
+// green.
+seen :: proc(s: ^engine.Session, e: engine.Seen) {
+	v := view(s)
+	#partial switch x in e {
+	case engine.Seen_Hurt:
+		if _, ours := foe_of(v, x.kind); ours {
+			engine.burst(s, facing_side(s, x.at), .Impact, kind_colour(s, x.kind))
+		}
+	case engine.Seen_Death:
+		foe, ours := foe_of(v, x.kind)
+		if !ours {break}
+		if v.felt.pending > 0 {
+			v.felt.pending -= 1
+			engine.float_text(s, x.at, horde.tr(.Bounty, horde.FOES[foe].bounty), COIN)
+		}
+		#partial switch foe {
+		case .Hulk:
+			engine.shake(s, 0.12, 0.3)
+		case .Matriarch:
+			engine.shake(s, 0.4, 0.9)
+		}
+	case engine.Seen_Harm:
+		engine.pulse(s, HARM)
+		engine.shake(s, min(0.08 + x.amount * 0.02, 0.3), 0.25)
+		engine.kick(s, -1.2)
+	case engine.Seen_Heal:
+		engine.pulse(s, HEAL)
+	}
+}
+
+// facing_side: a point of a creature's body on the side the player sees, half a block out
+// from its middle toward the eyes, where a burst from it is not hidden inside it.
+facing_side :: proc(s: ^engine.Session, middle: [3]f64) -> [3]f64 {
+	d := s.camera.position - middle
+	d.y = 0
+	l := math.sqrt(d.x * d.x + d.z * d.z)
+	return middle if l < 0.01 else middle + d / l * 0.45
+}
+
+// foe_of: which of the game's creatures a kind is (false: none of them).
+foe_of :: proc(v: ^View, kind: game.Kind_Id) -> (horde.Foe, bool) {
+	for k, f in v.kinds {if k != 0 && k == kind {return f, true}}
+	return {}, false
+}
+
+// kind_colour: a creature's colour, its model's first part's (its body's).
+kind_colour :: proc(s: ^engine.Session, kind: game.Kind_Id) -> [4]u8 {
+	info := game.kind_info(s.reg, kind)
+	if info == nil || len(info.parts) == 0 {return {}}
+	c := info.parts[0].color
+	return {c[0], c[1], c[2], 255}
 }
 
 // rounds: the rounds the player carries.
@@ -121,6 +221,7 @@ status :: proc(s: ^engine.Session) -> string {
 
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	v := view(s)
+	v.felt.pending = 0 // (a kill whose death was not seen: out of sight)
 	r := v.run
 	if r.run == 0 {return}
 	t := &ctx.theme

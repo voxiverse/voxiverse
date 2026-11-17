@@ -30,6 +30,8 @@ Text :: enum u8 {
 	Column_Coins,
 	Column_Downs,
 	Is_Down,
+	Bounty, // {0}: coins a kill paid (floating over it)
+	Spent, // {0}: coins a purchase cost (floating over the counter)
 }
 
 TEXT_EN := [Text]string {
@@ -56,6 +58,8 @@ TEXT_EN := [Text]string {
 	.Column_Coins     = "Coins",
 	.Column_Downs     = "Downs",
 	.Is_Down          = "down",
+	.Bounty           = "+{0}",
+	.Spent            = "-{0}",
 }
 
 tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}
