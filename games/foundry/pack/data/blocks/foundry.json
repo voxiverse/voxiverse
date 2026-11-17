@@ -3,63 +3,59 @@
 	"ember_ore": {"textures": {"all": "voxiverse:iron_ore"}, "sound": "voxiverse:stone"},
 	"tide_ore": {"textures": {"all": "voxiverse:copper_ore"}, "sound": "voxiverse:stone"},
 	"peat": {"textures": {"all": "voxiverse:coal_ore"}, "sound": "voxiverse:gravel"},
-	// The machines. Each faces the way it was placed: a miner puts out ahead, an arm takes
-	// from behind and gives ahead, a splitter takes from behind and gives to both sides.
+	// The machines, made of the kit's industrial materials (docs/packs.md, "Materials"). Each
+	// faces the way it was placed: a miner puts out ahead, an arm takes from behind and gives
+	// ahead, a splitter takes from behind and gives to both sides.
 	"miner": {
 		"states": {"facing": ["north", "east", "south", "west"]}, "default": {"facing": "north"},
-		"textures": {"side": "voxiverse:stone_bricks", "top": "voxiverse:gate_chevron", "bottom": "voxiverse:cobblestone"},
-		"place": "facing", "sound": "voxiverse:stone",
+		"material": "dark_steel", "textures": {"top": "voxiverse:hazard_stripes"},
+		"place": "facing",
 		"entity": {"kind": "machine", "slots": 1}
 	},
 	"furnace": {
-		"textures": {"side": "voxiverse:cobblestone", "top": "voxiverse:lamp", "bottom": "voxiverse:cobblestone"},
-		"light": 9, "sound": "voxiverse:stone",
+		"material": "red_bricks", "textures": {"top": "voxiverse:magma"},
+		"light": 9,
 		"entity": {"kind": "machine", "slots": 2}
 	},
 	"assembler": {
-		"textures": {"side": "voxiverse:gate_ring", "top": "voxiverse:gate_horizon", "bottom": "voxiverse:stone_bricks"},
-		"sound": "voxiverse:stone",
+		"material": "painted_blue", "textures": {"top": "voxiverse:vent"},
 		"entity": {"kind": "machine", "slots": 5}
 	},
 	"crate": {
-		"textures": {"side": "voxiverse:chest_side", "top": "voxiverse:chest_top", "bottom": "voxiverse:chest_top"},
-		"sound": "voxiverse:wood",
+		"material": "spruce_panel", "textures": {"top": "voxiverse:riveted_iron", "bottom": "voxiverse:riveted_iron"},
 		"entity": {"kind": "machine", "slots": 12}
 	},
 	"arm": {
 		"states": {"facing": ["north", "east", "south", "west"]}, "default": {"facing": "north"},
 		"shape": "foundry:low", "opaque": false,
-		"textures": {"side": "voxiverse:gate_chevron_lit", "top": "voxiverse:gate_chevron", "bottom": "voxiverse:stone"},
-		"place": "facing", "sound": "voxiverse:stone",
+		"material": "painted_yellow", "textures": {"top": "voxiverse:hazard_stripes"},
+		"place": "facing",
 		"entity": {"kind": "machine", "slots": 1}
 	},
 	"splitter": {
 		"states": {"facing": ["north", "east", "south", "west"]}, "default": {"facing": "north"},
 		"shape": "foundry:low", "opaque": false,
-		"textures": {"side": "voxiverse:sandstone_side", "top": "voxiverse:sandstone_top", "bottom": "voxiverse:stone"},
-		"place": "facing", "sound": "voxiverse:stone",
+		"material": "copper",
+		"place": "facing",
 		"entity": {"kind": "machine", "slots": 0}
 	},
 	"generator": {
-		"textures": {"side": "voxiverse:stone_bricks", "top": "voxiverse:gate_chevron_lit", "bottom": "voxiverse:stone_bricks"},
-		"light": 6, "sound": "voxiverse:stone",
+		"material": "pipes", "textures": {"top": "voxiverse:vent"},
+		"light": 6,
 		"entity": {"kind": "machine", "slots": 1}
 	},
 	"lab": {
-		"textures": {"side": "voxiverse:glass", "top": "voxiverse:lamp", "bottom": "voxiverse:stone_bricks"},
-		"opaque": false, "light": 11, "sound": "voxiverse:glass",
+		"material": "screen",
+		"light": 11,
 		"entity": {"kind": "machine", "slots": 2}
 	},
-	"pole": {
-		"textures": {"side": "voxiverse:log_side", "top": "voxiverse:log_top", "bottom": "voxiverse:log_top"},
-		"sound": "voxiverse:wood"
-	},
+	"pole": {"material": "riveted_iron"},
 	// The conveyor: a slab that carries items the way it faces.
 	"belt": {
 		"states": {"facing": ["north", "east", "south", "west"]}, "default": {"facing": "north"},
 		"shape": "foundry:low", "opaque": false,
-		"textures": {"side": "voxiverse:gravel", "top": "voxiverse:wool_black", "bottom": "voxiverse:gravel"},
-		"place": "facing", "sound": "voxiverse:wood",
+		"material": "conveyor",
+		"place": "facing",
 		"entity": {"kind": "belt", "speed": 1.5}
 	}
 }
