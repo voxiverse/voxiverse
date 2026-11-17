@@ -36,7 +36,7 @@ FAMILY_NAMES := [Family]string {
 // family: g's family.
 family :: proc(g: Generator) -> Family {
 	switch g {
-	case .Stone, .Bedrock, .Gravel, .Clay:
+	case .Stone, .Bedrock, .Gravel, .Clay, .Basalt, .Limestone, .Slate:
 		return .Rock
 	case .Dirt, .Grass_Top, .Grass_Side, .Farmland_Top, .Farmland_Moist_Top:
 		return .Soil
@@ -52,7 +52,15 @@ family :: proc(g: Generator) -> Family {
 		return .Crop
 	case .Log_Side, .Log_Top, .Spruce_Log_Side, .Planks:
 		return .Wood
-	case .Cobblestone, .Stone_Bricks:
+	case .Cobblestone, .Stone_Bricks, .Stone_Tiles, .Polished_Stone:
+		return .Masonry
+	case .Basalt_Cobble, .Basalt_Bricks, .Basalt_Tiles, .Polished_Basalt:
+		return .Masonry
+	case .Sandstone_Cobble, .Sandstone_Bricks, .Sandstone_Tiles, .Polished_Sandstone:
+		return .Masonry
+	case .Limestone_Cobble, .Limestone_Bricks, .Limestone_Tiles, .Polished_Limestone:
+		return .Masonry
+	case .Slate_Cobble, .Slate_Bricks, .Slate_Tiles, .Polished_Slate:
 		return .Masonry
 	case .Wool, .Wool_Black:
 		return .Cloth

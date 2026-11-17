@@ -32,6 +32,23 @@ TILING := [?]struct {
 	{.Planks, true, true},
 	{.Farmland_Top, true, true},
 	{.Farmland_Moist_Top, true, true},
+	// The kit's (a polished slab is framed, a block each: it does not tile).
+	{.Stone_Tiles, true, true},
+	{.Basalt, true, true},
+	{.Basalt_Cobble, true, true},
+	{.Basalt_Bricks, true, true},
+	{.Basalt_Tiles, true, true},
+	{.Sandstone_Cobble, true, true},
+	{.Sandstone_Bricks, true, true},
+	{.Sandstone_Tiles, true, true},
+	{.Limestone, true, true},
+	{.Limestone_Cobble, true, true},
+	{.Limestone_Bricks, true, true},
+	{.Limestone_Tiles, true, true},
+	{.Slate, true, true},
+	{.Slate_Cobble, true, true},
+	{.Slate_Bricks, true, true},
+	{.Slate_Tiles, true, true},
 }
 
 // A texture that tiles shows no seam: the mean step in brightness from its

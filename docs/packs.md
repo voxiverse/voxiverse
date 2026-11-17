@@ -77,7 +77,7 @@ draws them all, by family, with their names (`build/sheets/materials.png`). The 
 family:
 
 <!-- materials: written from common/game/materials.odin (materials_doc) -->
-- **stone and masonry** (4): `stone`, `cobblestone`, `stone_bricks`, `sandstone`
+- **stone and masonry** (25): `stone`, `cobblestone`, `stone_bricks`, `stone_tiles`, `polished_stone`, `basalt`, `basalt_cobble`, `basalt_bricks`, `basalt_tiles`, `polished_basalt`, `sandstone`, `sandstone_cobble`, `sandstone_bricks`, `sandstone_tiles`, `polished_sandstone`, `limestone`, `limestone_cobble`, `limestone_bricks`, `limestone_tiles`, `polished_limestone`, `slate`, `slate_cobble`, `slate_bricks`, `slate_tiles`, `polished_slate`
 - **wood** (2): `oak_log`, `oak_planks`
 - **built and industrial** (2): `glass`, `lamp`
 - **soft and domestic** (2): `white_wool`, `black_wool`

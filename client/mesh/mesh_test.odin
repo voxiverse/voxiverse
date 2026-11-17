@@ -1,6 +1,7 @@
 package mesh
 
 import "core:fmt"
+import "core:slice"
 import "core:strings"
 import "core:testing"
 
@@ -329,6 +330,18 @@ test_textures :: proc(t: ^testing.T) {
 	}
 	layer_of[.Ladder] = .Cutout // (the base pack's ladder block, after the builtins)
 	layer_of[.Door_Lower], layer_of[.Door_Upper] = .Opaque, .Opaque // (its door)
+	// The kit's: the layer of the material it is a face of.
+	for m in game.MATERIALS {
+		for name in game.material_faces(m) {
+			at, found := slice.linear_search(game.TEXTURE_GENERATOR_NAMES[:], name)
+			if !found {continue} 	// (common/game's test says so)
+			tex := texture.Generator(at)
+			if l, seen := layer_of[tex].?; seen {
+				testing.expectf(t, l == Layer(m.layer), "%v is used in two layers", tex)
+			}
+			layer_of[tex] = Layer(m.layer)
+		}
+	}
 	a, b: [TEXTURE_SIZE * TEXTURE_SIZE]Rgba
 	for tex in texture.Generator {
 		texture.generate(tex, a[:])

@@ -59,6 +59,28 @@ Generator :: enum u32 {
 	Ladder,
 	Door_Lower,
 	Door_Upper,
+	// The material kit's (game.MATERIALS), by family: kit_*.odin.
+	Stone_Tiles,
+	Polished_Stone,
+	Basalt,
+	Basalt_Cobble,
+	Basalt_Bricks,
+	Basalt_Tiles,
+	Polished_Basalt,
+	Sandstone_Cobble,
+	Sandstone_Bricks,
+	Sandstone_Tiles,
+	Polished_Sandstone,
+	Limestone,
+	Limestone_Cobble,
+	Limestone_Bricks,
+	Limestone_Tiles,
+	Polished_Limestone,
+	Slate,
+	Slate_Cobble,
+	Slate_Bricks,
+	Slate_Tiles,
+	Polished_Slate,
 }
 
 // generate fills pixels (SIZE² values, row by row) for t.
@@ -67,7 +89,7 @@ Generator :: enum u32 {
 // Each material is a ramp of five hand-picked shades (ramp.odin) and the
 // toolkit (toolkit.odin) only says how light a pixel is, so pixels form
 // crisp clusters of a few tones. The materials with form, the rock, soil,
-// wood and masonry, are drawn in material.odin.
+// wood and masonry, are drawn in material.odin; the kit's, in kit_*.odin.
 generate :: proc(t: Generator, pixels: []Rgba) {
 	assert(len(pixels) == SIZE * SIZE)
 	seed := u32(t) * 0x9e37_79b9
@@ -86,10 +108,11 @@ seed_of :: proc(g: Generator) -> u32 {
 
 @(private = "file")
 pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
+	if c, ok := kit_pixel(t, seed, x, y); ok {return c}
 	// Pixel grit and a 4 x 4 noise, both tiling.
 	fine := hash01(seed, x, y)
 	coarse := noise(seed ~ 0x5bd1_e995, x, y, 4, 4)
-	switch t {
+	#partial switch t {
 	case .Stone:
 		return rock(STONE, seed, x, y)
 	case .Clay:
