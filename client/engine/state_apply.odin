@@ -84,6 +84,9 @@ apply_mode :: proc(s: ^Session, g: protocol.Received) {
 @(private)
 apply_health :: proc(s: ^Session, g: protocol.Received) {
 	h := (^protocol.Health)(g.value)
+	if !h.dead && !s.dead && s.max_health > 0 && h.health > s.health {
+		game_seen(s, Seen_Heal{h.health - s.health}) // (not a respawn, nor the first word)
+	}
 	s.health, s.max_health, s.dead = h.health, h.max, h.dead
 }
 
@@ -197,6 +200,7 @@ apply_entity :: proc(s: ^Session, g: protocol.Received) {
 	}
 	v := (^protocol.Entity_Record)(g.value)
 	if e, known := &s.entities[id]; known && g.op == .Change {
+		if v.health < e.health {e.lost += e.health - v.health}
 		e.kind, e.stack, e.health, e.max_health = v.kind, v.stack, v.health, v.max_health
 		e.team, e.vision = v.team, v.vision
 		return
@@ -311,10 +315,15 @@ apply_event :: proc(s: ^Session, g: protocol.Received) {
 				&s.sounds,
 				Sound_Event{.Entity_Hurt, .Air, e.last_seen + {0, 0.5, 0}, 1, entity_voice(s, e)},
 			)
+			amount := int(e.lost)
+			e.lost = 0
+			game_seen(s, Seen_Hurt{id, e.kind, entity_middle(s, e), amount})
 		}
 	case .Entity_Died:
-		if e, known := &s.entities[(^protocol.Entity_Died)(g.value).entity]; known {
+		id := (^protocol.Entity_Died)(g.value).entity
+		if e, known := &s.entities[id]; known {
 			entity_died(s, e)
+			game_seen(s, Seen_Death{id, e.kind, entity_middle(s, e), int(e.lost) + int(e.health)})
 		}
 	case .Explosion:
 		x := (^protocol.Explosion)(g.value)
@@ -323,12 +332,15 @@ apply_event :: proc(s: ^Session, g: protocol.Received) {
 		s.hurt = (^protocol.Damage_Hit)(g.value)^
 		s.hurts += 1
 		s.hurt_age = 0
+		game_seen(s, Seen_Harm{s.hurt.amount, s.hurt.yaw, s.hurt.known})
 	case .Shot:
 		shot_seen(s, (^protocol.Shot)(g.value))
 	case .Swung:
 		swung_seen(s, (^protocol.Swung)(g.value))
 	case .Hit_Confirm:
-		hit_confirmed(s, (^protocol.Hit_Confirm)(g.value))
+		v := (^protocol.Hit_Confirm)(g.value)
+		hit_confirmed(s, v)
+		game_seen(s, Seen_Hit{v.kill, v.headshot})
 	case .Player_Died:
 		s.died += 1
 		s.death_age = 0

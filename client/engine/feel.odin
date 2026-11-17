@@ -59,6 +59,72 @@ feel_age :: proc(s: ^Session, from: f64) -> f32 {
 }
 
 // ---------------------------------------------------------------------------
+// What the engine saw: the game's seen hook
+// ---------------------------------------------------------------------------
+
+// Seen: something the engine was told and showed that a game's client part may make felt
+// (Game.seen), as it was taken: the server's own events, which a game's records need not
+// repeat.
+Seen :: union {
+	Seen_Hurt,
+	Seen_Death,
+	Seen_Harm,
+	Seen_Heal,
+	Seen_Hit,
+}
+
+// Seen_Hurt: an entity the player knows was hurt (it flashes red): where its middle is
+// drawn, and the health it lost (0: not told).
+Seen_Hurt :: struct {
+	id:     u32,
+	kind:   game.Kind_Id,
+	at:     [3]f64,
+	amount: int,
+}
+
+// Seen_Death: an entity the player knew died (it bursts into pieces): where its middle was
+// drawn, and the health it had left (what the last blow took).
+Seen_Death :: struct {
+	id:     u32,
+	kind:   game.Kind_Id,
+	at:     [3]f64,
+	amount: int,
+}
+
+// Seen_Harm: the player was hurt: how much, and from which way (yaw; known false: from no
+// place, a fall).
+Seen_Harm :: struct {
+	amount: f32,
+	yaw:    f32,
+	known:  bool,
+}
+
+// Seen_Heal: the player's health rose by amount while it lived (a respawn is none).
+Seen_Heal :: struct {
+	amount: f32,
+}
+
+// Seen_Hit: the player's shot hit another player (the hit marker).
+Seen_Hit :: struct {
+	kill:     bool,
+	headshot: bool,
+}
+
+// game_seen: the game's seen hook, if it has one.
+@(private)
+game_seen :: proc(s: ^Session, e: Seen) {
+	if s.game.seen != nil {s.game.seen(s, e)}
+}
+
+// entity_middle: where the middle of an entity's box is drawn.
+@(private)
+entity_middle :: proc(s: ^Session, e: ^Other_Entity) -> [3]f64 {
+	height := 0.5
+	if info := game.kind_info(s.reg, e.kind); info != nil {height = f64(info.box[1]) / 2}
+	return e.last_seen + {0, height, 0}
+}
+
+// ---------------------------------------------------------------------------
 // Bursts: a handful of puffs flung out of a point
 // ---------------------------------------------------------------------------
 

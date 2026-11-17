@@ -31,6 +31,7 @@ Other_Entity :: struct {
 	stack:       game.Stack, // a dropped item's
 	health:      u16, // as the server last said (Entity_Record)
 	max_health:  u16, // ... its most (0: none)
+	lost:        u16, // health lost since its last hurt was told (Seen_Hurt's amount)
 	team:        u8, // its side (0: none)
 	vision:      u8, // how far it sees for its side under fog (blocks)
 	looks:       u16, // bit i: the kind's i-th look (Kind_Info.looks)

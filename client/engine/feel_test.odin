@@ -5,6 +5,7 @@ import "core:testing"
 
 import "client:render"
 import "common:game"
+import "common:protocol"
 
 // feel_session: a session with room for puffs and entities, no server (the heap: a Session
 // is past what a test thread's stack holds).
@@ -223,4 +224,69 @@ test_tween :: proc(t: ^testing.T) {
 	testing.expect_value(t, flash_shown(&f, s), "WAVE 3")
 	feel_advance(s, {}, 1)
 	testing.expect_value(t, flash_shown(&f, s), "")
+}
+
+@(private = "file", thread_local)
+seen_log: [dynamic]Seen
+
+// The game's seen hook hears what the engine showed: an entity hurt, with the health it
+// lost; an entity dying, with what it had left; the player hurt and healed (a respawn is
+// no heal), its shot hitting.
+@(test)
+test_seen_hook :: proc(t: ^testing.T) {
+	s := feel_session()
+	defer feel_free(s)
+	defer delete(s.sounds)
+	defer delete(seen_log)
+	reg: game.Registry
+	s.reg = &reg
+	s.game.seen = proc(s: ^Session, e: Seen) {append(&seen_log, e)}
+	s.entities[5] = {
+		health     = 10,
+		max_health = 10,
+		last_seen  = {1, 2, 3},
+	}
+	record := protocol.Entity_Record {
+		health     = 7,
+		max_health = 10,
+	}
+	apply_entity(
+		s,
+		{kind = int(protocol.State_Kind.Entity), op = .Change, key = {a = 5}, value = &record},
+	)
+	event :: proc(s: ^Session, kind: protocol.Event_Kind, value: rawptr) {
+		apply_event(s, {kind = len(protocol.State_Kind) + int(kind), op = .Event, value = value})
+	}
+	hurt := protocol.Entity_Hurt{5}
+	event(s, .Entity_Hurt, &hurt)
+	died := protocol.Entity_Died{5}
+	event(s, .Entity_Died, &died)
+	harm := protocol.Damage_Hit {
+		yaw    = 4,
+		amount = 1.5,
+		known  = true,
+	}
+	event(s, .Damage_Hit, &harm)
+	confirm := protocol.Hit_Confirm {
+		kill = true,
+	}
+	event(s, .Hit_Confirm, &confirm)
+	health :: proc(s: ^Session, h: protocol.Health) {
+		h := h
+		apply_health(s, {kind = int(protocol.State_Kind.Health), op = .Change, value = &h})
+	}
+	health(s, {10, 20, false}) // (the first word: no heal)
+	health(s, {14, 20, false})
+	health(s, {0, 20, true})
+	health(s, {20, 20, false}) // (a respawn: no heal)
+
+	if !testing.expect_value(t, len(seen_log), 5) {return}
+	testing.expect_value(t, seen_log[0].(Seen_Hurt).amount, 3)
+	testing.expect_value(t, seen_log[0].(Seen_Hurt).at, [3]f64{1, 2.5, 3})
+	testing.expect_value(t, seen_log[1].(Seen_Death).amount, 7)
+	testing.expect_value(t, seen_log[2].(Seen_Harm).amount, 1.5)
+	testing.expect(t, seen_log[3].(Seen_Hit).kill)
+	testing.expect_value(t, seen_log[4].(Seen_Heal).amount, 4)
+	color, flashing := entity_flashing(s, &s.entities[5])
+	testing.expect(t, flashing && color == HURT, "a hurt creature flashes red")
 }

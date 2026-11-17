@@ -459,6 +459,7 @@ the frame.
 | `camera(s) -> Game_Camera` | Every frame: the camera the game wants. `.Player` (the player's own, <kbd>F5</kbd>), `.First`, `.Third`; `.Top_Down` (over the head, `distance` away, `angle` degrees down along `heading`, the world cut `cut` blocks above the feet): the pointer aims (`s.aim`, `s.aim_entity`, `s.pointer`), the avatar faces it, the movement keys move across the screen; `.Free` (no avatar, for a mode with `game.Ability.Bodiless`): looks at the player's focus from `distance`, zoomed between `near` and `far`, panned by the movement keys, the screen's edge and the middle button; `pointer_tool(s)` says what the pointer is over and each button's press, drag and release |
 | `look` | Its atmosphere, as data: the sky, the fog, the light and the picture's colour its world is drawn in ([below](#a-games-look)); zero: the engine's own |
 | `screen(s, ctx, top)` | Every frame while the game's screen is open: a panel of its own over the world (a town's market, a shop) drawn with the UI kit (`top`: it has the focus). The game opens it with `game_screen_open(s)` (from a record, an event, its action's answer) and closes it with `game_screen_close(s)`; the player closes it as any screen over the world, Escape or the pad's Back, and it closes with the world. While open it takes the keyboard, the pointer and the pad's navigation (the world runs on); `game_screen_shown(s)` says whether it is open |
+| `seen(s, e)` | The engine showed something worth feeling, as the server told it: an entity hurt (`Seen_Hurt`: its id, kind, the middle of its box and the health it lost) or dead (`Seen_Death`: what it had left), the player hurt (`Seen_Harm`) or healed (`Seen_Heal`: not a respawn), its shot hitting another player (`Seen_Hit`). The game gives it its own feedback ([feel](#feel)); what the engine shows of each already (a red flash, a puff, the hit marker, the damage arc) it shows anyway |
 
 **Its keys.** While a game plays, the controls (Options > Controls) list its actions and its
 keys under its name, each rebindable as the engine's are; what the player binds is kept for
@@ -514,6 +515,11 @@ What happens in a game lands with a little feedback of the client part's: a burs
 blow lands, a flash on the creature it hit. These are the feel kit's calls
 (`client/engine/feel.odin`), each one line from the game's `received` or `hud`, each
 presentation alone: nothing is sent, saved or simulated.
+
+What to feel comes from what the client part is told: its records and events (a wave's news,
+a purse that grew, a hit's damage a game sends), and the engine's own, which its `seen` hook
+hears without the server part repeating them (an entity hurt or dead, with the health it
+lost; the player hurt or healed; its shot hitting).
 
 - `engine.burst(s, at, .Impact, engine.block_colour(s, block))`: chips where a blow lands, in
   a material's colour; `.Sparks`, `.Smoke`, `.Sparkle`, `.Death`, `.Splash` the others.

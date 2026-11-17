@@ -76,6 +76,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 | `no_hotbar` | `bool` | its players hold no hotbar: in its world the hotbar's keys and the wheel pick no slot, and the controls do not list them |
 | `machine_shown` | `typeid` | what its machines show (its server part's Game.machine_shown): machine_shown reads it |
 | `look` | `Look` | its atmosphere: sky, fog, light and the picture's colour, as data (zero: the engine's own) |
+| `seen` | `proc(s: ^Session, e: Seen)` | the engine showed something worth feeling (an entity hurt or dead, the player hurt or healed, its shot hitting): the game's own feedback (feel.odin) |
 
 ## `server/core` (`core.`): What a game may call
 
