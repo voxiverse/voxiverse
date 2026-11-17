@@ -57,6 +57,8 @@ Messages begin with the subsystem (`gpu`, `server`, `session`, ...) and write va
 | `VX_BREAK=1` | Stops in the attached debugger on validation errors and wherever `base.debug_break()` is called. |
 | `VX_SETTINGS=<path>` | The settings file (empty: none is read or written). The crash bundles and `account.key` live beside it. |
 | `VX_SAVES=<dir>` | Where saves go. |
+| `VX_UPDATE_AS=<version>` | Development builds only: the updater checks as that version (a development build otherwise never checks; [platforms.md](platforms.md#updates)). |
+| `VX_UPDATE_SOURCE=<dir>` | Development builds only: the updater reads `<dir>/releases.json` and downloads from `<dir>/download/<tag>/` over `file://` instead of GitHub (a release build has no way to do this). |
 | `build run --sanitize` | AddressSanitizer build: reports use-after-free and buffer overflows with the offending line (Linux/macOS). |
 | `build test [<package>...] -sanitize:address` | The tests under AddressSanitizer (also `-sanitize:thread`; Linux/macOS). Runs at the same 512 KiB thread stack as every test run. |
 | `build test [<package>...] -o:speed` | The tests at an optimisation level (`none`, `minimal`, `size`, `speed`, `aggressive`). |

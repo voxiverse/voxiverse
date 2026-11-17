@@ -55,6 +55,8 @@ Env :: struct {
 	settings:          Maybe(string), // VX_SETTINGS
 	saves:             Maybe(string), // VX_SAVES
 	state_dir:         Maybe(string), // VX_STATE_DIR
+	update_source:     Maybe(string), // VX_UPDATE_SOURCE (development builds: a folder of releases for the updater)
+	update_as:         Maybe(string), // VX_UPDATE_AS (development builds: the version the updater checks as)
 	log_debug:         bool, // VX_LOG=debug
 	break_on_error:    bool, // VX_BREAK=1
 	pad_ignore:        string, // SDL_GAMECONTROLLER_IGNORE_DEVICES

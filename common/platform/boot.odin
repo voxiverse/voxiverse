@@ -74,14 +74,17 @@ env_string :: proc(name: string) -> string {
 @(private = "file")
 read_env :: proc() -> base.Env {
 	return {
-		validation = env_maybe("VX_VALIDATION"),
-		packs = env_maybe("VX_PACKS"),
-		settings = env_maybe("VX_SETTINGS"),
-		saves = env_maybe("VX_SAVES"),
-		state_dir = env_maybe("VX_STATE_DIR"),
-		log_debug = env_string("VX_LOG") == "debug",
-		break_on_error = env_string("VX_BREAK") == "1",
-		pad_ignore = env_string("SDL_GAMECONTROLLER_IGNORE_DEVICES"),
+		validation        = env_maybe("VX_VALIDATION"),
+		packs             = env_maybe("VX_PACKS"),
+		settings          = env_maybe("VX_SETTINGS"),
+		saves             = env_maybe("VX_SAVES"),
+		state_dir         = env_maybe("VX_STATE_DIR"),
+		// (Never in a release: there the updater reads GitHub, as this build.)
+		update_source     = env_maybe("VX_UPDATE_SOURCE") if base.DEV else nil,
+		update_as         = env_maybe("VX_UPDATE_AS") if base.DEV else nil,
+		log_debug         = env_string("VX_LOG") == "debug",
+		break_on_error    = env_string("VX_BREAK") == "1",
+		pad_ignore        = env_string("SDL_GAMECONTROLLER_IGNORE_DEVICES"),
 		pad_ignore_except = env_string("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT"),
 	}
 }
