@@ -1,5 +1,6 @@
 package main
 
+import "base:runtime"
 import "core:flags"
 import "core:fmt"
 import "core:log"
@@ -11,8 +12,10 @@ import "core:time"
 import "client:autopilot"
 import "client:console"
 import "client:engine"
+import "client:update"
 import "common:base"
 import "common:game"
+import "common:limited"
 import platform "common:platform"
 
 import "generated:games"
@@ -46,13 +49,25 @@ main :: proc() {
 			log.infof("profiling to %s (open with Spall: https://gravitymoth.com/spall/)", path)
 		}
 	}
-	ok := run(&host, opts, &dbg.sink)
+	restart: []string
+	ok := run(&host, opts, &dbg.sink, &restart)
 	base.profile_stop()
 	ok = base.debug_end(&dbg) && ok
+	// The update installed starts once this run has written its last (its log is the
+	// same file).
+	if restart != nil {limited.start(restart)}
 	os.exit(0 if ok else 1)
 }
 
-run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> bool {
+// run is the App's whole life. restart is told the command that starts the update
+// installed, when the player asked to restart into it (the heap's: the process ends
+// right after).
+run :: proc(
+	host: ^base.Host,
+	opts: engine.Options,
+	sink: ^base.Log_Sink,
+	restart: ^[]string,
+) -> bool {
 	app := new(engine.App)
 	defer free(app)
 	scenario: engine.Scenario
@@ -137,6 +152,17 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 	app.null_audio = opts.null_audio || opts.check == "audio" || opts.scene != ""
 	ok := app_init(app)
 	if ok {
+		// The title checks for an update once a launch; a run that does one thing (a
+		// script, a benchmark, a check, a scene, a capture) never does.
+		update.init(
+			&app.updater,
+			base.boot_info().dirs.exe,
+			opts.exec == "" &&
+			opts.benchmark == "" &&
+			opts.check == "" &&
+			opts.scene == "" &&
+			opts.capture_frame == 0,
+		)
 		if app.benchmark {autopilot.bench_begin(app, scenario, opts.smoke, bench_size)}
 		if opts.scene != "" &&
 		   !autopilot.scene_begin(app, opts.scene) {app.script_failed, app.quit = true, true}
@@ -252,6 +278,16 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 	if opts.scene != "" && app.scene.phase != .Done {
 		log.errorf("scene %s: the run ended before its picture was written", opts.scene)
 		ok = false
+	}
+	if app.restart {
+		if cmd, ready := update.restart_command(
+			&app.updater,
+			os.args[1:],
+			runtime.heap_allocator(),
+		); ready {
+			restart^ = cmd
+			log.infof("update restarting into path=%s", cmd[0])
+		}
 	}
 	server_failed := app.server_failed
 	// app_destroy frees the console: later lines must not reach it.

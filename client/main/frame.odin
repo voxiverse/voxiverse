@@ -14,6 +14,7 @@ import "client:prompt"
 import "client:render"
 import "client:screen"
 import "client:ui"
+import "client:update"
 import "common:base"
 import "common:game"
 import "common:protocol"
@@ -152,6 +153,7 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 	engine.music_destroy(app)
 	free(app.mixer)
 	engine.devchat_stop(app)
+	update.destroy(&app.updater) // (a download is stopped; an install finishes first)
 	engine.steam_stop(app)
 	if app.settings_dirty {engine.settings_save(app)}
 	console.console_history_save(&app.console)

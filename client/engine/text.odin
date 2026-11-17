@@ -182,6 +182,17 @@ Text :: enum u16 {
 	Hud_Ammo,
 	Hud_Ammo_Carried, // {0}: the magazine, {1}: the rounds carried for it
 	Hud_Reloading,
+	Update_Available, // {0}: the version (the title's corner)
+	Update_Install,
+	Update_Downloading, // {0}: the version, {1}: percent
+	Update_Installing, // {0}: the version
+	Update_Ready, // {0}: the version
+	Update_Restart,
+	Update_Failed_Download,
+	Update_Failed_Mismatch,
+	Update_Failed_Not_Writable,
+	Update_Failed_Not_Package,
+	Update_Failed_Install,
 }
 
 @(rodata)
@@ -357,6 +368,17 @@ TEXT_EN := [Text]string {
 	.Hud_Ammo                               = "{0} / inf",
 	.Hud_Reloading                          = "Reloading",
 	.Hud_Ammo_Carried                       = "{0} / {1}",
+	.Update_Available                       = "Update available: {0}",
+	.Update_Install                         = "Update",
+	.Update_Downloading                     = "Downloading {0}: {1}%",
+	.Update_Installing                      = "Installing {0}",
+	.Update_Ready                           = "Update installed: {0}",
+	.Update_Restart                         = "Restart to update",
+	.Update_Failed_Download                 = "Update failed: could not download",
+	.Update_Failed_Mismatch                 = "Update failed: the download did not match",
+	.Update_Failed_Not_Writable             = "Update failed: this folder cannot be written; download it from voxiverse.net",
+	.Update_Failed_Not_Package              = "Update failed: this copy cannot update itself; download it from voxiverse.net",
+	.Update_Failed_Install                  = "Update failed: could not install",
 }
 
 // tr: the string for key with {n} replaced by args[n] (temp allocator; base.text_format).

@@ -7,6 +7,7 @@ import "core:unicode/utf8"
 
 import "client:engine"
 import "client:ui"
+import "client:update"
 import "common:base"
 import "common:starmap"
 
@@ -92,7 +93,7 @@ LOGO_GAP :: 40
 // title_screen: the logo and splash, then at most five buttons: Continue (the save played
 // last, by its game and its name, when it is there to open: continue_save), Singleplayer
 // (the games, each with its saves), Multiplayer, Options and Quit Game. Nothing else: the
-// developer chat is F9's.
+// developer chat is F9's. In the corners: the version, and an update (update_notice).
 title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "title")
 	defer ui.pop_id(ctx)
@@ -204,7 +205,69 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			t.text_muted,
 		)
 	}
+	if !app.scene.menu {update_notice(app, ctx)}
 	if !app.settings.reduce_motion {
 		holiday_front(app, ctx, holiday, app.last_frame_ms / 1000)
 	}
+}
+
+// update_notice: the update, in the lower right corner, small as the version across
+// from it: reaching the title starts the launch's one check (when the setting allows);
+// then "Update available: 0.5.3" with Update, the download's progress, Restart to
+// update once it is installed, or why it failed. Nothing while there is nothing to say.
+update_notice :: proc(app: ^engine.App, ctx: ^ui.Context) {
+	when !update.ENABLED {return}
+	u := &app.updater
+	if app.settings.updates {update.check(u)}
+	s := update.status(u)
+	text, action: string
+	switch s.phase {
+	case .Off, .Idle, .Checking, .Current:
+		return
+	case .Available:
+		text, action = engine.tr(.Update_Available, s.version), engine.tr(.Update_Install)
+	case .Downloading:
+		text = engine.tr(.Update_Downloading, s.version, s.percent)
+	case .Installing:
+		text = engine.tr(.Update_Installing, s.version)
+	case .Ready:
+		text, action = engine.tr(.Update_Ready, s.version), engine.tr(.Update_Restart)
+	case .Failed:
+		switch s.failure {
+		case .None, .Install:
+			text = engine.tr(.Update_Failed_Install)
+		case .Download:
+			text = engine.tr(.Update_Failed_Download)
+		case .Mismatch:
+			text = engine.tr(.Update_Failed_Mismatch)
+		case .Not_Writable:
+			text = engine.tr(.Update_Failed_Not_Writable)
+		case .Not_Package:
+			text = engine.tr(.Update_Failed_Not_Package)
+		}
+	}
+	t := &ctx.theme
+	small := t.font_size * 0.75
+	// Alone, the line sits on the version's; beside its button, centred on it.
+	line := ui.Rect{ctx.screen.x, ctx.screen.y + ctx.screen.h - small - 6, ctx.screen.w - 8, small}
+	if action != "" {
+		height := math.round(t.row_height * 0.8)
+		row := ui.Rect {
+			ctx.screen.x,
+			ctx.screen.y + ctx.screen.h - height - 4,
+			ctx.screen.w - 8,
+			height,
+		}
+		width := ui.measure_text(ctx, action, t.font_size) + 2 * t.padding
+		if ui.button(ctx, action, ui.cut_right(&row, width), id = "update") {
+			if s.phase == .Available {
+				update.install(u)
+			} else {
+				app.restart, app.quit = true, true
+			}
+		}
+		ui.cut_right(&row, t.spacing)
+		line = ui.rect_center(row, row.w, small)
+	}
+	ui.draw_text(ctx, line, text, small, t.text, .Right)
 }

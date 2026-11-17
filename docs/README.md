@@ -11,7 +11,7 @@ Plans and history don't live here: git is the history.
 | [packs.md](packs.md) | Pack layout, the rule language, how packs travel to clients, pack asset limits, and what the engine treats as untrusted |
 | [glossary.md](glossary.md) | The project's terms, each with the code that implements it |
 | [layout.md](layout.md) | Where every file goes: every folder and its file-name patterns (`check` enforces it) |
-| [platforms.md](platforms.md) | What runs where, and what each platform requires |
+| [platforms.md](platforms.md) | What runs where, what each platform requires, and how the game updates itself |
 | [debugging.md](debugging.md) | What debug builds detect, the switches, the log, the console and checks, debuggers, GPU captures, visual baselines, reports |
 | [graphics.md](graphics.md) | The renderer's passes, GPU timings, draw counts, culling and chunk light |
 | [benchmarking.md](benchmarking.md) | Benchmark scenarios, comparing versions, profiling and Spall traces |

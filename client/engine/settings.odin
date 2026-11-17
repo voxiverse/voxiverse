@@ -26,6 +26,7 @@ Settings :: struct {
 	collector:         base.Var_Text, // the collector's address ("": DEFAULT_COLLECTOR)
 	devchat:           base.Var_Text, // the developer chat's collector (host:port; "": off)
 	steam:             bool, // use Steam when its library is beside the game (off: never; read at start)
+	updates:           bool, // the title looks for a newer version on GitHub and offers it (client/update)
 	// Video
 	fullscreen:        bool, // borderless, covering the monitor
 	window_width:      i32, // pixels; 0 = the default size
@@ -75,6 +76,7 @@ Settings :: struct {
 @(rodata)
 SETTINGS_DEFAULTS := Settings {
 	steam             = true,
+	updates           = true,
 	window_x          = -1,
 	window_y          = -1,
 	vsync             = true,
@@ -123,6 +125,12 @@ SETTINGS_VARS := [?]base.Var {
 	{
 		field = "steam",
 		help = "use Steam when its library is beside the game; off never loads it (read at start)",
+	},
+	{
+		field = "updates",
+		label = "Check for updates",
+		help = "On the title screen, look for a newer version of Voxiverse and offer to install it.",
+		choices = {{0, "Off"}, {1, "On"}},
 	},
 	{
 		field = "fullscreen",

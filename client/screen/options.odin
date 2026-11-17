@@ -8,6 +8,7 @@ import "client:engine"
 import "client:platform"
 import "client:prompt"
 import "client:ui"
+import "client:update"
 import "common:base"
 
 // Options: the player's settings in tabs, the same from the
@@ -61,7 +62,14 @@ OPTIONS_TABS := [engine.Options_Tab][]string {
 		"prompt_bar",
 		"chat_text_size",
 	},
-	.Profile       = {"name", "share_data"},
+	.Profile       = PROFILE_ROWS,
+}
+
+// PROFILE_ROWS: Check for updates only in a build with the updater (client/update).
+when update.ENABLED {
+	PROFILE_ROWS :: []string{"name", "share_data", "updates"}
+} else {
+	PROFILE_ROWS :: []string{"name", "share_data"}
 }
 
 OPTIONS_WIDTH :: 600

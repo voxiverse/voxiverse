@@ -18,6 +18,7 @@ import "client:render"
 import "client:starfield"
 import "client:steam"
 import "client:ui"
+import "client:update"
 import "common:access"
 import "common:base"
 import "common:game"
@@ -90,6 +91,8 @@ App :: struct {
 	session:             ^Session, // nil outside a world
 	devchat:             Devchat, // developer chat (devchat.odin): runs while the setting names a collector
 	steam:               steam.Client, // Steam (steam.odin): off unless its library is beside the game
+	updater:             update.Updater, // the title's update (client/update): checked once a launch
+	restart:             bool, // quit into the update installed (client/main starts it)
 	debug:               Debug_Switches,
 	telemetry:           Telemetry_Switches,
 	settings_dirty:      bool, // changed since loaded or saved

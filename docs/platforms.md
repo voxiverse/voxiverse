@@ -63,3 +63,75 @@ removed on 2026-11-15). So today:
 
 The project has no Mac: macOS has never been run on hardware by the project.
 
+
+## Updates
+
+The game updates itself from its GitHub releases (`client/update`). On reaching the title,
+once a launch and in the background, it asks GitHub's API for the releases
+(`https://api.github.com/repos/voxiverse/voxiverse/releases?per_page=20`). The newest
+release whose tag is a version (`v0.5.3`; the rolling `playtest` release and drafts are
+passed over) that is newer than the running build and has this computer's package and a
+`SHA256SUMS` is offered in the title's lower right corner: "Update available: 0.5.3" and
+**Update**. Versions order as semver: `0.4.0-flood.5` is before `0.4.0`. A failed check
+shows nothing (the log says why).
+
+**Update** downloads the package into `.voxiverse-update/` inside the install folder
+("Downloading 0.5.3: 42%"; the menus and the game go on meanwhile), checks it, unpacks it
+there, and swaps it in; the corner then says **Restart to update**, which quits as Quit
+Game does (settings saved) and starts the new version with the same arguments, less the
+ones that do one thing (`--exec`, `--check`, ...). Any failure is one line ("Update
+failed: could not download", "...: the download did not match", "...: this folder cannot
+be written; download it from voxiverse.net") and leaves the installed game as it was.
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Fetches with | `curl.exe` in the system folder (Windows 10 and later) | `/usr/bin/curl` | `/usr/bin/curl` or `/bin/curl` |
+| Unpacks with | `tar.exe` in the system folder (it reads zips) | `/usr/bin/ditto -x -k` (listed with `/usr/bin/tar`) | `tar` in `/usr/bin` or `/bin` |
+| What is swapped | Every entry of the package in the install folder. A running `.exe` cannot be deleted but can be renamed: the old one is renamed aside | `Voxiverse.app` and the package's other files beside it; an app dragged out on its own (to Applications) is swapped alone | Every entry of the package in the install folder |
+| Restarts with | the new `voxiverse.exe` | `open -n Voxiverse.app --args ...` | the new `voxiverse` |
+
+Without the system's curl and tar there are no updates (the log says so once). A game not
+run from an unpacked package (a developer's `build/`) or whose folder cannot be written
+(`Program Files` without administrator rights) does not try: it says so and points to
+voxiverse.net.
+
+**The swap.** Each of the package's entries is renamed aside (`<name>.voxiverse-old`),
+then the new one renamed in, all inside the install folder (one filesystem, so a rename
+is atomic). A rename that fails undoes the ones before it. What was renamed aside is
+deleted at the next start, when nothing runs from it. Files in the install folder that are
+not the package's (the log, the pipeline cache, screenshots) are not touched. The player's
+data lives elsewhere and is never touched: settings, crash reports and the account key in
+the user's config folder, saves in the user's data folder (`~/.config/voxiverse` and
+`~/.local/share/voxiverse` on Linux, `~/Library/Application Support/voxiverse` on macOS,
+`%LOCALAPPDATA%\voxiverse` or `%APPDATA%\voxiverse` on Windows). On macOS the log and the
+pipeline cache sit beside the executable inside the app, so they go with the old app.
+
+**What it trusts.** Only two addresses are fetched: the API's list above, and files at
+exactly `https://github.com/voxiverse/voxiverse/releases/download/<tag>/<name>` as the
+list gives them (GitHub then redirects to its storage). curl runs with explicit arguments
+(no shell, no config file): https only, redirects included, TLS 1.2 or newer, at most 5
+redirects, the size and the time capped, and the user agent `voxiverse-updater`; nothing
+about the player or the computer is sent. The package's SHA-256 must equal its line in the
+release's `SHA256SUMS` before anything is unpacked. That is integrity and GitHub's TLS,
+**not a signature**: whoever can publish a release on the repository (or take over the
+account) can publish an update. The list and `SHA256SUMS` are read by our own code with
+every size capped (fuzz targets `update.releases`, `update.sums`). Before unpacking, the
+archive's listing must be one folder of the package's name with no absolute path, no `..`
+and no link; after, the unpacked tree is walked (without following links) for the same and
+for the files every package has.
+
+**Turning it off.** The player: Options, Profile, **Check for updates** (the setting
+`updates`, on by default). A build: `-define:VX_UPDATER=false` leaves the updater out
+entirely (no check, no setting), for a store such as Steam that
+updates the game itself. It never checks in a development build (a version with a commit,
+or `0.0.0-dev`) or in a run that does one thing (`--exec` and so `build shot`,
+`--benchmark`, `--check`, `--scene`). For testing, a development build checks as the version
+`VX_UPDATE_AS` gives, from a folder of releases `VX_UPDATE_SOURCE` names
+([debugging.md](debugging.md#switches)); the console's `update` shows the state, checks,
+installs, restarts or fakes a phase for screenshots.
+
+**Tested.** The readers, the choice, the listing and tree checks, the swap and its undo are
+unit tests on every OS that runs them; the whole update (check, download, checksum,
+unpack, swap) runs from a folder of releases in `client/update`'s tests on Linux. Windows'
+renames of a running executable, `tar.exe` on a zip, and macOS's `ditto` and `open` have
+not been run.

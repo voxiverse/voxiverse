@@ -624,6 +624,15 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		console_register(
 			c,
 			{
+				"update",
+				"update [check | install | restart | fake <phase> <version> [percent | failure]]: the updater: its state; check now (even in a script); install what it found; restart into it; or show the title as if a phase had come (available, downloading, installing, ready, failed; failures: download, mismatch, not_writable, not_package, install)",
+				update_command,
+			},
+			args = {0, 4},
+		)
+		console_register(
+			c,
+			{
 				"creation",
 				"creation seed <n|text>: set the creation screen's seed as if typed (open it with `screen universes create`)",
 				proc(app: ^engine.App, args: []string) {

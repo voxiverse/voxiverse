@@ -148,7 +148,7 @@ test_update_end_to_end :: proc(t: ^testing.T) {
 			!os.exists(join(dir, "install", STAGING_NAME)),
 			"the staging folder is gone",
 		)
-		cmd, ok := restart_command(&u, {"--exec", "x", "--null-audio"})
+		cmd, ok := restart_command(&u, {"--exec", "x", "--null-audio"}, context.temp_allocator)
 		testing.expect(t, ok)
 		testing.expect_value(t, cmd[0], join(u.exe_dir, "voxiverse"))
 		testing.expect_value(t, len(cmd), 2)
@@ -185,7 +185,7 @@ test_update_wrong_checksum_refused :: proc(t: ^testing.T) {
 			testing.expect_value(t, string(data), "old")
 		}
 		testing.expect(t, !os.exists(join(dir, "install", STAGING_NAME)))
-		_, ok := restart_command(&u, {})
+		_, ok := restart_command(&u, {}, context.temp_allocator)
 		testing.expect(t, !ok)
 	}
 }

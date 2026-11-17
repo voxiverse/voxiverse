@@ -16,6 +16,7 @@ import "core:crypto/sha2"
 import "core:log"
 import "core:mem/virtual"
 import "core:os"
+import "core:path/filepath"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -96,7 +97,6 @@ init :: proc(u: ^Updater, exe_dir: string, allowed: bool) {
 	u.exe_dir = strings.clone(exe_dir, a)
 	u.source, u.proto = GITHUB, "=https"
 	if install, ok := install_find(exe_dir, LAYOUT); ok {cleanup(install.dir)}
-	if !allowed {return}
 	version := base.VERSION
 	dev := base.version_is_dev()
 	when base.DEV {
@@ -126,7 +126,8 @@ init :: proc(u: ^Updater, exe_dir: string, allowed: bool) {
 		log.info("update off: no curl or tar where the system keeps them")
 		return
 	}
-	u.current, u.version, u.tools, u.phase = current, version, tools, .Idle
+	u.current, u.version, u.tools = current, version, tools
+	u.phase = .Idle if allowed else .Off
 }
 
 // destroy stops what runs (a download is killed, its files removed) and frees the rest.
@@ -141,9 +142,12 @@ destroy :: proc(u: ^Updater) {
 }
 
 // check starts a check, if none was made this launch: a thread asks GitHub and the phase
-// becomes Available or Current. A failed check says so in the log only.
-check :: proc(u: ^Updater) {
+// becomes Available or Current. A failed check says so in the log only. force checks in
+// a run that does not otherwise (a script's: the console's `update check`), though never
+// in a build that cannot (a development build without VX_UPDATE_AS, no curl).
+check :: proc(u: ^Updater, force := false) {
 	sync.guard(&u.mutex)
+	if force && u.phase == .Off && u.tools.curl != "" {u.phase = .Idle}
 	if u.phase != .Idle {return}
 	u.phase = .Checking
 	u.worker = thread.create_and_start_with_poly_data(u, check_main, base.thread_context())
@@ -186,15 +190,25 @@ status :: proc(u: ^Updater) -> Status {
 
 // restart_command: the command that starts the installed update with the game's
 // arguments (without its path; the one-shot ones are left out), once it is Ready. macOS
-// opens the app (a new instance: this one is quitting).
-restart_command :: proc(u: ^Updater, args: []string) -> (cmd: []string, ok: bool) {
+// opens the app (a new instance: this one is quitting). The list and the path in it are
+// allocated with allocator; the arguments are args' own.
+restart_command :: proc(
+	u: ^Updater,
+	args: []string,
+	allocator := context.allocator,
+) -> (
+	cmd: []string,
+	ok: bool,
+) {
 	sync.guard(&u.mutex)
 	if u.phase != .Ready {return}
-	out := make([dynamic]string, context.temp_allocator)
+	out := make([dynamic]string, allocator)
 	when ODIN_OS == .Darwin {
-		append(&out, "/usr/bin/open", "-n", join(u.install.dir, LAYOUT.app), "--args")
+		app, _ := filepath.join({u.install.dir, LAYOUT.app}, allocator)
+		append(&out, "/usr/bin/open", "-n", app, "--args")
 	} else {
-		append(&out, join(u.install.dir, LAYOUT.game))
+		game, _ := filepath.join({u.install.dir, LAYOUT.game}, allocator)
+		append(&out, game)
 	}
 	append(&out, ..restart_args(args))
 	return out[:], true
