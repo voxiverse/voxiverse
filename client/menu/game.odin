@@ -47,7 +47,7 @@ game_menu :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	t := &ctx.theme
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
-	ui.backdrop(ctx)
+	ui.veil(ctx) // (the same for every game: the world dark enough under the menu's text)
 	hosting := engine.session_hosting(s)
 	port := core.stats(&s.server).port if hosting else 0
 	entries := game_menu_entries(hosting, port != 0, s.config.save_dir != "")
@@ -59,12 +59,10 @@ game_menu :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	)
 	heading := ui.cut_top(&column, GAME_MENU_HEADING)
 	// "Game Paused" under the name, apart from the buttons (its place kept either way, so
-	// the name stands still).
+	// the name stands still), in the text's own white: grey does not read on a lit sky.
 	ui.cut_bottom(&heading, t.spacing)
 	paused := ui.cut_bottom(&heading, t.row_height)
-	if s.frozen {
-		ui.label(ctx, engine.tr(.Game_Menu_Game_Paused), paused, .Center, t.text_muted)
-	}
+	if s.frozen {ui.label(ctx, engine.tr(.Game_Menu_Game_Paused), paused, .Center)}
 	// The game's name (a session that has not been told its game yet: the menu's).
 	ui.title(ctx, s.game.name if s.game.name != "" else engine.tr(.Game_Menu_Game_Menu), heading)
 	ui.begin_column(ctx, column)

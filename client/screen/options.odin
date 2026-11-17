@@ -82,6 +82,7 @@ options_panel :: proc(app: ^engine.App, ctx: ^ui.Context, in_game: bool) -> (don
 	if in_game {
 		prev := ui.begin_layer(ctx, .Modal)
 		defer ui.end_layer(ctx, prev)
+		ui.veil(ctx) // (the game menu's, which it stands in for)
 		r := ctx.screen
 		panel := ui.cut_left(&r, OPTIONS_WIDTH + 4 * t.padding)
 		ui.panel(ctx, panel)

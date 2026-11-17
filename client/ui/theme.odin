@@ -14,6 +14,7 @@ Theme :: struct {
 	focus_ring:     Color,
 	disabled_alpha: u8,
 	backdrop:       Color, // behind modals
+	veil:           Color, // over the world behind the game menu: white text reads on any sky
 	selection:      Color, // text selection
 	font_size:      f32,
 	title_size:     f32,
@@ -58,6 +59,7 @@ DEFAULT_THEME :: Theme {
 	focus_ring     = {255, 255, 255, 255},
 	disabled_alpha = 90,
 	backdrop       = {0, 0, 0, 190},
+	veil           = {0, 0, 0, 230}, // (blended in linear light: about a third of the world's brightness left)
 	selection      = {90, 90, 90, 255},
 	font_size      = 16,
 	title_size     = 40,

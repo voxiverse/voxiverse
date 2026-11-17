@@ -66,6 +66,12 @@ backdrop :: proc(ctx: ^Context) {
 	fill_rect(ctx, ctx.screen, ctx.theme.backdrop)
 }
 
+// veil darkens the world under a menu over it (the game menu, Options in a world: use on
+// .Modal) further than backdrop, so its white text reads on any sky.
+veil :: proc(ctx: ^Context) {
+	fill_rect(ctx, ctx.screen, ctx.theme.veil)
+}
+
 button :: proc(
 	ctx: ^Context,
 	text: string,
