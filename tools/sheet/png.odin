@@ -6,8 +6,9 @@ import "core:hash"
 // mostly flat colour and texels drawn 4 or 8 pixels wide, so each row is
 // filtered "up" when it repeats the row above (all zeros) and "sub"
 // otherwise (zeros along a run of one colour), and deflate codes each run of
-// equal bytes as a back-reference (fixed Huffman codes). A sheet is a tenth
-// of base.png_encode's stored size, with no compressor library.
+// equal bytes as a back-reference (fixed Huffman codes). The base pack's
+// sheet is 1.3 MB, a thirtieth of base.png_encode's stored size, with no
+// compressor library.
 png_compressed :: proc(width, height: int, rgba: []u8) -> []u8 {
 	assert(len(rgba) == width * height * 4)
 	row := width * 4
