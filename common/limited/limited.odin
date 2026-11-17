@@ -6,6 +6,7 @@ package limited
 import "base:intrinsics"
 import "core:fmt"
 import "core:os"
+import "core:strings"
 import "core:time"
 
 // COLLECTIONS: the `-collection:` flags every first-party `odin` run takes (see the driver's
@@ -87,11 +88,13 @@ capture :: proc(cmd: []string) -> (output: string, ok: bool) {
 // load) like one that wrote nothing: `git tag --list` exited 0 and its tags were never
 // read. Here a hang-up is read too, until the read itself says the pipe is empty.
 // When stop is given and becomes true while it runs, the child is killed with its
-// children (it then ends as a failure).
+// children (it then ends as a failure). hidden: no console window for it on Windows (a
+// windowed program's child: start_hidden).
 exec :: proc(
 	desc: os.Process_Desc,
 	allocator := context.allocator,
 	stop: ^b32 = nil,
+	hidden := false,
 ) -> (
 	state: os.Process_State,
 	stdout, stderr: []u8,
@@ -108,7 +111,11 @@ exec :: proc(
 		defer os.close(err_w)
 		d := desc
 		d.stdout, d.stderr = out_w, err_w
-		child = os.process_start(d) or_return
+		if hidden {
+			child = start_hidden(d) or_return
+		} else {
+			child = os.process_start(d) or_return
+		}
 	}
 	out := make([dynamic]u8, allocator)
 	errs := make([dynamic]u8, allocator)
@@ -140,6 +147,40 @@ exec :: proc(
 	}
 	state, err = os.process_wait(child)
 	return state, out[:], errs[:], err
+}
+
+// command_line: args as one Windows command line, which the C runtime's parsing (and
+// CommandLineToArgvW) splits back into the same arguments: an argument with a space, a
+// tab or a quote (or none) is quoted, its quotes escaped, and the backslashes before a
+// quote, the closing one included, doubled (start_hidden's; os.process_start has its own).
+command_line :: proc(args: []string) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	for arg, i in args {
+		if i > 0 {strings.write_byte(&b, ' ')}
+		if arg != "" && !strings.contains_any(arg, " \t\"") {
+			strings.write_string(&b, arg)
+			continue
+		}
+		strings.write_byte(&b, '"')
+		backslashes := 0
+		for c in transmute([]u8)arg {
+			switch c {
+			case '\\':
+				backslashes += 1
+			case '"':
+				for _ in 0 ..< 2 * backslashes + 1 {strings.write_byte(&b, '\\')}
+				strings.write_byte(&b, '"')
+				backslashes = 0
+			case:
+				for _ in 0 ..< backslashes {strings.write_byte(&b, '\\')}
+				strings.write_byte(&b, c)
+				backslashes = 0
+			}
+		}
+		for _ in 0 ..< 2 * backslashes {strings.write_byte(&b, '\\')}
+		strings.write_byte(&b, '"')
+	}
+	return strings.to_string(b)
 }
 
 // start starts cmd and does not wait for it: a program that goes on after this one

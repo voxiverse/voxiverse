@@ -99,3 +99,28 @@ test_failure_excerpt_names_the_unfinished_tests :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(text, "  p.b\n  p.c\n"), text)
 	testing.expect(t, !strings.contains(text, "  p.a\n"), text)
 }
+
+// A Windows command line (start_hidden's) splits back into the arguments given: the
+// cases of Microsoft's "Parsing C command-line arguments".
+@(test)
+test_command_line_quotes_as_windows_parses :: proc(t: ^testing.T) {
+	Case :: struct {
+		args: []string,
+		line: string,
+	}
+	cases := []Case {
+		{
+			{`C:\Windows\System32\curl.exe`, "--max-time", "30"},
+			`C:\Windows\System32\curl.exe --max-time 30`,
+		},
+		{{`C:\Program Files\Voxiverse\a.zip`}, `"C:\Program Files\Voxiverse\a.zip"`},
+		{{`a b\`}, `"a b\\"`},
+		{{`say "hi"`}, `"say \"hi\""`},
+		{{`a\"b`}, `"a\\\"b"`},
+		{{""}, `""`},
+		{{`a\\b c`}, `"a\\b c"`},
+	}
+	for c in cases {
+		testing.expect_value(t, limited.command_line(c.args), c.line)
+	}
+}
