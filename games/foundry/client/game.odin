@@ -55,7 +55,12 @@ View :: struct {
 	builders: engine.Seats(foundry.Builder),
 	goal:     engine.Flash,
 	opening:  bool, // the craft list opened this frame (its key does not close it at once)
+	placed:   u32, // machines and belts you placed, as last told (one more: a puff)
+	told:     bool,
 }
+
+// PLACED: the puff a machine or belt set down raises: a little dust of the works' haze.
+PLACED :: [4]u8{150, 140, 124, 255}
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
 
@@ -71,8 +76,21 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 		engine.game_screen_open(s)
 	} else if g, reached := engine.game_value(s, r, foundry.Goal_Reached); reached && g != nil {
 		engine.flash(&v.goal, s, foundry.tr(.Goal_Banner, clock(g.seconds)), .Good, 6)
-	} else {
-		engine.seats_received(s, &v.builders, r)
+	} else if engine.seats_received(s, &v.builders, r) {
+		placed_felt(s)
+	}
+}
+
+// placed_felt: one more machine or belt of yours: a small puff of dust where you aimed (the
+// block just set there), rising off its top. Calm: a few motes, gone in a second.
+placed_felt :: proc(s: ^engine.Session) {
+	v := view(s)
+	placed := engine.seat_mine(s, &v.builders).placed
+	defer v.placed, v.told = placed, true
+	if !v.told || placed <= v.placed {return}
+	if hit, aimed := s.aim.?; aimed {
+		b := hit.block
+		engine.burst(s, {f64(b.x) + 0.5, f64(b.y) + 1.05, f64(b.z) + 0.5}, .Smoke, PLACED, 0.6)
 	}
 }
 
