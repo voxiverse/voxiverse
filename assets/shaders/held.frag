@@ -42,7 +42,7 @@ void main() {
 		if (texel.a < 0.5) discard;
 		albedo = texel.rgb;
 	}
-	vec3 light = max(s.sky_light.rgb, vec3(0.06)) * in_shade;
+	vec3 light = max(s.sky_light.rgb + s.ambient.rgb, s.figure.rgb) * in_shade;
 	light = mix(light, 1.0 - pow(1.0 - min(light, vec3(1.0)), vec3(4.0)), s.sky_light.w);
-	out_color = vec4(albedo * light, 1.0);
+	out_color = vec4(graded(s, albedo * light, gl_FragCoord.xy), 1.0);
 }

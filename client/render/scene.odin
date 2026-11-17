@@ -20,14 +20,19 @@ Scene :: struct {
 	inv_view_proj: matrix[4, 4]f32,
 	camera:        [4]f32, // xyz from the camera chunk's origin; w: absolute y
 	sun:           [4]f32, // xyz towards the sun; w: how visible the stars are (0..1)
-	axis:          [4]f32, // xyz the sky turns around (stars turn with the sun)
+	axis:          [4]f32, // xyz the sky turns around (stars turn with the sun); w: 1 no sun or moon drawn
 	zenith:        [4]f32, // rgb (linear); w: fog distance in blocks (fully fogged)
-	horizon:       [4]f32, // rgb
+	horizon:       [4]f32, // rgb; w: the fog's span, a fraction of its distance (it begins at lamp.w)
 	glow:          [4]f32, // rgb sunrise/sunset glow towards the sun; w: its strength
 	sky_light:     [4]f32, // rgb: what sky light level 15 looks like now; w: brightness (0..1)
 	cloud:         [4]f32, // rgb cloud colour (lit side); w: 1 drawn, 0 not
 	cloud_origin:  [4]f32, // xz: the camera in the cloud pattern (wrapped; see CLOUD_PERIOD)
 	water:         [4]f32, // rgb: the colour of water seen from inside it; w: 1 with the camera under water
+	lamp:          [4]f32, // rgb: what block light level 15 looks like; w: where the fog begins, a fraction of its distance
+	ambient:       [4]f32, // rgb: light added everywhere (a look's); w: 0
+	figure:        [4]f32, // rgb: the least light a figure is drawn in; w: 1 graded (grade, grade_more), 0 not
+	grade:         [4]f32, // rgb: the picture's tint; w: its saturation (1 as it is)
+	grade_more:    [4]f32, // x: contrast (1 as it is); y: vignette (0 none); zw: 1 / the target's size in pixels
 	camera_chunk:  [4]i32, // xyz: the camera's chunk (what "from the camera chunk's origin" is from); w: the world is cut at this y (NO_CUT: not)
 	cloud_map:     u64, // address of the Cloud_Map (set by scene_upload)
 	_:             u64,
@@ -144,11 +149,13 @@ sky_at :: proc(f: f64) -> (s: Sky) {
 	return
 }
 
-// scene_make puts a camera, the sky and the fog together. drift: how far
-// the clouds have moved (blocks).
 // UNDERWATER: the colour of deep water around a camera in it, in daylight
 // (dimmed with the sky's light).
 UNDERWATER :: [3]f32{0.05, 0.14, 0.30}
+
+// scene_make puts a camera, the sky and the fog together. drift: how far
+// the clouds have moved (blocks). look: the game's (its sky is look_sky's,
+// given as sky); pixels: the target's size (the look's vignette).
 
 scene_make :: proc(
 	camera: Camera,
@@ -158,6 +165,8 @@ scene_make :: proc(
 	underwater := false,
 	brightness: f32 = 0,
 	clouds := true,
+	look := Look{},
+	pixels := [2]i32{},
 ) -> Scene {
 	absolute := [3]f64 {
 		f64(camera.chunk.x) * CHUNK_EXTENT + f64(camera.position.x),
@@ -167,17 +176,28 @@ scene_make :: proc(
 	wrap :: proc(v: f64) -> f32 {
 		return f32(v - math.floor(v / CLOUD_PERIOD) * CLOUD_PERIOD)
 	}
+	fog := min(fog_distance, look.fog) if look.fog > 0 else fog_distance
+	fog_near, fog_span := f32(FOG_NEAR), f32(1 - FOG_NEAR)
+	if look.fog_near > 0 {
+		fog_near = clamp(look.fog_near, 0, 0.95)
+		fog_span = 1 - fog_near
+	}
+	lamp := look.lamp_light if look.lamp_light != {} else LAMP_LIGHT
+	figure := look.figure_light if look.figure_light != {} else FIGURE_LIGHT
+	g := look.grade
+	tint := g.tint if g.tint != {} else 1
+	inverse := [2]f32{1 / f32(max(pixels.x, 1)), 1 / f32(max(pixels.y, 1))}
 	return {
 		view_proj = camera.view_proj,
 		inv_view_proj = linalg.inverse(camera.view_proj),
 		camera = {camera.position.x, camera.position.y, camera.position.z, f32(absolute.y)},
 		sun = {sky.sun.x, sky.sun.y, sky.sun.z, sky.stars},
-		axis = {sky.axis.x, sky.axis.y, sky.axis.z, 0},
-		zenith = {sky.zenith.r, sky.zenith.g, sky.zenith.b, fog_distance},
-		horizon = {sky.horizon.r, sky.horizon.g, sky.horizon.b, 0},
+		axis = {sky.axis.x, sky.axis.y, sky.axis.z, 1 if look.no_sun else 0},
+		zenith = {sky.zenith.r, sky.zenith.g, sky.zenith.b, fog},
+		horizon = {sky.horizon.r, sky.horizon.g, sky.horizon.b, fog_span},
 		glow = {sky.glow.r, sky.glow.g, sky.glow.b, sky.glow_k},
 		sky_light = {sky.sky_light.r, sky.sky_light.g, sky.sky_light.b, brightness},
-		cloud = {sky.cloud.r, sky.cloud.g, sky.cloud.b, 1 if clouds else 0},
+		cloud = {sky.cloud.r, sky.cloud.g, sky.cloud.b, 1 if clouds && !look.no_clouds else 0},
 		cloud_origin = {wrap(absolute.x + drift), 0, wrap(absolute.z), 0},
 		water = {
 			UNDERWATER.r * sky.sky_light.r,
@@ -185,6 +205,11 @@ scene_make :: proc(
 			UNDERWATER.b * sky.sky_light.b,
 			1 if underwater else 0,
 		},
+		lamp = {lamp.r, lamp.g, lamp.b, fog_near},
+		ambient = {look.ambient.r, look.ambient.g, look.ambient.b, 0},
+		figure = {figure.r, figure.g, figure.b, 1 if look_graded(look) else 0},
+		grade = {tint.r, tint.g, tint.b, 1 + g.saturation},
+		grade_more = {1 + g.contrast, g.vignette, inverse.x, inverse.y},
 		camera_chunk = {
 			camera.chunk.x,
 			camera.chunk.y,

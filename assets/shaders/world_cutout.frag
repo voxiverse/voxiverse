@@ -18,5 +18,5 @@ layout(location = 0) out vec4 out_color;
 void main() {
 	vec4 texel = texture(sampler2DArray(array_textures[push.textures], samplers[push.sampler_id]), in_uvw);
 	if (texel.a < 0.5) discard;
-	out_color = vec4(world_shade(push.scene, texel.rgb, in_light, in_pos), 1.0);
+	out_color = vec4(graded(push.scene, world_shade(push.scene, texel.rgb, in_light, in_pos), gl_FragCoord.xy), 1.0);
 }

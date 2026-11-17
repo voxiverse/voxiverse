@@ -23,7 +23,6 @@ out float gl_ClipDistance[1]; // the cut: what is above it is clipped away
 // +x -x +y -y +z -z, then a plant's two diagonal planes.
 const float FACE_LIGHT[8] = float[](0.80, 0.80, 1.00, 0.50, 0.65, 0.65, 0.90, 0.90);
 const float AO_LIGHT[4] = float[](0.35, 0.60, 0.80, 1.00);
-const vec3 LAMP_COLOR = vec3(1.00, 0.82, 0.58); // warm, like the lamp texture
 const float PI = 3.14159265;
 
 // brightness of light level l (0..15): a curve, so a few levels from a
@@ -70,8 +69,9 @@ void main() {
 
 	uint sky = (in_layer >> 12) & 15u;
 	uint block = (in_layer >> 16) & 15u;
-	// Sky light takes the colour of the time of day; lamps stay warm.
-	vec3 light = max(s.sky_light.rgb * brightness(sky), LAMP_COLOR * brightness(block));
+	// Sky light takes the colour of the time of day; lamps stay warm (the
+	// look's colours, render/look.odin), and the look's ambient is everywhere.
+	vec3 light = max(s.sky_light.rgb * brightness(sky), s.lamp.rgb * brightness(block)) + s.ambient.rgb;
 	light = lifted(light, s.sky_light.w);
 	out_light = FACE_LIGHT[face] * AO_LIGHT[ao] * light;
 	out_pos = pos;

@@ -54,12 +54,14 @@ view_model_frame :: proc(app: ^App, s: ^Session, width, height: i32) -> u64 {
 		&app.g,
 		render.scene_make(
 			camera,
-			render.sky_at(game.time_of_day(s.clock)),
+			render.look_sky(s.game.look, game.time_of_day(s.clock)),
 			1e9,
 			0,
 			false,
 			app.settings.brightness,
 			false,
+			s.game.look,
+			{width, height},
 		),
 	)
 }

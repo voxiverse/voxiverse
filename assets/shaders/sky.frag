@@ -100,15 +100,16 @@ void main() {
 	vec3 dir = normalize(in_ray);
 	if (s.water.w > 0.5) {
 		// Under water: no sky, only more water.
-		out_color = vec4(s.water.rgb, 1.0);
+		out_color = vec4(graded(s, s.water.rgb, gl_FragCoord.xy), 1.0);
 		return;
 	}
 	vec3 color = sky_color(s, dir);
 
 	// Stars, then the sun and moon over them.
 	if (s.sun.w > 0.0) color += vec3(stars(s, dir) * s.sun.w * smoothstep(-0.02, 0.08, dir.y));
-	// Below the horizon the ground would hide the sun and moon, loaded or not.
-	if (dir.y >= 0.0) {
+	// Below the horizon the ground would hide the sun and moon, loaded or not;
+	// a game's look may have neither.
+	if (dir.y >= 0.0 && s.axis.w == 0.0) {
 		vec3 tint = mix(vec3(1.0), vec3(1.0, 0.62, 0.42), s.glow.w); // redder when low
 		vec2 t = body_texel(dir, s.sun.xyz, SUN_SIZE);
 		if (on_body(t)) {
@@ -123,5 +124,5 @@ void main() {
 	}
 
 	color = with_clouds(s, dir, CLOUD_FAR, color);
-	out_color = vec4(color, 1.0);
+	out_color = vec4(graded(s, color, gl_FragCoord.xy), 1.0);
 }

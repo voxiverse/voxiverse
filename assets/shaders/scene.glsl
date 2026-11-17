@@ -13,14 +13,19 @@ layout(buffer_reference, std430) readonly buffer Scene {
 	mat4 inv_view_proj;
 	vec4 camera;        // xyz from the camera chunk's origin; w: absolute y
 	vec4 sun;           // xyz towards the sun; w: star visibility
-	vec4 axis;          // xyz the sky turns around
+	vec4 axis;          // xyz the sky turns around; w: 1 no sun or moon drawn
 	vec4 zenith;        // rgb; w: fog distance (blocks)
-	vec4 horizon;       // rgb
+	vec4 horizon;       // rgb; w: the fog's span (a fraction of its distance)
 	vec4 glow;          // rgb sunrise/sunset glow; w: its strength
 	vec4 sky_light;     // rgb: sky light level 15, now; w: brightness setting (0..1)
 	vec4 cloud;         // rgb: lit cloud colour; w: 1 drawn, 0 not (the setting)
 	vec4 cloud_origin;  // xz: the camera in the (wrapped) cloud pattern
 	vec4 water;         // rgb: water seen from inside; w: 1 with the camera under water
+	vec4 lamp;          // rgb: block light level 15; w: where the fog begins (a fraction of its distance)
+	vec4 ambient;       // rgb: light added everywhere (the game's look)
+	vec4 figure;        // rgb: the least light a figure is drawn in; w: 1 graded, 0 not
+	vec4 grade;         // rgb: tint; w: saturation (1 as it is)
+	vec4 grade_more;    // x: contrast (1 as it is); y: vignette; zw: 1 / the target's size
 	ivec4 camera_chunk; // xyz: the camera's chunk; w: no block at this y or above is drawn (render/scene.odin's NO_CUT: none)
 	Cloud_Map cloud_map;
 };
@@ -44,7 +49,7 @@ vec3 sky_color(Scene s, vec3 dir) {
 
 // fog_amount: 0 near .. 1 at the fog distance (horizontal distance d).
 float fog_amount(Scene s, float d) {
-	return clamp((d - 0.6 * s.zenith.w) / (0.4 * s.zenith.w), 0.0, 1.0);
+	return clamp((d - s.lamp.w * s.zenith.w) / (s.horizon.w * s.zenith.w), 0.0, 1.0);
 }
 
 // cloud_at: whether a cloud fills cell (the map repeats).
@@ -120,4 +125,18 @@ vec3 fog_mix(Scene s, vec3 color, vec3 to) {
 	}
 	float fog = fog_amount(s, length(to.xz));
 	return fog > 0.0 ? mix(color, sky_color(s, normalize(to)), fog) : color;
+}
+
+// graded: a finished colour in the game's look's grade (render/look.odin), at
+// pixel `at` (gl_FragCoord.xy): tint, saturation, contrast about a mid grey,
+// then the vignette. Untouched when the look has none.
+vec3 graded(Scene s, vec3 color, vec2 at) {
+	if (s.figure.w == 0.0) return color;
+	vec3 c = color * s.grade.rgb;
+	float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+	c = max(mix(vec3(luma), c, s.grade.w), vec3(0.0));
+	c = 0.18 * pow(c / 0.18, vec3(s.grade_more.x));
+	vec2 p = at * s.grade_more.zw - 0.5; // -0.5..0.5 across the target
+	float edge = smoothstep(0.25, 0.75, length(p * vec2(1.0, 0.8)) * 1.2);
+	return c * (1.0 - s.grade_more.y * edge);
 }

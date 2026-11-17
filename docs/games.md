@@ -456,6 +456,7 @@ the frame.
 | `keys` | The client part's own keys beyond its actions, at most `MAX_GAME_KEYS` (`engine.Game_Key`: a name and its default key): a command panel's hotkeys, control groups on the number keys. Never sent: `game_key_pressed(s, i)` and `game_key_down(s, i)` read them while the world has the keyboard, `game_key_label(s, i)` names the key bound, and the modifiers held are the UI's (`ctx.input.modifiers`) |
 | `no_hotbar` | Its players hold no hotbar (a commander, a city's planner): in its world the hotbar's keys and the wheel pick no slot, and the controls do not list them |
 | `camera(s) -> Game_Camera` | Every frame: the camera the game wants. `.Player` (the player's own, <kbd>F5</kbd>), `.First`, `.Third`; `.Top_Down` (over the head, `distance` away, `angle` degrees down along `heading`, the world cut `cut` blocks above the feet): the pointer aims (`s.aim`, `s.aim_entity`, `s.pointer`), the avatar faces it, the movement keys move across the screen; `.Free` (no avatar, for a mode with `game.Ability.Bodiless`): looks at the player's focus from `distance`, zoomed between `near` and `far`, panned by the movement keys, the screen's edge and the middle button; `pointer_tool(s)` says what the pointer is over and each button's press, drag and release |
+| `look` | Its atmosphere, as data: the sky, the fog, the light and the picture's colour its world is drawn in ([below](#a-games-look)); zero: the engine's own |
 | `screen(s, ctx, top)` | Every frame while the game's screen is open: a panel of its own over the world (a town's market, a shop) drawn with the UI kit (`top`: it has the focus). The game opens it with `game_screen_open(s)` (from a record, an event, its action's answer) and closes it with `game_screen_close(s)`; the player closes it as any screen over the world, Escape or the pad's Back, and it closes with the world. While open it takes the keyboard, the pointer and the pad's navigation (the world runs on); `game_screen_shown(s)` says whether it is open |
 
 **Its keys.** While a game plays, the controls (Options > Controls) list its actions and its
@@ -479,6 +480,7 @@ number and no cast.
 | `game_screen_open(s)`, `game_screen_close(s)`, `game_screen_shown(s)` | Its screen over the world (the `screen` hook): open it, close it, whether it is open |
 | `game_action_key(s, i)`, `game_action_pressed(s, i)`, `game_key_pressed(s, i)`, `game_key_down(s, i)`, `game_key_label(s, i)` | Its actions and its own keys: the key bound to an action (for the HUD to say), an action or a key pressed this frame, a key held, the key bound to a key |
 | `Game_Key`, `MAX_GAME_KEYS`, `Command_Spec` | What its `keys` and `commands` fields hold |
+| `Look`, `Grade` | What its `look` field holds: its atmosphere ([below](#a-games-look)) |
 | `Game_Camera`, `Game_Camera_Kind`, `pointer_tool(s)`, `Pointer_Tool`, `Pointer_Press` | The camera its `camera` hook asks for; under a top-down or free camera, what the pointer is over and what each button did |
 | `Scoreboard`, `SCOREBOARD_COLUMNS`, `scoreboard_columns(board, ...)`, `scoreboard_row(board, name, ...)` | Filling the player list (the `scoreboard` hook) |
 
@@ -535,6 +537,46 @@ tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[ke
 A test holds every key to its text (`base.text_missing(TEXT_EN)`); a translation is another
 table of the same keys beside it. `games/flood` is the model; every game's HUD speaks from its
 table, while the server's notices and announcements are still English in place.
+
+## A game's look
+
+Each game has an air of its own: a dungeon dark and close, a race bright and far. A game's
+client part declares it once, as data, in `engine.Game.look` (an `engine.Look`, which is
+`render.Look`), beside its camera and its HUD:
+
+```odin
+// games/tag/client/game.odin
+LOOK :: engine.Look {
+	time       = 0.97, // past midnight, always
+	horizon    = {0.035, 0.05, 0.09},
+	fog        = 70,
+	fog_near   = 0.3,
+	grade      = {tint = {0.86, 0.95, 1.12}, saturation = -0.3, vignette = 0.35},
+}
+GAME :: engine.Game{info = tag.INFO, ..., look = LOOK}
+```
+
+Every field's zero is the engine's own, so a game names only what it changes, and a game
+that declares nothing is drawn as the sandbox is. A look moves colour and atmosphere, never
+the art: the textures, the materials, the UI and the lighting model are every game's.
+
+| Field | What it sets (zero: the engine's) |
+|---|---|
+| `time` | A time of day that stands, `0 < time <= 1` (0.25 sunrise, 0.5 noon, 0.75 sunset, 1 midnight): the sun, the moon, the stars and the light follow it. The server's clock still runs (its spawns, its growth); only the picture stands. Zero: the world's clock |
+| `zenith`, `horizon` | The sky overhead and at the horizon (linear rgb), at every hour. The fog fades into the sky, so `horizon` is the fog's colour too |
+| `sun_light` | What full sky light looks like on blocks and figures (white at noon, blue at night) |
+| `lamp_light` | What full block light looks like: lamps, magma, a glowing stone (`render.LAMP_LIGHT`, warm) |
+| `ambient` | Light added everywhere, the dark included: a cave's cold air |
+| `figure_light` | The least light creatures, players and items are drawn in (`render.FIGURE_LIGHT`): figures take no block light, so a dark look raises it to keep them seen |
+| `fog`, `fog_near` | The distance (horizontal, in blocks) at which the fog is whole, at most the view's edge, and where it begins, a fraction of it (`render.FOG_NEAR`, 0.6). Blocks, figures and water all fade into the sky's colour by it |
+| `no_clouds`, `no_sun` | No clouds (whatever the player's setting); no sun, moon or stars drawn |
+| `grade` | The finished picture's colour (`engine.Grade`): `tint` (multiplies; zero: white), `saturation` and `contrast` (-1 .. 0 as it is .. 1) and a `vignette` (0 .. 1, the corners darker). The world, its figures, the hand and the sky are graded as each is drawn; the HUD never is |
+
+Readability comes first: enemies, pickups, paths and the player must stay easy to see in a
+look. Take the game's screenshot at 1280x720 ([below](#screenshots)) before and after, and
+when a figure sinks into the dark or the fog, raise `figure_light` or push the fog back
+before darkening further. A look is the client's presentation of the game the server names:
+it is not sent, saved or part of the schema, so changing one changes no protocol.
 
 ## Which game a session plays
 

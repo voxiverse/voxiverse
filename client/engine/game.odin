@@ -10,6 +10,7 @@ import "core:reflect"
 import "core:strings"
 
 import "client:platform"
+import "client:render"
 import "client:ui"
 import "common:game"
 import "common:protocol"
@@ -37,7 +38,16 @@ Game :: struct {
 	keys:          []Game_Key, // its client part's own keys (at most MAX_GAME_KEYS): a command panel's hotkeys, control groups; read with game_key_pressed and game_key_down, never sent
 	no_hotbar:     bool, // its players hold no hotbar: in its world the hotbar's keys and the wheel pick no slot, and the controls do not list them
 	machine_shown: typeid, // what its machines show (its server part's Game.machine_shown): machine_shown reads it
+	look:          Look, // its atmosphere: sky, fog, light and the picture's colour, as data (zero: the engine's own)
 }
+
+// Look: a game's atmosphere (render.Look, docs/games.md): its sky, fog, light and the
+// picture's colour, declared as data in its client part (Game.look); zero is the engine's own.
+Look :: render.Look
+
+// Grade: the colour of a look's finished picture (render.Grade): tint, saturation, contrast
+// and vignette; zero is none.
+Grade :: render.Grade
 
 // Machine_Shown: what a machine showed when last told (apply_machine).
 Machine_Shown :: struct {

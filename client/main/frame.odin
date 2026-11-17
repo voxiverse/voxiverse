@@ -391,7 +391,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 				engine.camera_fov(s, app.settings),
 			)
 			fog := f32(s.welcome.view_radius * game.CHUNK_SIZE)
-			sky := render.sky_at(game.time_of_day(s.clock))
+			sky := render.look_sky(s.game.look, game.time_of_day(s.clock))
 			scene = render.scene_upload(
 				&app.scenes,
 				g,
@@ -403,6 +403,8 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 					engine.eye_in_water(s),
 					app.settings.brightness,
 					app.settings.clouds,
+					s.game.look,
+					{width, height},
 				),
 			)
 			engine.world_debug_lines(app)

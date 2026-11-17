@@ -25,6 +25,13 @@ A label names the pass in validation messages and GPU captures, and times it on 
 | `ui` | The HUD and menus. |
 | `present copy` | Benchmarks only: the offscreen image copied onto the window. |
 
+There is no post-processing pass. A game's look ([games.md](games.md#a-games-look),
+`client/render/look.odin`) reaches the frame through the scene: its sky, fog and light are the
+scene's colours, and its grade (tint, saturation, contrast, vignette) is `scene.glsl`'s
+`graded`, applied at the end of every world, entity, held and sky fragment shader (the UI is
+not graded). A look without a grade skips it on a uniform branch, so the sandbox's frame is
+unchanged by it.
+
 ## Timing
 
 Each pass's GPU time is measured with timestamp queries (`client/gpu/timing.odin`) and read

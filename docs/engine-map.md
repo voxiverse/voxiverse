@@ -75,6 +75,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 | `keys` | `[]Game_Key` | its client part's own keys (at most MAX_GAME_KEYS): a command panel's hotkeys, control groups; read with game_key_pressed and game_key_down, never sent |
 | `no_hotbar` | `bool` | its players hold no hotbar: in its world the hotbar's keys and the wheel pick no slot, and the controls do not list them |
 | `machine_shown` | `typeid` | what its machines show (its server part's Game.machine_shown): machine_shown reads it |
+| `look` | `Look` | its atmosphere: sky, fog, light and the picture's colour, as data (zero: the engine's own) |
 
 ## `server/core` (`core.`): What a game may call
 
@@ -309,6 +310,8 @@ The types these name:
 - `Game_Key :: struct {...}`: one of a game's own keys: what it does (shown in the controls under the game's name and in the controls' words of the game's HUD) and the key that does it until the player binds another.
 - `MAX_GAME_KEYS :: 32`: the keys a game's client part may declare (Game.keys).
 - `Command_Spec :: struct {...}`: what console_register is given (the rest apart).
+- `Look :: render.Look`: a game's atmosphere (render.Look, docs/games.md): its sky, fog, light and the picture's colour, declared as data in its client part (Game.look); zero is the engine's own.
+- `Grade :: render.Grade`: the colour of a look's finished picture (render.Grade): tint, saturation, contrast and vignette; zero is none.
 - `Game_Camera :: struct {...}`: the camera a game wants this frame.
 - `Game_Camera_Kind :: enum u8 {Player, First, Third, Top_Down, Free}`: which camera a game's client part chooses (Game.camera).
 - `pointer_tool :: proc(s: ^Session) -> ^Pointer_Tool`: what the free pointer is over and its buttons this frame (all zero with any other camera).

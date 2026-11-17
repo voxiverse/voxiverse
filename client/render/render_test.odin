@@ -114,12 +114,14 @@ test_sky_through_a_day :: proc(t: ^testing.T) {
 	}
 }
 
-// scene.glsl's Scene: two mat4, ten vec4, an ivec4, the cloud map's address (std430).
-#assert(size_of(Scene) == 2 * 64 + 11 * 16 + 16)
+// scene.glsl's Scene: two mat4, fifteen vec4, an ivec4, the cloud map's address (std430).
+#assert(size_of(Scene) == 2 * 64 + 16 * 16 + 16)
 #assert(offset_of(Scene, camera) == 128)
 #assert(offset_of(Scene, water) == 272)
-#assert(offset_of(Scene, camera_chunk) == 288)
-#assert(offset_of(Scene, cloud_map) == 304)
+#assert(offset_of(Scene, lamp) == 288)
+#assert(offset_of(Scene, grade_more) == 352)
+#assert(offset_of(Scene, camera_chunk) == 368)
+#assert(offset_of(Scene, cloud_map) == 384)
 
 // world.glsl's push constants and chunk draw records.
 #assert(offset_of(World_Push, textures) == 8)
