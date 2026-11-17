@@ -1,8 +1,17 @@
 {
+	// A block of one of these shapes is what its "block" says unless it says otherwise:
+	// {"stone_stairs": {"shape": "voxiverse:stairs", "material": "stone"}}.
 	"stairs": {
 		"boxes": [[0, 0, 0, 16, 8, 16], [0, 8, 0, 16, 16, 8]],
 		"rotate": "facing",
-		"flip": {"half": "top"}
+		"flip": {"half": "top"},
+		"block": {
+			"states": {"facing": ["north", "east", "south", "west"], "half": ["bottom", "top"]},
+			"default": {"facing": "north", "half": "bottom"},
+			"place": "stairs",
+			"opaque": false,
+			"shades": true
+		}
 	},
 	"slab": {
 		"boxes": [],
@@ -10,7 +19,14 @@
 			{"when": {"type": "bottom"}, "boxes": [[0, 0, 0, 16, 8, 16]]},
 			{"when": {"type": "top"}, "boxes": [[0, 8, 0, 16, 16, 16]]},
 			{"when": {"type": "double"}, "boxes": [[0, 0, 0, 16, 16, 16]]}
-		]
+		],
+		"block": {
+			"states": {"type": ["bottom", "top", "double"]},
+			"default": {"type": "bottom"},
+			"place": "slab",
+			"opaque": false,
+			"shades": true
+		}
 	},
 	"ladder": {"boxes": [[0, 0, 13, 16, 16, 16]], "rotate": "facing"},
 	"farmland": {"boxes": [[0, 0, 0, 16, 15, 16]]}

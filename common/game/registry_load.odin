@@ -133,6 +133,7 @@ BLOCK_FIELDS := []string {
 	"light",
 	"render",
 	"layer",
+	"material",
 	"textures",
 	"sound",
 	"drop",
@@ -404,14 +405,16 @@ build_packs :: proc(b: ^Reg_Build) {
 	b.by_dir = make([][Content_Kind][dynamic]Pack_File, len(b.sources))
 	for src, pi in b.sources {read_pack_manifest(b, pi, src)}
 	if len(b.errs) > 0 {return}
-	// Kind by kind, so a block's item exists before the item files merge.
+	// Kind by kind, so a block's item exists before the item files merge, and every
+	// material's textures before the blocks that use them.
 	for kind in Content_Kind {
 		if kind == .Item {seed_block_items(b)}
 		for pi in 0 ..< len(b.sources) {
 			for f in b.by_dir[pi][kind] {read_definitions(b, pi, kind, f)}
 		}
-		if kind == .Structure {continue}
+		if kind == .Texture {seed_material_textures(b)}
 	}
+	apply_shape_blocks(b)
 }
 
 // asset_suffix: the extension of the art or sound files that sit beside a

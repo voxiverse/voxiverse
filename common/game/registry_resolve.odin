@@ -754,10 +754,41 @@ read_generator :: proc(b: ^Reg_Build, m: ^Merged_Def, names: []string) -> string
 	return names[i]
 }
 
+// read_material: the index in MATERIALS of the material f names, or an error that says
+// the materials are the client's.
+@(private)
+read_material :: proc(b: ^Reg_Build, f: ^Def_Field) -> (int, bool) {
+	if f.value.kind == .String {
+		if at, ok := material_index(f.value.s); ok {return at, true}
+	}
+	got := f.value.s if f.value.kind == .String else "a non-string"
+	names := make([]string, len(MATERIALS))
+	for m, i in MATERIALS {names[i] = m.name}
+	fail_field(
+		b,
+		f,
+		f.value,
+		fmt.aprintf(
+			"\"%s\" is not a material this game has%s (the materials are the client's: docs/packs.md, \"Materials\")",
+			got,
+			suggestion(got, names, false),
+		),
+	)
+	return 0, false
+}
+
 @(private)
 read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order, number: []int) {
 	// n: the block's first state (what it writes; the rest copy it)
 	t := &reg.blocks
+	// Its material, if it names one, says what the block's own fields do not.
+	material := NO_MATERIAL
+	made_of: Material_Def
+	if f := field_of(m, "material"); f != nil {
+		if at, ok := read_material(b, f); ok {
+			material, made_of = i16(at), MATERIALS[at]
+		}
+	}
 	flags: Block_Flags
 	if rd_bool(b, m, "collides", true) {flags += {.Collides}}
 	if rd_bool(b, m, "targetable", true) {flags += {.Targetable}}
@@ -765,11 +796,11 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 	if rd_bool(b, m, "placeable", true) {flags += {.Placeable}}
 	if rd_bool(b, m, "replaceable", false) {flags += {.Replaceable}}
 	if rd_bool(b, m, "shades", false) {flags += {.Shades}}
-	if rd_bool(b, m, "cull_same", false) {flags += {.Cull_Same}}
+	if rd_bool(b, m, "cull_same", made_of.cull_same) {flags += {.Cull_Same}}
 	if rd_bool(b, m, "liquid", false) {flags += {.Liquid}}
 	render := Render_Kind(rd_choice(b, m, "render", RENDER_NAMES, 0))
-	layer := Layer_Kind(rd_choice(b, m, "layer", LAYER_NAMES, 0))
-	if rd_bool(b, m, "opaque", true) {
+	layer := Layer_Kind(rd_choice(b, m, "layer", LAYER_NAMES, int(made_of.layer)))
+	if rd_bool(b, m, "opaque", made_of.layer == .Opaque) {
 		if render != .Cube || layer != .Opaque {
 			f := field_of(m, "opaque")
 			if f != nil {
@@ -793,11 +824,12 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 		flags += {.Opaque}
 	}
 	t.flags[n] = flags
-	t.light[n] = u8(rd_int(b, m, "light", 0, 0, 15))
+	t.light[n] = u8(rd_int(b, m, "light", int(made_of.light), 0, 15))
 	d := &t.defs[n]
 	d.id = m.id
 	d.render = render
 	d.layer = layer
+	d.material = material
 	d.sound = NO_SOUND
 	d.support = NO_TAG
 	d.back = NO_TAG
@@ -807,10 +839,19 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 		} else if at, ok := ref_index(b, .Sound, f.value.s, f, f.value); ok {
 			d.sound = i32(at)
 		}
+	} else if material != NO_MATERIAL {
+		d.sound = i32(b.index[.Sound][strings.concatenate({BASE_NAMESPACE, ":", made_of.sound})])
 	}
-	// Faces: side, top, bottom.
+	// Faces: side, top, bottom; a material's, each that the block's textures do not name.
+	if material != NO_MATERIAL {
+		for generator, k in material_faces(made_of) {
+			id := strings.concatenate({BASE_NAMESPACE, ":", generator})
+			d.faces[k] = u32(b.index[.Texture][id])
+		}
+	}
 	if render == .None && field_of(m, "textures") == nil {return}
 	f := field_of(m, "textures")
+	if f == nil && field_of(m, "material") != nil {return} 	// (one it does not know is said)
 	if f == nil {
 		at, found := b.index[.Texture][m.id]
 		if !found {
@@ -875,6 +916,10 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 			return
 		}
 		d.faces = {u32(got[0]), u32(got[0]), u32(got[0])}
+		return
+	}
+	if material != NO_MATERIAL {
+		for k in 0 ..< 3 {if got[k + 1] >= 0 {d.faces[k] = u32(got[k + 1])}}
 		return
 	}
 	if got[1] < 0 {

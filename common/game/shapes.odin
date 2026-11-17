@@ -155,7 +155,76 @@ Shape_Case :: struct {
 	replace: bool, // its boxes instead of the shape's own and those of the cases before it
 }
 
-SHAPE_FIELDS := []string{"boxes", "cases", "rotate", "flip", "override"}
+SHAPE_FIELDS := []string{"boxes", "cases", "rotate", "flip", "block", "override"}
+
+// SHAPE_BLOCK_FIELDS: what a shape's `block` may say of the blocks of that shape.
+@(private)
+SHAPE_BLOCK_FIELDS := []string {
+	"states",
+	"default",
+	"place",
+	"opaque",
+	"shades",
+	"cull_same",
+	"layer",
+	"collides",
+	"collision",
+	"selection",
+	"render_shape",
+	"connect",
+	"climbable",
+	"use",
+}
+
+// apply_shape_blocks: a block that names a shape takes each field of the shape's `block`
+// (what a block of that shape is: its states, how it is placed, that it is not opaque)
+// that it does not give itself, so a stair of a material is one line:
+// {"basalt_stairs": {"shape": "voxiverse:stairs", "material": "basalt"}}.
+@(private)
+apply_shape_blocks :: proc(b: ^Reg_Build) {
+	for &shape in b.defs[.Shape] {
+		g := field_of(&shape, "block")
+		if g == nil {continue}
+		if g.value.kind != .Object {
+			fail_field(b, g, g.value, "block is an object of the fields a block of this shape has")
+			continue
+		}
+		for member in g.value.members {
+			if !slice.contains(SHAPE_BLOCK_FIELDS, member.key) {
+				fail(
+					b,
+					g.pack,
+					g.file,
+					member.key_line,
+					member.key_column,
+					fmt.aprintf(
+						"\"%s\" is not what a shape says of its blocks%s",
+						member.key,
+						suggestion(member.key, SHAPE_BLOCK_FIELDS),
+					),
+				)
+			}
+		}
+	}
+	if len(b.errs) > 0 {return}
+	for &m in b.defs[.Block] {
+		f := field_of(&m, "shape")
+		if f == nil || f.value.kind != .String {continue}
+		id, ok := id_parse(f.value.s)
+		if !ok {continue}
+		at, found := b.index[.Shape][strings.concatenate({id.namespace, ":", id.name})]
+		if !found {continue} 	// (resolving the shape says so)
+		g := field_of(&b.defs[.Shape][at], "block")
+		if g == nil {continue}
+		for member in g.value.members {
+			if field_of(&m, member.key) != nil {continue}
+			append(
+				&m.fields,
+				Def_Field{name = member.key, value = member.value, pack = g.pack, file = g.file},
+			)
+		}
+	}
+}
 
 // read_boxes: a list of [x0, y0, z0, x1, y1, z1].
 @(private)

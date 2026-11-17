@@ -1,32 +1,11 @@
 {
-	"cobblestone": {
-		"sound": "voxiverse:stone"
-	},
-	"stone_bricks": {
-		"sound": "voxiverse:stone"
-	},
-	"planks": {
-		"sound": "voxiverse:wood"
-	},
-	"glass": {
-		"opaque": false,
-		"layer": "cutout",
-		"cull_same": true,
-		"sound": "voxiverse:glass"
-	},
-	"lamp": {
-		"light": 15,
-		"sound": "voxiverse:glass"
-	},
-	"wool": {
-		"sound": "voxiverse:snow"
-	},
-	"black_wool": {
-		"textures": {
-			"all": "voxiverse:wool_black"
-		},
-		"sound": "voxiverse:snow"
-	},
+	"cobblestone": {"material": "cobblestone"},
+	"stone_bricks": {"material": "stone_bricks"},
+	"planks": {"material": "oak_planks"},
+	"glass": {"material": "glass"},
+	"lamp": {"material": "lamp"},
+	"wool": {"material": "white_wool"},
+	"black_wool": {"material": "black_wool"},
 	"chest": {
 		"textures": {
 			"side": "voxiverse:chest_side",

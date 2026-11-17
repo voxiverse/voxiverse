@@ -279,6 +279,7 @@ Block_Def :: struct {
 	id:        string,
 	render:    Render_Kind,
 	layer:     Layer_Kind,
+	material:  i16, // its material's index in MATERIALS, or NO_MATERIAL
 	faces:     [3]u32, // texture layers: side, top, bottom
 	sound:     i32, // a sound set index, or NO_SOUND
 	drop:      Item,

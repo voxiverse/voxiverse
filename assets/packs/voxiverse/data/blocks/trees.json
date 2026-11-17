@@ -1,12 +1,5 @@
 {
-	"log": {
-		"textures": {
-			"side": "voxiverse:log_side",
-			"top": "voxiverse:log_top",
-			"bottom": "voxiverse:log_top"
-		},
-		"sound": "voxiverse:wood"
-	},
+	"log": {"material": "oak_log"},
 	"leaves": {
 		"opaque": false,
 		"shades": true,

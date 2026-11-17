@@ -45,6 +45,44 @@ assigned in load order; packs load in the order the universe lists them.
 universe does, prints every error and a summary with the registry hash (`tools/packcheck`). A directory's name is its pack's namespace, but for a game's own pack, `games/<game>/pack`,
 which takes the game's ([games.md](games.md#the-games-pack)).
 
+## Materials
+
+A block is made of a material: `{"wall": {"material": "basalt_bricks"}}` is a whole block.
+The material (`MATERIALS` in `common/game/materials.odin`) gives it what follows from what it
+is made of: its textures (side, top and bottom: planks all round, a log's bark and its cut
+ends), its sound set (one of the base pack's: `stone`, `wood`, `metal`, ...), the light it
+gives (a lamp, a screen, a crystal) and whether it is seen through (glass culls its own kind;
+a grating has holes; tinted glass is translucent). Its dust and its colour on a map follow
+from its textures. Whatever the block says itself wins: `"light": 6` dims a lamp, `"sound"`
+changes how it sounds, and `"textures"` with only `"top"` replaces only its top.
+
+A shape says what a block of that shape is unless the block says otherwise (its `block`:
+the states, how it is placed, that it is not opaque and shades, its collision), so a block
+of a shape in a material is one line too:
+
+```json
+{
+	"basalt_stairs": {"shape": "voxiverse:stairs", "material": "basalt"},
+	"basalt_slab": {"shape": "voxiverse:slab", "material": "basalt"},
+	"oak_fence": {"shape": "voxiverse:fence", "material": "oak_planks"}
+}
+```
+
+The materials ship with the client: their textures are the client's generators, each the base
+pack's texture of its name (`voxiverse:basalt_bricks`, made by the registry when the base pack
+has none), so any pack, one from a server too, can make a block of any material without the
+base pack defining one. A pack that names a material this client does not have is refused
+where it names it, with the nearest name (`./build.sh packs` says so too). `./build.sh sheet`
+draws them all, by family, with their names. The materials, by family:
+
+<!-- materials: written from common/game/materials.odin (materials_doc) -->
+- **stone and masonry** (4): `stone`, `cobblestone`, `stone_bricks`, `sandstone`
+- **wood** (2): `oak_log`, `oak_planks`
+- **built and industrial** (2): `glass`, `lamp`
+- **soft and domestic** (2): `white_wool`, `black_wool`
+- **natural** (7): `dirt`, `grass`, `sand`, `gravel`, `clay`, `snow`, `ice`
+<!-- end of materials -->
+
 ## Entity kinds
 
 Entity kinds are `data/entities/*.json` entries (`common/game/registry_entities.odin`); the base
