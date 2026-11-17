@@ -84,6 +84,10 @@ DELVER_MODE :: "delve:delver"
 CHEST_KIND :: "delve:chest"
 FLOOR_BLOCK :: "delve:flagstone"
 WALL_BLOCK :: "delve:wall"
+MOSSY_BLOCK :: "delve:mossy_wall"
+RUNE_BLOCK :: "delve:rune_pillar"
+BRAZIER_BLOCK :: "delve:brazier"
+BONES_BLOCK :: "delve:bones"
 EXIT_BLOCK :: "delve:way_down"
 
 // Rarity: a rolled weapon's grade; its bonus to damage grows with it.

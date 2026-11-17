@@ -1,13 +1,14 @@
 {
-	// The dungeon's: never broken nor placed by a delver (the game refuses every edit).
-	"flagstone": {
-		"textures": {"all": "voxiverse:cobblestone"},
-		"sound": "voxiverse:stone"
-	},
-	"wall": {
-		"textures": {"side": "voxiverse:stone_bricks", "top": "voxiverse:bedrock", "bottom": "voxiverse:stone_bricks"},
-		"sound": "voxiverse:stone"
-	},
+	// The dungeon's, dressed in the kit's dungeon materials: never broken nor placed by a
+	// delver (the game refuses every edit). The walls' tops are what the camera sees most.
+	"flagstone": {"material": "slate_tiles"},
+	"wall": {"material": "dark_bricks", "textures": {"top": "voxiverse:obsidian"}},
+	"mossy_wall": {"material": "mossy_bricks", "textures": {"top": "voxiverse:obsidian"}},
+	// A glowing stone in the middle of a room's side walls, and a brazier of magma in each
+	// of its floor's corners: the dungeon's light.
+	"rune_pillar": {"material": "rune_stone"},
+	"brazier": {"material": "magma"},
+	"bones": {"material": "bone"},
 	// The way down: it glows in the warden's room once the warden is dead.
 	"way_down": {
 		"textures": {"all": "voxiverse:gate_horizon"},

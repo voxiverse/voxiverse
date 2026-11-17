@@ -29,6 +29,25 @@ GAME :: engine.Game {
 	hud        = hud,
 	debug      = debug,
 	scoreboard = scoreboard,
+	look       = LOOK,
+}
+
+// LOOK: a dungeon's air: no sky to speak of, a cold blue dark close round the delver, the
+// braziers' and the runes' warm light the only warmth, and the corners dark. Creatures are
+// drawn in more light than the dark gives, so they read against the floor.
+LOOK :: engine.Look {
+	time = 0.5,
+	zenith = {0.004, 0.005, 0.009},
+	horizon = {0.012, 0.014, 0.024},
+	sun_light = {0.13, 0.15, 0.23},
+	lamp_light = {1.15, 0.72, 0.38},
+	ambient = {0.03, 0.04, 0.07},
+	figure_light = {0.55, 0.55, 0.62},
+	fog = 30,
+	fog_near = 0.3,
+	no_clouds = true,
+	no_sun = true,
+	grade = {tint = {0.95, 0.97, 1.08}, saturation = -0.1, contrast = 0.12, vignette = 0.45},
 }
 
 // The camera: over the head, looking down at 60 degrees from 15 blocks; nothing of the

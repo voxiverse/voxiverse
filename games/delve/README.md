@@ -5,6 +5,10 @@ from a seed: a grid of rooms joined by corridors, a start room in a corner and t
 room the most corridors away. Creatures wait in the rooms; the warden's death opens the way
 down, and stepping on it takes every delver to the next dungeon, deeper, bigger and harder.
 
+The dungeon is dark and close: dark bricks with moss on some walls, a glowing rune stone in
+the middle of each room's side walls, a brazier of magma in each corner of its floor, bones
+about, and a cold dark beyond a few rooms (its look, `LOOK` in `client/game.odin`).
+
 The camera hangs over your head and looks down; nothing of the world above the walls' height
 is drawn, so a roof would never hide you. The mouse is free: you face the pointer, the left button strikes
 or shoots where it points, and W A S D move you up, left, down and right on the screen.

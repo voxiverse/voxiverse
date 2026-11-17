@@ -55,6 +55,7 @@ dungeon_build :: proc(s: ^core.Server, force: bool) -> bool {
 	fill(w, {{AREA.lo.x, -1, AREA.lo.z}, {AREA.hi.x, -1, AREA.hi.z}}, .Grass, act)
 	fill(w, {{-1, -1, -1}, {size.x, -1, size.y}}, d.floor, act)
 	fill(w, {{-1, 0, -1}, {size.x, top, size.y}}, d.wall, act)
+	dress_walls(s, act)
 	carve :: proc(w: ^core.World, a: delve.Area, top: i32, act: core.Act) {
 		fill(w, {{a.lo.x, 0, a.lo.y}, {a.hi.x, top, a.hi.y}}, .Air, act)
 	}
@@ -63,8 +64,78 @@ dungeon_build :: proc(s: ^core.Server, force: bool) -> bool {
 		carve(w, p.legs[0], top, act)
 		carve(w, p.legs[1], top, act)
 	}
+	dress_floors(s, act)
 	populate(s)
 	return true
+}
+
+// Dress: the blocks a dungeon is dressed in beyond its walls and floor (the pack's).
+Dress :: struct {
+	mossy, rune, brazier, bones: game.Block,
+}
+
+// dress_rng: the dressing's own numbers, from the dungeon's seed (the game's rng, which
+// places the creatures, is left as it was).
+dress_rng :: proc(s: ^core.Server) -> base.Rng {
+	return base.rng_make(u64(state(s).seed) ~ 0xd2e55)
+}
+
+// dress_walls: before the rooms are carved, a stretch of moss along one side of some
+// rooms and a glowing rune stone in the middle of each room's two side walls (a corridor
+// carved through one takes it away).
+dress_walls :: proc(s: ^core.Server, act: core.Act) {
+	w := s.home
+	d := state(s)
+	r := dress_rng(s)
+	top := i32(delve.WALL_HEIGHT - 1)
+	for room in d.plan.rooms[:d.plan.room_count] {
+		a := room.area
+		if base.rng_int_max(&r, 3) < 2 {
+			x := a.lo.x - 1 if base.rng_int_max(&r, 2) == 0 else a.hi.x + 1
+			core.bulk_edit(
+				w,
+				{
+					shape = core.Box{{x, 0, a.lo.y}, {x, top, a.hi.y}},
+					op = .Set,
+					block = d.dress.mossy,
+					partial = true,
+				},
+				act,
+			)
+		}
+		m := delve.room_middle(a)
+		for x in ([2]i32{a.lo.x - 1, a.hi.x + 1}) {
+			core.bulk_edit(
+				w,
+				{
+					shape = core.Box{{x, 0, m.y}, {x, top, m.y}},
+					op = .Set,
+					block = d.dress.rune,
+					partial = true,
+				},
+				act,
+			)
+		}
+	}
+}
+
+// dress_floors: after the carving, a brazier in each corner of every room's floor and a
+// few bones about it.
+dress_floors :: proc(s: ^core.Server, act: core.Act) {
+	w := s.home
+	d := state(s)
+	r := dress_rng(s)
+	for room in d.plan.rooms[:d.plan.room_count] {
+		a := room.area
+		for corner in ([4][2]i32{a.lo, {a.hi.x, a.lo.y}, {a.lo.x, a.hi.y}, a.hi}) {
+			core.set_block(w, {corner.x, -1, corner.y}, d.dress.brazier, act)
+		}
+		for _ in 0 ..< 2 {
+			x := i32(base.rng_int_range(&r, int(a.lo.x) + 1, int(a.hi.x)))
+			z := i32(base.rng_int_range(&r, int(a.lo.y) + 1, int(a.hi.y)))
+			core.set_block(w, {x, -1, z}, d.dress.bones, act)
+		}
+	}
 }
 
 // room_point: the middle of a room's floor (where a delver or a creature stands).

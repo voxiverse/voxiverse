@@ -68,6 +68,7 @@ Run :: struct {
 	floor:       game.Block,
 	wall:        game.Block,
 	exit:        game.Block,
+	dress:       Dress,
 }
 
 // Seat: a delver's progress in this session.
@@ -119,6 +120,10 @@ start :: proc(s: ^core.Server) -> bool {
 	d.potion = game.registry_item(reg, delve.POTION) or_return
 	d.floor = game.registry_block(reg, delve.FLOOR_BLOCK) or_return
 	d.wall = game.registry_block(reg, delve.WALL_BLOCK) or_return
+	d.dress.mossy = game.registry_block(reg, delve.MOSSY_BLOCK) or_return
+	d.dress.rune = game.registry_block(reg, delve.RUNE_BLOCK) or_return
+	d.dress.brazier = game.registry_block(reg, delve.BRAZIER_BLOCK) or_return
+	d.dress.bones = game.registry_block(reg, delve.BONES_BLOCK) or_return
 	d.exit = game.registry_block(reg, delve.EXIT_BLOCK) or_return
 	core.world_keep(w, AREA)
 	dungeon_begin(s, 1)
