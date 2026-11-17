@@ -27,6 +27,7 @@ Material :: enum u8 {
 	Glass,
 	Wood,
 	Snow,
+	Metal,
 }
 
 Action :: enum u8 {
@@ -226,6 +227,14 @@ block_sound :: proc(
 			0.2,
 			0.4,
 		)
+	case .Metal:
+		// A struck plate: a clank of inharmonic partials that ring on longer than
+		// stone's, a hard tick, no grit.
+		for ratio, i in ([?]f32{1, 2.76, 5.4, 8.93}) {
+			tone(&s, 620 * r * ratio, (0.16 - 0.03 * f32(i)) * size, 1 / (1 + 0.6 * f32(i)))
+		}
+		burst(&s, {start = 0, tau = 0.004, filter = .Band, freq = 3000 * r, q = 2, gain = 0.5})
+		burst(&s, {start = 0, tau = 0.020 * size, filter = .Low, freq = 300 * r, gain = 0.4})
 	}
 	return finish(&s, peak, allocator)
 }

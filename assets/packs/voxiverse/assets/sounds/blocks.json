@@ -22,5 +22,8 @@
 	},
 	"snow": {
 		"generator": "snow"
+	},
+	"metal": {
+		"generator": "metal"
 	}
 }

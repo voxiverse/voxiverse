@@ -95,6 +95,7 @@ SOUND_GENERATOR_NAMES := [?]string {
 	"glass",
 	"wood",
 	"snow",
+	"metal",
 }
 
 // Id: `namespace:name`. namespace is [a-z0-9_]{1,32}, name [a-z0-9_]{1,48}.

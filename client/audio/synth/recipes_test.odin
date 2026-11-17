@@ -16,6 +16,7 @@ RECIPES :: [?]struct {
 	{"grass.recipe", #load("../../../assets/sounds/grass.recipe", string)},
 	{"gravel.recipe", #load("../../../assets/sounds/gravel.recipe", string)},
 	{"leaves.recipe", #load("../../../assets/sounds/leaves.recipe", string)},
+	{"metal.recipe", #load("../../../assets/sounds/metal.recipe", string)},
 	{"sand.recipe", #load("../../../assets/sounds/sand.recipe", string)},
 	{"creature.recipe", #load("../../../assets/sounds/creature.recipe", string)},
 	{"snow.recipe", #load("../../../assets/sounds/snow.recipe", string)},
