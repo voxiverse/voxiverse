@@ -190,7 +190,10 @@ checked when the registry is built (`common/game/pack_assets.odin`):
   run by `tools/atlas` into `build/textures/`, carried in the executable: nothing is drawn when
   the client starts). A PNG is one more layer after the atlas's, its mips made by the client
   the way the build made the atlas's (`texture.mip_chain`). So a pack a server sends can name
-  only the generators every client has, or bring PNGs.
+  only the generators every client has, or bring PNGs. `./build.sh sheet` draws every pack's
+  textures to look at (`build/sheets/<pack>.png`, `tools/sheet`): its own large and named, by
+  family (`texture.Family`), then each one its blocks show tiled 3 x 3 as in the world, where
+  seams and repetition show, with the blocks that show it.
 - A sound is an Ogg of at most `MAX_OGG_BYTES` = 1 MiB and `MAX_SOUND_SECONDS` = 5 s, scanned for
   its length and decoded once by `common/ogg`, so the client only plays a file that passed.
   File-based sound sets total at most `MAX_PACK_SOUND_FILES` = 128 files over all packs.

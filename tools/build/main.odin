@@ -83,6 +83,7 @@ PACKAGES :: []string {
 	"tools/ogg",
 	"tools/schema",
 	"tools/packcheck",
+	"tools/sheet",
 	"tools/audiodump",
 	"tools/analytics",
 	"tools/replay",
@@ -146,6 +147,7 @@ TEST_PACKAGES :: []string {
 	"tools/music",
 	"tools/netdump",
 	"tools/replay",
+	"tools/sheet",
 	"tools/build",
 }
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
@@ -310,7 +312,8 @@ main :: proc() {
 	     "bench",
 	     "images",
 	     "shot",
-	     "audio":
+	     "audio",
+	     "sheet":
 		// The game's packages link miniaudio and carry the texture atlas; even
 		// type-checking wants both.
 		compare_only := args[0] == "determinism" && len(args) > 1 && args[1] == "--compare"
@@ -373,6 +376,8 @@ main :: proc() {
 		ok = music_command(args[1:])
 	case "packs":
 		ok = run_tool("packcheck", args[1:], release = true)
+	case "sheet":
+		ok = run_tool("sheet", args[1:], release = true)
 	case "fuzz":
 		ok = fuzz(args[1:])
 	case "audio":
@@ -519,6 +524,9 @@ usage :: proc() {
 	fmt.println("  perf      record game, server or bench under Linux perf (-- program arguments)")
 	fmt.println(
 		"  icon      draw the game's icon to build/voxiverse.ico and build/icon-<size>.png",
+	)
+	fmt.println(
+		"  sheet     draw the block textures to look at: build/sheets/<pack>.png (the base pack, each game's) and all.png",
 	)
 	fmt.println("  build     build the game and the dedicated server into build/: by default a")
 	fmt.println("            development build (lightly optimized, debug info, the dev aids), or:")

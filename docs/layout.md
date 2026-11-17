@@ -231,6 +231,7 @@ package** is enforced by the `layout` lint (see above).
 | `tools/script` | The script tool (run, disasm) | `*.odin` |
 | `tools/ogg` | The Ogg tool | `*.odin` |
 | `tools/packcheck` | The pack checker | `*.odin` |
+| `tools/sheet` | The texture sheets (`build sheet`: every pack's block textures, large and named, and tiled as in the world, to `build/sheets/`) | `*.odin` |
 | `tools/replay` | The replay tool | `*.odin` |
 | `tools/schema` | The schema tool | `*.odin` |
 | `tools/sfx` | The sound-effect tool (`build sfx`: recipes to WAVs and a targets report) | `*.odin` |
