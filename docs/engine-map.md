@@ -332,7 +332,7 @@ The types these name:
 - `banner :: proc(ctx: ^ui.Context, at: f32, text: string, scale: f32, color: ui.Color)`: a line of big text across the screen, its middle `at` pixels from the screen's (negative: above it), `scale` times the title's size, with a shadow.
 - `Flash :: struct {...}`: a banner shown for a while, kept in the game's view (it outlives the frame its news came in).
 - `flash :: proc(f: ^Flash, s: ^Session, text: string, tone := Tone.Plain, seconds := FLASH_SECONDS)`: show text as a banner from now for seconds (it replaces the one shown).
-- `flash_draw :: proc(ctx: ^ui.Context, f: ^Flash, s: ^Session, at: f32 = -160, scale: f32 = 1)`: the flash, while it stands, as a banner at `at` (banner's).
+- `flash_draw :: proc(ctx: ^ui.Context, f: ^Flash, s: ^Session, at: f32 = -160, scale: f32 = 1)`: the flash, while it stands, as a banner at `at` (banner's), popping in and fading out.
 - `Tone :: enum u8 {Plain, Good, Warn, Bad}`: what a flash's news is, which colours it.
 - `world_point :: proc(s: ^Session, ctx: ^ui.Context, p: [3]f64) -> (at: [2]f32, ok: bool)`: where p in the world is on the screen this frame (UI units); false behind the eyes, farther than MARK_DISTANCE, or with no view yet.
 - `world_label :: proc(s: ^Session, ctx: ^ui.Context, p: [3]f64, text: string) -> bool`: text on a dark plate over p, as players' names are.
@@ -356,6 +356,11 @@ The types these name:
 - `MAX_BURST_PUFFS :: 256`: the puffs bursts may have alive at once, of the MAX_PUFFS every effect shares: a burst past it makes fewer pieces, or none, so no game can crowd out the engine's own effects or slow the frame.
 - `shake :: proc(s: ^Session, amount: f32, seconds: f32)`: the view shakes, `amount` hard (0 ..= 1: 0.15 a blow taken, 0.4 a blast near, 1 the most there is) for `seconds`, dying away.
 - `kick :: proc(s: ^Session, degrees: f32)`: the view jolts up by `degrees` (down below 0) and settles, in a few tenths of a second: a gun's recoil, a landing, a collision.
+- `float_text :: proc(s: ^Session, at: [3]f64, text: string, color: [4]u8, scale: f32 = 1)`: text over `at` in the world, in color, scale times the HUD's text: it pops, rises a block and fades in under a second (FLOAT_SECONDS).
+- `pulse :: proc(s: ^Session, color: [4]u8)`: the screen's edges glow in color for a moment (PULSE_SECONDS) and fade, strongest at the edge: red for harm taken, green for a heal.
+- `Tween :: struct {...}`: a HUD element's moment of easing in (a score that changed, a banner): started when its news comes, read each frame as the fraction done.
+- `tween_start :: proc(t: ^Tween, s: ^Session)`: the tween begins now (again, if it was under way).
+- `tween_value :: proc(t: ^Tween, s: ^Session, seconds: f32, curve := ui.Ease.Out_Cubic) -> f32`: how far the tween is, 0 at its start to 1 after `seconds`, along the curve (ui.ease); 1 when never started, and at once under Reduce motion.
 - `entity_flash :: proc(s: ^Session, id: u32, color: [4]u8)`: the entity drawn in color for a moment (ENTITY_FLASH_SECONDS): red as every creature is when hurt, white for a critical blow, gold for a level gained.
 - `HURT :: [4]u8 {...}`: what a hurt creature flashes (Entity_Hurt: entity_flash).
 - `game_request :: proc(s: ^Session, value: ^$T)`: game_request sends the game's server part one of its requests (Game_Kinds.requests: value of the request kind's type), after the last input sent; the server checks it and its request hook judges it.

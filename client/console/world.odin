@@ -130,7 +130,7 @@ register_world_commands :: proc(c: ^engine.Console) {
 		c,
 		{
 			"feel",
-			"feel burst <impact|sparks|smoke|sparkle|death|splash> <x> <y> <z> | shake <amount> <seconds> | kick <degrees>: one of the feel kit's effects, for a picture (a development build's)",
+			"feel burst <impact|sparks|smoke|sparkle|death|splash> <x> <y> <z> | shake <amount> <seconds> | kick <degrees> | text <x> <y> <z> <text> | pulse <hurt|heal>: one of the feel kit's effects, for a picture (a development build's)",
 			feel_command,
 		},
 		args = {1, 8},
@@ -168,6 +168,18 @@ feel_command :: proc(app: ^engine.App, args: []string) {
 		seconds, s_ok := strconv.parse_f32(args[2] if len(args) == 3 else "")
 		if a_ok && s_ok {
 			engine.shake(s, amount, seconds)
+			return
+		}
+	case "text":
+		if len(args) == 5 && numbers(args[1:], &at) {
+			engine.float_text(s, at, args[4], app.ui.theme.warning)
+			return
+		}
+	case "pulse":
+		if len(args) == 2 && (args[1] == "hurt" || args[1] == "heal") {
+			color := app.ui.theme.log_error if args[1] == "hurt" else app.ui.theme.success
+			color.a = 100
+			engine.pulse(s, color)
 			return
 		}
 	case "kick":

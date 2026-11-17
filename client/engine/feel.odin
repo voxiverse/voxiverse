@@ -2,11 +2,14 @@ package engine
 
 import "core:math"
 
+import "client:ui"
 import "common:base"
 import "common:game"
 
 // The feel kit (docs/games.md, "Feel"): the short, small feedback a game's client part gives
-// what happens in it, a line a call: a burst of particles, a flash on a creature. It is
+// what happens in it, a line a call: a burst of particles, a flash on a creature, a shake or
+// a kick of the view, a number floating up, a pulse at the screen's edge, a HUD element
+// easing in (feel_hud draws what is the HUD's). It is
 // presentation only: nothing is sent, saved or simulated, and the server never knows.
 //
 // Every effect is timed by the feel clock (Feel.clock), which follows the server's ticks as
@@ -27,6 +30,8 @@ Feel :: struct {
 	still:       bool, // Reduce motion: what eases in is simply there, what floats up stands
 	shakes:      [MAX_SHAKES]Shake,
 	kicks:       [MAX_KICKS]Kick,
+	floats:      [MAX_FLOATS]Float_Text,
+	pulse:       Pulse,
 }
 
 // feel_advance: a frame of dt seconds on the feel clock (session_update, after the messages
@@ -315,4 +320,129 @@ feel_view :: proc(f: ^Feel) -> (move: [3]f32, turn: [3]f32) {
 	}
 	turn.y += clamp(degrees, -KICK_CAP, KICK_CAP) * f.shaking * math.RAD_PER_DEG
 	return
+}
+
+// ---------------------------------------------------------------------------
+// The HUD: floating text, the edge's pulse, tweens
+// ---------------------------------------------------------------------------
+
+MAX_FLOATS :: 24 // texts floating at once (one more takes the oldest's place)
+FLOAT_TEXT_MAX :: 24 // bytes of one (cut at a whole letter)
+FLOAT_SECONDS :: 0.9
+FLOAT_RISE :: 1.1 // blocks it rises
+FLOAT_POP :: 0.15 // seconds it takes to pop to its size
+
+// Float_Text: a few words in the world rising and fading: a hit's damage, "+5".
+Float_Text :: struct {
+	text:  [FLOAT_TEXT_MAX]u8,
+	len:   int, // (0: a free slot)
+	at:    [3]f64,
+	color: [4]u8,
+	scale: f32,
+	born:  f64,
+}
+
+// float_text: text over `at` in the world, in color, scale times the HUD's text: it pops,
+// rises a block and fades in under a second (FLOAT_SECONDS). At most MAX_FLOATS at once,
+// the oldest giving way; under Reduce motion it stands and fades.
+float_text :: proc(s: ^Session, at: [3]f64, text: string, color: [4]u8, scale: f32 = 1) {
+	f := &s.feel
+	slot, oldest := 0, f64(max(f64))
+	for x, i in f.floats {
+		if x.len == 0 {slot = i; break}
+		if x.born < oldest {slot, oldest = i, x.born}
+	}
+	n := len(text)
+	if n > FLOAT_TEXT_MAX {
+		n = FLOAT_TEXT_MAX
+		for n > 0 && text[n] & 0xc0 == 0x80 {n -= 1} 	// (a whole letter)
+	}
+	x := &f.floats[slot]
+	x.len = copy(x.text[:], text[:n])
+	x.at, x.color, x.scale, x.born = at, color, scale, feel_now(s)
+}
+
+PULSE_SECONDS :: 0.45
+PULSE_BANDS :: 8 // the edge's glow, in bands fading inward
+PULSE_DEPTH :: 0.09 // ... as deep as this of the screen's height
+
+// Pulse: the screen's edge glowing for a moment.
+Pulse :: struct {
+	color: [4]u8, // (alpha 0: none)
+	born:  f64,
+}
+
+// pulse: the screen's edges glow in color for a moment (PULSE_SECONDS) and fade, strongest
+// at the edge: red for harm taken, green for a heal. Its alpha is how strong (60 to 110
+// reads without hiding anything); a new one replaces the one fading.
+pulse :: proc(s: ^Session, color: [4]u8) {
+	s.feel.pulse = {color, feel_now(s)}
+}
+
+// Tween: a HUD element's moment of easing in (a score that changed, a banner): started when
+// its news comes, read each frame as the fraction done.
+Tween :: struct {
+	born:    f64,
+	started: bool,
+}
+
+// tween_start: the tween begins now (again, if it was under way).
+tween_start :: proc(t: ^Tween, s: ^Session) {
+	t^ = {feel_now(s), true}
+}
+
+// tween_value: how far the tween is, 0 at its start to 1 after `seconds`, along the curve
+// (ui.ease); 1 when never started, and at once under Reduce motion. A pop is
+// `scale * (0.7 + 0.3 * tween_value(&t, s, 0.25, .Out_Back))`, a slide in `x - 40 * (1 - v)`.
+tween_value :: proc(t: ^Tween, s: ^Session, seconds: f32, curve := ui.Ease.Out_Cubic) -> f32 {
+	if !t.started || s.feel.still || seconds <= 0 {return 1}
+	return ui.ease(curve, feel_age(s, t.born) / seconds)
+}
+
+// feel_hud: what the feel kit draws on the HUD (hud_draw, before the game's HUD): the texts
+// floating over the world, then the edge's pulse.
+feel_hud :: proc(s: ^Session, ctx: ^ui.Context) {
+	f := &s.feel
+	t := &ctx.theme
+	for &x in f.floats {
+		if x.len == 0 {continue}
+		age := feel_age(s, x.born)
+		if age >= FLOAT_SECONDS {
+			x.len = 0
+			continue
+		}
+		done := age / FLOAT_SECONDS
+		rise, pop: f32 = 0, 1
+		if !f.still {
+			rise = FLOAT_RISE * ui.ease(.Out_Cubic, done)
+			pop = 0.6 + 0.4 * ui.ease(.Out_Back, age / FLOAT_POP)
+		}
+		at, shown := world_point(s, ctx, x.at + {0, f64(rise), 0})
+		if !shown {continue}
+		fade := 1 - ui.ease(.In_Out, (done - 0.55) / 0.45)
+		color, shadow := x.color, t.text_shadow
+		color.a = u8(f32(color.a) * fade)
+		shadow.a = u8(f32(shadow.a) * fade)
+		size := t.font_size * 1.2 * x.scale * pop
+		text := string(x.text[:x.len])
+		r := ui.Rect{at.x - 80, at.y - size, 160, size * 2}
+		ui.draw_text(ctx, {r.x + 2, r.y + 2, r.w, r.h}, text, size, shadow, .Center)
+		ui.draw_text(ctx, r, text, size, color, .Center)
+	}
+	if f.pulse.color.a == 0 {return}
+	age := feel_age(s, f.pulse.born)
+	if age >= PULSE_SECONDS {
+		f.pulse = {}
+		return
+	}
+	strength := f32(f.pulse.color.a) * (1 - ui.ease(.Out_Quad, age / PULSE_SECONDS))
+	band := ctx.screen.h * PULSE_DEPTH / PULSE_BANDS
+	r := ctx.screen
+	for k in 0 ..< PULSE_BANDS {
+		inward := 1 - f32(k) / PULSE_BANDS
+		color := f.pulse.color
+		color.a = u8(strength * inward * inward)
+		ui.stroke_rect(ctx, r, band, color)
+		r = {r.x + band, r.y + band, r.w - 2 * band, r.h - 2 * band}
+	}
 }

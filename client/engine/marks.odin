@@ -239,7 +239,9 @@ banner :: proc(ctx: ^ui.Context, at: f32, text: string, scale: f32, color: ui.Co
 	size := ctx.theme.title_size * scale * k
 	y := ctx.screen.y + ctx.screen.h / 2 + at * k
 	r := ui.Rect{ctx.screen.x, y - size, ctx.screen.w, size * 2}
-	ui.draw_text(ctx, {r.x + 3, r.y + 3, r.w, r.h}, text, size, ctx.theme.text_shadow, .Center)
+	shadow := ctx.theme.text_shadow
+	shadow.a = u8(u32(shadow.a) * u32(color.a) / 255) // (a fading banner's shadow fades with it)
+	ui.draw_text(ctx, {r.x + 3, r.y + 3, r.w, r.h}, text, size, shadow, .Center)
 	ui.draw_text(ctx, r, text, size, color, .Center)
 }
 
@@ -267,31 +269,45 @@ tone_color :: proc(t: ^ui.Theme, tone: Tone) -> ui.Color {
 
 FLASH_SECONDS :: 3.0
 FLASH_TEXT_MAX :: 64
+FLASH_POP :: 0.25 // seconds a flash takes to pop in (from FLASH_POP_FROM of its size, past it and back)
+FLASH_POP_FROM :: 0.7
+FLASH_FADE :: 0.4 // ... and to fade at its end
 
 // Flash: a banner shown for a while, kept in the game's view (it outlives the frame its
-// news came in).
+// news came in). It pops in and fades out on the feel clock (feel.odin), simply there and
+// gone under Reduce motion.
 Flash :: struct {
-	text:  [FLASH_TEXT_MAX]u8,
-	len:   int,
-	tone:  Tone,
-	until: f64, // the session's frame_seconds when it goes
+	text:    [FLASH_TEXT_MAX]u8,
+	len:     int,
+	tone:    Tone,
+	born:    f64, // the feel clock when it was shown
+	seconds: f32, // ... and how long it stands
 }
 
 // flash: show text as a banner from now for seconds (it replaces the one shown).
 flash :: proc(f: ^Flash, s: ^Session, text: string, tone := Tone.Plain, seconds := FLASH_SECONDS) {
 	f.len = copy(f.text[:], text)
-	f.tone, f.until = tone, s.frame_seconds + seconds
+	f.tone, f.born, f.seconds = tone, feel_now(s), f32(seconds)
 }
 
 // flash_shown: the flash's text while it stands ("" once it has gone).
 flash_shown :: proc(f: ^Flash, s: ^Session) -> string {
-	if f.len == 0 || s.frame_seconds >= f.until {return ""}
+	if f.len == 0 || feel_age(s, f.born) >= f.seconds {return ""}
 	return string(f.text[:f.len])
 }
 
-// flash_draw: the flash, while it stands, as a banner at `at` (banner's).
+// flash_draw: the flash, while it stands, as a banner at `at` (banner's), popping in and
+// fading out.
 flash_draw :: proc(ctx: ^ui.Context, f: ^Flash, s: ^Session, at: f32 = -160, scale: f32 = 1) {
-	if text := flash_shown(f, s); text != "" {
-		banner(ctx, at, text, scale, tone_color(&ctx.theme, f.tone))
+	text := flash_shown(f, s)
+	if text == "" {return}
+	color := tone_color(&ctx.theme, f.tone)
+	if s.feel.still {
+		banner(ctx, at, text, scale, color)
+		return
 	}
+	age := feel_age(s, f.born)
+	pop := FLASH_POP_FROM + (1 - FLASH_POP_FROM) * ui.ease(.Out_Back, age / FLASH_POP)
+	color.a = u8(f32(color.a) * clamp((f.seconds - age) / FLASH_FADE, 0, 1))
+	banner(ctx, at, text, scale * pop, color)
 }

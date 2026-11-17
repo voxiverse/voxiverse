@@ -491,7 +491,7 @@ number and no cast.
 |---|---|
 | `top_bar(ctx, &rest, text)` | A line of status across the top of the screen, on the HUD's backing, cut from `rest` |
 | `banner(ctx, at, text, scale, color)` | Big text across the screen with a shadow, its middle `at` pixels from the screen's (laid out for 720 high and shrunk with a smaller screen, as under F3), `scale` times the title's size |
-| `Flash`, `flash(&f, s, text, tone, seconds)`, `flash_draw(ctx, &f, s, at, scale)`, `Tone` | A banner that stands a few seconds after the news that brought it (a wave set out, a level gained), kept in the game's view, coloured by its tone (`.Good`, `.Warn`, `.Bad`) |
+| `Flash`, `flash(&f, s, text, tone, seconds)`, `flash_draw(ctx, &f, s, at, scale)`, `Tone` | A banner that stands a few seconds after the news that brought it (a wave set out, a level gained), kept in the game's view, coloured by its tone (`.Good`, `.Warn`, `.Bad`); it pops in and fades out on the feel clock ([feel](#feel)) |
 | `world_point(s, ctx, p)`, `world_label(s, ctx, p, text)`, `world_bar(s, ctx, p, fraction)` | Where a point of the world is on the screen (false behind the eyes or past `MARK_DISTANCE`); a plate of text there; a bar |
 | `entity_place(s, id)`, `entity_top(s, id)`, `entity_label(s, ctx, id, text, rows)`, `entity_bar(s, ctx, id)`, `entity_bars(s, ctx, kind)` | Where the session shows an entity, the point over it, a plate of text there (a name the game keeps in a record keyed by the entity), its health bar; a bar over every hurt entity of a kind (in a crowd the most hurt first, a bar that would overlap one drawn left out: what reads is the worst wounds) |
 | `world_box(s, lo, hi, color)` | An outline of blocks in the world this frame (a placement's ghost, a footprint) |
@@ -501,6 +501,9 @@ number and no cast.
 | `puff_add(s, puff)` | A speck that drifts and fades (a tower's tracer, a blast's smoke), aged on the feel clock ([feel](#feel)) |
 | `burst(s, at, kind, color, scale)`, `Burst`, `MAX_BURST_PUFFS` | A handful of puffs flung out of a point as a preset looks (`.Impact`, `.Sparks`, `.Smoke`, `.Sparkle`, `.Death`, `.Splash`), in a colour (zero: the preset's; a material's: `block_colour`), at most `MAX_BURST_PUFFS` alive from every burst ([feel](#feel)) |
 | `shake(s, amount, seconds)`, `kick(s, degrees)` | The view shaken (`amount` 0 ..= 1, dying away over `seconds`; shakes add up to a whole one at most) or jolted up by degrees (down below 0) and settling; scaled by the player's Screen shake, none under Reduce motion ([feel](#feel)) |
+| `float_text(s, at, text, color, scale)` | A few words over a point of the world (a hit's damage, "+5") that pop, rise a block and fade in under a second, `MAX_FLOATS` at once, the oldest giving way ([feel](#feel)) |
+| `pulse(s, color)` | The screen's edges glowing a moment in a colour, its alpha how strong: red for harm taken, green for a heal ([feel](#feel)) |
+| `Tween`, `tween_start(&t, s)`, `tween_value(&t, s, seconds, curve)` | A HUD element's moment of easing in, started by its news and read each frame as 0 .. 1 along a `ui.Ease` curve (`ui.ease(curve, fraction)`): a score that pops, a line that slides in; done at once under Reduce motion ([feel](#feel)) |
 | `entity_flash(s, id, color)`, `HURT` | An entity drawn in one colour for a moment: `HURT` red as every creature is when hurt, white for a critical blow ([feel](#feel)) |
 | `game_request(s, &value)` | Send the server part one of the game's requests ([below](#requests)) |
 | `Seats(T)`, `seats_received(s, &seats, r)`, `seat_mine(s, &seats)`, `seats_ranked(&seats, before)` | What the game keeps of each player from a record of its keyed by the player (`key_player`, with a `name`): the last value by seat, its name copied out of the message, forgotten when the server stops putting it; the player's own; the seats told of in order (ties by name), a scoreboard's rows |
@@ -520,6 +523,13 @@ presentation alone: nothing is sent, saved or simulated.
   blast near); `engine.kick(s, -1.5)`: it dips a degree and a half and settles (a landing,
   a collision; up for a recoil). The player's Options > Accessibility > Screen shake (Off,
   Low, Full) scales both, and Reduce motion stills them: a game never needs to ask.
+- `engine.float_text(s, at, "-12", t.log_error)`: a number rising from a creature and
+  fading; `engine.pulse(s, {220, 40, 36, 100})`: the screen's edges flushing red a moment
+  (green for a heal). The engine draws both over the world, under the game's HUD.
+- `engine.tween_start(&v.coins_pop, s)` when the news comes, then in the HUD
+  `k := engine.tween_value(&v.coins_pop, s, 0.25, .Out_Back)` and draw it at
+  `scale * (0.7 + 0.3 * k)`: it pops instead of appearing. An `engine.Flash` already pops in
+  and fades out.
 
 **Restraint.** An effect is short (under a second) and small (a fraction of a block, a few
 pieces), and it never hides what the player must see: enemies, pickups, the path. Bursts

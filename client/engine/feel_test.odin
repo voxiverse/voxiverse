@@ -175,3 +175,52 @@ test_shakes_combine_decay_and_obey_the_setting :: proc(t: ^testing.T) {
 	_, turn = feel_view(&s.feel)
 	testing.expect(t, abs(turn.y) < 1e-3, "and settles")
 }
+
+// Floating texts are capped (the oldest gives way), cut at a whole letter, and gone after
+// FLOAT_SECONDS; a pulse fades in PULSE_SECONDS.
+@(test)
+test_floats_are_capped_and_go :: proc(t: ^testing.T) {
+	s := feel_session()
+	defer feel_free(s)
+	for i in 0 ..< MAX_FLOATS {
+		float_text(s, {0, 0, 0}, "12", {255, 255, 255, 255})
+		feel_advance(s, {}, 0.001)
+		testing.expect_value(t, s.feel.floats[i].len, 2)
+	}
+	first := s.feel.floats[0].born
+	float_text(s, {1, 2, 3}, "+5 coins and then a very long tail", {255, 255, 255, 255})
+	testing.expect(t, s.feel.floats[0].born > first, "the oldest gave way")
+	testing.expect_value(t, s.feel.floats[0].at, [3]f64{1, 2, 3})
+	testing.expect_value(t, s.feel.floats[0].len, FLOAT_TEXT_MAX)
+	float_text(s, {}, "ééééééééééééééééééé", {255, 255, 255, 255}) // (two bytes a letter)
+	testing.expect_value(t, s.feel.floats[1].len, FLOAT_TEXT_MAX)
+	float_text(s, {}, "éééééééééééééééééééé", {255, 255, 255, 255})
+	testing.expect_value(t, s.feel.floats[2].len, FLOAT_TEXT_MAX) // (24 is whole: 12 letters)
+	float_text(s, {}, "aéééééééééééééééééééé", {255, 255, 255, 255})
+	testing.expect_value(t, s.feel.floats[3].len, FLOAT_TEXT_MAX - 1)
+}
+
+// A tween runs 0 to 1 along its curve over its seconds; one never started, and any under
+// Reduce motion, is done.
+@(test)
+test_tween :: proc(t: ^testing.T) {
+	s := feel_session()
+	defer feel_free(s)
+	tw: Tween
+	testing.expect_value(t, tween_value(&tw, s, 0.5), 1)
+	tween_start(&tw, s)
+	testing.expect_value(t, tween_value(&tw, s, 0.5, .Linear), 0)
+	feel_advance(s, {}, 0.25)
+	testing.expect(t, abs(tween_value(&tw, s, 0.5, .Linear) - 0.5) < 1e-4)
+	testing.expect(t, tween_value(&tw, s, 0.5, .Out_Cubic) > 0.5)
+	feel_advance(s, {reduce_motion = true}, 0)
+	testing.expect_value(t, tween_value(&tw, s, 0.5, .Linear), 1)
+	feel_advance(s, {}, 1)
+	testing.expect_value(t, tween_value(&tw, s, 0.5, .Out_Back), 1)
+
+	f: Flash
+	flash(&f, s, "WAVE 3", .Warn, 1)
+	testing.expect_value(t, flash_shown(&f, s), "WAVE 3")
+	feel_advance(s, {}, 1)
+	testing.expect_value(t, flash_shown(&f, s), "")
+}
