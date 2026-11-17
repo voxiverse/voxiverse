@@ -1,6 +1,7 @@
 package rally_client
 
 import "core:fmt"
+import "core:math"
 import "core:slice"
 import "core:strings"
 
@@ -15,7 +16,9 @@ import "games:rally"
 // and shows them: a line at the top of the HUD (the gate to make for, the race's clock,
 // your best, the record), the countdown, each split against your best's and each finish
 // as banners, the gates marked in the world (the next one outlined), the racers while the
-// player list's key is held, and a line in F3.
+// player list's key is held, and a line in F3. With the feel kit: a hard landing jolts the
+// view and kicks up the platform's dust, a gate passed sparkles, a fall sent back shakes
+// the view and flushes the edges, a best or a record sparkles round the racer.
 
 GAME :: engine.Game {
 	info       = rally.INFO,
@@ -48,7 +51,20 @@ View :: struct {
 	laid:        u32, // the seed it was laid out from (0: none yet)
 	split:       engine.Flash, // the last gate passed, against the best
 	finish:      engine.Flash, // a finish
+	resets:      u16, // yours, as last told (one more: sent back)
+	falling:     f32, // the fastest the racer fell since it left the ground (blocks/s, down)
+	aloft:       bool, // it was off the ground last frame
 }
+
+// The feel's colours, inside the bright midday: a gate's green, a best's gold, the
+// edges' flush at a fall.
+GATE :: [4]u8{120, 240, 140, 255}
+BEST :: [4]u8{255, 214, 96, 255}
+FELL :: [4]u8{230, 60, 50, 70}
+
+// HARD_LANDING: blocks a second of fall speed at which a landing is felt (a step down is
+// not; a gap's jump is).
+HARD_LANDING :: 7.0
 
 // Seat: a racer's progress, as told.
 Seat :: struct {
@@ -58,6 +74,27 @@ Seat :: struct {
 }
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
+
+// landing: once a frame, the racer's feet as predicted: coming down hard from a jump jolts
+// the view down, as hard as it fell, and kicks up the dust of what it landed on.
+landing :: proc(s: ^engine.Session) {
+	v := view(s)
+	state := s.prediction.state
+	if !state.on_ground {
+		v.aloft = true
+		v.falling = max(v.falling, f32(-state.velocity.y))
+		return
+	}
+	defer v.aloft, v.falling = false, 0
+	if !v.aloft || v.falling < HARD_LANDING {return}
+	hard := min((v.falling - HARD_LANDING) / 10, 1)
+	engine.kick(s, -(1 + 2 * hard))
+	x, z := i32(math.floor(s.feet.x)), i32(math.floor(s.feet.z))
+	y := i32(math.floor(s.feet.y))
+	if block, _, ok := engine.ground_top(s, x, z, y - 2, y); ok {
+		engine.burst(s, s.feet + {0, 0.1, 0}, .Impact, engine.block_colour(s, block), 0.8 + hard)
+	}
+}
 
 // mine: the player's own progress.
 mine :: proc(s: ^engine.Session) -> ^Seat {
@@ -82,9 +119,20 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 		} else {
 			seat.racer, seat.known = racer^, true
 			seat.name = string(seat.name_buf[:copy(seat.name_buf[:], racer.name)])
+			if int(r.key.a) == int(s.welcome.player) {
+				if racer.racing && racer.resets > v.resets {
+					engine.shake(s, 0.25, 0.35) // (sent back to the last gate)
+					engine.pulse(s, FELL)
+				}
+				v.resets = racer.resets
+			}
 		}
 	}
 	if split, ok := engine.game_value(s, r, rally.Split); ok && split != nil {
+		if int(split.checkpoint) < len(v.course.checkpoints) {
+			c := v.course.checkpoints[split.checkpoint]
+			engine.burst(s, {f64(c.x) + 0.5, f64(c.y) + 1, f64(c.z) + 0.5}, .Sparkle, GATE, 1.5)
+		}
 		gate :=
 			rally.tr(.Finish) if split.checkpoint == rally.CHECKPOINTS else rally.tr(.Gate, split.checkpoint)
 		if split.compared {
@@ -101,6 +149,9 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	}
 	if f, ok := engine.game_value(s, r, rally.Finish); ok && f != nil {
 		mine := f.name == mine(s).name
+		if mine && (f.record || f.personal) {
+			engine.burst(s, s.feet + {0, 1, 0}, .Sparkle, BEST, 2)
+		}
 		switch {
 		case f.record:
 			engine.flash(
@@ -161,6 +212,7 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	v := view(s)
 	r := v.race
 	if r.race == 0 {return}
+	landing(s)
 	t := &ctx.theme
 	rest := ctx.screen
 	engine.top_bar(ctx, &rest, status(s))
