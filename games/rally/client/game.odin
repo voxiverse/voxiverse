@@ -25,6 +25,18 @@ GAME :: engine.Game {
 	hud        = hud,
 	debug      = debug,
 	scoreboard = scoreboard,
+	look       = LOOK,
+}
+
+// LOOK: a bright midday for racing: a deep blue sky, strong white light, saturated colour
+// and the fog pushed out to the view's edge so the course reads far ahead.
+LOOK :: engine.Look {
+	time = 0.5,
+	zenith = {0.04, 0.18, 0.72},
+	horizon = {0.40, 0.64, 0.95},
+	sun_light = {1.08, 1.05, 0.98},
+	fog_near = 0.85,
+	grade = {saturation = 0.25, contrast = 0.1},
 }
 
 // View: what the session knows of the race.
