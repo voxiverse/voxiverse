@@ -25,6 +25,20 @@ GAME :: engine.Game {
 	debug      = debug,
 	scoreboard = scoreboard,
 	actions    = horde.ACTIONS,
+	look       = LOOK,
+}
+
+// LOOK: a cold moonlit night that never ends, the fog close and heavy beyond the walls;
+// the moon lights enough to aim by, and the creatures are drawn in more light than it gives.
+LOOK :: engine.Look {
+	time = 0.02,
+	zenith = {0.008, 0.012, 0.03},
+	horizon = {0.03, 0.045, 0.085},
+	sun_light = {0.32, 0.38, 0.58},
+	figure_light = {0.42, 0.44, 0.52},
+	fog = 64,
+	fog_near = 0.15,
+	grade = {tint = {0.88, 0.95, 1.10}, saturation = -0.3, contrast = 0.08, vignette = 0.35},
 }
 
 // View: what the session knows of the run.
