@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:strings"
 import "core:testing"
 
+import "client:texture"
 import "common:game"
 
 // bp: a vertex's position in blocks (the whole-cell quads of cubes lie on block boundaries).
@@ -314,12 +315,12 @@ test_snapshot_fill_uses_neighbours :: proc(t: ^testing.T) {
 test_textures :: proc(t: ^testing.T) {
 	// Each texture's alpha suits the layer of the blocks that use it:
 	// opaque, cutout (fully there or not at all), translucent.
-	layer_of: [Texture_Generator]Maybe(Layer)
+	layer_of: [texture.Generator]Maybe(Layer)
 	for b in game.Block {
 		shape, layer := frozen_block_shape(b)
 		if shape == .None {continue}
 		side, top, bottom := frozen_block_faces(b)
-		for tex in ([3]Texture_Generator{side, top, bottom}) {
+		for tex in ([3]texture.Generator{side, top, bottom}) {
 			if l, seen := layer_of[tex].?; seen {
 				testing.expectf(t, l == layer, "%v is used in two layers", tex)
 			}
@@ -329,9 +330,9 @@ test_textures :: proc(t: ^testing.T) {
 	layer_of[.Ladder] = .Cutout // (the base pack's ladder block, after the builtins)
 	layer_of[.Door_Lower], layer_of[.Door_Upper] = .Opaque, .Opaque // (its door)
 	a, b: [TEXTURE_SIZE * TEXTURE_SIZE]Rgba
-	for tex in Texture_Generator {
-		generate_texture(tex, a[:])
-		generate_texture(tex, b[:])
+	for tex in texture.Generator {
+		texture.generate(tex, a[:])
+		texture.generate(tex, b[:])
 		testing.expect(t, a == b) // deterministic
 		layer, used := layer_of[tex].?
 		testing.expectf(t, used, "%v is used by no block", tex)
@@ -359,21 +360,14 @@ test_textures :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		block_texture(test_reg(), .Grass, .Pos_Y),
-		u32(Texture_Generator.Grass_Top),
+		u32(texture.Generator.Grass_Top),
 	)
-	testing.expect_value(t, block_texture(test_reg(), .Grass, .Neg_Y), u32(Texture_Generator.Dirt))
+	testing.expect_value(t, block_texture(test_reg(), .Grass, .Neg_Y), u32(texture.Generator.Dirt))
 	testing.expect_value(
 		t,
 		block_texture(test_reg(), .Grass, .Pos_X),
-		u32(Texture_Generator.Grass_Side),
+		u32(texture.Generator.Grass_Side),
 	)
-
-	// Mips average in linear light: black and white average to mid grey in
-	// light (188 in sRGB), not 128.
-	src := [4]Rgba{{0, 0, 0, 255}, {255, 255, 255, 255}, {0, 0, 0, 255}, {255, 255, 255, 255}}
-	dst: [1]Rgba
-	generate_mip(src[:], 2, dst[:])
-	testing.expect_value(t, dst[0], Rgba{188, 188, 188, 255})
 }
 
 @(test)
@@ -440,7 +434,7 @@ test_layers :: proc(t: ^testing.T) {
 	for v in plant {
 		face := v.packed >> 27 & 7
 		testing.expect(t, face == CROSS_A || face == CROSS_B)
-		testing.expect_value(t, v.layer & LAYER_BITS, u32(Texture_Generator.Poppy))
+		testing.expect_value(t, v.layer & LAYER_BITS, u32(texture.Generator.Poppy))
 	}
 	water := out[counts[.Opaque] + counts[.Cutout]:]
 	for v in water {
@@ -507,12 +501,12 @@ test_farmland_is_low :: proc(t: ^testing.T) {
 test_base_looks_the_same :: proc(t: ^testing.T) {
 	reg := game.registry_base()
 	defer game.registry_destroy(reg)
-	testing.expect_value(t, len(game.TEXTURE_GENERATOR_NAMES), len(Texture_Generator))
+	testing.expect_value(t, len(game.TEXTURE_GENERATOR_NAMES), len(texture.Generator))
 	for name, i in game.TEXTURE_GENERATOR_NAMES {
 		testing.expect_value(
 			t,
 			name,
-			strings.to_lower(fmt.tprintf("%v", Texture_Generator(i)), context.temp_allocator),
+			strings.to_lower(fmt.tprintf("%v", texture.Generator(i)), context.temp_allocator),
 		)
 	}
 	for b in game.Block {

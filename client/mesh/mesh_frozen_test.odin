@@ -3,11 +3,12 @@ package mesh
 // Frozen copies of how the Odin tables drew blocks before the registry did
 //: test_base_looks_the_same compares the base pack against them.
 
+import "client:texture"
 import "common:game"
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
 // block does not compile until it has its look).
-frozen_block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture_Generator) {
+frozen_block_faces :: proc(b: game.Block) -> (side, top, bottom: texture.Generator) {
 	switch b {
 	case .Air:
 		return

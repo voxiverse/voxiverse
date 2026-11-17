@@ -10,6 +10,7 @@ import "client:audio"
 import "client:engine"
 import "client:mesh"
 import "client:sfx"
+import "client:texture"
 import "common:game"
 
 // A pack's PNG is its texture's layer, level 0, exactly; its Ogg is the
@@ -48,7 +49,7 @@ test_pack_png_is_the_texture_layer :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(array), per_layer * game.registry_texture_layers(reg))
 	// The layers before it are still the generators'.
 	stone: [mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba
-	mesh.generate_texture(.Stone, stone[:])
+	texture.generate(.Stone, stone[:])
 	testing.expect(t, slice.equal(array[:1024], slice.to_bytes(stone[:])))
 }
 

@@ -28,8 +28,8 @@ MAX_ERRORS :: 100
 BASE_NAMESPACE :: "voxiverse"
 
 // TEXTURE_GENERATOR_NAMES and SOUND_GENERATOR_NAMES: the generators the
-// client has (mesh.Texture_Generator, sfx.Material, in their order; tests
-// there compare). A texture or sound set of a pack names one.
+// client has (texture.Generator, sfx.Material, in their order; tests in
+// client/mesh and client/sfx compare). A texture or sound set of a pack names one.
 @(rodata)
 TEXTURE_GENERATOR_NAMES := [?]string {
 	"stone",
