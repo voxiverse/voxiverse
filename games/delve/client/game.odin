@@ -1,6 +1,7 @@
 package delve_client
 
 import "core:fmt"
+import "core:math"
 import "core:slice"
 import "core:strings"
 
@@ -15,8 +16,11 @@ import "games:delve"
 // keeps what the server told it (the dungeon, every delver's progress, the creatures'
 // tags) and draws: a line at the top (depth, level, potions, coins, the whirl), the
 // experience bar, banners, a health bar over every creature and the name of an elite or
-// the warden, the damage of each hit floating up, the name of each piece of loot lying
-// about, the delvers while the player list's key is held, and a line in F3.
+// the warden, the name of each piece of loot lying about, the delvers while the player
+// list's key is held, and a line in F3. It makes the fight felt with the feel kit: each
+// hit's damage floating up (a critical one bigger, with sparks), chips where a creature is
+// struck, red edges and a jolt when the delver is hurt, coins and potions picked up rising
+// from it, a level's sparkle and glow, the warden's fall shaking the floor.
 
 GAME :: engine.Game {
 	info       = delve.INFO,
@@ -30,6 +34,7 @@ GAME :: engine.Game {
 	debug      = debug,
 	scoreboard = scoreboard,
 	look       = LOOK,
+	seen       = seen,
 }
 
 // LOOK: a dungeon's air: no sky to speak of, a cold blue dark close round the delver, the
@@ -60,16 +65,22 @@ CAMERA :: engine.Game_Camera {
 	cut      = delve.WALL_HEIGHT,
 }
 
-NUMBER_SECONDS :: 1.0 // a hit's number floats this long
-MAX_NUMBERS :: 48
+// The feel's colours, inside the dungeon's dark: a hit's number, a critical one's, a
+// delver's own hurt; the coin's gold, the potion's red, a level's warm glow, the edges' red.
+NUMBER :: [4]u8{236, 232, 222, 255}
+CRIT :: [4]u8{220, 90, 70, 255}
+TAKEN :: [4]u8{255, 200, 80, 255}
+COIN :: [4]u8{255, 214, 96, 255}
+POTION :: [4]u8{230, 80, 90, 255}
+LEVEL :: [4]u8{255, 210, 120, 70}
+HARM :: [4]u8{200, 30, 30, 85}
 
 View :: struct {
 	dungeon: delve.Delve,
 	heroes:  [game.MAX_PLAYERS]Seat, // by player id
 	tags:    [delve.MAX_TAGS]Tag,
-	numbers: [MAX_NUMBERS]Number,
-	next:    int, // the number slot to use next
 	flash:   engine.Flash, // a level gained, the warden's fall, a new depth
+	purse:   Purse, // the delver's coins and potions as last told
 	items:   [delve.Weapon]game.Item,
 	coin:    game.Item,
 	potion:  game.Item,
@@ -93,13 +104,11 @@ Tag :: struct {
 	name_len: int,
 }
 
-// Number: a hit's damage floating up.
-Number :: struct {
-	at:     [3]f64,
-	amount: int,
-	crit:   bool,
-	taken:  bool,
-	since:  f64, // frame_seconds when it came (0: none)
+// Purse: the delver's coins and potions as last told, to tell what it picked up.
+Purse :: struct {
+	told:    bool,
+	coins:   u32,
+	potions: u16,
 }
 
 view :: proc(s: ^engine.Session) -> ^View {return engine.game_state(s, View)}
@@ -131,29 +140,90 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 			seat.known, seat.hero = true, h^
 			seat.name_len = copy(seat.name[:], h.name)
 			seat.hero.name = ""
+			if int(r.key.a) == int(s.welcome.player) {purse_felt(s, &seat.hero)}
 		}
 	}
 	if t, ok := engine.game_value(s, r, delve.Foe_Tag); ok {tag_set(v, u32(r.key.a), t)}
 	if hit, ok := engine.game_value(s, r, delve.Hit); ok && hit != nil {
 		v.hits += 1
-		v.numbers[v.next] = {
-			at     = {f64(hit.at.x), f64(hit.at.y), f64(hit.at.z)},
-			amount = int(hit.amount),
-			crit   = hit.crit,
-			taken  = hit.taken,
-			since  = s.frame_seconds,
+		at := [3]f64{f64(hit.at.x), f64(hit.at.y), f64(hit.at.z)}
+		switch {
+		case hit.taken:
+			engine.float_text(s, at, fmt.tprint(hit.amount), TAKEN)
+		case hit.crit:
+			engine.float_text(s, at, fmt.tprintf("%d!", hit.amount), CRIT, 1.35)
+			engine.burst(s, at, .Sparks, {}, 1.5)
+		case:
+			engine.float_text(s, at, fmt.tprint(hit.amount), NUMBER)
 		}
-		v.next = (v.next + 1) % MAX_NUMBERS
 	}
 	if up, ok := engine.game_value(s, r, delve.Level_Up); ok && up != nil {
 		engine.flash(&view(s).flash, s, delve.tr(.Level_Up, up.level), .Good)
+		engine.burst(s, s.feet + {0, 1, 0}, .Sparkle, {}, 1.8)
+		engine.pulse(s, LEVEL)
 	}
 	if down, ok := engine.game_value(s, r, delve.Warden_Down); ok && down != nil {
 		engine.flash(&view(s).flash, s, delve.tr(.Warden_Falls), .Good)
+		engine.shake(s, 0.35, 0.7)
 	}
 	if deeper, ok := engine.game_value(s, r, delve.Descended); ok && deeper != nil {
 		engine.flash(&view(s).flash, s, delve.tr(.Deeper, deeper.depth), .Bad)
 	}
+}
+
+// purse_felt: the delver's progress as now told: coins and potions more than before (loot
+// walked over) rise from it, with a sparkle.
+purse_felt :: proc(s: ^engine.Session, h: ^delve.Hero) {
+	p := &view(s).purse
+	defer p^ = {true, h.coins, h.potions}
+	if !p.told {return}
+	at := s.feet + {0, 1.6, 0}
+	if h.coins > p.coins {
+		engine.float_text(s, at, delve.tr(.Gained_Coins, h.coins - p.coins), COIN)
+		engine.burst(s, s.feet + {0, 0.8, 0}, .Sparkle, COIN)
+	}
+	if h.potions > p.potions {
+		engine.float_text(s, at + {0, 0.4, 0}, delve.tr(.Gained_Potion), POTION)
+		engine.burst(s, s.feet + {0, 0.8, 0}, .Sparkle, POTION)
+	}
+}
+
+// seen: the fight felt: a creature struck throws chips of its colour from the side the
+// camera sees; the delver hurt flushes the edges red and jolts the view.
+seen :: proc(s: ^engine.Session, e: engine.Seen) {
+	#partial switch x in e {
+	case engine.Seen_Hurt:
+		if tag_of(view(s), x.id) != nil { 	// (bigger: the camera is far above)
+			engine.burst(s, facing_side(s, x.at), .Impact, kind_colour(s, x.kind), 1.5)
+		}
+	case engine.Seen_Harm:
+		engine.pulse(s, HARM)
+		engine.shake(s, min(0.08 + x.amount * 0.015, 0.25), 0.25)
+		engine.kick(s, -0.8)
+	}
+}
+
+// tag_of: the tag of a creature (nil: not one of the dungeon's).
+tag_of :: proc(v: ^View, id: u32) -> ^Tag {
+	for &tag in v.tags {if tag.id == id {return &tag}}
+	return nil
+}
+
+// facing_side: a point of a creature's body on the side the camera sees, half a block out
+// from its middle toward it, where a burst from it is not hidden inside it.
+facing_side :: proc(s: ^engine.Session, middle: [3]f64) -> [3]f64 {
+	d := s.view.position - middle
+	d.y = 0
+	l := math.sqrt(d.x * d.x + d.z * d.z)
+	return middle if l < 0.01 else middle + d / l * 0.45
+}
+
+// kind_colour: a creature's colour, its model's first part's (its body's).
+kind_colour :: proc(s: ^engine.Session, kind: game.Kind_Id) -> [4]u8 {
+	info := game.kind_info(s.reg, kind)
+	if info == nil || len(info.parts) == 0 {return {}}
+	c := info.parts[0].color
+	return {c[0], c[1], c[2], 255}
 }
 
 // tag_set: a creature's tag came (t nil: it went).
@@ -270,21 +340,6 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	for id, &e in s.entities {
 		if text := loot_label(v, e.stack); text != "" {engine.entity_label(s, ctx, id, text)}
 	}
-	// The hits' numbers, rising and fading.
-	for n in v.numbers {
-		if n.since == 0 {continue}
-		age := s.frame_seconds - n.since
-		if age > NUMBER_SECONDS {continue}
-		at, shown := engine.world_point(s, ctx, n.at + {0, age * 1.2, 0})
-		if !shown {continue}
-		color := t.log_warn if n.taken else (t.warning if n.crit else t.text)
-		size := t.font_size * (1.5 if n.crit else 1.1)
-		text := fmt.tprintf("%d!", n.amount) if n.crit else fmt.tprint(n.amount)
-		r := ui.Rect{at.x - 40, at.y - size, 80, size * 2}
-		ui.draw_text(ctx, {r.x + 2, r.y + 2, r.w, r.h}, text, size, t.text_shadow, .Center)
-		ui.draw_text(ctx, r, text, size, color, .Center)
-	}
-
 	engine.flash_draw(ctx, &v.flash, s, -160)
 }
 

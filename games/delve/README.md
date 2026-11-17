@@ -65,8 +65,10 @@ pick it up.
 The HUD's line: the depth, the creatures left (or that the way down is open), your level,
 potions, coins and the whirl's wait; the experience bar under it. Over each creature its
 health, over an elite or the warden its name, and each hit's damage floats up (yellow and
-bigger for a critical hit, red when it is yours). F3 shows the dungeon's seed, the counts and
-where the pointer is.
+bigger for a critical hit, red when it is yours). A creature struck throws chips, a critical
+blow sparks; your wounds flush the screen's edges red; coins and potions picked up rise from
+you; a level sparkles and glows; the warden's fall shakes the floor (the engine's feel kit).
+F3 shows the dungeon's seed, the counts and where the pointer is.
 
 Server commands: `/delve` (the dungeon), and with the permission `delve.admin` (the host has
 it) `/delve down` (the next dungeon now), `/delve depth <1..99>`, `/delve goto <start|boss>`,

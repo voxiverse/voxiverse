@@ -24,6 +24,8 @@ Text :: enum u8 {
 	Column_Kills,
 	Column_Deaths,
 	Column_Deepest,
+	Gained_Coins, // {0}: how many (floating up from the delver)
+	Gained_Potion,
 }
 
 TEXT_EN := [Text]string {
@@ -44,6 +46,8 @@ TEXT_EN := [Text]string {
 	.Column_Kills   = "Kills",
 	.Column_Deaths  = "Deaths",
 	.Column_Deepest = "Deepest",
+	.Gained_Coins   = "+{0} coins",
+	.Gained_Potion  = "+1 potion",
 }
 
 tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}
