@@ -1,5 +1,6 @@
 package console
 
+import "core:fmt"
 import "core:math"
 import "core:strconv"
 import "core:strings"
@@ -125,6 +126,45 @@ register_world_commands :: proc(c: ^engine.Console) {
 		args = {1, 6},
 		needs = {.World},
 	)
+	console_register(
+		c,
+		{
+			"feel",
+			"feel burst <impact|sparks|smoke|sparkle|death|splash> <x> <y> <z>: one of the feel kit's effects, here, for a picture (a development build's)",
+			feel_command,
+		},
+		args = {1, 8},
+		needs = {.World},
+	)
+}
+
+// feel_command: `feel ...`, a development build's: an effect of the feel kit's
+// (client/engine/feel.odin) made by hand, to look at it in a picture.
+@(private)
+feel_command :: proc(app: ^engine.App, args: []string) {
+	if !base.DEV {
+		engine.console_print(&app.console, "feel: a development build's", .Warning)
+		return
+	}
+	s := app.session
+	numbers :: proc(args: []string, n: ^[3]f64) -> bool {
+		if len(args) < len(n) {return false}
+		for &x, i in n {x = strconv.parse_f64(args[i]) or_return}
+		return true
+	}
+	at: [3]f64
+	switch args[0] {
+	case "burst":
+		if len(args) == 5 && numbers(args[2:], &at) {
+			for kind in engine.Burst {
+				if strings.equal_fold(fmt.tprint(kind), args[1]) {
+					engine.burst(s, at, kind)
+					return
+				}
+			}
+		}
+	}
+	engine.console_print(&app.console, "feel: see `help feel`", .Warning)
 }
 
 // camera_place_command: `camera at <x> <y> <z> <yaw> <pitch>` and `camera reset`, a

@@ -39,7 +39,7 @@ test_shaped_model_moves_its_parts :: proc(t: ^testing.T) {
 	v := Other_View {
 		position = {10, 64, 10},
 	}
-	shaped(&d, v, &info, 0.4, false, 0)
+	shaped(&d, v, &info, 0.4, {}, 0)
 	if !testing.expect_value(t, len(d.boxes), 3) {return}
 	body, leg, arm := d.boxes[0], d.boxes[1], d.boxes[2]
 	testing.expect_value(t, body.pitch, 0)
@@ -51,7 +51,7 @@ test_shaped_model_moves_its_parts :: proc(t: ^testing.T) {
 	testing.expect_value(t, body.color, [4]u8{90, 140, 60, 255})
 
 	clear(&d.boxes)
-	shaped(&d, v, &info, 0.4, true, 1)
+	shaped(&d, v, &info, 0.4, HURT, 1)
 	testing.expect_value(t, d.boxes[2].pitch, STRIKE_RAISE)
 	testing.expect(t, d.boxes[0].color != [4]u8{90, 140, 60, 255}, "not red while hurt")
 }
@@ -98,15 +98,15 @@ test_looks_change_a_model :: proc(t: ^testing.T) {
 		position = {0, 10, 0},
 		pitch    = -1.2,
 	}
-	shaped(&d, v, &info, 0, false, 0)
+	shaped(&d, v, &info, 0, {}, 0)
 	if !testing.expect_value(t, len(d.boxes), 2) {return}
 	testing.expect_value(t, d.boxes[0].color, [4]u8{230, 220, 200, 255})
 	testing.expect_value(t, d.boxes[1].pitch, f32(-1.2))
 	clear(&d.boxes)
-	shaped(&d, v, &info, 0, false, BLACK)
+	shaped(&d, v, &info, 0, {}, BLACK)
 	testing.expect_value(t, d.boxes[0].color, [4]u8{30, 30, 30, 255})
 	clear(&d.boxes)
-	shaped(&d, v, &info, 0, false, SHORN | LAMB)
+	shaped(&d, v, &info, 0, {}, SHORN | LAMB)
 	if !testing.expect_value(t, len(d.boxes), 2) {return}
 	testing.expect_value(t, d.boxes[0].color, [4]u8{200, 160, 150, 255})
 	testing.expect(

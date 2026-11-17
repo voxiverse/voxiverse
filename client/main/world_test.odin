@@ -350,12 +350,14 @@ test_entity_death_puff :: proc(t: ^testing.T) {
 	d: render.Entity_Draw
 	render.entity_draw_init(&d)
 	defer render.entity_draw_destroy(&d)
-	engine.entities_draw(s, &d, 0.1)
+	engine.feel_advance(s, 0.1)
+	engine.entities_draw(s, &d)
 	testing.expect_value(t, len(d.boxes), engine.PUFF_PIECES)
 	for p in s.puffs {testing.expect(t, p.position != {10, 64, 10} || p.velocity != {})}
 	for _ in 0 ..< 10 {
 		clear(&d.boxes)
-		engine.entities_draw(s, &d, 0.1)
+		engine.feel_advance(s, 0.1)
+		engine.entities_draw(s, &d)
 	}
 	testing.expect_value(t, len(s.puffs), 0)
 	testing.expect_value(t, len(d.boxes), 0)
@@ -400,7 +402,7 @@ test_box_model_entity :: proc(t: ^testing.T) {
 	}
 	engine.track_add(&e.track, {5, {10, 64, 10}, 0, 0, false, false})
 	s.entities[1] = e
-	engine.entities_draw(s, &d, 0.1)
+	engine.entities_draw(s, &d)
 	box := game.kind_box(game.kind_info(s.reg, cube))
 	testing.expect_value(t, len(d.boxes), 1)
 	if len(d.boxes) == 1 {

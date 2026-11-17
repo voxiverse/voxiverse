@@ -1,7 +1,6 @@
 package engine
 
 import "core:math"
-import "core:time"
 
 import "common:game"
 import "common:protocol"
@@ -28,17 +27,18 @@ Other_Player :: struct {
 
 // Other_Entity: an entity near us (entities.odin draws it).
 Other_Entity :: struct {
-	kind:       game.Kind_Id,
-	stack:      game.Stack, // a dropped item's
-	health:     u16, // as the server last said (Entity_Record)
-	max_health: u16, // ... its most (0: none)
-	team:       u8, // its side (0: none)
-	vision:     u8, // how far it sees for its side under fog (blocks)
-	looks:      u16, // bit i: the kind's i-th look (Kind_Info.looks)
-	track:      Track,
-	hurt_at:    time.Tick, // when it was last hit (flash)
-	stride:     f32, // blocks walked, for its legs
-	last_seen:  [3]f64, // where it was drawn last frame
+	kind:        game.Kind_Id,
+	stack:       game.Stack, // a dropped item's
+	health:      u16, // as the server last said (Entity_Record)
+	max_health:  u16, // ... its most (0: none)
+	team:        u8, // its side (0: none)
+	vision:      u8, // how far it sees for its side under fog (blocks)
+	looks:       u16, // bit i: the kind's i-th look (Kind_Info.looks)
+	track:       Track,
+	flash_at:    f64, // the feel clock when it began to flash (entity_flash)
+	flash_color: [4]u8, // ... in what (alpha 0: never)
+	stride:      f32, // blocks walked, for its legs
+	last_seen:   [3]f64, // where it was drawn last frame
 }
 
 Track :: struct {

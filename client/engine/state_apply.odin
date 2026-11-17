@@ -4,7 +4,6 @@ import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:strings"
-import "core:time"
 
 import "common:access"
 import "common:base"
@@ -305,8 +304,9 @@ apply_event :: proc(s: ^Session, g: protocol.Received) {
 	case .Chat_Delete:
 		chat_delete(s, (^protocol.Chat_Delete)(g.value).id)
 	case .Entity_Hurt:
-		if e, known := &s.entities[(^protocol.Entity_Hurt)(g.value).entity]; known {
-			e.hurt_at = time.tick_now()
+		id := (^protocol.Entity_Hurt)(g.value).entity
+		if e, known := &s.entities[id]; known {
+			entity_flash(s, id, HURT)
 			append(
 				&s.sounds,
 				Sound_Event{.Entity_Hurt, .Air, e.last_seen + {0, 0.5, 0}, 1, entity_voice(s, e)},

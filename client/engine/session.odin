@@ -100,6 +100,7 @@ Session :: struct {
 	tool:             Pointer_Tool, // the free pointer's (pointer_tool)
 	pointer_over_ui:  bool, // the pointer is over the UI (ui.pointer_over): the world does not take its clicks
 	puffs:            [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
+	feel:             Feel, // the feedback under way and its clock (feel.odin)
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen:     bool,
 	grants:           [dynamic]access.Grant, // what the server lets this player do (heap)
@@ -510,6 +511,7 @@ session_update :: proc(
 		receive(s)
 		world_changes_settle(&s.world)
 	}
+	feel_advance(s, dt)
 	defer {
 		base.profile_scope("send messages")
 		flush(s)

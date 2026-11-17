@@ -12,32 +12,54 @@ import "common:game"
 // (players.odin), drawn as boxes in the entity pass. A creature is its kind's parts
 // (its pack's model): legs that swing as fast as it walks, a head that pitches as the
 // server's pitch says, parts shown, hidden, coloured and sized by its looks, specks that
-// rise from it by a look; it flashes red when hit and bursts into a puff of pixels when
-// it dies. Nothing here knows any particular creature.
+// rise from it by a look; it flashes red when hit (entity_flash) and bursts into a puff of
+// pixels when it dies. Nothing here knows any particular creature.
 
-HURT_FLASH :: 250 * time.Millisecond
 PUFF_SECONDS :: 0.7
 PUFF_PIECES :: 14
 MAX_PUFFS :: 1024
 
 // Puff: a particle, a piece of something (a dying entity, debris, smoke,
 // flame) flying out and falling, or drifting and slowing. It shrinks as it
-// ages.
+// ages, on the feel clock (feel.odin): where it is follows from its age alone
+// (puff_at), so it is where it would be however the frames fell.
 Puff :: struct {
-	position: [3]f64,
-	velocity: [3]f32,
-	age:      f32, // seconds
+	position: [3]f64, // where it started
+	velocity: [3]f32, // ... and how fast, blocks/s
 	life:     f32, // seconds it lasts
 	size:     f32, // half-width, blocks
 	gravity:  f32, // blocks/s²
-	drag:     f32, // fraction of its speed lost per second
+	drag:     f32, // its speed falls by e^(-drag) a second
 	color:    [4]u8,
+	born:     f64, // the feel clock when it was made (puff_add sets it)
+	burst:    bool, // a burst's (counted against MAX_BURST_PUFFS)
 }
 
 // puff_add adds p, unless there are MAX_PUFFS already (then it is dropped:
-// effects are not worth growing memory for).
-puff_add :: proc(s: ^Session, p: Puff) {
-	if len(s.puffs) < cap(s.puffs) {append(&s.puffs, p)}
+// effects are not worth growing memory for); false when dropped.
+puff_add :: proc(s: ^Session, p: Puff) -> bool {
+	if len(s.puffs) >= cap(s.puffs) {return false}
+	p := p
+	p.born = feel_now(s)
+	append(&s.puffs, p)
+	return true
+}
+
+// puff_at: where a puff is `age` seconds after it was made: thrown from its start, slowed
+// by its drag and pulled by its gravity, exactly.
+puff_at :: proc(p: Puff, age: f32) -> [3]f64 {
+	v, g, k := p.velocity, p.gravity, p.drag
+	moved: [3]f32
+	if k < 1e-4 {
+		moved = v * age
+		moved.y -= 0.5 * g * age * age
+	} else {
+		// v' = -k v - g: v decays to -g/k, and what it covers is its integral.
+		f := (1 - math.exp(-k * age)) / k
+		moved = v * f
+		moved.y -= g / k * (age - f)
+	}
+	return p.position + {f64(moved.x), f64(moved.y), f64(moved.z)}
 }
 
 @(private = "file")
@@ -45,12 +67,12 @@ SMOKE :: [4]u8{70, 68, 66, 255}
 @(private = "file")
 FLAME :: [4]u8{255, 170, 60, 255}
 
-@(private = "file")
+// HURT: what a hurt creature flashes (Entity_Hurt: entity_flash).
 HURT :: [4]u8{236, 84, 72, 255}
 
-// entities_draw adds the entities and puffs to the entity pass and moves
-// the puffs on by dt.
-entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
+// entities_draw adds the entities and puffs to the entity pass (the puffs as old as the
+// feel clock says: those past their life go).
+entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
 	// Puffs are local effects: they move on and fade whatever the connection.
 	now, live := session_others_now(s)
 	for _, &e in s.entities {
@@ -60,7 +82,7 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 		moved := v.position - e.last_seen
 		e.stride += f32(math.sqrt(moved.x * moved.x + moved.z * moved.z))
 		e.last_seen = v.position
-		hurt := e.hurt_at != {} && time.tick_since(e.hurt_at) < HURT_FLASH
+		flash, flashing := entity_flashing(s, &e)
 		info := game.kind_info(s.reg, e.kind)
 		if info == nil {continue}
 		switch info.model {
@@ -77,27 +99,25 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 				0,
 				{f32(lo.x), 0, f32(lo.z)},
 				{f32(hi.x), f32(hi.y), f32(hi.z)},
-				{info.color[0], info.color[1], info.color[2], 255},
+				flash if flashing else {info.color[0], info.color[1], info.color[2], 255},
 				.Body,
 			)
 		case .Parts:
-			shaped(d, v, info, e.stride, hurt, e.looks)
+			shaped(d, v, info, e.stride, flash if flashing else {}, e.looks)
 			look_puffs(s, v, info, e.looks)
 		case .Player: // (players are drawn as players, not from here)
 		}
 	}
 	for i := 0; i < len(s.puffs); {
 		p := &s.puffs[i]
-		p.age += dt
-		if p.age > p.life {
+		age := feel_age(s, p.born)
+		if age > p.life {
+			if p.burst {s.feel.burst_puffs -= 1}
 			unordered_remove(&s.puffs, i)
 			continue
 		}
-		p.velocity.y -= p.gravity * dt
-		p.velocity *= max(1 - p.drag * dt, 0)
-		p.position += {f64(p.velocity.x * dt), f64(p.velocity.y * dt), f64(p.velocity.z * dt)}
-		size := p.size * (1 - p.age / p.life * 0.6)
-		render.entity_box(d, p.position, 0, 0, -size, size, p.color, .Body)
+		size := p.size * (1 - age / p.life * 0.6)
+		render.entity_box(d, puff_at(p^, age), 0, 0, -size, size, p.color, .Body)
 		i += 1
 	}
 }
@@ -108,14 +128,15 @@ STRIKE_RAISE :: 1.5
 // shaped: a kind's own boxes (its model's parts), turned with it, sized by its looks
 // about its feet; a part a look hides (or one not shown) is left out, and a look may
 // colour it. A part that swings turns about its hinge: to and fro with the stride, forward
-// while it strikes, up and down with its pitch. Red while hurt.
+// while it strikes, up and down with its pitch. All of it in flash while it flashes (its
+// alpha not 0: entity_flash).
 @(private)
 shaped :: proc(
 	d: ^render.Entity_Draw,
 	v: Other_View,
 	info: ^game.Kind_Info,
 	stride: f32,
-	hurt: bool,
+	flash: [4]u8,
 	looks: u16,
 ) {
 	walk := math.sin(stride * 4) * 0.7
@@ -152,7 +173,7 @@ shaped :: proc(
 			angle,
 			(part.lo - part.hinge) * k,
 			(part.hi - part.hinge) * k,
-			HURT if hurt else color,
+			flash if flash.a != 0 else color,
 			skin[part.skin],
 		)
 	}

@@ -498,9 +498,36 @@ number and no cast.
 | `ground_fill(s, lo, hi, color)`, `ground_outline(s, lo, hi, color)`, `structure_ghost(s, t, at, rotation, color)` | A translucent cover over the tops of a rectangle's columns (a zone, a heat map), its edge on the ground, a template's blocks tinted (what a placement would build), `MAX_FILL_VERTICES` and `MAX_WORLD_LINES` a frame |
 | `ground_top(s, x, z, lo, hi)`, `ground_quad(s, a, b, c, d, color)`, `block_colour(s, block)` | The highest solid block of a column as the session holds the world (false: none, or not loaded), a translucent quad of the game's drawn with the ground marks, a block's look in one colour: what a fog over the ground and a minimap are made of |
 | `machine_shown(s, p, T)` | What the game's machine at `p` shows, as its type (`Game.machine_shown`, the server part's): nil where the session holds none ([machines](#machines)) |
-| `puff_add(s, puff)` | A speck that drifts and fades (a tower's tracer, a blast's smoke) |
+| `puff_add(s, puff)` | A speck that drifts and fades (a tower's tracer, a blast's smoke), aged on the feel clock ([feel](#feel)) |
+| `burst(s, at, kind, color, scale)`, `Burst`, `MAX_BURST_PUFFS` | A handful of puffs flung out of a point as a preset looks (`.Impact`, `.Sparks`, `.Smoke`, `.Sparkle`, `.Death`, `.Splash`), in a colour (zero: the preset's; a material's: `block_colour`), at most `MAX_BURST_PUFFS` alive from every burst ([feel](#feel)) |
+| `entity_flash(s, id, color)`, `HURT` | An entity drawn in one colour for a moment: `HURT` red as every creature is when hurt, white for a critical blow ([feel](#feel)) |
 | `game_request(s, &value)` | Send the server part one of the game's requests ([below](#requests)) |
 | `Seats(T)`, `seats_received(s, &seats, r)`, `seat_mine(s, &seats)`, `seats_ranked(&seats, before)` | What the game keeps of each player from a record of its keyed by the player (`key_player`, with a `name`): the last value by seat, its name copied out of the message, forgotten when the server stops putting it; the player's own; the seats told of in order (ties by name), a scoreboard's rows |
+
+### Feel
+
+What happens in a game lands with a little feedback of the client part's: a burst where a
+blow lands, a flash on the creature it hit. These are the feel kit's calls
+(`client/engine/feel.odin`), each one line from the game's `received` or `hud`, each
+presentation alone: nothing is sent, saved or simulated.
+
+- `engine.burst(s, at, .Impact, engine.block_colour(s, block))`: chips where a blow lands, in
+  a material's colour; `.Sparks`, `.Smoke`, `.Sparkle`, `.Death`, `.Splash` the others.
+- `engine.entity_flash(s, id, {255, 255, 255, 255})`: a creature lit white for a moment (a
+  critical blow); the engine flashes every hurt one `engine.HURT` itself.
+
+**Restraint.** An effect is short (under a second) and small (a fraction of a block, a few
+pieces), and it never hides what the player must see: enemies, pickups, the path. Bursts
+share a budget (`MAX_BURST_PUFFS` alive of the `MAX_PUFFS` every effect has) and a burst past
+it makes fewer pieces or none, so a game calls them freely and the frame does not pay. The
+effects sit inside the game's look ([below](#a-games-look)): a dark game's sparks are not a
+noon's, and a calm game's are few.
+
+Every effect is timed by the **feel clock** (`Feel.clock`), which runs with the frames but
+follows the server's ticks as they are heard (never more than `FEEL_LEAD` ahead of the newest,
+nor `FEEL_LAG` behind): a paused world holds its effects, and a screenshot's `ticks <n>`
+finds an effect as far through as the ticks put it, to within a tick or two, however long
+lavapipe's frames took ([screenshots](#screenshots)).
 
 ### Commanding from above: `client:overview`
 
