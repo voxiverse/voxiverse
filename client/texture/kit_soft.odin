@@ -363,16 +363,16 @@ foliage :: proc(ramp: Ramp, seed: u32, x, y: int) -> Rgba {
 	return step(r, s)
 }
 
-// packed_ice: ice pressed hard: broad blue facets, their edges fractured white, a bubble
-// caught here and there.
+// ice_of: ice in facets n across (broad for clear ice, smaller for packed), each a blue of
+// its own lit at its top left, their edges fractured white, a bubble caught here and there.
 @(private)
-packed_ice :: proc(seed: u32, x, y: int) -> Rgba {
-	c := cells(seed, x, y, 3)
+ice_of :: proc(ramp: Ramp, seed: u32, x, y, n: int) -> Rgba {
+	c := cells(seed, x, y, n)
 	gap := c.d2 - c.d1
-	lean := -(c.dx + c.dy) / 3
-	if gap < 0.8 {return PACKED_ICE[4] if lean > -0.2 else PACKED_ICE[0]}
+	lean := -(c.dx + c.dy) / (9 / f32(n)) // (a facet's reach, about)
+	if gap < 0.8 {return ramp[4] if lean > -0.2 else ramp[0]}
 	s := 1 + int(hash01(c.id, 0, 0) * 1.99)
 	if lean > 0.5 {s += 1}
 	if hash01(seed ~ 1, x, y) > 0.97 {s = 4} 	// a bubble
-	return step(PACKED_ICE, s)
+	return step(ramp, s)
 }

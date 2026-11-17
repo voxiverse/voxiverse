@@ -183,7 +183,7 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 	coarse := noise(seed ~ 0x5bd1_e995, x, y, 4, 4)
 	#partial switch t {
 	case .Stone:
-		return rock(STONE, seed, x, y)
+		return rough(STONE_ROCK, seed, x, y)
 	case .Clay:
 		return clay(seed, x, y)
 	case .Gravel:
@@ -191,9 +191,9 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 	case .Bedrock:
 		return bedrock(seed, x, y)
 	case .Cobblestone:
-		return cobble(seed, x, y)
+		return cobble_of(STONE_ROCK, seed, x, y)
 	case .Stone_Bricks:
-		return stone_brick(seed, x, y)
+		return bricks(STONE_ROCK, seed, x, y, 8, 4)
 	case .Coal_Ore:
 		c, _ := ore(COAL, seed, x, y, 4, 1.8, 0.4)
 		return c
@@ -228,26 +228,22 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 		v := 0.4 + 0.25 * coarse + 0.2 * (fine - 0.5)
 		if y % 4 == 0 {v -= 0.3}
 		if y % 4 == 1 {v += 0.2}
-		return dither(ramp, v, x, y)
+		return pick(ramp, v)
 	case .Sand:
-		return sand(seed, x, y)
+		return dunes(SAND, seed, x, y)
 	case .Sandstone_Side:
 		return sandstone_side(seed, x, y)
 	case .Sandstone_Top:
-		// A cut face: smooth, its edges catching the light at the top left.
-		v := 0.45 + 0.25 * fbm(seed, x, y, 2, 3) + 0.15 * (fine - 0.5)
-		v += 0.22 * bevel(x, y, SIZE, SIZE)
-		return dither(SANDSTONE, v, x, y)
+		// A cut face: a slab, smooth, its edges catching the light at the top left.
+		return polished(SANDSTONE_ROCK, seed, x, y)
 	case .Snow:
-		// Soft drifts, blue in their hollows, a glint here and there.
-		v := 0.3 + 0.6 * fbm(seed, x, y, 2, 3)
+		// Soft drifts in broad patches, blue in their hollows, a glint here and there.
+		f := fbm(seed, x, y, 2, 3)
 		if fine > 0.97 {return SNOW[4]}
-		return dither(SNOW, v, x, y)
+		return step(SNOW, 1 + int(f > 0.4) + int(f > 0.6))
 	case .Ice:
-		// Clear blue, cloudy patches, long white fracture lines here and there.
-		crack := wrap(x - 2 * y) == 3 || wrap(2 * x + y) == 11
-		if crack && noise(seed ~ 30, x, y, 4, 4) > 0.5 {return ICE[4]}
-		return dither(ICE, 0.2 + 0.55 * fbm(seed, x, y, 2, 3), x, y)
+		// Clear blue in broad facets, their edges fractured white, a bubble here and there.
+		return ice_of(ICE, seed, x, y, 2)
 	case .Water:
 		// Ripples: soft horizontal bands; see-through (alpha).
 		band := noise(seed ~ 23, x + y / 3, y, 4, 4)
@@ -266,22 +262,17 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 		}
 		return pick(LAMP, 0.45 + 0.3 * fine)
 	case .Log_Side:
-		return bark(BARK, seed, x, y, 6, 3)
+		return bark_of(OAK, seed, x, y)
 	case .Spruce_Log_Side:
-		// Spruce: darker, finer furrows broken into scales.
-		c := bark(SPRUCE_BARK, seed, x, y, 8, 5)
-		if wrap(y + int(hash01(seed ~ 5, x / 2, 0) * 16)) % 5 == 0 && fine > 0.3 {
-			return SPRUCE_BARK[0]
-		}
-		return c
+		return bark_of(SPRUCE, seed, x, y)
 	case .Log_Top:
 		return rings(seed, x, y)
 	case .Planks:
 		return plank(seed, x, y)
-	case .Leaves, .Spruce_Leaves:
-		ramp := LEAVES if t == .Leaves else SPRUCE_LEAVES
-		if hash01(seed ~ 41, x, y) > 0.78 {return {}} 	// gaps to see through
-		return pick(ramp, 0.1 + 0.55 * coarse + 0.4 * fine)
+	case .Leaves:
+		return foliage(LEAVES, seed, x, y)
+	case .Spruce_Leaves:
+		return foliage(SPRUCE_LEAVES, seed, x, y)
 	case .Tall_Grass:
 		// Blades of different heights from the bottom edge.
 		height := int(6 + hash01(seed ~ 47, x, 0) * 10)
@@ -329,13 +320,10 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 		if rim || latch {return pick(IRON, 0.3 + 0.4 * fine)}
 		if y % 4 == 3 {return WOOD[0]}
 		return pick(WOOD, 0.45 + 0.4 * (grain(seed, x, y) - 0.5) + 0.12 * bevel(x, y % 4, SIZE, 3))
-	case .Wool, .Wool_Black:
-		// Woven: soft tufts in rows, a thread's shadow between.
-		ramp := WOOL_BLACK if t == .Wool_Black else WOOL
-		v := 0.45 + 0.3 * coarse + 0.25 * fine
-		if y % 4 == 3 {v -= 0.2}
-		if (x + (y / 4) * 2) % 4 == 3 {v -= 0.12}
-		return pick(ramp, clamp(v, 0, 1))
+	case .Wool:
+		return woven(WOOL, seed, x, y)
+	case .Wool_Black:
+		return woven(WOOL_BLACK, seed, x, y)
 	case .Ladder:
 		// Two rails and four rungs; clear between.
 		rail := (x >= 2 && x <= 3) || (x >= 12 && x <= 13)

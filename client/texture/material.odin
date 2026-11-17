@@ -7,26 +7,13 @@ import "core:math"
 // tiles as the toolkit does; a material's look is said in its comment, from
 // what the real thing looks like.
 
-// rock: broad patches of tone (fbm, dithered between the ramp's steps), a
-// hairline crack along some of the borders between cells, and here and
-// there a grain of quartz or a dark one.
-@(private)
-rock :: proc(ramp: Ramp, seed: u32, x, y: int) -> Rgba {
-	grit := hash01(seed ~ 4, x, y)
-	if grit > 0.975 {return ramp[4]}
-	if grit < 0.02 {return ramp[0]}
-	v := 0.18 + 0.64 * fbm(seed, x, y, 2, 4) + 0.12 * (hash01(seed ~ 1, x, y) - 0.5)
-	c := cells(seed ~ 2, x, y, 3)
-	if c.d2 - c.d1 < 0.8 && noise(seed ~ 3, x, y, 4, 4) > 0.55 {v -= 0.3}
-	return dither(ramp, v, x, y)
-}
+// The rock, cobblestone and stone bricks are the kit's grey stone (kit_stone.odin).
 
 // clay: smooth and fine, no grit to speak of, in soft bands where it settled.
 @(private)
 clay :: proc(seed: u32, x, y: int) -> Rgba {
 	v := 0.15 + 0.45 * noise(seed, x, y, 2, 5) + 0.35 * noise(seed ~ 1, x, y, 4, 8)
-	v += 0.08 * (hash01(seed ~ 2, x, y) - 0.5)
-	return dither(CLAY, v, x, y)
+	return pick(CLAY, v)
 }
 
 // gravel: small pebbles packed together, each its own stone (grey, warm or
@@ -55,33 +42,6 @@ bedrock :: proc(seed: u32, x, y: int) -> Rgba {
 	return pick(BEDROCK, v)
 }
 
-// cobble: rounded stones of their own tones set in dark mortar, each lit at
-// its top left and shaded towards its rim.
-@(private)
-cobble :: proc(seed: u32, x, y: int) -> Rgba {
-	c := cells(seed, x, y, 3)
-	gap := c.d2 - c.d1
-	if gap < 1.0 {return STONE[0]}
-	v := 0.3 + 0.4 * hash01(c.id, 0, 0) + 0.2 * clamp(-(c.dx + c.dy) / 5, -1, 1)
-	if gap < 1.9 {v -= 0.18}
-	return dither(STONE, v + 0.1 * (hash01(seed ~ 1, x, y) - 0.5), x, y)
-}
-
-// stone_brick: dressed blocks of stone in a running bond, each a tone of its
-// own with its top and left edges lit, its bottom and right shaded, a chip
-// out of an edge here and there.
-@(private)
-stone_brick :: proc(seed: u32, x, y: int) -> Rgba {
-	course := wrap(y) / 4
-	b := brick(x + course * 4, y, 8, 4)
-	if b.joint {return STONE[0]}
-	edge := bevel(b.u, b.v, 7, 3)
-	v := 0.35 + 0.3 * hash01(seed ~ 1, b.index, course) + 0.22 * edge
-	v += 0.3 * (fbm(seed ~ 2, x, y, 4, 2) - 0.5)
-	if edge != 0 && hash01(seed ~ 3, x, y) > 0.88 {v -= 0.35}
-	return dither(STONE, v, x, y)
-}
-
 // ore: stone with nuggets of a mineral in it (of the n by n places, the share
 // chance hold one, of about radius pixels), each lit at its top left, set in
 // a rim of darker stone. The stone is stone's own, so ore and stone meet
@@ -97,7 +57,7 @@ ore :: proc(ramp: Ramp, seed: u32, x, y, n: int, radius, chance: f32) -> (c: Rgb
 		return pick(ramp, v + 0.15 * (hash01(seed, x, y) - 0.5)), true
 	}
 	if present && d < r + 0.6 {return STONE[0], false}
-	return rock(STONE, seed_of(.Stone), x, y), false
+	return rough(STONE_ROCK, seed_of(.Stone), x, y), false
 }
 
 // dirt: crumbly earth in clumps of a few tones, a small stone in it here
@@ -123,17 +83,6 @@ grass :: proc(seed: u32, x, y: int) -> Rgba {
 	return pick(GRASS, v)
 }
 
-// sand: fine grains of a few tones, a dark or a pale one here and there,
-// over faint ripples the wind left.
-@(private)
-sand :: proc(seed: u32, x, y: int) -> Rgba {
-	grit := hash01(seed ~ 1, x, y)
-	if grit > 0.96 {return SAND[0]}
-	if grit < 0.03 {return SAND[4]}
-	v := 0.3 + 0.3 * noise(seed, x + y / 2, y, 2, 5) + 0.4 * (hash01(seed ~ 2, x, y) - 0.5)
-	return dither(SAND, v + 0.15, x, y)
-}
-
 // sandstone_side: sand turned to stone in beds: layers of their own tones,
 // their boundaries wavering, a darker bedding plane under each.
 @(private)
@@ -141,31 +90,18 @@ sandstone_side :: proc(seed: u32, x, y: int) -> Rgba {
 	wobble := int(1.8 * noise(seed, x, 0, 3, 1))
 	row := wrap(y + wobble)
 	layer := row / 4
-	v := 0.3 + 0.35 * hash01(seed ~ 1, layer, 0) + 0.2 * (hash01(seed ~ 2, x, y) - 0.5)
-	v += 0.15 * (noise(seed ~ 3, x, y, 8, 4) - 0.5)
+	s := 1 + int(hash01(seed ~ 1, layer, 0) * 2.99)
 	switch row % 4 {
 	case 3:
-		v -= 0.3
+		s -= 1 // the bedding plane under the layer
 	case 0:
-		v += 0.12
+		s += 1 // the layer's top, lit
 	}
-	return dither(SANDSTONE, v, x, y)
+	if hash01(seed ~ 2, x, y) > 0.95 {s -= 1}
+	return step(SANDSTONE, s)
 }
 
-// bark: ridges running up the trunk, n across, broken every so often (breaks
-// down it), deep furrows between them, each ridge's left side catching the
-// light.
-@(private)
-bark :: proc(ramp: Ramp, seed: u32, x, y, n, breaks: int) -> Rgba {
-	ridge_at :: proc(seed: u32, x, y, n, breaks: int) -> f32 {
-		return 0.65 * noise(seed, x, y, n, 1) + 0.35 * noise(seed ~ 5, x, y, n, breaks)
-	}
-	ridge := ridge_at(seed, x, y, n, breaks)
-	if ridge < 0.3 {return ramp[0]} 	// a furrow
-	v := 0.1 + 0.8 * ridge + 0.2 * (hash01(seed ~ 1, x, y) - 0.5)
-	if ridge_at(seed, x - 1, y, n, breaks) < ridge - 0.06 {v += 0.2}
-	return pick(ramp, v)
-}
+// (Bark is the kit's, bark_of: kit_wood.odin.)
 
 // rings: a log's cut end: growth rings round the pith, wavering, a dark
 // line of cambium, then the bark.

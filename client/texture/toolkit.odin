@@ -18,20 +18,6 @@ pick :: proc(ramp: Ramp, v: f32) -> Rgba {
 	return ramp[clamp(int(v * 5), 0, 4)]
 }
 
-// dither: the ramp's colour for v in 0..1 by ordered dithering: between two
-// steps, a 4 x 4 Bayer pattern mixes them in proportion, so a gradient is a
-// fine pattern of two tones rather than a band with a hard edge.
-dither :: proc(ramp: Ramp, v: f32, x, y: int) -> Rgba {
-	s := clamp(v, 0, 1) * 4
-	i := int(s)
-	if i >= 4 {return ramp[4]}
-	threshold := (f32(BAYER[wrap(y) % 4][wrap(x) % 4]) + 0.5) / 16
-	return ramp[i + 1] if s - f32(i) > threshold else ramp[i]
-}
-
-@(private = "file", rodata)
-BAYER := [4][4]u8{{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}}
-
 // wrap: v in 0..<SIZE, as a texture that repeats sees it.
 wrap :: proc(v: int) -> int {
 	return ((v % SIZE) + SIZE) % SIZE

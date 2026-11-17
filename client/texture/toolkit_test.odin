@@ -97,7 +97,7 @@ test_bevel_lights_the_top_left :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_dither_mixes_two_steps :: proc(t: ^testing.T) {
+test_pick_takes_a_step :: proc(t: ^testing.T) {
 	ramp := Ramp {
 		{0, 0, 0, 255},
 		{50, 0, 0, 255},
@@ -105,16 +105,9 @@ test_dither_mixes_two_steps :: proc(t: ^testing.T) {
 		{150, 0, 0, 255},
 		{200, 0, 0, 255},
 	}
-	testing.expect_value(t, dither(ramp, 0, 3, 3), ramp[0])
-	testing.expect_value(t, dither(ramp, 1, 3, 3), ramp[4])
-	// A quarter of the way from step 1 to step 2: a quarter of a 4 x 4 block is step 2.
-	counts: [5]int
-	for y in 0 ..< 4 {
-		for x in 0 ..< 4 {
-			c := dither(ramp, 0.25 + 0.25 / 4, x, y)
-			for s, i in ramp {if c == s {counts[i] += 1}}
-		}
-	}
-	testing.expect_value(t, counts, [5]int{0, 12, 4, 0, 0})
+	testing.expect_value(t, pick(ramp, 0), ramp[0])
 	testing.expect_value(t, pick(ramp, 0.5), ramp[2])
+	testing.expect_value(t, pick(ramp, 1), ramp[4])
+	testing.expect_value(t, step(ramp, -2), ramp[0])
+	testing.expect_value(t, step(ramp, 7), ramp[4])
 }

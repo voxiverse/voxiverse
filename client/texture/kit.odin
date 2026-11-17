@@ -178,7 +178,7 @@ kit_pixel :: proc(g: Generator, seed: u32, x, y: int) -> (Rgba, bool) {
 	case .Autumn_Leaves:
 		return foliage(AUTUMN_LEAVES, seed, x, y), true
 	case .Packed_Ice:
-		return packed_ice(seed, x, y), true
+		return ice_of(PACKED_ICE, seed, x, y, 3), true
 	// Fantasy and dungeon.
 	case .Dark_Bricks:
 		return bricks(DUNGEON_ROCK, seed, x, y, 8, 4), true
