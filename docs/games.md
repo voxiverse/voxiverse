@@ -540,20 +540,24 @@ table, while the server's notices and announcements are still English in place.
 
 ## A game's look
 
-Each game has an air of its own: a dungeon dark and close, a race bright and far. A game's
+Each game has an air of its own: Delve's dungeon dark and close, Rally's midday bright and
+far, Horde's night cold, Flood's sky overcast. The sandbox declares none. A game's
 client part declares it once, as data, in `engine.Game.look` (an `engine.Look`, which is
 `render.Look`), beside its camera and its HUD:
 
 ```odin
-// games/tag/client/game.odin
+// games/horde/client/game.odin: a moonlit night that never ends
 LOOK :: engine.Look {
-	time       = 0.97, // past midnight, always
-	horizon    = {0.035, 0.05, 0.09},
-	fog        = 70,
-	fog_near   = 0.3,
-	grade      = {tint = {0.86, 0.95, 1.12}, saturation = -0.3, vignette = 0.35},
+	time         = 0.02, // just past midnight, always
+	zenith       = {0.008, 0.012, 0.03},
+	horizon      = {0.03, 0.045, 0.085}, // the fog's colour too
+	sun_light    = {0.32, 0.38, 0.58}, // a moon bright enough to aim by
+	figure_light = {0.42, 0.44, 0.52}, // the creatures read in the dark
+	fog          = 64,
+	fog_near     = 0.15,
+	grade        = {tint = {0.88, 0.95, 1.10}, saturation = -0.3, contrast = 0.08, vignette = 0.35},
 }
-GAME :: engine.Game{info = tag.INFO, ..., look = LOOK}
+GAME :: engine.Game{info = horde.INFO, ..., look = LOOK}
 ```
 
 Every field's zero is the engine's own, so a game names only what it changes, and a game
