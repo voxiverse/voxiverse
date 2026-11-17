@@ -84,8 +84,24 @@ family :: proc(g: Generator) -> Family {
 		return .Built
 	case .Painted_Red, .Painted_Blue, .Painted_Yellow, .Painted_White:
 		return .Built
-	case .Tinted_Glass, .Screen, .Vent, .Conveyor_Top, .Conveyor_Side:
+	case .Tinted_Glass, .Screen, .Vent, .Conveyor_Top, .Conveyor_Side, .Carpet, .Bookshelf:
 		return .Fixture
+	case .Thatch, .White_Plaster, .Cream_Plaster, .Ochre_Plaster, .Clay_Roof, .Slate_Roof:
+		return .Built
+	case .Red_Wool, .Blue_Wool, .Green_Wool, .Yellow_Wool:
+		return .Cloth
+	case .Mud, .Dry_Earth, .Dry_Grass_Top, .Dry_Grass_Side, .Snowy_Grass_Side:
+		return .Soil
+	case .Red_Sand:
+		return .Sand
+	case .Moss, .Birch_Leaves, .Autumn_Leaves:
+		return .Plant
+	case .Packed_Ice:
+		return .Water_And_Ice
+	case .Dark_Bricks, .Mossy_Bricks, .Rune_Stone:
+		return .Masonry
+	case .Bone, .Crystal, .Magma, .Obsidian:
+		return .Rock
 	case .Lamp, .Glass, .Chest_Side, .Chest_Top, .Ladder, .Door_Lower, .Door_Upper:
 		return .Fixture
 	case .Gate_Ring, .Gate_Chevron, .Gate_Chevron_Lit, .Gate_Horizon:

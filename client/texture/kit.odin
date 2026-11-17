@@ -133,6 +133,67 @@ kit_pixel :: proc(g: Generator, seed: u32, x, y: int) -> (Rgba, bool) {
 		return conveyor_top(seed, x, y), true
 	case .Conveyor_Side:
 		return conveyor_side(seed, x, y), true
+	// Soft and domestic.
+	case .Thatch:
+		return thatch(seed, x, y), true
+	case .White_Plaster:
+		return plaster(WHITE_PLASTER, seed, x, y), true
+	case .Cream_Plaster:
+		return plaster(CREAM_PLASTER, seed, x, y), true
+	case .Ochre_Plaster:
+		return plaster(OCHRE_PLASTER, seed, x, y), true
+	case .Clay_Roof:
+		return roof(CLAY_TILE, seed, x, y, round = true), true
+	case .Slate_Roof:
+		return roof(SLATE, seed, x, y, round = false), true
+	case .Red_Wool:
+		return woven(WOOL_RED, seed, x, y), true
+	case .Blue_Wool:
+		return woven(WOOL_BLUE, seed, x, y), true
+	case .Green_Wool:
+		return woven(WOOL_GREEN, seed, x, y), true
+	case .Yellow_Wool:
+		return woven(WOOL_YELLOW, seed, x, y), true
+	case .Carpet:
+		return carpet(seed, x, y), true
+	case .Bookshelf:
+		return bookshelf(seed, x, y), true
+	// Natural.
+	case .Mud:
+		return mud(seed, x, y), true
+	case .Dry_Earth:
+		return dry_earth(seed, x, y), true
+	case .Dry_Grass_Top:
+		return turf(DRY_GRASS, seed, x, y), true
+	case .Dry_Grass_Side:
+		return turf_side(DRY_GRASS, seed, x, y), true
+	case .Snowy_Grass_Side:
+		return snow_side(seed, x, y), true
+	case .Red_Sand:
+		return dunes(RED_SAND, seed, x, y), true
+	case .Moss:
+		return moss(seed, x, y), true
+	case .Birch_Leaves:
+		return foliage(BIRCH_LEAVES, seed, x, y), true
+	case .Autumn_Leaves:
+		return foliage(AUTUMN_LEAVES, seed, x, y), true
+	case .Packed_Ice:
+		return packed_ice(seed, x, y), true
+	// Fantasy and dungeon.
+	case .Dark_Bricks:
+		return bricks(DUNGEON_ROCK, seed, x, y, 8, 4), true
+	case .Mossy_Bricks:
+		return mossy_bricks(seed, x, y), true
+	case .Rune_Stone:
+		return rune_stone(seed, x, y), true
+	case .Bone:
+		return bone(seed, x, y), true
+	case .Crystal:
+		return crystal(seed, x, y), true
+	case .Magma:
+		return magma(seed, x, y), true
+	case .Obsidian:
+		return obsidian(seed, x, y), true
 	}
 	return {}, false
 }
