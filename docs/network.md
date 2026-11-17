@@ -46,6 +46,22 @@ A message that fails to decode, or whose values are out of range, is refused as 
 An aim pitch beyond `PITCH_LIMIT` (`Fire`, and therefore any aim computed straight up or
 down) is such a message: clamp an aim before sending it.
 
+## Finding servers
+
+A server that listens answers a `Discover` packet (`common/netcode`, outside any
+connection) with a `Discover_Reply`: its instance, a number of its own for as long as it
+runs, and its `Server_Info` (`common/protocol`), refreshed once a second: the protocol it
+speaks, its name, its players and their limit, whether it wants a password, and the game it
+plays, by id and by name (the dedicated server's `--game`, or the game of the world opened
+to the LAN). The game came with protocol 51; an older server's info ends after the
+password, and decodes with no game, so a client can still list it as running another
+version.
+
+`Discovery` asks, once a second, the default ports (`DEFAULT_PORT` and the next
+`DISCOVERY_PORTS - 1`) on this machine, the global broadcast address and each network's
+own; the servers that answer are the LAN's. A server not heard from for four seconds is
+forgotten. There is nothing else to ask: no master server, no relay.
+
 ## Retired kinds
 
 `Market_Trade` (client to server, kind 28) and `Market_View` (server to client, kind 43) are

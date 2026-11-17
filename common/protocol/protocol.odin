@@ -19,7 +19,7 @@ import sc "common:steam"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 50
+PROTOCOL_VERSION :: 51
 MAX_MESSAGE_SIZE :: 64 * 1024
 
 // Client -> server.
@@ -1596,14 +1596,18 @@ read_chunk_pos :: proc(r: ^game.Reader) -> (c: game.Chunk_Pos) {
 	return
 }
 
-// Server_Info: what a server tells LAN discovery about itself (netcode
-// carries it as bytes).
+// Server_Info: what a server tells anyone who asks about it, LAN discovery's broadcast
+// or a Discover sent to its address (netcode carries it as bytes; docs/network.md):
+// its protocol, its name, its players and the game it plays. The game came with
+// protocol 51: an older server's info ends after password, and decodes with game "".
 Server_Info :: struct {
 	protocol:    u32,
 	name:        string, // view into the bytes when decoded
 	players:     int,
 	max_players: int,
 	password:    bool,
+	game:        string, // the game it plays, by id (game_id_valid; "": a server older than protocol 51)
+	game_name:   string, // that game's name as the server's build has it (at most MAX_SERVER_NAME)
 }
 
 encode_server_info :: proc(w: ^game.Writer, i: Server_Info) {
@@ -1612,8 +1616,12 @@ encode_server_info :: proc(w: ^game.Writer, i: Server_Info) {
 	game.write_u8(w, u8(i.players))
 	game.write_u8(w, u8(i.max_players))
 	game.write_u8(w, 1 if i.password else 0)
+	game.write_string(w, i.game)
+	game.write_string(w, i.game_name)
 }
 
+// decode_server_info: info as encode_server_info wrote it, or as an older server did
+// (nothing after password: game and game_name "").
 decode_server_info :: proc(data: []u8) -> (i: Server_Info, ok: bool) {
 	r := game.reader_make(data)
 	i.protocol = game.read_u32(&r)
@@ -1621,6 +1629,11 @@ decode_server_info :: proc(data: []u8) -> (i: Server_Info, ok: bool) {
 	i.players = int(game.read_u8(&r))
 	i.max_players = int(game.read_u8(&r))
 	i.password = game.read_u8(&r) == 1
+	if r.ok && r.pos < len(r.data) {
+		i.game = game.read_string(&r, game.MAX_GAME_ID)
+		i.game_name = game.read_string(&r, MAX_SERVER_NAME)
+		if !game.game_id_valid(i.game) {game.reader_fail(&r)}
+	}
 	return i, game.reader_finish(&r)
 }
 

@@ -4,6 +4,7 @@ import "core:testing"
 
 import "common:game"
 import "common:netcode"
+import "common:protocol"
 
 @(private = "file")
 HARNESS_INTEREST :: 39 // the chunks a player holds in the harness world: 13 columns, 3 high
@@ -117,6 +118,31 @@ test_harness_player_joins :: proc(t: ^testing.T) {
 		harness_player_client(p) == nil || c.state != .Playing,
 		"the guest is still playing",
 	)
+}
+
+// A listening server tells whoever asks (LAN discovery, a saved server's status) the game
+// it plays, by id and by name, and its players: what a Discover is answered decodes so.
+@(test)
+test_server_tells_its_game :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.listen = true
+	config.name = "Probe night"
+	config.game = Game {
+		info = {id = "probe", name = "Probe"},
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	harness_step(&sess.h, game.TICK_RATE) // (the info is refreshed once a second)
+	info, ok := protocol.decode_server_info(sess.h.srv.host.info[:])
+	if !testing.expect(t, ok, "the server's info does not decode") {return}
+	testing.expect_value(t, info.protocol, protocol.PROTOCOL_VERSION)
+	testing.expect_value(t, info.name, "Probe night")
+	testing.expect_value(t, info.game, "probe")
+	testing.expect_value(t, info.game_name, "Probe")
+	testing.expect_value(t, info.players, 1) // (the mirror)
+	testing.expect_value(t, info.max_players, config.max_players)
 }
 
 // The mirror reads blocks and modes by the server's registry, as a client that took the

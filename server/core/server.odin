@@ -1306,25 +1306,34 @@ player_of :: proc(s: ^Server, ref: Player_Ref) -> ^Client {
 	return c
 }
 
-// update_info refreshes what LAN discovery answers.
+// update_info refreshes what a Discover is answered (LAN discovery, or a client asking
+// a saved server's address): server_info.
 @(private = "file")
 update_info :: proc(s: ^Server) {
-	players := 0
-	for c in s.clients {if c.state == .Playing {players += 1}}
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	name := s.config.name if s.config.name != "" else "Voxiverse server"
-	protocol.encode_server_info(
-		&w,
-		{
-			protocol = protocol.PROTOCOL_VERSION,
-			name = name[:min(len(name), protocol.MAX_SERVER_NAME)],
-			players = players,
-			max_players = s.config.max_players,
-			password = s.config.password != "",
-		},
-	)
+	protocol.encode_server_info(&w, server_info(s))
 	netcode.host_set_info(&s.host, w.buf[:])
+}
+
+// server_info: what the server says of itself to anyone who asks: its name, its players,
+// whether it wants a password, and the game it plays (the dedicated server's --game, or
+// the game of the world opened to the LAN).
+@(private)
+server_info :: proc(s: ^Server) -> protocol.Server_Info {
+	players := 0
+	for c in s.clients {if c.state == .Playing {players += 1}}
+	name := s.config.name if s.config.name != "" else "Voxiverse server"
+	g := s.config.game.info
+	return {
+		protocol = protocol.PROTOCOL_VERSION,
+		name = name[:min(len(name), protocol.MAX_SERVER_NAME)],
+		players = players,
+		max_players = s.config.max_players,
+		password = s.config.password != "",
+		game = g.id,
+		game_name = g.name[:min(len(g.name), protocol.MAX_SERVER_NAME)],
+	}
 }
 
 @(private)

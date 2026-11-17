@@ -801,6 +801,51 @@ test_rules_vars_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, game.rules_valid(&got))
 }
 
+// A server's info carries the game it plays, by id and by name, and comes back whole.
+@(test)
+test_server_info_round_trip :: proc(t: ^testing.T) {
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	sent := Server_Info{PROTOCOL_VERSION, "Alice's world", 3, 8, true, "foundry", "Foundry"}
+	encode_server_info(&w, sent)
+	got, ok := decode_server_info(w.buf[:])
+	testing.expect(t, ok)
+	testing.expect_value(t, got, sent)
+
+	// Every byte short of the whole is refused, but for the old info's end (below).
+	for n in 0 ..< len(w.buf) {
+		_, cut_ok := decode_server_info(w.buf[:n])
+		old_end := n == len(w.buf) - len("foundry") - len("Foundry") - 2
+		testing.expectf(t, cut_ok == old_end, "%d of %d bytes decoded: %v", n, len(w.buf), cut_ok)
+	}
+	// A game id no folder could have is refused.
+	game.writer_init(&w, context.temp_allocator)
+	encode_server_info(&w, {PROTOCOL_VERSION, "x", 0, 8, false, "Not An Id", "?"})
+	_, bad_ok := decode_server_info(w.buf[:])
+	testing.expect(t, !bad_ok)
+}
+
+// A server older than protocol 51 says nothing of its game: its info still decodes (the
+// list can say it runs another version), the game "".
+@(test)
+test_server_info_from_an_older_server :: proc(t: ^testing.T) {
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	game.write_u32(&w, 50)
+	game.write_string(&w, "Old server")
+	game.write_u8(&w, 2)
+	game.write_u8(&w, 10)
+	game.write_u8(&w, 0)
+	got, ok := decode_server_info(w.buf[:])
+	testing.expect(t, ok)
+	testing.expect_value(t, got.protocol, u32(50))
+	testing.expect_value(t, got.name, "Old server")
+	testing.expect_value(t, got.players, 2)
+	testing.expect_value(t, got.max_players, 10)
+	testing.expect_value(t, got.game, "")
+	testing.expect_value(t, got.game_name, "")
+}
+
 decode_client_t :: proc(data: []u8) -> (Client_Message, bool) {
 	return decode_client(data, game.test_reg())
 }
