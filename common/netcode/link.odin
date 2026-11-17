@@ -198,7 +198,9 @@ fail :: proc(l: ^Link, reason: string) {
 // LAN discovery: a Discover to the default ports, sent to this machine, to
 // the global broadcast address and to each network's own broadcast address
 // (Windows sends the global one out of a single interface); servers answer
-// with their info (the game's bytes).
+// with their info (the game's bytes). The same Discover goes to the addresses
+// asked by name (discovery_ask: the player's saved servers, anywhere), so they
+// answer as the LAN's do.
 
 Discovery :: struct {
 	socket:    Socket,
@@ -206,7 +208,14 @@ Discovery :: struct {
 	last_ask:  time.Tick,
 	found:     [dynamic]Found_Server,
 	targets:   [dynamic]net.Address, // where to ask
+	asked:     [dynamic]Asked_Server, // the addresses asked besides (discovery_ask)
 	allocator: mem.Allocator,
+}
+
+// Asked_Server: an address asked by name, and the server that answered from it.
+Asked_Server :: struct {
+	address:  net.Endpoint,
+	instance: u64, // the server that answered there last, in found while it answers (0: none yet)
 }
 
 Found_Server :: struct {
@@ -233,6 +242,7 @@ discovery_open :: proc(
 	base.entropy_fill(mem.ptr_to_bytes(&d.nonce))
 	d.found = make([dynamic]Found_Server, allocator)
 	d.targets = make([dynamic]net.Address, allocator)
+	d.asked = make([dynamic]Asked_Server, allocator)
 	append(&d.targets, net.IP4_Loopback)
 	if sim != nil {return nil}
 	append(&d.targets, net.IP4_Address{255, 255, 255, 255})
@@ -256,7 +266,38 @@ discovery_close :: proc(d: ^Discovery) {
 	for f in d.found {delete(f.info, d.allocator)}
 	delete(d.found)
 	delete(d.targets)
+	delete(d.asked)
 	d^ = {}
+}
+
+// discovery_ask asks address too, every DISCOVER_EVERY from the next update on (once
+// however often it is asked); its answers join found, and d.asked says which server
+// answered there.
+discovery_ask :: proc(d: ^Discovery, address: net.Endpoint) {
+	for a in d.asked {if a.address == address {return}}
+	append(&d.asked, Asked_Server{address = address})
+	d.last_ask = {} // (at once)
+}
+
+// discovery_unask stops asking address (discovery_ask); what answered there is forgotten
+// as any server is, once it is not heard from.
+discovery_unask :: proc(d: ^Discovery, address: net.Endpoint) {
+	for a, i in d.asked {
+		if a.address == address {
+			ordered_remove(&d.asked, i)
+			return
+		}
+	}
+}
+
+// discovery_asked: the server that answers at address, asked by discovery_ask: its
+// place in d.found; -1 while none does.
+discovery_asked :: proc(d: ^Discovery, address: net.Endpoint) -> int {
+	for a in d.asked {
+		if a.address != address || a.instance == 0 {continue}
+		for f, i in d.found {if f.instance == a.instance {return i}}
+	}
+	return -1
 }
 
 // discovery_update asks again every DISCOVER_EVERY and collects answers in
@@ -274,6 +315,7 @@ discovery_update :: proc(d: ^Discovery, now: time.Tick) {
 				socket_send(&d.socket, {to, port}, buf[:], now)
 			}
 		}
+		for a in d.asked {socket_send(&d.socket, a.address, buf[:], now)}
 	}
 	for {
 		data, from, ok := socket_receive(&d.socket)
@@ -294,6 +336,7 @@ discovery_update :: proc(d: ^Discovery, now: time.Tick) {
 		entry.info = make([]u8, len(info), d.allocator)
 		copy(entry.info, info)
 		entry.seen = now
+		for &a in d.asked {if a.address == from {a.instance = instance}}
 	}
 	for i := 0; i < len(d.found); {
 		if time.tick_diff(d.found[i].seen, now) > DISCOVER_FORGET {

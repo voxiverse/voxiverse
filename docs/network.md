@@ -59,7 +59,10 @@ version.
 
 `Discovery` asks, once a second, the default ports (`DEFAULT_PORT` and the next
 `DISCOVERY_PORTS - 1`) on this machine, the global broadcast address and each network's
-own; the servers that answer are the LAN's. A server not heard from for four seconds is
+own; the servers that answer are the LAN's. It asks the addresses it is given
+(`discovery_ask`: the player's saved servers, anywhere) the same way, and
+`discovery_asked` says which server answered at one: that answer is a saved server's
+status, and none means it cannot be reached. A server not heard from for four seconds is
 forgotten. There is nothing else to ask: no master server, no relay.
 
 ## Retired kinds

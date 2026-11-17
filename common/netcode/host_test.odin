@@ -273,3 +273,54 @@ test_lan_discovery :: proc(t: ^testing.T) {
 		testing.expect_value(t, d.found[0].address.port, port)
 	}
 }
+
+// A server on a port the LAN's ports do not reach (a saved server's) is found when its
+// address is asked, and discovery_asked says which it is; one asked where nobody listens
+// has none, and a server that stops answering is none again.
+@(test)
+test_discovery_asks_an_address :: proc(t: ^testing.T) {
+	n: Simnet
+	simnet_init(&n)
+	defer simnet_destroy(&n)
+	h: Host
+	port := DEFAULT_PORT + 100
+	if err := host_open(&h, port, 4, sim = &n); err != nil {
+		testing.expectf(t, false, "port %d busy: %v", port, err)
+		return
+	}
+	host_set_info(&h, transmute([]u8)string("Far World"))
+	d: Discovery
+	if !testing.expect(t, discovery_open(&d, sim = &n) == nil) {return}
+	defer discovery_close(&d)
+	there := net.Endpoint{net.IP4_Loopback, port}
+	nobody := net.Endpoint{net.IP4_Loopback, port + 1}
+	run :: proc(n: ^Simnet, d: ^Discovery, h: ^Host, seconds: int) {
+		for _ in 0 ..< seconds * int(time.Second / STEP) {
+			n.now = time.tick_add(n.now, STEP)
+			discovery_update(d, n.now)
+			if h != nil {
+				host_update(h, n.now)
+				host_flush(h, n.now)
+			}
+		}
+	}
+	run(&n, &d, &h, 2)
+	testing.expect_value(t, len(d.found), 0) // (not on a LAN port)
+
+	discovery_ask(&d, there)
+	discovery_ask(&d, there) // (asked once)
+	discovery_ask(&d, nobody)
+	testing.expect_value(t, len(d.asked), 2)
+	run(&n, &d, &h, 2)
+	i := discovery_asked(&d, there)
+	if testing.expect(t, i >= 0, "the asked server did not answer") {
+		testing.expect_value(t, string(d.found[i].info), "Far World")
+	}
+	testing.expect_value(t, discovery_asked(&d, nobody), -1)
+	discovery_unask(&d, nobody)
+	testing.expect_value(t, len(d.asked), 1)
+
+	host_close(&h, "bye")
+	run(&n, &d, nil, 5)
+	testing.expect_value(t, discovery_asked(&d, there), -1)
+}
