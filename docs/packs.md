@@ -186,6 +186,11 @@ checked when the registry is built (`common/game/pack_assets.odin`):
   zlib stream are checked first (`png_ok` in `common/game/png_check.odin`, CRC'd chunks and a
   complete deflate structure, at most 4 KiB of output); `core:image/png` decodes only what
   passed into RGBA8.
+- A texture that names a generator is a layer of the atlas the build made (`client/texture`,
+  run by `tools/atlas` into `build/textures/`, carried in the executable: nothing is drawn when
+  the client starts). A PNG is one more layer after the atlas's, its mips made by the client
+  the way the build made the atlas's (`texture.mip_chain`). So a pack a server sends can name
+  only the generators every client has, or bring PNGs.
 - A sound is an Ogg of at most `MAX_OGG_BYTES` = 1 MiB and `MAX_SOUND_SECONDS` = 5 s, scanned for
   its length and decoded once by `common/ogg`, so the client only plays a file that passed.
   File-based sound sets total at most `MAX_PACK_SOUND_FILES` = 128 files over all packs.

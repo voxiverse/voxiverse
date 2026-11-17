@@ -8,12 +8,28 @@ import "common:game"
 // Block textures: one layer per texture.Generator in a texture array, then
 // one per pack image. The registry says which generator each texture of each
 // block face uses (game.TEXTURE_GENERATOR_NAMES is that enum, in order).
+//
+// The generators' layers are not drawn here: the build made them (the atlas,
+// client/texture: atlas_make; tools/build/atlas.odin) and the executable
+// carries them. A pack's image, which can come from a server at run time,
+// gets its mips here, the way the atlas's were made (texture.mip_chain).
 
 TEXTURE_SIZE :: texture.SIZE
 TEXTURE_MIPS :: texture.MIPS
 #assert(TEXTURE_SIZE == game.TEXTURE_SIZE)
 
 Rgba :: texture.Rgba
+
+// ATLAS: the generators' layers, each texture.LAYER_PIXELS pixels;
+// ATLAS_INDEX: their names, a line each (a test holds it to the registry's).
+ATLAS :: #load("../../build/textures/" + texture.ATLAS_PIXELS)
+ATLAS_INDEX :: #load("../../build/textures/" + texture.ATLAS_INDEX, string)
+
+// atlas_layer: generator layer's pixels (its level, then its mips).
+atlas_layer :: proc(layer: u32) -> []Rgba {
+	all := slice.reinterpret([]Rgba, ATLAS)
+	return all[int(layer) * texture.LAYER_PIXELS:][:texture.LAYER_PIXELS]
+}
 
 // block_texture: the layer of the client's texture array that b's face f
 // uses: its texture's generator (a pack's texture of the same generator is the
@@ -35,7 +51,7 @@ block_texture :: proc(reg: ^game.Registry, b: game.Block, f: Face) -> u32 {
 // it; it is not palette-quantized).
 texture_layer_pixels :: proc(reg: ^game.Registry, layer: u32, pixels: []Rgba) {
 	if int(layer) < len(game.TEXTURE_GENERATOR_NAMES) {
-		texture.generate(texture.Generator(layer), pixels)
+		copy(pixels, atlas_layer(layer)[:TEXTURE_SIZE * TEXTURE_SIZE])
 		return
 	}
 	image := reg.images[int(layer) - len(game.TEXTURE_GENERATOR_NAMES)]
@@ -59,14 +75,14 @@ block_average_colour :: proc(reg: ^game.Registry, b: game.Block, f: Face) -> Rgb
 }
 
 // texture_array makes the bytes of the whole texture array for reg: every
-// layer's mips, one layer after another (what render.world_init takes).
+// layer's mips, one layer after another (what render.world_init takes): the
+// atlas, then each pack image's.
 texture_array :: proc(reg: ^game.Registry, allocator := context.temp_allocator) -> []u8 {
-	layers := game.registry_texture_layers(reg)
-	pixels := make([]Rgba, layers * texture.LAYER_PIXELS, allocator)
-	level: [TEXTURE_SIZE * TEXTURE_SIZE]Rgba
-	for layer in 0 ..< layers {
-		texture_layer_pixels(reg, u32(layer), level[:])
-		texture.mip_chain(level[:], pixels[layer * texture.LAYER_PIXELS:][:texture.LAYER_PIXELS])
+	pixels := make([]Rgba, game.registry_texture_layers(reg) * texture.LAYER_PIXELS, allocator)
+	copy(slice.to_bytes(pixels), ATLAS)
+	for &image, i in reg.images {
+		layer := len(game.TEXTURE_GENERATOR_NAMES) + i
+		texture.mip_chain(image[:], pixels[layer * texture.LAYER_PIXELS:][:texture.LAYER_PIXELS])
 	}
 	return slice.to_bytes(pixels)
 }

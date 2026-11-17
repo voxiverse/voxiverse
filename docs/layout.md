@@ -152,7 +152,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/gpu` | Vulkan | `*.odin` |
 | `client/main` | The game's main package: entry point, frame and dispatch | `*.odin` |
 | `client/mesh` | Chunk meshing | `*.odin` |
-| `client/texture` | The block textures drawn by code (one generator each) and a texture layer's mips | `*.odin` |
+| `client/texture` | The block textures drawn by code (one generator each), run at build time into the atlas the client carries, and a texture layer's mips | `*.odin` |
 | `client/music` | The music: the piece table with its embedded files, and the director that picks what plays | `*.odin` |
 | `client/planet` | The planet palette for the title and creation backdrops | `*.odin` |
 | `client/platform` | Windows, input and pads per OS | `*.odin` |
@@ -216,6 +216,7 @@ package** is enforced by the `layout` lint (see above).
 | `tests/panic_fixture` | A child process the panic tests start | `*.odin` |
 | `tests/window_fixture` | A child process the window tests start | `*.odin` |
 | `tools/analytics` | The analytics tool | `*.odin` |
+| `tools/atlas` | The block texture atlas's maker: the driver runs it into `build/textures/` before anything compiles the client | `*.odin` |
 | `tools/audiodump` | The audio dump tool | `*.odin` |
 | `tools/bench` | The benchmark tool | `*.odin` |
 | `tools/build` | The build driver | `*.odin`, `*.txt` |

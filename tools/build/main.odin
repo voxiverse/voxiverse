@@ -77,6 +77,7 @@ PACKAGES :: []string {
 	"client/sfx",
 	"server/dedicated",
 	"tools/build",
+	"tools/atlas",
 	"tools/netdump",
 	"tools/script",
 	"tools/ogg",
@@ -310,9 +311,10 @@ main :: proc() {
 	     "images",
 	     "shot",
 	     "audio":
-		// The game's packages link miniaudio; even type-checking wants it.
+		// The game's packages link miniaudio and carry the texture atlas; even
+		// type-checking wants both.
 		compare_only := args[0] == "determinism" && len(args) > 1 && args[1] == "--compare"
-		if !compare_only && !ensure_miniaudio() {os.exit(1)}
+		if !compare_only && !(ensure_miniaudio() && write_atlas()) {os.exit(1)}
 	}
 	switch args[0] {
 	case "check":
@@ -2002,13 +2004,15 @@ tool_stale :: proc(exe: string, dirs: []string) -> bool {
 	return false
 }
 
-// build_tool builds tools/<name> into build/ when it is stale (tool_stale).
-build_tool :: proc(name: string) -> (exe: string, ok: bool) {
+// build_tool builds tools/<name> into build/ when it is stale (tool_stale). imports: the
+// folders it is built from besides its own, when that is not the whole engine and games.
+build_tool :: proc(name: string, imports: []string = nil) -> (exe: string, ok: bool) {
 	exe = path_join({"build", strings.concatenate({name, exe_suffix()})})
 	// (a tool is built from what it imports too: the engine's and the games' code, not only
 	// its folder; `bench budgets` times server/core, and judged a stale build when only
 	// the engine had changed)
-	dirs := []string{path_join({"tools", name}), "common", "server", "client", "games"}
+	from := imports if imports != nil else []string{"common", "server", "client", "games"}
+	dirs := slice.concatenate([][]string{{path_join({"tools", name})}, from})
 	if !tool_stale(exe, dirs) {return exe, true}
 	cmd := slice.concatenate(
 	[][]string {
@@ -2018,7 +2022,8 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 		// The map generates millions of columns: optimized. The benchmark
 		// as a release build, with line tables for perf.
 		{"-o:speed"} if name == "worldmap" || name == "script" else {"-o:speed", "-debug", "-define:VX_DEV=false"} if name == "bench" else {},
-		version_defines(version_of()),
+		// (the version is common/base's: a tool built from a few folders has none)
+		version_defines(version_of()) if imports == nil else {},
 	},
 	)
 	if !run(cmd) {return exe, false}
