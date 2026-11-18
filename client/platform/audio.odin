@@ -85,11 +85,6 @@ audio_close :: proc(a: ^Audio_Output) {
 	a.thread = nil
 }
 
-// audio_frames: the frames in `ms` milliseconds at `rate`.
-audio_frames :: proc "contextless" (rate, ms: u32) -> u32 {
-	return u32(u64(rate) * u64(ms) / 1000)
-}
-
 // audio_fail writes why the output failed into a.why_text and returns it.
 @(private)
 audio_fail :: proc(a: ^Audio_Output, format: string, args: ..any) -> string {
