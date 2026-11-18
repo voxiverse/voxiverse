@@ -185,12 +185,11 @@ message_set :: proc(w: ^engine.Universes_Screen, text: string) {
 entry_read_config :: proc(e: ^engine.Save_Entry, cfg: string) {
 	data, err := os.read_entire_file_from_path(cfg, context.temp_allocator)
 	if err != nil {return}
-	rest := string(data)
-	for line in strings.split_lines_iterator(&rest) {
-		eq := strings.index_byte(line, '=')
-		if eq < 0 || strings.has_prefix(line, "#") {continue}
-		key, value := strings.trim_space(line[:eq]), strings.trim_space(line[eq + 1:])
-		switch key {
+	for l in base.config_lines(string(data)) {
+		value := l.value
+		switch l.key {
+		case "":
+			log.warnf("universes line ignored path=%s line=%d text=%q", cfg, l.number, l.text)
 		case "seed":
 			if n, ok := strconv.parse_i64(value); ok {e.seed = u64(n)}
 		case "mode":

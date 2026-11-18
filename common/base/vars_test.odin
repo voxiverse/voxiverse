@@ -100,6 +100,23 @@ test_vars_set_and_format :: proc(t: ^testing.T) {
 	testing.expect(t, !offered)
 }
 
+// One rule for every "key = value" file: blank lines and comments (indented too, even
+// with an `=` in them) are left out; a line with no `=` or no key comes with an empty key.
+@(test)
+test_config_lines :: proc(t: ^testing.T) {
+	text := "# top\n seed = 12 \n\n   # note = not a key\nnonsense\n = 3\nmode=a = b\n\tage =\n"
+	want := []Config_Line {
+		{2, "seed", "12", " seed = 12 "},
+		{5, "", "", "nonsense"},
+		{6, "", "", " = 3"},
+		{7, "mode", "a = b", "mode=a = b"},
+		{8, "age", "", "\tage ="},
+	}
+	got := config_lines(text)
+	testing.expect_value(t, len(got), len(want))
+	for l, i in got[:min(len(got), len(want))] {testing.expect_value(t, l, want[i])}
+}
+
 @(test)
 test_vars_file_round_trip :: proc(t: ^testing.T) {
 	table := test_table()

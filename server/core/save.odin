@@ -485,14 +485,16 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 		coords: int, // of x, y, z read
 	}
 	players := make(map[string]Partial, context.temp_allocator)
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		l := strings.trim_space(line)
-		if l == "" || l[0] == '#' {continue}
-		eq := strings.index_byte(l, '=')
-		if eq < 0 {continue}
-		key, value := strings.trim_space(l[:eq]), strings.trim_space(l[eq + 1:])
+	for l in base.config_lines(text) {
+		key, value := l.key, l.value
 		switch {
+		case key == "":
+			log.warnf(
+				"server universe line ignored path=%s line=%d text=%q",
+				path,
+				l.number,
+				l.text,
+			)
 		case key == "format":
 			n, ok := strconv.parse_int(value)
 			if !ok || n > store.SAVE_FORMAT {
@@ -627,14 +629,11 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 	rules_text := strings.builder_make(context.temp_allocator)
 	spawn_coords := 0
 	w.generator = .Classic // a world from before generators were named
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		l := strings.trim_space(line)
-		if l == "" || l[0] == '#' {continue}
-		eq := strings.index_byte(l, '=')
-		if eq < 0 {continue}
-		key, value := strings.trim_space(l[:eq]), strings.trim_space(l[eq + 1:])
+	for l in base.config_lines(text) {
+		key, value := l.key, l.value
 		switch {
+		case key == "":
+			log.warnf("server world line ignored path=%s line=%d text=%q", path, l.number, l.text)
 		case key == "format":
 			if n, ok := strconv.parse_int(value); !ok || n > store.SAVE_FORMAT {
 				log.errorf(

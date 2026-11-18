@@ -12,6 +12,7 @@ import "core:strings"
 import "client:platform"
 import "client:render"
 import "client:ui"
+import "common:base"
 import "common:game"
 import "common:protocol"
 import "server:core"
@@ -144,18 +145,11 @@ game_binds_load :: proc(app: ^App, s: ^Session) {
 	if !ok {return}
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {return}
-	text := string(data)
-	n := 0
-	for line in strings.split_lines_iterator(&text) {
-		n += 1
-		l := strings.trim_space(line)
-		if l == "" || l[0] == '#' {continue}
-		name, _, value := strings.partition(l, "=")
-		name, value = strings.trim_space(name), strings.trim_space(value)
-		k, known := key_named(value)
-		slot := game_bind_slot(b, &s.game, name)
+	for l in base.config_lines(string(data)) {
+		k, known := key_named(l.value)
+		slot := game_bind_slot(b, &s.game, l.key)
 		if !known || slot == nil {
-			log.warnf("game keys line ignored path=%s line=%d text=%q", path, n, line)
+			log.warnf("game keys line ignored path=%s line=%d text=%q", path, l.number, l.text)
 			continue
 		}
 		slot^ = k

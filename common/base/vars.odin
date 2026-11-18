@@ -296,9 +296,41 @@ Var_File_Problem :: struct {
 	error: Var_Error,
 }
 
-// vars_read applies "name = value" lines (blank lines and # comments
-// skipped). Lines that don't apply cleanly are returned; the rest are
-// applied, so one bad line does not lose the others.
+// Config_Line: a line of a "key = value" text: its number (from 1), its key and value
+// (trimmed) and the line as written.
+Config_Line :: struct {
+	number:     int,
+	key, value: string,
+	text:       string,
+}
+
+// config_lines: the lines of a "key = value" text (settings, universe.cfg, world.cfg),
+// in order, by the one rule they are all read by: a blank line, or one whose first
+// character after spaces is `#`, is left out; a line with no `=`, or nothing before
+// it, is no setting and comes with an empty key, for the caller to report (nothing is
+// dropped silently).
+config_lines :: proc(text: string, allocator := context.temp_allocator) -> []Config_Line {
+	lines := make([dynamic]Config_Line, allocator)
+	rest := text
+	number := 0
+	for line in strings.split_lines_iterator(&rest) {
+		number += 1
+		s := strings.trim_space(line)
+		if s == "" || s[0] == '#' {continue}
+		key, eq, value := strings.partition(s, "=")
+		key = strings.trim_space(key)
+		if eq == "" || key == "" {
+			append(&lines, Config_Line{number = number, text = line})
+			continue
+		}
+		append(&lines, Config_Line{number, key, strings.trim_space(value), line})
+	}
+	return lines[:]
+}
+
+// vars_read applies "name = value" lines (config_lines). Lines that don't apply
+// cleanly (no setting is Bad_Value) are returned; the rest are applied, so one bad
+// line does not lose the others.
 vars_read :: proc(
 	t: Var_Table,
 	data: rawptr,
@@ -306,21 +338,9 @@ vars_read :: proc(
 	allocator := context.temp_allocator,
 ) -> []Var_File_Problem {
 	problems := make([dynamic]Var_File_Problem, allocator)
-	rest := text
-	line_number := 0
-	for line in strings.split_lines_iterator(&rest) {
-		line_number += 1
-		s := strings.trim_space(line)
-		if s == "" || s[0] == '#' {continue}
-		eq := strings.index_byte(s, '=')
-		if eq < 0 {
-			append(&problems, Var_File_Problem{line_number, line, .Bad_Value})
-			continue
-		}
-		name := strings.trim_space(s[:eq])
-		if err := var_set(t, data, name, s[eq + 1:]); err != .None {
-			append(&problems, Var_File_Problem{line_number, line, err})
-		}
+	for l in config_lines(text) {
+		err := var_set(t, data, l.key, l.value) if l.key != "" else .Bad_Value
+		if err != .None {append(&problems, Var_File_Problem{l.number, l.text, err})}
 	}
 	return problems[:]
 }

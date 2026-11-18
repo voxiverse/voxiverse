@@ -6,6 +6,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
+import "common:base"
 import "common:game"
 import "server:packs"
 
@@ -122,15 +123,11 @@ packs_registry :: proc(
 	return built, all[:], nil
 }
 
-// text_keys: the "key = value" lines of a config text.
+// text_value: the value of the first line of a "key = value" text (base.config_lines)
+// that names key.
 text_value :: proc(text, key: string) -> (value: string, found: bool) {
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		l := strings.trim_space(line)
-		if l == "" || l[0] == '#' {continue}
-		if eq := strings.index_byte(l, '='); eq > 0 && strings.trim_space(l[:eq]) == key {
-			return strings.trim_space(l[eq + 1:]), true
-		}
+	for l in base.config_lines(text) {
+		if l.key == key && key != "" {return l.value, true}
 	}
 	return
 }
