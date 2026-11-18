@@ -363,10 +363,9 @@ main :: proc() {
 	     "shot",
 	     "audio",
 	     "sheet":
-		// The game's packages link miniaudio and carry the texture atlas; even
-		// type-checking wants both.
+		// The game's packages carry the texture atlas; even type-checking wants it.
 		compare_only := args[0] == "determinism" && len(args) > 1 && args[1] == "--compare"
-		if !compare_only && !(ensure_miniaudio() && write_atlas()) {os.exit(1)}
+		if !compare_only && !write_atlas() {os.exit(1)}
 	}
 	switch args[0] {
 	case "check":
@@ -557,9 +556,7 @@ usage :: proc() {
 	fmt.println(
 		"              chunks       generate, light and mesh on one thread (-check: fails on a changed count or over budget)",
 	)
-	fmt.println(
-		"              ogg          the Ogg decoder against miniaudio's, on the music (no game)",
-	)
+	fmt.println("              ogg          the Ogg decoder's speed, on the music (no game)")
 	fmt.println(
 		"              load, views, flight, edits, audio  the game (a release build, fixed settings;",
 	)
@@ -1091,26 +1088,6 @@ host_target :: proc() -> string {
 	return ODIN_OS_STRING + "_" + ODIN_ARCH_STRING
 }
 
-// ensure_foreign_miniaudio gives vendor:miniaudio the library file the host does
-// not use (an empty miniaudio.lib on Linux and macOS, miniaudio.a on Windows).
-// Odin refuses to compile the package for a target whose library file is missing,
-// and a release ships only the Windows one; object builds never read the file, and
-// the host's own never gets a placeholder (ensure_miniaudio builds the real one).
-ensure_foreign_miniaudio :: proc() -> bool {
-	name := "miniaudio.a" if ODIN_OS == .Windows else "miniaudio.lib"
-	lib := path_join({ODIN_ROOT, "vendor", "miniaudio", "lib", name})
-	if os.exists(lib) {return true}
-	if err := os.write_entire_file(lib, nil); err != nil {
-		fmt.eprintfln(
-			"cross: could not create the placeholder %s (is %s writable?)",
-			lib,
-			ODIN_ROOT,
-		)
-		return false
-	}
-	return true
-}
-
 // cross_jobs builds the game, the server and every test package as objects for
 // each Tier 1 target that is not the host, so code that only compiles on the host
 // (a variable used only inside `when ODIN_OS == .Linux`) fails here.
@@ -1119,7 +1096,6 @@ ensure_foreign_miniaudio :: proc() -> bool {
 // such flag and refuses a Windows target without the real SDK, so Windows test
 // packages are checked only on a Windows machine; macOS ones are cross-built here.
 cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
-	if !ensure_foreign_miniaudio() {return false}
 	host := host_target()
 	for target in TIER1_TARGETS {
 		if target == host {continue}

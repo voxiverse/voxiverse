@@ -54,20 +54,6 @@ test_mode_name_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_mode_names("f", "if m == MODE {} // == \"creative\"\n")), 0)
 }
 
-@(test)
-test_miniaudio_lint :: proc(t: ^testing.T) {
-	context.allocator = context.temp_allocator
-	imp := "import ma \"vendor:miniaudio\"\n"
-	testing.expect_value(t, len(lint_miniaudio("client/audio/clip.odin", imp)), 1)
-	testing.expect_value(t, len(lint_miniaudio("client/audio/device.odin", imp)), 0)
-	testing.expect_value(t, len(lint_miniaudio("server/x_test.odin", imp)), 1)
-	testing.expect_value(
-		t,
-		len(lint_miniaudio("client/a.odin", "// \"vendor:miniaudio\" in a comment\n")),
-		0,
-	)
-}
-
 // The words are built here so that this file does not hold them as text of its own.
 SLEEP :: "time" + ".sleep"
 START :: "start(" + "&srv"

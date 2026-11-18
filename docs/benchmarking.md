@@ -19,7 +19,7 @@ proportions from traces.
 | `audio` | The mixer offline: 64 looping voices on 4 buses, the reverb, a music stream; 10 s of blocks. |
 | `server` | The dedicated server alone (`voxiverse-server --benchmark server`): 8 simulated players join over UDP and fly out in 8 directions; ticks, streaming, generation, bytes sent. |
 | `party` | The `server` scenario's bots in survival with the kit's weapons, shooting each other. Its universe is `build/benchmarks/party-universe`. |
-| `ogg` | The Ogg decoder against miniaudio (see [debugging.md](debugging.md#the-ogg-decoder)). |
+| `ogg` | The Ogg decoder's speed on the music (see [debugging.md](debugging.md#the-ogg-decoder)). |
 | `telemetry` | An event's emit and write cost; `-check` as for chunks ([telemetry.md](telemetry.md)). |
 | `budgets` | The server's save, audit, counters, journal and flood costs, and the entity store, spatial service, collision (ns per operation), the simulation islands of 64 walking observers, 200 steered walkers on a route and 150 creatures fighting (keeping by a moving point, looking, striking, pushed apart: µs a tick); `-check` as for chunks ([saves.md](saves.md)). |
 | `script` | The script VM (`build script bench`; [script.md](script.md)). |

@@ -142,8 +142,6 @@ the music and a pack's sounds, is decoded by our own Odin code, `common/ogg`.
   [audio.md](audio.md).
 - Without a sound card (a headless machine, or Linux without `libasound.so.2`) the game logs one warning and runs silently.
 - `set volume 0..1` sets the player's volume.
-- On Linux and macOS the build compiles Odin's miniaudio library once (into the Odin
-  installation; Windows ships it), which requires a C compiler.
 
 ### The Ogg decoder
 
@@ -156,7 +154,7 @@ an `Error` and never allocates beyond `open`'s single block. Its maintenance com
 | `build ogg reference` | Rewrites `common/ogg/testdata/reference/` from the reference decoder (libvorbis through `ffmpeg` on the `PATH`; used only here, and the output is committed): half a second at the start, middle and end of each music file, and each edge-case file whole. `reference.odin` lists which edge-case files have no reference, and why. |
 | `build ogg make-test-files` | Rewrites `common/ogg/testdata/edge/` (`tools/ogg/make.odin`): valid Vorbis streams of seeded random packets over a fixed codebook set, one file per feature (every block size, tiny and cut streams, mono, coupled stereo, six channels, floor 0, residue 0 and 2, pages, chained links). Run it only to change those files; the digests and references must then be regenerated. |
 | `build fuzz pack.ogg` | The decoder is fuzzed by the fuzz harness ([fuzzing.md](fuzzing.md)). A minimized crashing input goes to `common/ogg/testdata/edge/regress/` and the suite replays it. |
-| `build bench ogg` | Decodes the music with `common/ogg` and with miniaudio, best of three, and reports seconds of audio per CPU second for both and their ratio. |
+| `build bench ogg` | Decodes the music with `common/ogg`, best of three, and reports seconds of audio per CPU second. |
 
 ## Keeping the screen awake
 

@@ -152,30 +152,6 @@ lint_os_quarantine :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// lint_miniaudio: `vendor:miniaudio` is the output device's layer only (client/audio/device.odin,
-// until the next tier replaces it): every Ogg the game reads goes through common/ogg.
-lint_miniaudio :: proc(path, text: string) -> []string {
-	found := make([dynamic]string)
-	if strings.has_suffix(path, "client/audio/device.odin") {return found[:]}
-	line_no := 0
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		line_no += 1
-		code, _, _ := strings.partition(line, "//")
-		if strings.contains(code, "\"vendor:miniaudio\"") {
-			append(
-				&found,
-				fmt.aprintf(
-					"%s:%d: vendor:miniaudio outside client/audio/device.odin: decode with common/ogg",
-					path,
-					line_no,
-				),
-			)
-		}
-	}
-	return found[:]
-}
-
 // lint_process_exec: no `os.process_exec` outside common/limited: it stops reading a
 // child's output when poll says the child hung up, and Linux's lockless pipe poll can
 // say so before showing what the child wrote, so its output was lost now and then
@@ -325,7 +301,6 @@ source_lint :: proc() -> bool {
 				}
 				continue
 			}
-			append(&msgs, ..lint_miniaudio(path, text))
 			if strings.has_suffix(info.name, "_test.odin") {
 				for msg in msgs {
 					fmt.eprintln(msg)
@@ -345,7 +320,7 @@ source_lint :: proc() -> bool {
 			}
 		}
 	}
-	if ok {fmt.println("lint   ui text, colours, mode names, miniaudio imports, process_exec and the OS quarantine clean")}
+	if ok {fmt.println("lint   ui text, colours, mode names, process_exec and the OS quarantine clean")}
 	return ok
 }
 

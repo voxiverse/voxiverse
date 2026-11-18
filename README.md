@@ -63,8 +63,8 @@ odinup install
 ./build.sh run        # Windows: .\build run
 ```
 
-The first build also fetches the pinned shader compiler (checksum-verified, into `build/`)
-and, on Linux, compiles Odin's sound library (miniaudio) once. Subsequent builds take seconds.
+The first build also fetches the pinned shader compiler (checksum-verified, into `build/`).
+Subsequent builds take seconds.
 
 Once the game is running, choose **Singleplayer**, create a world, and play.
 
