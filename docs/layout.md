@@ -185,7 +185,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/platform` | The platform layer both binaries share: reads the machine (arguments, environment, process id, core count, folders, CPU and OS, stdout and stderr, entropy, clocks, stack calls, the system libraries to link) into the `base.Host` at boot | `*.odin` |
 | `common/planet` | The home world as a planet: Earth's relief (its file format), other worlds' relief by plate tectonics (`relief_generate`: an address and seed to a relief on the same grid), sunlight, temperature, winds, ocean currents, moisture and rain, Köppen classes, rivers and lakes from the relief, the sampling of the climate, and the peoples' history | `*.odin` |
 | `common/island` | The world's simulation islands: the chunks around its observers, merging and splitting as they meet and part | `*.odin` |
-| `common/voxel` | The geometry of sets of cells: masks and fields, set algebra, dilation and erosion, shapes and turns, flood fill, connected parts, breadth-first distance, a moving point's or box's first cell (knows no world) | `*.odin` |
+| `common/voxel` | The geometry of sets of cells: masks and fields, set algebra, dilation and erosion, shapes and turns, flood fill, connected parts, least-cost distance, a moving point's or box's first cell (knows no world) | `*.odin` |
 | `common/script` | The script language: compiler, VM, collector, libraries and trace | `*.odin`, `*.vxs` |
 | `common/script/testdata/ast` | The parser's AST dumps | `*.vxs`, `*.txt` |
 | `common/script/testdata/bench` | The VM's benchmark programs and their instruction budgets | `*.vxs`, `budgets.txt` |

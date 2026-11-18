@@ -200,7 +200,7 @@ test_a_distance_field_steps_by_one_and_is_zero_on_the_sources :: proc(t: ^testin
 			}
 			// Descending walks back to a source in as many steps.
 			at, steps := c, i32(0)
-			for next in descend(f, at, e) {at = next; steps += 1}
+			for next in descend(f, at, moves_of(e, 1, context.temp_allocator)) {at = next; steps += 1}
 			testing.expect(t, steps == got && field_get(f, at) == 0)
 		}
 		// The nearest source from a cell, through the domain, is the lowest of the nearest.

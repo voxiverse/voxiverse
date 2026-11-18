@@ -12,8 +12,9 @@
 //   Minkowski sum and difference with a mask of offsets (`dilate`, `erode`), of which
 //   shells, margins and "does a body this big fit here" are compositions;
 // - shapes as masks (`box`, `ellipsoid`, `diamond`, `line`) and their turns (`turn`);
-// - reachability and its partition (`fill`, `components`), breadth-first distance
-//   (`distance`, `nearest`, `descend`);
+// - reachability and its partition (`fill`, `components`), and least cost (`least_cost`,
+//   `descend`): moves with integer costs, sources with start values, of which
+//   breadth-first distance (`distance`, `nearest`) is the case of unit steps;
 // - the first cell a moving point or box touches (`sweep`), and counts (`mask_count`).
 //
 // Everything is integer arithmetic: the same inputs give the same bits on every machine

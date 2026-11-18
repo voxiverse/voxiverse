@@ -78,3 +78,51 @@ test_results_are_the_same_bits_everywhere :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, h.h, 2964763567486446444)
 }
+
+// The bits a least-cost spread gives for fixed inputs, weighted, seeded and stopped.
+@(test)
+test_least_cost_is_the_same_bits_everywhere :: proc(t: ^testing.T) {
+	h: Hash
+	rng := base.rng_make(0x1ea5)
+	b := Bounds{{-40, -6, -9}, {90, 10, 12}}
+	n26 := neighbours(3)
+	defer mask_destroy(&n26)
+	octile := moves_of(n26, 10)
+	defer delete(octile)
+	costs := [4]i32{0, 10, 14, 17} // (by the number of axes a move crosses)
+	for &m in octile {
+		axes := 0
+		for k in 0 ..< 3 {if m.offset[k] != 0 {axes += 1}}
+		m.cost = costs[axes]
+	}
+	for round in 0 ..< 4 {
+		defer free_all(context.temp_allocator)
+		m := random_mask(&rng, b, base.rng_int_range(&rng, 40, 90))
+		defer mask_destroy(&m)
+		climb := random_mask(&rng, b, 50)
+		defer mask_destroy(&climb)
+		octile[round].from = &climb
+		f := field_make(b)
+		defer field_destroy(&f)
+		for _ in 0 ..< 5 {
+			c := ref_cells(b)[base.rng_int_max(&rng, bounds_volume(b))]
+			f.values[field_index(f, c)] = i32(base.rng_int_max(&rng, 40))
+		}
+		seeds := field_make(b)
+		defer field_destroy(&seeds)
+		copy(seeds.values, f.values)
+		least_cost(&f, m, octile, 900, max(int))
+		hash_field(&h, f)
+		goal := Cell{80, 8, 10}
+		stop := mask_make({goal, goal + 1})
+		defer mask_destroy(&stop)
+		mask_set(&stop, goal)
+		least_cost(&seeds, m, octile, max(int), max(int), stop)
+		hash_field(&h, seeds)
+		at := goal
+		for next in descend(seeds, at, octile) {at = next}
+		hash_u64(&h, u64(u32(at.x)) | u64(u32(at.y)) << 16 | u64(u32(at.z)) << 32)
+		octile[round].from = nil
+	}
+	testing.expect_value(t, h.h, 7472160107628367187)
+}
