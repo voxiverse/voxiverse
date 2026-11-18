@@ -33,11 +33,11 @@ welcome_trace :: proc(played: string) -> []protocol.Trace_Record {
 test_replay_plays_the_traces_game :: proc(t: ^testing.T) {
 	registry = game.registry_base(context.temp_allocator)
 	defer registry = nil
-	testing.expect_value(t, trace_game(welcome_trace("flood")).id, "flood")
+	testing.expect_value(t, trace_game(welcome_trace("arena")).id, "arena")
 	testing.expect(
 		t,
-		trace_game(welcome_trace("flood")).tick != nil,
-		"flood's rules are not there",
+		trace_game(welcome_trace("arena")).tick != nil,
+		"arena's rules are not there",
 	)
 	testing.expect_value(t, trace_game(welcome_trace("nonesuch")).id, game.DEFAULT_GAME)
 	testing.expect_value(t, trace_game({}).id, game.DEFAULT_GAME)
