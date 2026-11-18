@@ -79,10 +79,10 @@ audio_open :: proc(
 }
 
 // audio_close stops the calls to fill (it returns after the last one) and
-// closes the output.
+// closes the output. What it counted (xruns, reopens) stays to be read.
 audio_close :: proc(a: ^Audio_Output) {
 	native_audio_close(a)
-	a^ = {}
+	a.thread = nil
 }
 
 // audio_frames: the frames in `ms` milliseconds at `rate`.

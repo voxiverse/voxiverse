@@ -2,7 +2,7 @@
 
 The audio engine, the sounds it plays and the tools that make and inspect them. The mixer, the
 buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis decoder is
-`common/ogg`; miniaudio opens the output device and does nothing else. Ground rule 2 in
+`common/ogg`; the platform layer opens the output device and does nothing else. Ground rule 2 in
 [design.md](design.md) (handles, not pointers) applies to voices; determinism of the mixer is in
 [determinism.md](determinism.md); switches and keys in the running game are in
 [debugging.md](debugging.md#sound).
@@ -12,7 +12,7 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
 | Area | Rule |
 |---|---|
 | Not used | FMOD, Wwise and OpenAL Soft: proprietary, or binaries beside the executable. |
-| Device | miniaudio, through `client/audio/device.odin` only (a lint rejects `vendor:miniaudio` anywhere else). It is asked for 48 kHz stereo and converts if the card differs. The device callback runs on the card's thread at real-time priority and measures itself (duration, clock drift). No device (a server, a headless machine) is not an error: the game runs silent. |
+| Device | `platform.audio_open` (`client/platform/audio*.odin`), used by `client/audio/device.odin` only: it opens the default output for stereo `f32` at the mixer's rate and calls the engine to fill a buffer until closed; the system converts to the card's rate and format. Linux: ALSA's `default` PCM (the sound server's, PipeWire or PulseAudio) through `libasound.so.2`, loaded at run time; Windows: WASAPI, shared mode, event-driven, reopened when the endpoint is lost or the default output changes; macOS: the default output Audio Unit. Linux and Windows ask for a 40 ms buffer (`AUDIO_BUFFER_MS`; ALSA makes 10 ms periods of it, WASAPI wakes once a device period); macOS keeps the device's own buffer. The callback runs on the system's audio thread (MMCSS "Pro Audio" on Windows, Core Audio's I/O thread on macOS) and measures itself (duration, clock drift). No device (a server, a headless machine, no libasound) is not an error: the game logs one warning and runs silent. The log says `audio device open rate= period= buffer=` and, at exit, `audio device closed` with the callbacks, the underruns the system reported (`xruns`) and how often the output was opened again (`reopens`). |
 | Output | Stereo `f32`, 48 kHz (`DEVICE_RATE`). |
 | Music codec | Ogg Vorbis, decoded at run time by `common/ogg`. Encoded only by the dev tool, with `oggenc` or `ffmpeg` found on the `PATH`; the encoded files are committed, so nobody else needs either. |
 | Music sources | A text score (`assets/music/*.score`, diff-friendly) or a standard MIDI file (`.mid`) becomes one note list; `build music` renders either. Scores export to `.mid`. |

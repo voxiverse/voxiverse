@@ -1,25 +1,26 @@
 package audio
 
+import "client:platform"
 import "common:base"
-import _ "common:platform" // (macOS: links CoreAudio for miniaudio)
 import "core:log"
 import "core:strings"
 import "core:sync"
 import "core:thread"
 import "core:time"
-import ma "vendor:miniaudio"
 
-// The sound card, through miniaudio (only its device layer: it opens the
-// default output and calls us for samples; mixing is ours). No device (a
-// server, CI) is not an error: the game runs silent.
+// The sound card, through the platform's output (platform.audio_open: it
+// opens the default output and calls us for samples; mixing is ours). It is
+// asked for the mixer's own rate, stereo f32, and the system converts to the
+// card's. No device (a server, CI, no libasound) is not an error: the game
+// runs silent.
 //
-//	audio.device_open(&dev, &mixer) // sets mixer.rate, then starts
+//	audio.device_open(&dev, &mixer) // at mixer.rate (DEVICE_RATE if unset), then starts
 //	... audio.play(&mixer, ...) ...
 //	audio.device_close(&dev)
 //
-// The callback runs on the card's thread, which miniaudio asks the system to
-// make real-time (the context is opened with the realtime priority; on
-// Windows its WASAPI backend also joins MMCSS's "Pro Audio" class). Each call
+// The callback runs on the system's audio thread (Windows: in MMCSS's "Pro
+// Audio" class; macOS: Core Audio's I/O thread; Linux: the output's thread,
+// the sound server doing the real-time part). Each call
 // flushes denormals to zero (FTZ/DAZ on x86-64, FZ on arm64), so a decaying
 // filter or reverb tail never falls into the slow path, and measures itself:
 // its duration goes into Stats (cb_last_ns, cb_max_ns) and the device's clock
@@ -42,9 +43,8 @@ Device_Kind :: enum u8 {
 }
 
 Device :: struct {
-	device:   ma.device,
-	ma_ctx:   ma.context_type,
-	has_ctx:  bool,
+	output:   platform.Audio_Output, // the card's
+	opened:   time.Tick, // when the card opened (for the closing line)
 	open:     bool,
 	kind:     Device_Kind,
 	callback: Callback,
@@ -60,7 +60,8 @@ Device :: struct {
 	frames:   u64,
 }
 
-// DEVICE_RATE: what we ask for; miniaudio converts if the card differs.
+// DEVICE_RATE: the mixer's rate unless it has one; the system converts if the
+// card differs.
 DEVICE_RATE :: 48000
 
 // DRIFT_AFTER: seconds of running before the drift span begins, and its
@@ -75,48 +76,27 @@ NULL_BLOCK :: 480
 // FILE_DEVICE_SECONDS: the most the file device keeps (it is all in memory).
 FILE_DEVICE_SECONDS :: 300
 
-// device_open starts playing m through the default output. m must stay at
-// its address until device_close; sounds are added before this. False:
-// no sound (logged), and m is never mixed.
+// device_open starts playing m through the default output, at m's rate.
+// m must stay at its address until device_close; sounds are added before
+// this. False: no sound (logged), and m is never mixed.
 device_open :: proc(d: ^Device, m: ^Mixer) -> bool {
-	cctx := ma.context_config_init()
-	cctx.threadPriority = .realtime
-	ctx: ^ma.context_type
-	if r := ma.context_init(nil, 0, &cctx, &d.ma_ctx); r == .SUCCESS {
-		d.has_ctx = true
-		ctx = &d.ma_ctx
-	} else {
-		log.warnf("audio real-time priority unavailable, default context result=%v", r)
+	if m.rate == 0 {m.rate = DEVICE_RATE}
+	d^ = {
+		kind     = .Card,
+		callback = {m, d},
 	}
-	config := ma.device_config_init(.playback)
-	config.playback.format = .f32
-	config.playback.channels = 2
-	config.sampleRate = DEVICE_RATE
-	config.performanceProfile = .low_latency
-	config.dataCallback = data_callback
-	d.callback = {m, d}
-	config.pUserData = &d.callback
-	if r := ma.device_init(ctx, &config, &d.device); r != .SUCCESS {
-		log.warnf("audio no audio device found; sound is off result=%v", r)
-		if d.has_ctx {ma.context_uninit(&d.ma_ctx)}
-		d^ = {}
-		return false
-	}
-	m.rate = d.device.sampleRate
-	if r := ma.device_start(&d.device); r != .SUCCESS {
-		log.warnf("audio device would not start, running silent result=%v", r)
-		ma.device_uninit(&d.device)
-		if d.has_ctx {ma.context_uninit(&d.ma_ctx)}
+	if ok, why := platform.audio_open(&d.output, m.rate, card_fill, &d.callback); !ok {
+		log.warnf("audio no audio device; sound is off (%s)", why)
 		d^ = {}
 		return false
 	}
 	d.open = true
-	d.kind = .Card
+	d.opened = time.tick_now()
 	log.infof(
-		"audio device open rate=%d period=%d frames x %d",
+		"audio device open rate=%d period=%d buffer=%d frames",
 		m.rate,
-		d.device.playback.internalPeriodSizeInFrames,
-		d.device.playback.internalPeriods,
+		sync.atomic_load(&d.output.period),
+		sync.atomic_load(&d.output.buffer),
 	)
 	return true
 }
@@ -124,8 +104,16 @@ device_open :: proc(d: ^Device, m: ^Mixer) -> bool {
 device_close :: proc(d: ^Device) {
 	switch d.kind {
 	case .Card:
-		if d.open {ma.device_uninit(&d.device)} 	// stops the callbacks first
-		if d.has_ctx {ma.context_uninit(&d.ma_ctx)}
+		if d.open {
+			platform.audio_close(&d.output) // stops the callbacks first
+			log.infof(
+				"audio device closed seconds=%.1f callbacks=%d xruns=%d reopens=%d",
+				time.duration_seconds(time.tick_since(d.opened)),
+				sync.atomic_load(&d.callback.mixer.stats.callbacks),
+				d.output.xruns,
+				d.output.reopens,
+			)
+		}
 	case .Null:
 		if d.thread != nil {
 			sync.atomic_store(&d.stopping, true)
@@ -210,14 +198,15 @@ device_render :: proc(d: ^Device, frames: int) -> bool {
 output_latency :: proc(d: ^Device, m: ^Mixer) -> f32 {
 	if !d.open || m.rate == 0 {return 0}
 	if d.kind != .Card {return 1000 * f32(latency(m)) / f32(m.rate)}
-	buffer := d.device.playback.internalPeriodSizeInFrames * d.device.playback.internalPeriods
+	buffer := sync.atomic_load(&d.output.buffer)
 	return 1000 * f32(latency(m) + int(buffer)) / f32(m.rate)
 }
 
+// card_fill is the card's platform.Audio_Fill.
 @(private = "file")
-data_callback :: proc "c" (device: ^ma.device, output, input: rawptr, frames: u32) {
+card_fill :: proc "contextless" (user: rawptr, out: []f32) {
 	flush_denormals()
-	pump((^Callback)(device.pUserData), ([^]f32)(output)[:frames * 2])
+	pump((^Callback)(user), out)
 }
 
 // pump is the callback's body: mix, and measure.

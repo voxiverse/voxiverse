@@ -132,7 +132,7 @@ work on it.
 ## Sound
 
 Every sound effect is synthesized at startup (`client/sfx`; there are no recordings) and mixed
-by our own mixer (`client/audio/`). miniaudio only opens the sound card. Every Ogg file, including
+by our own mixer (`client/audio/`); the platform layer only opens the sound card (`client/platform/audio*.odin`). Every Ogg file, including
 the music and a pack's sounds, is decoded by our own Odin code, `common/ogg`.
 
 - `build sfx` writes every recipe of the base pack to `build/sounds/*.wav` and a target report, for listening outside the game.
@@ -140,7 +140,7 @@ the music and a pack's sounds, is decoded by our own Odin code, `common/ogg`.
   `audio` line summarizes the run.
 - `audio_capture` (<kbd>F9</kbd>), the F8 inspector and `build audio` are described in
   [audio.md](audio.md).
-- Without a sound card (a headless machine) the game logs a warning and runs silently.
+- Without a sound card (a headless machine, or Linux without `libasound.so.2`) the game logs one warning and runs silently.
 - `set volume 0..1` sets the player's volume.
 - On Linux and macOS the build compiles Odin's miniaudio library once (into the Odin
   installation; Windows ships it), which requires a C compiler.
