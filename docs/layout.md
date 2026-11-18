@@ -53,7 +53,10 @@ directly in it, not its sub-folders: each sub-folder has its own row. A row whos
    tests, which play the game against its server part): the `import` lint in `check`, which
    also checks the package names. The main packages reach the games through the lists the
    driver writes from `games/` into `build/generated/games` (the packages `generated:games`
-   and `generated:games/client`), so those lists are no file either.
+   and `generated:games/client`), so those lists are no file either. A game is shelved by
+   a file `games/<game>/SHELVED` (its text: why, and since when): the driver leaves it out
+   of those lists and of the tests that run, and still type-checks, formats and lints it,
+   so shelving or reviving a game edits nothing outside its folder either.
 
 ## The cap
 
@@ -196,7 +199,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/worldgen` | World generators (the Earth one can stand on the planet model's relief) | `*.odin` |
 | `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
 | `games` | Where the games live (rule 6) | `README.md` |
-| `games/<game>` | A game's shared package: its rules, constants and the record types both sides use (the shape of every game's folder) | `*.odin`, `README.md` |
+| `games/<game>` | A game's shared package: its rules, constants and the record types both sides use (the shape of every game's folder); `SHELVED` when the game is shelved (rule 6) | `*.odin`, `README.md`, `SHELVED` |
 | `games/<game>/server` | A game's server part: its `core.Game` and its tests | `*.odin` |
 | `games/<game>/client` | A game's client part: its `engine.Game` and its tests | `*.odin` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |

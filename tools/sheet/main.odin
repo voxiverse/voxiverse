@@ -15,7 +15,8 @@ import "server:packs"
 // Draws the block textures where a person (or an agent) can look at them:
 // build/sheets/materials.png, every material (game.MATERIALS) by family,
 // each face tiled 3 x 3 at 4x and named by its material;
-// build/sheets/<pack>.png for the base pack and each game's pack; and
+// build/sheets/<pack>.png for the base pack and each pack folder named on the
+// command line (the driver names the built games' packs: `build sheet`); and
 // all.png, the lot one under another. A pack's sheet has two parts:
 //
 //   - the pack's own textures, each large (8x, nearest neighbour) with its
@@ -23,7 +24,7 @@ import "server:packs"
 //   - every texture its blocks show, as in the world: tiled 3 x 3 at 4x, so
 //     seams and repetition show, named with the blocks that use it.
 //
-//	build sheet
+//	build sheet [pack folder...]
 
 FONT_DATA :: #load("../../assets/fonts/jetbrains_mono_regular.ttf")
 
@@ -96,7 +97,7 @@ main :: proc() {
 	materials := materials_draw(reg, &pen)
 	add(&all, &materials, "materials")
 	sheet(&all, reg, game.BASE_NAMESPACE, &pen)
-	for dir in game_pack_dirs() {
+	for dir in os.args[1:] {
 		src, read_errs := packs.pack_read_dir(dir)
 		if len(read_errs) > 0 {fail(read_errs)}
 		game_reg, build_errs := game.registry_build({base, src})
@@ -109,19 +110,6 @@ main :: proc() {
 fail :: proc(errs: []game.Pack_Error) -> ! {
 	for e in errs {fmt.eprintln(game.pack_error_text(e))}
 	os.exit(1)
-}
-
-// game_pack_dirs: games/<game>/pack for every game that has one, in name order.
-game_pack_dirs :: proc() -> []string {
-	entries, err := os.read_all_directory_by_path(packs.GAMES_FOLDER, context.temp_allocator)
-	if err != nil {return nil}
-	dirs := make([dynamic]string)
-	for e in entries {
-		dir, _ := filepath.join({packs.GAMES_FOLDER, e.name, packs.GAME_PACK_FOLDER})
-		if os.is_dir(dir) {append(&dirs, dir)}
-	}
-	slice.sort(dirs[:])
-	return dirs[:]
 }
 
 write_png :: proc(c: ^Canvas, name: string) {

@@ -19,7 +19,7 @@ BUILD_DIR :: "build"
 // PACKAGES are type-checked by `check`, each on its own so one broken
 // package doesn't hide errors in the others. The games' packages are not
 // listed: they are found in games/ (game_packages), so a new game edits
-// nothing here. `all_packages` is the whole list.
+// nothing here. `all_packages` is the whole list, shelved games' included.
 PACKAGES :: []string {
 	"common/base",
 	"common/base/fuzz",
@@ -100,7 +100,8 @@ PACKAGES :: []string {
 	"tests/window_fixture",
 }
 // TEST_PACKAGES contain @(test) procedures (and so do the games' packages
-// game_packages finds with tests; `all_test_packages` is the whole list).
+// game_packages finds with tests; `all_test_packages` is the whole list that
+// runs: a shelved game's are not in it).
 TEST_PACKAGES :: []string {
 	"common/base",
 	"common/base/fuzz",
@@ -211,16 +212,61 @@ repo_path :: proc(path: string) -> string {
 	return slashed
 }
 
-// all_packages: PACKAGES and the games' packages.
+// SHELVED: the file that shelves the game whose folder holds it (docs/games.md, "Shelving
+// a game"). Its text, if any, says why and since when; the driver reads only that it is
+// there. Shelving or reviving a game edits nothing outside its folder.
+SHELVED :: "SHELVED"
+
+// game_built: the game in folder games/<game> is built into the programs: it is not
+// shelved. Every list of games that makes something (the lists the programs import, the
+// test packages that run, the sheets) takes the built ones alone; check's type checks, the
+// format check and the lints take every game.
+game_built :: proc(game: string) -> bool {
+	return !os.exists(path_join({GAMES_DIR, game, SHELVED}))
+}
+
+// game_of: the game a package under games/ belongs to ("games/tag/server": tag).
+game_of :: proc(pkg: string) -> string {
+	game, _ := game_path_of(pkg[len(GAMES_DIR) + 1:])
+	return game
+}
+
+// games_found: the games in games/ (the folders holding a package), by folder name,
+// sorted: the built ones (game_built) and the shelved ones.
+games_found :: proc() -> (built, shelved: []string) {
+	packages, _ := game_packages()
+	b, s := make([dynamic]string), make([dynamic]string)
+	for pkg in packages {
+		game := game_of(pkg)
+		list := &b if game_built(game) else &s
+		if !slice.contains(list[:], game) {append(list, game)}
+	}
+	return b[:], s[:]
+}
+
+// games_shelved_note: the line saying which games are shelved, and what of them is done
+// ("" when none is), for the commands that list or count games.
+games_shelved_note :: proc() -> string {
+	_, shelved := games_found()
+	if len(shelved) == 0 {return ""}
+	return fmt.tprintf(
+		"games  shelved (type-checked and linted, not built, packaged or tested): %s",
+		strings.join(shelved, " ", context.temp_allocator),
+	)
+}
+
+// all_packages: PACKAGES and the games' packages, the shelved ones' too.
 all_packages :: proc() -> []string {
 	games, _ := game_packages()
 	return slice.concatenate([][]string{PACKAGES, games})
 }
 
-// all_test_packages: TEST_PACKAGES and the games' packages that have tests.
+// all_test_packages: TEST_PACKAGES and the built games' packages that have tests.
 all_test_packages :: proc() -> []string {
 	_, games := game_packages()
-	return slice.concatenate([][]string{TEST_PACKAGES, games})
+	built := make([dynamic]string)
+	for pkg in games {if game_built(game_of(pkg)) {append(&built, pkg)}}
+	return slice.concatenate([][]string{TEST_PACKAGES, built[:]})
 }
 
 // COLLECTIONS: the roots first-party code imports through (client:gpu, server:collector,
@@ -377,7 +423,11 @@ main :: proc() {
 	case "packs":
 		ok = run_tool("packcheck", args[1:], release = true)
 	case "sheet":
-		ok = run_tool("sheet", args[1:], release = true)
+		ok = run_tool(
+			"sheet",
+			slice.concatenate([][]string{game_pack_dirs(), args[1:]}),
+			release = true,
+		)
 	case "fuzz":
 		ok = fuzz(args[1:])
 	case "audio":
@@ -526,7 +576,7 @@ usage :: proc() {
 		"  icon      draw the game's icon to build/voxiverse.ico and build/icon-<size>.png",
 	)
 	fmt.println(
-		"  sheet     draw the block textures to look at: build/sheets/<pack>.png (the base pack, each game's) and all.png",
+		"  sheet     draw the block textures to look at: build/sheets/<pack>.png (the base pack, each built game's, any pack dir given) and all.png",
 	)
 	fmt.println("  build     build the game and the dedicated server into build/: by default a")
 	fmt.println("            development build (lightly optimized, debug info, the dev aids), or:")
@@ -548,6 +598,9 @@ usage :: proc() {
 	fmt.println(
 		"  debug     build, then run it in the debugger (gdb; --lldb, --gdb; RAD Debugger on Windows)",
 	)
+	built, _ := games_found()
+	fmt.printfln("games  built into the programs: %s", strings.join(built, " "))
+	if note := games_shelved_note(); note != "" {fmt.println(note)}
 }
 
 // Build profiles. Compile times (the client, on one machine):
@@ -857,10 +910,11 @@ check :: proc() -> bool {
 	// The host's type checks and the other targets' object builds share one pool.
 	jobs := make([dynamic]Check_Job)
 	for pkg in all_packages() {
+		shelved := strings.has_prefix(pkg, GAMES_DIR + "/") && !game_built(game_of(pkg))
 		append(
 			&jobs,
 			Check_Job {
-				label = strings.concatenate({"check  ", pkg}),
+				label = strings.concatenate({"check  ", pkg, " (shelved)" if shelved else ""}),
 				target = host_target(),
 				cmd = slice.concatenate(
 					[][]string{{"odin", "check", pkg}, ODIN_FLAGS, COLLECTIONS, CHECK_FLAGS},
@@ -900,6 +954,7 @@ check :: proc() -> bool {
 	ok := true
 	if cross {ok = cross_jobs(&jobs)}
 	ok = run_checks(jobs[:]) && ok
+	if note := games_shelved_note(); note != "" {fmt.println(note)}
 	return(
 		determinism_lint() &&
 		source_lint() &&
@@ -1305,6 +1360,16 @@ test :: proc(args: []string) -> bool {
 	packages := all
 	if len(named) > 0 {
 		for pkg in named {
+			if strings.has_prefix(pkg, GAMES_DIR + "/") && !game_built(game_of(pkg)) {
+				fmt.eprintfln(
+					"build: test: '%s' is a shelved game's (%s/%s/%s): its tests do not run",
+					pkg,
+					GAMES_DIR,
+					game_of(pkg),
+					SHELVED,
+				)
+				return false
+			}
 			if !slice.contains(all, pkg) {
 				fmt.eprintfln("build: test: '%s' is not a test package (%v)", pkg, all)
 				return false
@@ -1312,6 +1377,7 @@ test :: proc(args: []string) -> bool {
 		}
 		packages = slice.clone(named)
 	}
+	if note := games_shelved_note(); note != "" && len(named) == 0 {fmt.println(note)}
 	suffix := test_suffix(opts)
 	os.remove(path_join({REPORT_DIR, "tests.jsonl"})) // this run's tests only
 	Timed :: struct {

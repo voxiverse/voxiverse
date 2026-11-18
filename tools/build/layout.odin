@@ -409,11 +409,13 @@ package_lists_lint :: proc() -> bool {
 			if p != "" {append(&with_tests, p)}
 		}
 	}
+	// A shelved game's tests are not run, but they are its, not a forgotten package's.
+	_, game_tests := game_packages()
 	found := lint_package_lists(
 		tracked[:],
 		with_tests[:],
 		all_packages(),
-		all_test_packages(),
+		slice.concatenate([][]string{TEST_PACKAGES, game_tests}),
 		SOURCE_DIRS,
 	)
 	for msg in found {fmt.eprintln(msg)}

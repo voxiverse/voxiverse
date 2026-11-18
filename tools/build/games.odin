@@ -3,10 +3,11 @@ package build
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 
 // The lists of games (docs/games.md): the driver writes them from the folders in games/, so
-// adding a game edits no list. They are the packages `generated:games` (every game's server
+// adding a game edits no list, and a shelved game (game_built) is left out of them. They are the packages `generated:games` (every game's server
 // part: SERVER) and `generated:games/client` (every game's client part: CLIENT), which only
 // the main packages import, the client list client/main alone (the import lint), under
 // build/: generated, never committed.
@@ -45,19 +46,29 @@ GAME_LISTS :: [?]Game_List {
 	},
 }
 
-// games_with: the games that have a part (a package `games/<game>/<part>`), by folder
-// name, sorted.
+// games_with: the built games (game_built) that have a part (a package
+// `games/<game>/<part>`), by folder name, sorted: a shelved game is in no list.
 games_with :: proc(part: string) -> []string {
 	packages, _ := game_packages()
+	built, _ := games_found()
 	names := make([dynamic]string)
-	for pkg in packages {
-		rest := pkg[len(GAMES_DIR) + 1:]
-		game, _ := game_path_of(rest)
-		if rest == strings.concatenate({game, "/", part}, context.temp_allocator) {
-			append(&names, game)
-		}
+	for game in built {
+		pkg := strings.concatenate({GAMES_DIR, "/", game, "/", part}, context.temp_allocator)
+		if slice.contains(packages, pkg) {append(&names, game)}
 	}
 	return names[:]
+}
+
+// game_pack_dirs: games/<game>/pack for every built game that has a pack, sorted: the
+// packs `build sheet` draws beside the base pack.
+game_pack_dirs :: proc() -> []string {
+	built, _ := games_found()
+	dirs := make([dynamic]string)
+	for game in built {
+		dir := path_join({GAMES_DIR, game, "pack"})
+		if os.is_dir(dir) {append(&dirs, dir)}
+	}
+	return dirs[:]
 }
 
 // game_list_text: the list of the named games' parts (each `games/<game>/<part>` package's
@@ -71,7 +82,8 @@ game_list_text :: proc(list: Game_List, names: []string) -> string {
 	fmt.sbprintf(
 		&b,
 		"// Written by the build driver (tools/build/games.odin) from the folders in games/.\n" +
-		"// Not committed and not edited: a new game is a new folder (docs/games.md).\n" +
+		"// Not committed and not edited: a new game is a new folder, a shelved one is left out\n" +
+		"// (docs/games.md).\n" +
 		"package %s\n\nimport \"%s\"\n",
 		list.pkg,
 		list.engine,

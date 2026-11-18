@@ -43,8 +43,9 @@ description is one line in its small text, at most `screen.TITLE_WIDTH` wide (a
 
 No file lists the games. The build driver writes two before every `odin` it runs, from the
 folders in `games/` (the collection `generated` is `build/generated`): `generated:games`,
-whose `SERVER` holds every server part's `GAME`, and `generated:games/client`, whose
-`CLIENT` holds every client part's. Both are sorted by folder, an `#assert` keeps each
+whose `SERVER` holds every built game's server part's `GAME` (a shelved one is in neither:
+[below](#shelving-a-game)), and `generated:games/client`, whose `CLIENT` holds every built
+game's client part's. Both are sorted by folder, an `#assert` keeps each
 game's id its folder's name, and only the executables' main packages import them
 (`client/main` the client's list alone, so the dedicated server links no client code), and
 the trace tools the server's.
@@ -64,6 +65,19 @@ are known to git (`git add --intent-to-add`), so right after it `./build.sh chec
 `game.MAX_GAME_ID`), one that is an Odin keyword or a package its parts import (`game`,
 `core`, `engine`...), and one whose folder is there. The files are
 `tools/build/game_template/`'s. Then make the rule the game's own, and its README.
+
+## Shelving a game
+
+A game that is not being worked on is shelved, not deleted: an empty file
+`games/<id>/SHELVED` (or one saying why, and since when) and nothing else. The driver
+(`game_built` in `tools/build/main.odin`, the one test every list of games asks) then
+leaves the game out of the lists of games, so out of both programs, Singleplayer and the
+packages; its test packages do not run in `test` or `gate` (`test games/<id>/server` says
+it is shelved), and `build sheet` draws no sheet of its pack. `check` still type-checks
+every package of it, formats it and lints it, so an engine change that would break it
+fails there, its packages marked `(shelved)`; `check`, `test` and `help` name the shelved
+games. Its splash lines stay in `assets/splashes.txt` and show only while the game is
+built. Deleting the file revives it, with nothing outside its folder edited either way.
 
 ## A walk-through
 
