@@ -96,7 +96,7 @@ test_cards_know_their_game :: proc(t: ^testing.T) {
 	screen.saves_override = dir
 	defer screen.saves_override = ""
 	make_universe(dir, "Older", 1, "creative", 72 * time.Hour)
-	make_universe(dir, "Flooded", 2, "creative\ngame = flood", time.Hour)
+	make_universe(dir, "Yard", 2, "creative\ngame = horde", time.Hour)
 	make_universe(dir, "Elsewhere", 3, "creative\ngame = nonesuch", time.Minute)
 	app := ui_app(t)
 	defer ui_app_free(app)
@@ -107,7 +107,7 @@ test_cards_know_their_game :: proc(t: ^testing.T) {
 	e := app.universes.entries[:]
 	if !testing.expect_value(t, len(e), 3) {return}
 	testing.expect_value(t, e[0].game_id, "nonesuch")
-	testing.expect_value(t, e[1].game_id, "flood")
+	testing.expect_value(t, e[1].game_id, "horde")
 	testing.expect_value(t, e[2].game_id, "")
 	testing.expect_value(t, screen.entry_game(&e[2]), "sandbox")
 	shows :: proc(app: ^engine.App, want: string) -> bool {
@@ -117,7 +117,7 @@ test_cards_know_their_game :: proc(t: ^testing.T) {
 	screen.universes_open(app, "sandbox")
 	ui_frame(app)
 	testing.expect(t, shows(app, "Older"), "sandbox's page lacks its save")
-	testing.expect(t, !shows(app, "Flooded") && !shows(app, "Elsewhere"), "another game's save")
+	testing.expect(t, !shows(app, "Yard") && !shows(app, "Elsewhere"), "another game's save")
 	screen.universes_open(app, "nonesuch")
 	ui_frame(app)
 	testing.expect(t, shows(app, "Elsewhere") && !shows(app, "Older"), "nonesuch's page")

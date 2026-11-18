@@ -24,7 +24,6 @@ import "common:game"
 import "common:netcode"
 import "common:protocol"
 import "common:starmap"
-import "generated:games"
 import games_client "generated:games/client"
 
 // A UI test's app: the font, the UI and the base registry (a screen's
@@ -354,7 +353,7 @@ test_server_rows :: proc(t: ^testing.T) {
 		netcode.Found_Server {
 			1,
 			near,
-			server_info_bytes({v, "Factory night", 2, 8, false, "foundry", "Foundry"}),
+			server_info_bytes({v, "Horde night", 2, 8, false, "horde", "Horde"}),
 			{},
 		},
 		netcode.Found_Server {
@@ -375,10 +374,10 @@ test_server_rows :: proc(t: ^testing.T) {
 	rows := screen.server_rows(saved, &d, games_client.CLIENT)
 	if !testing.expect_value(t, len(rows), 6) {return}
 
-	testing.expect_value(t, rows[0].name, "Factory night")
+	testing.expect_value(t, rows[0].name, "Horde night")
 	testing.expect_value(t, rows[0].address, "localhost:30000")
 	testing.expect_value(t, rows[0].saved, 0)
-	testing.expect_value(t, rows[0].game, "Foundry")
+	testing.expect_value(t, rows[0].game, "Horde")
 	testing.expect(t, rows[0].answered && rows[0].found && rows[0].why_not == "")
 	testing.expect_value(t, rows[0].players, 2)
 	testing.expect_value(t, rows[0].max_players, 8)
@@ -454,7 +453,7 @@ test_multiplayer_host :: proc(t: ^testing.T) {
 	defer ui_app_free(app)
 	defer screen.multiplayer_destroy(&app.multiplayer)
 	defer screen.universes_destroy(&app.universes)
-	app.games, app.server_games = games_client.CLIENT, games.SERVER
+	app.games, app.server_games = games_with_rounds()
 	base.var_text_set(&app.settings.name, "alice")
 	screen.multiplayer_open(app)
 	ui_frame(app)
@@ -465,14 +464,14 @@ test_multiplayer_host :: proc(t: ^testing.T) {
 	testing.expect(t, said(app, "Host a Game"), "the games are not titled for hosting")
 	testing.expect(t, said(app, engine.tr(.Multiplayer_Host_Note)))
 
-	click(t, app, "Flood") // (a game whose rounds keep nothing: Play alone on its page)
+	click(t, app, ROUNDS.name) // (a game that keeps nothing: Play alone on its page)
 	testing.expect_value(t, app.screen, engine.Screen.Universes)
-	testing.expect_value(t, app.universes.game, "flood")
+	testing.expect_value(t, app.universes.game, ROUNDS.id)
 	testing.expect(t, said(app, engine.tr(.Multiplayer_Host_Note)))
 	_, play := ui.find_widget(&app.ui, "Play")
 	testing.expect(t, !play, "the hosting page says Play")
 	click(t, app, "Host")
-	testing.expect_value(t, app.launch, "flood") // (the frame starts it, opened to the LAN)
+	testing.expect_value(t, app.launch, ROUNDS.id) // (the frame starts it, opened to the LAN)
 	app.launch = ""
 
 	click(t, app, "Back")
@@ -487,7 +486,7 @@ test_multiplayer_host :: proc(t: ^testing.T) {
 	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
 	testing.expect(t, !app.singleplayer.host)
 	testing.expect(t, said(app, "Singleplayer"))
-	click(t, app, "Flood")
+	click(t, app, ROUNDS.name)
 	_, play = ui.find_widget(&app.ui, "Play")
 	testing.expect(t, play, "the page to play alone has no Play")
 	free_all(context.temp_allocator)
@@ -1372,8 +1371,8 @@ test_loading_names_the_game :: proc(t: ^testing.T) {
 		for said in app.ui.texts {if said == text {return true}}
 		return false
 	}
-	s.config.host_game.name = "Foundry"
-	testing.expect(t, says(app, "Foundry"), "hosting: the game's name is not shown")
+	s.config.host_game.name = "Horde"
+	testing.expect(t, says(app, "Horde"), "hosting: the game's name is not shown")
 	testing.expect(t, says(app, "Starting the world"))
 	s.remote, s.config.host_game = true, {}
 	testing.expect(t, says(app, "Connecting to the server"))

@@ -76,7 +76,7 @@ test_title_continue :: proc(t: ^testing.T) {
 		file := filepath.join({save, "universe.cfg"}, context.temp_allocator) or_else ""
 		_ = os.write_entire_file(file, transmute([]u8)text)
 	}
-	cfg(dir, "Factory 2", "format = 1\nseed = 1\ngame = foundry\n")
+	cfg(dir, "Yard 2", "format = 1\nseed = 1\ngame = horde\n")
 	cfg(dir, "Elsewhere", "format = 1\nseed = 1\ngame = nonesuch\n")
 	os.make_directory_all(filepath.join({dir, "Empty"}, context.temp_allocator) or_else "")
 	app := ui_app(t)
@@ -99,16 +99,16 @@ test_title_continue :: proc(t: ^testing.T) {
 	testing.expect_value(t, n, 4)
 
 	// Played: the save is the one Continue opens.
-	screen.save_played(app, filepath.join({dir, "Factory 2"}, context.temp_allocator) or_else "")
+	screen.save_played(app, filepath.join({dir, "Yard 2"}, context.temp_allocator) or_else "")
 	label, n = buttons(app)
-	testing.expect_value(t, label, "Continue: Foundry, Factory 2")
+	testing.expect_value(t, label, "Continue: Horde, Yard 2")
 	testing.expect_value(t, n, 5)
 	r, _ := ui.find_widget(&app.ui, label)
 	single, _ := ui.find_widget(&app.ui, "Singleplayer")
 	testing.expect(t, r.y < single.y, "Continue is not first")
 
 	// Gone (deleted on its page: the saves read again): no Continue.
-	os.remove_all(filepath.join({dir, "Factory 2"}, context.temp_allocator) or_else "")
+	os.remove_all(filepath.join({dir, "Yard 2"}, context.temp_allocator) or_else "")
 	screen.universes_refresh(&app.universes)
 	label, n = buttons(app)
 	testing.expect_value(t, label, "")
@@ -168,6 +168,29 @@ test_splash_motion :: proc(t: ^testing.T) {
 	}
 }
 
+// ROUNDS: a game that keeps nothing (no save hook, no kept data), whose page is a single
+// Play. None of the games built keeps nothing, so the tests of that page bring their own:
+// the lists of games with it first, so it is listed second, after the default game
+// (games_with_rounds).
+ROUNDS :: game.Game_Info {
+	id          = "rounds",
+	name        = "Rounds",
+	description = "Plays a round; keeps nothing.",
+}
+
+// games_with_rounds: ROUNDS, then the lists of games this build has (in the temp allocator).
+games_with_rounds :: proc() -> (client: []engine.Game, server: []core.Game) {
+	client = slice.concatenate(
+		[][]engine.Game{{{info = ROUNDS}}, games_client.CLIENT},
+		context.temp_allocator,
+	)
+	server = slice.concatenate(
+		[][]core.Game{{{info = ROUNDS}}, games.SERVER},
+		context.temp_allocator,
+	)
+	return
+}
+
 // Singleplayer: every game this build has (the default first, then by folder), each its
 // name and its one line (within TITLE_WIDTH), in a list that scrolls to the last; none on
 // the title. Choosing one opens its page: a game that keeps something shows New and its
@@ -186,12 +209,12 @@ test_singleplayer_lists_and_opens_every_game :: proc(t: ^testing.T) {
 	app := r.app
 	app.session = nil
 	app.screen = .Title
-	app.games, app.server_games = games_client.CLIENT, games.SERVER
+	app.games, app.server_games = games_with_rounds()
 	ui_frame(app)
 	order := make([dynamic]string, context.temp_allocator)
 	append(&order, game.DEFAULT_GAME)
-	for g in games_client.CLIENT {if g.id != game.DEFAULT_GAME {append(&order, g.id)}}
-	testing.expect_value(t, len(order), len(games.SERVER))
+	for g in app.games {if g.id != game.DEFAULT_GAME {append(&order, g.id)}}
+	testing.expect_value(t, len(order), len(app.server_games))
 	for id in order {
 		g, _ := engine.game_find(app.games, id)
 		_, on_title := ui.find_widget(&app.ui, g.name)
@@ -256,8 +279,8 @@ test_singleplayer_lists_and_opens_every_game :: proc(t: ^testing.T) {
 			app.launch = ""
 		}
 	}
-	testing.expect(t, !engine.game_keeps(app, "flood"), "Flood's rounds keep nothing")
-	testing.expect(t, engine.game_keeps(app, "foundry"), "Foundry keeps its factory")
+	testing.expect(t, !engine.game_keeps(app, ROUNDS.id), "Rounds keeps nothing")
+	testing.expect(t, engine.game_keeps(app, "horde"), "Horde keeps its best wave")
 
 	// What the frame starts: a world hosted with that game's server part, whose session
 	// plays it (on the stepped server; the embedded one runs on its own thread).
