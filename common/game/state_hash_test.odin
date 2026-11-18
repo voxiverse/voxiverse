@@ -100,3 +100,29 @@ test_dump_names_paths :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(text, "s.items[1].x = 0x3f8ccccd (1.1)\n"), text)
 	testing.expect(t, strings.contains(text, "s.items.len = 2\n"), text)
 }
+
+// A field named `_` is padding, as the codec, the deltas and entity data have it: what
+// it holds is no state, so it moves neither the hash nor the dump.
+@(test)
+test_hash_skips_blank_fields :: proc(t: ^testing.T) {
+	Padded :: struct {
+		how: u8,
+		_:   [3]u8,
+		age: u32,
+	}
+	a, b := Padded {
+			how = 1,
+			age = 9,
+		}, Padded {
+			how = 1,
+			age = 9,
+		}
+	for &x in ([^]u8)(&b)[1:4] {x = 7} 	// (the bytes of _)
+	ha, hb := hasher_make(), hasher_make()
+	hash_value(&ha, a)
+	hash_value(&hb, b)
+	testing.expect_value(t, hasher_finish(hb), hasher_finish(ha))
+	dump := strings.builder_make(context.temp_allocator)
+	dump_value(&dump, "p", b)
+	testing.expect_value(t, strings.to_string(dump), "p.how = 0x1 (1)\np.age = 0x9 (9)\n")
+}

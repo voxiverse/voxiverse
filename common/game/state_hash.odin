@@ -13,7 +13,8 @@ import "core:strings"
 //
 // Integers, enums, bools and bit_sets are their bytes; floats are their bits
 // (so -0 is not 0); padding never enters (fields are walked, not bytes of the
-// struct); arrays, structs and unions (tag, then value) are walked; slices,
+// struct, and a field named `_` is padding as the codec and the saves have it);
+// arrays, structs and unions (tag, then value) are walked; slices,
 // dynamic arrays and strings are a length, then their elements.
 
 // A Hasher folds u64 words, each mixed as h = (h ~ w) * FNV prime.
@@ -207,6 +208,7 @@ walk :: proc(w: ^Walker, data: rawptr, base: ^runtime.Type_Info, ti: ^runtime.Ty
 		elements(w, data, v.count, v.elem)
 	case runtime.Type_Info_Struct:
 		for i in 0 ..< int(v.field_count) {
+			if v.names[i] == "_" {continue} 	// (padding by name: never replicated or saved)
 			resize(&w.path, mark)
 			append(&w.path, '.')
 			append(&w.path, ..transmute([]u8)v.names[i])
