@@ -58,11 +58,13 @@ test_a_fill_is_the_least_closed_set_holding_the_seed :: proc(t: ^testing.T) {
 		b := random_bounds(&rng)
 		domain := random_mask(&rng, b, base.rng_int_range(&rng, 30, 90))
 		defer mask_destroy(&domain)
+		domain.wrap = random_wrap(&rng)
 		seed := random_mask(&rng, b, 1)
 		defer mask_destroy(&seed)
 		e := elements[round % len(elements)]
 		reached := mask_make(b)
 		defer mask_destroy(&reached)
+		reached.wrap = domain.wrap
 		mask_copy(&reached, seed)
 		start := mask_count(reached)
 		added, ran_out := fill(&reached, domain, e, no_limit())
@@ -132,6 +134,7 @@ test_components_partition_the_set :: proc(t: ^testing.T) {
 		b := random_bounds(&rng)
 		m := random_mask(&rng, b, base.rng_int_range(&rng, 10, 70))
 		defer mask_destroy(&m)
+		m.wrap = random_wrap(&rng)
 		e := elements[round % 4] // (the symmetric ones)
 		labels := field_make(b)
 		defer field_destroy(&labels)
@@ -185,12 +188,14 @@ test_a_distance_field_steps_by_one_and_is_zero_on_the_sources :: proc(t: ^testin
 		b := random_bounds(&rng)
 		domain := random_mask(&rng, b, base.rng_int_range(&rng, 40, 95))
 		defer mask_destroy(&domain)
+		domain.wrap = random_wrap(&rng)
 		sources := random_mask(&rng, random_bounds(&rng), 2)
 		defer mask_destroy(&sources)
 		e := elements[round % len(elements)]
 		limit := base.rng_int_range(&rng, 1, 40)
 		f := field_make(b)
 		defer field_destroy(&f)
+		f.wrap = domain.wrap
 		testing.expect(t, !distance(&f, sources, domain, e, limit, no_limit()))
 		rs, rd := ref_of(sources), ref_of(domain)
 		defer ref_destroy(&rs)

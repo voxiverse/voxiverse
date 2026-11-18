@@ -273,7 +273,7 @@ descend :: proc(f: Field, at: Cell, moves: []Move) -> (next: Cell, ok: bool) {
 	v := field_get(f, at)
 	if v == UNREACHED {return}
 	for m in moves {
-		c := at - m.offset
+		c := wrapped(f.bounds, f.wrap, at - m.offset)
 		if m.from != nil && !mask_get(m.from^, c) {continue}
 		u := field_get(f, c)
 		if u != UNREACHED && u + m.cost == v && c != at {return c, true}
@@ -334,6 +334,7 @@ nearest :: proc(
 		r := far * i32(max_steps)
 		b := domain.bounds
 		lo, hi := from - r, from + r + 1
+		for k in domain.wrap {lo[k], hi[k] = b.lo[k], b.hi[k]} 	// (a seam is not an edge)
 		b = {
 			{max(b.lo.x, lo.x), max(b.lo.y, lo.y), max(b.lo.z, lo.z)},
 			{min(b.hi.x, hi.x), min(b.hi.y, hi.y), min(b.hi.z, hi.z)},
@@ -341,11 +342,13 @@ nearest :: proc(
 		if b != domain.bounds {
 			near = mask_make(b, allocator)
 			mask_copy(&near, domain)
+			near.wrap = domain.wrap
 		}
 	}
 	defer if near.bounds != domain.bounds {mask_destroy(&near, allocator)}
 	f := field_make(near.bounds, allocator)
 	defer field_destroy(&f, allocator)
+	f.wrap = domain.wrap
 	f.values[field_index(f, from)] = 0
 	moves := moves_of(element, 1, allocator)
 	defer delete(moves, allocator)

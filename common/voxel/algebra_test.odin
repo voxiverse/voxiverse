@@ -81,6 +81,25 @@ test_dilation_and_erosion_are_adjoint :: proc(t: ^testing.T) {
 			testing.expect(t, same(fdiff, fwant))
 			ref_destroy(&fwant)
 		}
+		// Repeating along y or z: still the definitions, on bounds wider than a period.
+		{
+			periodic := a
+			periodic.wrap = {1 + base.rng_int_max(&rng, 2)}
+			rp := ref_of_tmp(periodic)
+			wide := Bounds{sum.bounds.lo - 3, sum.bounds.hi + 3}
+			psum := mask_make(wide)
+			defer mask_destroy(&psum)
+			dilate(&psum, periodic, e)
+			pwant := ref_dilate(rp, e, wide)
+			testing.expect(t, same(psum, pwant))
+			ref_destroy(&pwant)
+			pdiff := mask_make(wide)
+			defer mask_destroy(&pdiff)
+			erode(&pdiff, periodic, e)
+			pwant = ref_erode(rp, e, wide)
+			testing.expect(t, same(pdiff, pwant))
+			ref_destroy(&pwant)
+		}
 		// A ⊕ E ⊆ C if and only if A ⊆ C ⊖ E: C is the sum, sometimes less a cell or two
 		// and sometimes with noise added.
 		c := mask_make(sum.bounds)

@@ -11,6 +11,18 @@ Ref :: struct {
 	bounds:  Bounds,
 	cells:   []bool,
 	outside: bool, // every cell outside the bounds is in the set
+	wrap:    Wrap, // the axes along which it repeats
+}
+
+// ref_wrapped: c brought into the bounds along the axes r wraps on, by the definition.
+ref_wrapped :: proc(r: Ref, c: Cell) -> Cell {
+	c := c
+	for k in r.wrap {
+		n := r.bounds.hi[k] - r.bounds.lo[k]
+		for c[k] < r.bounds.lo[k] {c[k] += n}
+		for c[k] >= r.bounds.hi[k] {c[k] -= n}
+	}
+	return c
 }
 
 ref_make :: proc(b: Bounds) -> Ref {
@@ -23,12 +35,13 @@ ref_destroy :: proc(r: ^Ref) {
 
 ref_index :: proc(r: Ref, c: Cell) -> int {
 	s := bounds_size(r.bounds)
-	l := c - r.bounds.lo
+	l := ref_wrapped(r, c) - r.bounds.lo
 	return (int(l.y) * int(s.z) + int(l.z)) * int(s.x) + int(l.x)
 }
 
 ref_get :: proc(r: Ref, c: Cell) -> bool {
-	return r.cells[ref_index(r, c)] if bounds_has(r.bounds, c) else r.outside
+	at := ref_wrapped(r, c)
+	return r.cells[ref_index(r, at)] if bounds_has(r.bounds, at) else r.outside
 }
 
 ref_set :: proc(r: ^Ref, c: Cell, v := true) {
@@ -37,7 +50,7 @@ ref_set :: proc(r: ^Ref, c: Cell, v := true) {
 
 ref_of :: proc(m: Mask) -> Ref {
 	r := ref_make(m.bounds)
-	r.outside = m.outside
+	r.outside, r.wrap = m.outside, m.wrap
 	for c in ref_cells(m.bounds) {ref_set(&r, c, mask_get(m, c))}
 	return r
 }
@@ -82,6 +95,12 @@ random_bounds :: proc(rng: ^base.Rng, wide := 150) -> Bounds {
 	return {lo, lo + size}
 }
 
+// random_wrap: no axis half the time, else y, z or both.
+random_wrap :: proc(rng: ^base.Rng) -> Wrap {
+	wraps := [4]Wrap{{}, {1}, {2}, {1, 2}}
+	return wraps[max(base.rng_int_max(rng, 6) - 2, 0)]
+}
+
 // random_mask: each cell of b in the set with the chance percent / 100.
 random_mask :: proc(rng: ^base.Rng, b: Bounds, percent: int) -> Mask {
 	m := mask_make(b)
@@ -110,6 +129,7 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 		defer mask_destroy(&b)
 		a.outside = base.rng_int_max(&rng, 3) == 0
 		b.outside = base.rng_int_max(&rng, 3) == 0
+		b.wrap = random_wrap(&rng)
 		o := random_offset(&rng)
 		ra, rb := ref_of(a), ref_of(b)
 		defer ref_destroy(&ra)
@@ -265,6 +285,7 @@ ref_of_tmp :: proc(m: Mask) -> Ref {
 		bounds  = m.bounds,
 		cells   = make([]bool, bounds_volume(m.bounds), context.temp_allocator),
 		outside = m.outside,
+		wrap    = m.wrap,
 	}
 	for c in ref_cells(m.bounds) {ref_set(&r, c, mask_get(m, c))}
 	return r

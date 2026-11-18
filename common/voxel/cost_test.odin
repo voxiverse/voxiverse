@@ -79,6 +79,7 @@ test_least_cost_is_dijkstra :: proc(t: ^testing.T) {
 		b := random_bounds(&rng, 80)
 		domain := random_mask(&rng, b, base.rng_int_range(&rng, 40, 95))
 		defer mask_destroy(&domain)
+		domain.wrap = random_wrap(&rng)
 		drawn := random_moves(&rng, b, 0)
 		defer destroy_moves(drawn)
 		moves := drawn
@@ -125,12 +126,16 @@ test_a_least_cost_field_is_consistent_and_descends_to_a_seed :: proc(t: ^testing
 		b := random_bounds(&rng, 40)
 		domain := random_mask(&rng, b, base.rng_int_range(&rng, 50, 95))
 		defer mask_destroy(&domain)
+		domain.wrap = random_wrap(&rng)
 		moves := random_moves(&rng, b, 1)
 		defer destroy_moves(moves)
+		for m in moves {if m.from != nil {m.from.wrap = domain.wrap}}
 		seeds := random_seeds(&rng, b)
 		defer field_destroy(&seeds)
+		seeds.wrap = domain.wrap
 		f := field_make(b)
 		defer field_destroy(&f)
+		f.wrap = domain.wrap
 		copy(f.values, seeds.values)
 		least_cost(&f, domain, moves, max(int), no_limit())
 		for c in ref_cells(b) {
@@ -178,6 +183,7 @@ test_unit_moves_and_zero_seeds_are_breadth_first_distance :: proc(t: ^testing.T)
 		b := random_bounds(&rng)
 		domain := random_mask(&rng, b, base.rng_int_range(&rng, 40, 95))
 		defer mask_destroy(&domain)
+		domain.wrap = random_wrap(&rng)
 		sources := random_mask(&rng, b, 2)
 		defer mask_destroy(&sources)
 		e := elements[round % len(elements)]

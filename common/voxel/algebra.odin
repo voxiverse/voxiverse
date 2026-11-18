@@ -104,6 +104,7 @@ minkowski :: proc(dst: ^Mask, src: Mask, element: Mask, op: Op, allocator := con
 	if op == .Or {along_bounds.hi.x += longest - 1} else {along_bounds.lo.x -= longest - 1}
 	along := mask_make(along_bounds, allocator)
 	defer mask_destroy(&along, allocator)
+	along.wrap = src.wrap
 	unite(&along, src)
 	slice.sort_by(runs[:], proc(a, b: Run) -> bool {return a.n < b.n})
 	n := i32(1)

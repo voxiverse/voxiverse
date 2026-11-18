@@ -121,9 +121,10 @@ test_a_sweep_touches_what_the_definition_touches :: proc(t: ^testing.T) {
 			_, found_spent, spent := sweep(m, from, size, delta, &none)
 			testing.expect(t, spent && !found_spent)
 		}
-		// With every cell past the mask's bounds in it: the first cell touched among them all.
-		if round % 4 == 0 {
-			m.outside = true
+		// With every cell past the mask's bounds in it, or with it repeating along y or z: the
+		// first cell touched among them all.
+		if round % 4 < 2 {
+			if round % 4 == 0 {m.outside = true} else {m.wrap = {1 + base.rng_int_max(&rng, 2)}}
 			wide := Bounds{b.lo - 12, b.hi + 12} // (every cell the move can touch)
 			want: Hit
 			want_at, want_axis := Frac{2, 1}, 3

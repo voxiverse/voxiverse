@@ -48,10 +48,12 @@ CUBE :: Bounds{{-1, -1, -1}, {2, 2, 2}}
 SQUARE :: Bounds{{-1, 0, -1}, {2, 1, 2}}
 
 // Field: a small integer for each cell of a box (a distance, a label), x fastest, then z,
-// then y.
+// then y; with wrap, repeating along those axes as a mask does (`field_get` reads it so,
+// as `descend` does a least-cost field over a domain that wraps).
 Field :: struct {
 	bounds: Bounds,
 	values: []i32,
+	wrap:   Wrap,
 }
 
 bounds_size :: proc(b: Bounds) -> Cell {
@@ -141,8 +143,9 @@ field_mask :: proc(dst: ^Mask, f: Field, lo, hi: i32) {
 
 // field_get: the value at c, UNREACHED outside the field's bounds.
 field_get :: proc(f: Field, c: Cell) -> i32 {
-	if !bounds_has(f.bounds, c) {return UNREACHED}
-	return f.values[field_index(f, c)]
+	at := wrapped(f.bounds, f.wrap, c)
+	if !bounds_has(f.bounds, at) {return UNREACHED}
+	return f.values[field_index(f, at)]
 }
 
 @(private)

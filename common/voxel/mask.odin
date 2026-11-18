@@ -14,6 +14,15 @@ import "core:math/bits"
 // spreads (fill, components, least_cost) work within the bounds they are given and do
 // not look outside them.
 //
+// A mask may wrap along y or z (`wrap`, never x): the set then repeats along that axis
+// with the period of its bounds, cell c being in it when the cell c moved into the bounds
+// by a multiple of the size along the axis is, and nothing is outside the bounds along
+// it: a planet's surface that wraps in longitude, a ring. Wrapping is the row's index
+// taken modulo the size, so every operation reading a mask honours it (a source moved
+// past the seam comes in at the other side, a spread steps across it); the cells an
+// operation writes are those of dst's bounds, as always, and dst's own wrap says what
+// they mean.
+//
 // The cells are bits in rows along x, 64 to a word: the row of (y, z) is the `stride`
 // words from `row * stride`, row = (y - lo.y) * size.z + (z - lo.z), and its bit i is the
 // cell x = lo.x + i. The bits past size.x in a row's last word are always clear.
@@ -22,7 +31,12 @@ Mask :: struct {
 	stride:  int,
 	words:   []u64,
 	outside: bool, // every cell outside the bounds is in the set
+	wrap:    Wrap, // the axes along which the set repeats
 }
+
+// Wrap: the axes along which a mask or a field repeats with the period of its bounds: y
+// and z (1 and 2), never x (the axis of the rows' bits).
+Wrap :: bit_set[1 ..= 2]
 
 // MAX_STRIDE: the most words in a row (MAX_EXTENT cells).
 @(private)
@@ -78,8 +92,9 @@ mask_clear :: proc(m: ^Mask) {
 
 // mask_get: c is in the set.
 mask_get :: proc(m: Mask, c: Cell) -> bool {
-	if !bounds_has(m.bounds, c) {return m.outside}
-	i := cell_bit(m, c)
+	at := wrapped(m.bounds, m.wrap, c)
+	if !bounds_has(m.bounds, at) {return m.outside}
+	i := cell_bit(m, at)
 	return m.words[i >> 6] & (1 << uint(i & 63)) != 0
 }
 
@@ -220,11 +235,27 @@ row_of :: #force_inline proc(m: Mask, y, z: i32) -> int {
 	return int(y - m.bounds.lo.y) * int(m.bounds.hi.z - m.bounds.lo.z) + int(z - m.bounds.lo.z)
 }
 
-// row_at: the index of the row (y, z), ok false when it is outside the bounds.
+// row_at: the index of the row (y, z) (brought into the bounds along the axes the mask
+// wraps on), ok false when it is outside the bounds.
 @(private)
 row_at :: #force_inline proc(m: Mask, y, z: i32) -> (row: int, ok: bool) {
-	if y < m.bounds.lo.y || y >= m.bounds.hi.y || z < m.bounds.lo.z || z >= m.bounds.hi.z {return}
-	return row_of(m, y, z), true
+	c := Cell{m.bounds.lo.x, y, z}
+	if m.wrap != {} {c = wrapped(m.bounds, m.wrap, c)}
+	if c.y < m.bounds.lo.y || c.y >= m.bounds.hi.y || c.z < m.bounds.lo.z || c.z >= m.bounds.hi.z {
+		return
+	}
+	return row_of(m, c.y, c.z), true
+}
+
+// wrapped: c moved into b by a multiple of b's size along each axis of wrap.
+@(private)
+wrapped :: #force_inline proc(b: Bounds, wrap: Wrap, c: Cell) -> Cell {
+	c := c
+	for k in wrap {
+		n := b.hi[k] - b.lo[k]
+		if n > 0 {c[k] = b.lo[k] + ((c[k] - b.lo[k]) % n + n) % n}
+	}
+	return c
 }
 
 @(private)

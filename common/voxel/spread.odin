@@ -67,6 +67,7 @@ components :: proc(
 	remaining := mask_make(m.bounds, allocator)
 	defer mask_destroy(&remaining, allocator)
 	mask_copy(&remaining, m)
+	remaining.wrap = m.wrap
 	reached := mask_make(m.bounds, allocator)
 	defer mask_destroy(&reached, allocator)
 	for row in 0 ..< rows_of(m) {
