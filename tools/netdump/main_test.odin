@@ -35,10 +35,10 @@ test_netdump_reads_the_games_kinds :: proc(t: ^testing.T) {
 	defer registry = nil
 	scratch := new(game.Block_Array)
 	defer free(scratch)
-	flood := trace_schema(welcome_trace("flood"), scratch)
-	defer protocol.schema_destroy(&flood)
+	arena := trace_schema(welcome_trace("arena"), scratch)
+	defer protocol.schema_destroy(&arena)
 	found := false
-	for k in flood.kinds {found ||= k.name == "flood.round"}
+	for k in arena.kinds {found ||= k.name == "arena.match"}
 	testing.expect(t, found, "the game's kinds are not in the schema")
 	none := trace_schema(welcome_trace("nonesuch"), scratch)
 	defer protocol.schema_destroy(&none)
