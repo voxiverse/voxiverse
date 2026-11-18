@@ -111,16 +111,6 @@ degree_shift :: proc(key, n: int, s: Scale) -> int {
 	return s.tonic + 12 * q + s.steps[to - 7 * q] + off
 }
 
-// splitmix64: the seeded stream `vary` draws from.
-@(private = "file")
-next_rand :: proc(state: ^u64) -> u64 {
-	state^ += 0x9e3779b97f4a7c15
-	z := state^
-	z = (z ~ (z >> 30)) * 0xbf58476d1ce4e5b9
-	z = (z ~ (z >> 27)) * 0x94d049bb133111eb
-	return z ~ (z >> 31)
-}
-
 // motif_apply returns the motif with each operation applied in order.
 motif_apply :: proc(m: Motif, ops: []Op, s: Scale) -> (out: Motif, err: string) {
 	out = Motif {
@@ -205,10 +195,10 @@ motif_vary :: proc(m: ^Motif, seed: u64, s: Scale) {
 	state := seed
 	for _ in 0 ..< len(notes) / 4 {
 		if len(eligible) == 0 {break}
-		pick := int(next_rand(&state) % u64(len(eligible)))
+		pick := int(base.splitmix(&state) % u64(len(eligible)))
 		at := eligible[pick]
 		ordered_remove(&eligible, pick)
-		dir := 1 if next_rand(&state) & 1 == 0 else -1
+		dir := 1 if base.splitmix(&state) & 1 == 0 else -1
 		for _ in 0 ..< 2 {
 			k := int(m.items[at].key)
 			k = degree_shift(k, dir, s) if s.known else k + 2 * dir

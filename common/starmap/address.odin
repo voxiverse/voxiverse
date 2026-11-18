@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:strconv"
 import "core:strings"
 
+import "common:base"
+
 // Addresses: a world's name in its universe: a galaxy (GALAXY_LENGTH different symbols, in order) and a
 // world in it (WORLD_LENGTH different symbols, in order), symbols being
 // SYMBOLS letters of Old Turkic. Written world first, then the galaxy. In
@@ -111,18 +113,11 @@ address_hash :: proc(a: Address) -> u64 {
 // world): distinct symbols drawn in order by a small random sequence.
 address_derive :: proc(n: u64) -> (a: Address) {
 	state := n ~ 0x9e37_79b9_7f4a_7c15
-	next :: proc(state: ^u64) -> u64 {
-		state^ += 0x9e37_79b9_7f4a_7c15
-		z := state^
-		z = (z ~ (z >> 30)) * 0xbf58_476d_1ce4_e5b9
-		z = (z ~ (z >> 27)) * 0x94d0_49bb_1331_11eb
-		return z ~ (z >> 31)
-	}
 	draw :: proc(part: []u8, state: ^u64) {
 		pool: [SYMBOLS]u8
 		for &p, i in pool {p = u8(i)}
 		for i in 0 ..< len(part) {
-			j := i + int(next(state) % u64(SYMBOLS - i))
+			j := i + int(base.splitmix(state) % u64(SYMBOLS - i))
 			pool[i], pool[j] = pool[j], pool[i]
 			part[i] = pool[i]
 		}

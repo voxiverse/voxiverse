@@ -4,6 +4,8 @@ import "base:runtime"
 import "core:fmt"
 import "core:strings"
 
+import "common:base"
+
 // The state hash's walker (docs/determinism.md): one reflective walk over a
 // value with two outputs. hash_value folds it into a Hasher; dump_value writes
 // a line per leaf, `entities[3].body.velocity.x = 0x3f8ccccd (1.1)`, which is
@@ -47,10 +49,7 @@ hasher_bytes :: proc "contextless" (h: ^Hasher, bytes: []u8) {
 
 // hasher_finish is splitmix64's finalizer.
 hasher_finish :: proc "contextless" (h: Hasher) -> u64 {
-	z := h.h
-	z = (z ~ (z >> 30)) * 0xbf58_476d_1ce4_e5b9
-	z = (z ~ (z >> 27)) * 0x94d0_49bb_1331_11eb
-	return z ~ (z >> 31)
+	return base.mix(h.h)
 }
 
 hash_value :: proc(h: ^Hasher, v: any, name := "value") {

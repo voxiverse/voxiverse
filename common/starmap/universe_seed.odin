@@ -4,6 +4,8 @@ import "core:hash"
 import "core:strconv"
 import "core:strings"
 
+import "common:base"
+
 // A universe's seed as the player sees it: its
 // home world's gate address, shown as glyphs, and the galaxy around it as a
 // set of stars. Both are pure functions of the seed (state, not free: the
@@ -78,14 +80,7 @@ galaxy_stars :: proc(a: Address, out: []Star) {
 	g, w := a.galaxy, a.world
 	state := u64(0xcbf2_9ce4_8422_2325)
 	for s in g {state = (state ~ u64(s)) * 0x100_0000_01b3}
-	next :: proc(state: ^u64) -> f32 {
-		state^ += 0x9e37_79b9_7f4a_7c15
-		z := state^
-		z = (z ~ (z >> 30)) * 0xbf58_476d_1ce4_e5b9
-		z = (z ~ (z >> 27)) * 0x94d0_49bb_1331_11eb
-		z ~= z >> 31
-		return f32(z >> 40) / f32(1 << 24)
-	}
+	next :: proc(state: ^u64) -> f32 {return base.unit_f32(base.splitmix(state))}
 	for &star in out[1:] {
 		// A disc denser in the middle, like a galaxy seen from above.
 		angle := next(&state) * 6.2831853

@@ -1,5 +1,6 @@
 package worldgen
 
+import "common:base"
 import "common:starmap"
 
 // What lives on a world, from its address alone (level L0 of the peoples
@@ -38,14 +39,7 @@ World_Life :: struct {
 // home world (Earth), which has no peoples.
 world_life :: proc(a: starmap.Address, home := false) -> (l: World_Life) {
 	state := starmap.address_hash(a) ~ 0x5bd1_e995_a3c9_f0d1
-	next :: proc(state: ^u64) -> u64 {
-		state^ += 0x9e37_79b9_7f4a_7c15
-		z := state^
-		z = (z ~ (z >> 30)) * 0xbf58_476d_1ce4_e5b9
-		z = (z ~ (z >> 27)) * 0x94d0_49bb_1331_11eb
-		return z ~ (z >> 31)
-	}
-	roll := int(next(&state) % 100)
+	roll := int(base.splitmix(&state) % 100)
 	for share, kind in LIFE_SHARE {
 		if roll < share {
 			l.life = kind
@@ -53,9 +47,9 @@ world_life :: proc(a: starmap.Address, home := false) -> (l: World_Life) {
 		}
 		roll -= share
 	}
-	has := next(&state) % PEOPLES_ONE_IN == 0
-	count := 1 + u8(next(&state) % PEOPLES_MAX)
-	age := PEOPLES_AGE_MIN + u32(next(&state) % (PEOPLES_AGE_MAX - PEOPLES_AGE_MIN + 1))
+	has := base.splitmix(&state) % PEOPLES_ONE_IN == 0
+	count := 1 + u8(base.splitmix(&state) % PEOPLES_MAX)
+	age := PEOPLES_AGE_MIN + u32(base.splitmix(&state) % (PEOPLES_AGE_MAX - PEOPLES_AGE_MIN + 1))
 	if home {
 		l.life = .Animals
 	} else if l.life == .Animals && has {

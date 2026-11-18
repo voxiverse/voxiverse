@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:strings"
 import "core:testing"
 
+import "common:base"
+
 // The collector: flat memory under churn, cycles and dead strings freed, the barrier,
 // the full collection before the memory fault, counted work, and a fuzz of allocation
 // patterns under gc_stress with heap_check after every step.
@@ -192,11 +194,7 @@ vm_stats_for_test :: proc(src: string) -> Vm_Stats {
 @(test)
 test_gc_fuzz :: proc(t: ^testing.T) {
 	rng := u64(51)
-	next :: proc(s: ^u64) -> u64 {
-		s^ += 0x9e37_79b9_7f4a_7c15
-		return splitmix_finish(s^)
-	}
-	pick :: proc(s: ^u64, n: int) -> int {return int(next(s) % u64(n))}
+	pick :: proc(s: ^u64, n: int) -> int {return int(base.splitmix(s) % u64(n))}
 	SNIPPETS := [?]string {
 		"t[$1] = {}",
 		"t[$1] = {x = t[$2], y = 'k' .. $3}",

@@ -1,5 +1,7 @@
 package script
 
+import "common:base"
+
 // Code generation for expressions: Lua 5.4's lcode.c, ported (no MMBIN, globals through
 // GETGLOBAL and SETGLOBAL). An Exp describes a value not yet placed; jump lists (t, f)
 // chain the JMPs of a condition through their sJ fields.
@@ -327,7 +329,7 @@ const_put :: proc(index: []i32, h: u32, e: i32) {
 @(private = "file")
 const_hash :: proc(k: Const) -> u32 {
 	if k.tag == .String {return string_hash(0, k.s)}
-	return u32(splitmix_finish(k.bits ~ u64(k.tag) << 56))
+	return u32(base.mix(k.bits ~ u64(k.tag) << 56))
 }
 
 @(private = "file")

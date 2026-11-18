@@ -2,18 +2,13 @@ package script
 
 import "core:mem"
 
+import "common:base"
+
 // Strings are all interned: equal strings are the same Ref. The intern index is a Bytes
 // buffer of u32 slots (a string's Ref, 0 empty), a power of two, linear probing.
 
 FNV_OFFSET :: 0xcbf2_9ce4_8422_2325
 FNV_PRIME :: 0x0000_0100_0000_01b3
-
-splitmix_finish :: #force_inline proc "contextless" (x: u64) -> u64 {
-	z := x
-	z = (z ~ (z >> 30)) * 0xbf58_476d_1ce4_e5b9
-	z = (z ~ (z >> 27)) * 0x94d0_49bb_1331_11eb
-	return z ~ (z >> 31)
-}
 
 string_hash :: proc "contextless" (seed: u64, s: string) -> u32 {
 	h := u64(FNV_OFFSET) ~ seed
@@ -21,7 +16,7 @@ string_hash :: proc "contextless" (seed: u64, s: string) -> u32 {
 		h ~= u64(s[i])
 		h *= FNV_PRIME
 	}
-	return u32(splitmix_finish(h))
+	return u32(base.mix(h))
 }
 
 // intern returns the string's Ref, making it if it is new; 0 on the memory fault.

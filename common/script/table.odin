@@ -2,6 +2,8 @@ package script
 
 import "core:mem"
 
+import "common:base"
+
 // Tables: an array part (keys 1..arr_len) and a hash part whose entries keep insertion
 // order. A key set to nil stays dead in place (so next can go on past it) and revives in
 // place when set again; full entries are compacted when a quarter are dead, else doubled.
@@ -39,7 +41,7 @@ normalize_key :: #force_inline proc "contextless" (key: Value) -> Value {
 
 key_hash :: #force_inline proc "contextless" (key: Value, vm: ^VM) -> u32 {
 	if key.tag == .String {return (^String)(&vm.mem[as_ref(key)]).hash}
-	return u32(splitmix_finish(key.bits ~ (u64(key.tag) << 56) ~ (u64(key.kind) << 40)))
+	return u32(base.mix(key.bits ~ (u64(key.tag) << 56) ~ (u64(key.kind) << 40)))
 }
 
 @(private = "file")
