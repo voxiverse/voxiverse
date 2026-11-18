@@ -83,7 +83,7 @@ built. Deleting the file revives it, with nothing outside its folder edited eith
 
 A small game, from nothing: every player in a walled arena, a round counted down, played,
 and shown. (`games/flood` is this game grown; `games/stopwatch` is the smallest that uses
-every server hook but harm's.)
+every server hook but harm's. Both are shelved: their code is there to read, not built.)
 
 ```odin
 // games/tag/rules.odin
@@ -440,7 +440,7 @@ What it attacks and when is the game's: `entity_strike` lands a blow when the ta
 within its reach and its cooldown has run, `entity_shoot` sends its kind's shot at a point;
 the damage is its kind's, credited to the creature (a player killed by one reads "was
 beaten by <kind>"). Walkers that overlap each other or a player are pushed apart as they
-steer (players are not pushed: their clients move them). `games/delve` is the model.
+steer (players are not pushed: their clients move them). `games/horde`'s foes are the model.
 
 A player's weapons are items with their numbers as data in a pack (`data/items`): a hitscan
 weapon's `weapon` (its `damage` hurts players and creatures alike; with `"ammo": "<item id>"`
@@ -592,14 +592,14 @@ table, and a `tr` that formats one with `base.text_format` (`{0}`, `{1}`: the ar
 position):
 
 ```odin
-// games/flood/text.odin (package flood)
+// games/flood/text.odin (package flood; a shelved game)
 Text :: enum u8 {Status_Waiting, Round_Title, Made_It, ...}
 TEXT_EN := [Text]string{.Status_Waiting = "FLOOD  waiting for players", .Round_Title = "ROUND {0}", .Made_It = "{0} of {1} made it", ...}
 tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}
 ```
 
 A test holds every key to its text (`base.text_missing(TEXT_EN)`); a translation is another
-table of the same keys beside it. `games/flood` is the model; every game's HUD speaks from its
+table of the same keys beside it. `games/horde` is the model; every game's HUD speaks from its
 table, while the server's notices and announcements are still English in place.
 
 ## A game's look
@@ -688,7 +688,7 @@ A game may bring content as data, a pack of its own ([packs.md](packs.md)) in
 and its server part puts it in `core.Game.pack`:
 
 ```odin
-// games/flood/pack.odin (package flood)
+// games/flood/pack.odin (package flood; a shelved game)
 PACK :: game.Pack_Source {
 	namespace = "flood",
 	files = {
@@ -785,7 +785,7 @@ its shared package, a `protocol.Game_Kinds`, and puts it in `core.Game.kinds` an
 `engine.Game.kinds`:
 
 ```odin
-// games/stopwatch/records.odin (package stopwatch, importing common:protocol)
+// games/stopwatch/records.odin (package stopwatch, importing common:protocol; a shelved game)
 Times :: struct {
 	time:   u32,
 	record: u32,
@@ -831,7 +831,7 @@ a road along that) it sends as **requests**: values of types of its own with a s
 `engine.game_request(s, &value)`; the server decodes it only into a kind that is a request,
 checks it (every enum in range, every string within its limit; one that does not decode gets
 its client refused) and calls the game's `request` hook, where `core.request_value(s, r, T)`
-reads it. `games/hamlet` is the model.
+reads it. `games/sandbox`'s trader is the model.
 
 ## Testing a game
 
@@ -922,8 +922,6 @@ top-down or free camera neither aims at a corner nor pans at an edge. A game's s
 with the game where it should be:
 
 ```sh
-# Foundry's demo line, twenty seconds after it is built, from above and south of it.
-./build.sh shot foundry_line --game foundry -- "wait_world; /foundry demo; ticks 600; camera at 56.5 5 50 0 -30; wait_world; screenshot foundry_line; quit"
 ./build.sh shot horde_shop --game horde -- "wait_world; ticks 80; /horde restart; ticks 40; /horde purse 60; /tp 15 1 18.5 -90 -12; key z down; wait 2; key z up; sleep 0.8; screenshot horde_shop; quit"
 ./build.sh shot launcher -- "wait 60; screenshot launcher; quit"
 ```

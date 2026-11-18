@@ -269,7 +269,7 @@ join `your-address:27315` by **Direct Connection**.
 ### Running a dedicated server
 
 ```sh
-./build.sh serve -- --game foundry --universe universes/factory --password secret
+./build.sh serve -- --game horde --universe universes/yard --password secret
 ```
 
 Run `build/voxiverse-server --help` for every flag (game, port, name, seats, view distance,
