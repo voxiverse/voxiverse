@@ -1,5 +1,6 @@
 package base
 
+import "base:intrinsics"
 import "base:runtime"
 
 // Rng is xoshiro256** (Blackman and Vigna), seeded through splitmix64: 32 bytes
@@ -10,15 +11,10 @@ Rng :: struct {
 	s: [4]u64,
 }
 
+// rng_make: the state is the first four draws of splitmix from seed (chance.odin).
 rng_make :: proc "contextless" (seed: u64) -> (r: Rng) {
 	x := seed
-	for &w in r.s {
-		x += 0x9e37_79b9_7f4a_7c15
-		z := x
-		z = (z ~ (z >> 30)) * 0xbf58_476d_1ce4_e5b9
-		z = (z ~ (z >> 27)) * 0x94d0_49bb_1331_11eb
-		w = z ~ (z >> 31)
-	}
+	for &w in r.s {w = splitmix(&x)}
 	return
 }
 
@@ -59,14 +55,21 @@ rng_int_range :: proc "contextless" (r: ^Rng, lo, hi: int) -> int {
 	return lo + rng_int_max(r, hi - lo)
 }
 
-// rng_f32 is uniform in [0, 1): the top 24 bits times 2^-24.
-rng_f32 :: proc "contextless" (r: ^Rng) -> f32 {
-	return f32(rng_u64(r) >> 40) * (1.0 / 16777216.0)
+// rng_roll is uniform in [lo, hi], both ends included (a die is rng_roll(r, 1, 6)):
+// rng_int_range(r, lo, hi + 1), draw for draw, for any integer type.
+rng_roll :: proc "contextless" (r: ^Rng, lo, hi: $T) -> T where intrinsics.type_is_integer(T) {
+	runtime.assert_contextless(hi >= lo, "rng_roll needs lo <= hi")
+	return lo + T(rng_int_max(r, int(hi) - int(lo) + 1))
 }
 
-// rng_f64 is uniform in [0, 1): the top 53 bits times 2^-53.
+// rng_f32 is uniform in [0, 1): unit_f32 of a draw.
+rng_f32 :: proc "contextless" (r: ^Rng) -> f32 {
+	return unit_f32(rng_u64(r))
+}
+
+// rng_f64 is uniform in [0, 1): unit_f64 of a draw.
 rng_f64 :: proc "contextless" (r: ^Rng) -> f64 {
-	return f64(rng_u64(r) >> 11) * (1.0 / 9007199254740992.0)
+	return unit_f64(rng_u64(r))
 }
 
 rng_f32_range :: proc "contextless" (r: ^Rng, lo, hi: f32) -> f32 {

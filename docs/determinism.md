@@ -54,8 +54,13 @@ completion order may reach state or the wire.
 3. **Randomness.** Randomness in state is `base.Rng` (`common/base/rng.odin`): xoshiro256** seeded
    through splitmix64, with 32 bytes of state and a stream the project owns. Never use
    `core:math/rand` (ChaCha8, 1 KiB of state, and a stream the toolchain may change). Each
-   stream is seeded from its world's seed XOR a named constant. Cryptographic randomness
-   (nonces, keys) is never state.
+   stream is seeded from its world's seed and a named constant. A new stream's seed is
+   `base.hash(seed, SALT)`; the streams older than it (`seed ~ SALT`) keep the XOR, since
+   changing one changes every world made with it. What is drawn by position rather than in
+   order (a block's moment, a lattice point) is `base.hash(key, x, y, ...)`, read as a
+   number by `base.unit_f32` or `base.unit_f64`; the family, its laws and the older copies
+   it replaced are in `common/base/chance.odin`. Cryptographic randomness (nonces, keys)
+   is never state.
 4. **Map order.** Map iteration order never reaches state or the wire. Walk a pool in slot
    order, or walk the keys sorted (`base.keys_sorted(m, less, allocator)` with
    `game.chunk_pos_less` and `game.block_pos_less`: y, then z, then x). Maps remain in use

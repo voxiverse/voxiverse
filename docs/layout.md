@@ -65,7 +65,7 @@ Cap: `70` files per package.
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
 read from the line above. The largest packages are `client/engine` (70 files),
-`server/core` (69), `common/game` (58) and `common/base` (34); every other package has 31
+`server/core` (69), `common/game` (58) and `common/base` (35); every other package has 31
 or fewer (the `layout` lint holds these counts to the tree, so they are never stale). The
 cap leaves the largest no room beyond it, so a package that keeps growing splits into
 feature packages rather than get a bigger number. There is no per-folder allowance (that would
@@ -170,7 +170,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/update` | The updater (docs/platforms.md, "Updates"): reading GitHub's releases and SHA256SUMS, choosing the version to offer, downloading, checking and unpacking a package, swapping it in for the installed one and restarting | `*.odin` |
 | `common/access` | Who a player is and what it may do: accounts (key pairs, proofs of a nonce), the admins' list, permission nodes and grants | `*.odin` |
 | `common/starmap` | A world's gate address: its glyphs, its derivation from a seed, its character and motif; a universe's seed as the player sees it | `*.odin` |
-| `common/base` | Logging, clocks, jobs, pools, numbers, crash bundles | `*.odin` |
+| `common/base` | Logging, clocks, jobs, pools, numbers, chance (the keyed hash family and the random stream), crash bundles | `*.odin` |
 | `common/base/fuzz` | The fuzz harness | `*.odin` |
 | `common/game` | The shared game rules and formats: blocks, items, entities, physics, packs and the registry, chunks, saves' encodings | `*.odin` |
 | `common/game/testdata` | Game test input | `*.ogg` |
