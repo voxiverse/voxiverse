@@ -2,17 +2,26 @@ package voxel
 
 import "core:math/bits"
 
-// Mask: a finite set of cells, those of its bounds whose bit is set (a cell outside the
-// bounds is not in the set). The bounds are storage, not part of the set's meaning: two
-// masks with different bounds holding the same cells are the same set.
+// Mask: a set of cells: those of its bounds whose bit is set, and every cell outside the
+// bounds when `outside` is true (the solid ground past what is loaded, the open air past
+// a template) or none when it is false. The bounds are storage, not part of the set's
+// meaning: two masks with different bounds holding the same cells are the same set.
+//
+// Each operation that writes a mask gives it the outside its result has far from every
+// bounds (a union's is either's, a complement's the other), so that the set algebra holds
+// of the whole sets; within the written mask's bounds the result is exact, and a cell
+// just past them that the result would hold otherwise is cut off, as always. The
+// spreads (fill, components, least_cost) work within the bounds they are given and do
+// not look outside them.
 //
 // The cells are bits in rows along x, 64 to a word: the row of (y, z) is the `stride`
 // words from `row * stride`, row = (y - lo.y) * size.z + (z - lo.z), and its bit i is the
 // cell x = lo.x + i. The bits past size.x in a row's last word are always clear.
 Mask :: struct {
-	bounds: Bounds,
-	stride: int,
-	words:  []u64,
+	bounds:  Bounds,
+	stride:  int,
+	words:   []u64,
+	outside: bool, // every cell outside the bounds is in the set
 }
 
 // MAX_STRIDE: the most words in a row (MAX_EXTENT cells).
@@ -61,14 +70,15 @@ mask_destroy :: proc(m: ^Mask, allocator := context.allocator) {
 	m^ = {}
 }
 
-// mask_clear: no cell.
+// mask_clear: no cell (outside the bounds either).
 mask_clear :: proc(m: ^Mask) {
 	for &w in m.words {w = 0}
+	m.outside = false
 }
 
 // mask_get: c is in the set.
 mask_get :: proc(m: Mask, c: Cell) -> bool {
-	if !bounds_has(m.bounds, c) {return false}
+	if !bounds_has(m.bounds, c) {return m.outside}
 	i := cell_bit(m, c)
 	return m.words[i >> 6] & (1 << uint(i & 63)) != 0
 }
@@ -81,8 +91,8 @@ mask_set :: proc(m: ^Mask, c: Cell, value := true, loc := #caller_location) {
 	if value {m.words[i >> 6] |= bit} else {m.words[i >> 6] &~= bit}
 }
 
-// mask_count: how many cells the set has within b (all of them by default): any cell of
-// a box is `mask_count(m, b) > 0`.
+// mask_count: how many cells of its bounds the set has, within b when it is given: any cell
+// of a box within the bounds is `mask_count(m, b) > 0`.
 mask_count :: proc(m: Mask, b: Maybe(Bounds) = nil) -> int {
 	within := b.? or_else m.bounds
 	lo := Cell {
@@ -109,7 +119,8 @@ mask_count :: proc(m: Mask, b: Maybe(Bounds) = nil) -> int {
 	return n
 }
 
-// mask_bounds: the smallest bounds holding every cell of the set; ok false when it is empty.
+// mask_bounds: the smallest bounds holding every cell of the set within its bounds; ok
+// false when there is none.
 mask_bounds :: proc(m: Mask) -> (b: Bounds, ok: bool) {
 	s := bounds_size(m.bounds)
 	for y in 0 ..< s.y {
@@ -237,9 +248,10 @@ tail_bits :: #force_inline proc(m: Mask) -> u64 {
 	return ~u64(0) if r == 0 else (u64(1) << uint(r)) - 1
 }
 
-// bits_at: out's bit i is row's bit start + i (start may be negative), clear past either end.
+// bits_at: out's bit i is row's bit start + i (start may be negative), clear past either end
+// (or set, past the n cells of the row, when outside is true).
 @(private)
-bits_at :: proc(row: []u64, start: int, out: []u64) {
+bits_at :: proc(row: []u64, start: int, out: []u64, outside := false, n := 0) {
 	shift := uint(start & 63)
 	first := start >> 6 // (rounds down)
 	word :: #force_inline proc(row: []u64, j: int) -> u64 {
@@ -252,6 +264,7 @@ bits_at :: proc(row: []u64, start: int, out: []u64) {
 		} else {
 			out[i] = word(row, j) >> shift | word(row, j + 1) << (64 - shift)
 		}
+		if outside {out[i] |= ~span_bits(i, -start, n - start)}
 	}
 }
 
@@ -276,27 +289,27 @@ Op :: enum u8 {
 	And_Not,
 }
 
-// combine: dst becomes dst op (src moved by offset), cell by cell within dst's bounds, a
-// cell outside src's bounds being outside the set. The one loop under the set algebra and
-// the Minkowski operations: a row at a time, a word at a time.
+// combine: dst becomes dst op (src moved by offset), cell by cell within dst's bounds and
+// as its outside. The one loop under the set algebra and the Minkowski operations: a row
+// at a time, a word at a time.
 @(private)
 combine :: proc(dst: ^Mask, src: Mask, offset: Cell, op: Op) {
 	ds := bounds_size(dst.bounds)
 	buf: [MAX_STRIDE]u64
 	moved := buf[:dst.stride]
 	start := int(dst.bounds.lo.x - offset.x - src.bounds.lo.x)
+	n := int(src.bounds.hi.x - src.bounds.lo.x)
 	tail := tail_bits(dst^)
 	row := 0
 	for y in dst.bounds.lo.y ..< dst.bounds.lo.y + ds.y {
 		for z in dst.bounds.lo.z ..< dst.bounds.lo.z + ds.z {
 			defer row += 1
 			words := row_words(dst^, row)
-			src_row, found := row_at(src, y - offset.y, z - offset.z)
-			if !found {
-				if op == .And {for &w in words {w = 0}}
-				continue
+			if src_row, found := row_at(src, y - offset.y, z - offset.z); found {
+				bits_at(row_words(src, src_row), start, moved, src.outside, n)
+			} else {
+				for &w in moved {w = ~u64(0) if src.outside else 0}
 			}
-			bits_at(row_words(src, src_row), start, moved)
 			switch op {
 			case .Or:
 				for &w, i in words {w |= moved[i]}
@@ -307,5 +320,13 @@ combine :: proc(dst: ^Mask, src: Mask, offset: Cell, op: Op) {
 			}
 			if len(words) > 0 {words[len(words) - 1] &= tail}
 		}
+	}
+	switch op {
+	case .Or:
+		dst.outside ||= src.outside
+	case .And:
+		dst.outside &&= src.outside
+	case .And_Not:
+		dst.outside &&= !src.outside
 	}
 }

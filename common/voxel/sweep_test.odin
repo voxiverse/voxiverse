@@ -121,5 +121,26 @@ test_a_sweep_touches_what_the_definition_touches :: proc(t: ^testing.T) {
 			_, found_spent, spent := sweep(m, from, size, delta, &none)
 			testing.expect(t, spent && !found_spent)
 		}
+		// With every cell past the mask's bounds in it: the first cell touched among them all.
+		if round % 4 == 0 {
+			m.outside = true
+			wide := Bounds{b.lo - 12, b.hi + 12} // (every cell the move can touch)
+			want: Hit
+			want_at, want_axis := Frac{2, 1}, 3
+			for c in ref_cells(wide) {
+				at, axis, ok := ref_touch(c, from, size, delta)
+				if !ok || !mask_get(m, c) {continue}
+				if !frac_less(at, want_at) &&
+				   (frac_less(want_at, at) || axis >= want_axis) {continue}
+				want, want_at, want_axis = {
+						cell = c,
+						t    = i64(at.num * FIXED_ONE / at.den),
+					}, at, axis
+				if axis >= 0 {want.normal[axis] = -1 if delta[axis] > 0 else 1}
+			}
+			got, hit, _ := sweep(m, from, size, delta, no_limit())
+			testing.expect_value(t, hit, want_axis < 3)
+			if hit {testing.expectf(t, got == want, "round %d: %v, want %v", round, got, want)}
+		}
 	}
 }

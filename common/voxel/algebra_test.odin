@@ -58,6 +58,29 @@ test_dilation_and_erosion_are_adjoint :: proc(t: ^testing.T) {
 		want = ref_erode(ra, e, a.bounds)
 		testing.expect(t, same(eroded, want))
 		ref_destroy(&want)
+		// With every cell past a's bounds in the set: still the definitions (on bounds a
+		// cell wider, so that some of what lies past a's is looked at), and the outsides
+		// are the sum's and the difference's far from a.
+		{
+			full := a
+			full.outside = true
+			rf := ref_of_tmp(full)
+			wide := Bounds{sum.bounds.lo - 1, sum.bounds.hi + 1}
+			fsum := mask_make(wide)
+			defer mask_destroy(&fsum)
+			dilate(&fsum, full, e)
+			testing.expect(t, fsum.outside == (mask_count(e) > 0))
+			fwant := ref_dilate(rf, e, wide)
+			testing.expect(t, same(fsum, fwant))
+			ref_destroy(&fwant)
+			fdiff := mask_make(wide)
+			defer mask_destroy(&fdiff)
+			erode(&fdiff, full, e)
+			testing.expect(t, fdiff.outside)
+			fwant = ref_erode(rf, e, wide)
+			testing.expect(t, same(fdiff, fwant))
+			ref_destroy(&fwant)
+		}
 		// A ⊕ E ⊆ C if and only if A ⊆ C ⊖ E: C is the sum, sometimes less a cell or two
 		// and sometimes with noise added.
 		c := mask_make(sum.bounds)

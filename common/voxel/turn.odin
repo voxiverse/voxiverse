@@ -51,14 +51,18 @@ turn_bounds :: proc(m: Turn, b: Bounds) -> Bounds {
 }
 
 // turn: dst becomes the cells of src turned by m about the origin, within dst's bounds
-// (turn_bounds gives the bounds that hold them all; translate moves them after). A cell
-// at a time. dst is not src.
+// (turn_bounds gives the bounds that hold those of src's bounds; translate moves them
+// after), and src's outside. A cell at a time. dst is not src.
 turn :: proc(dst: ^Mask, src: Mask, m: Turn) {
 	assert(
 		raw_data(dst.words) != raw_data(src.words) || len(src.words) == 0,
 		"voxel: turn in place",
 	)
 	mask_clear(dst)
+	if src.outside {
+		complement(dst)
+		box(dst, turn_bounds(m, src.bounds), false)
+	}
 	s := bounds_size(src.bounds)
 	for y in 0 ..< s.y {
 		for z in 0 ..< s.z {

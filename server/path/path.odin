@@ -88,10 +88,9 @@ standable :: proc(q: game.Block_Query, p: game.Block_Pos, body := SMALL) -> bool
 
 // standable_mask: dst becomes the cells of its bounds a body stands in over the solid
 // cells: erode(free, body) ∩ (solid moved up one ⊕ the footprint turned back), the cells
-// where all of the body is free and some of its footprint is over solid ground. A cell
-// outside solid's bounds is neither free nor ground, so solid's bounds hold the body
-// and the row under it for every cell of dst (a field's grid does). The cells
-// `standable` says one at a time.
+// where all of the body is free and some of its footprint is over solid ground. Past
+// solid's bounds, solid.outside says what is there (a field's grid says solid: neither
+// free nor known ground). The cells `standable` says one at a time.
 standable_mask :: proc(
 	dst: ^voxel.Mask,
 	solid: voxel.Mask,

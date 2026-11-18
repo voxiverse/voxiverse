@@ -37,7 +37,7 @@ sweep :: proc(
 	if c, touched, spent := look(m, {w.lo, w.hi + 1}, budget); touched || spent {
 		return {cell = c}, touched, spent
 	}
-	for !walk_past(w, m.bounds) && walk_next(&w) {
+	for (m.outside || !walk_past(w, m.bounds)) && walk_next(&w) {
 		if budget^ <= 0 {return {}, false, true}
 		budget^ -= 1
 		slabs, axes, n := walk_slabs(w)
@@ -70,8 +70,11 @@ line :: proc(dst: ^Mask, from, size, delta: [3]i64, value := true) {
 // look: the first cell of m within b, by y, then z, then x; spent when the budget ran out.
 @(private)
 look :: proc(m: Mask, b: Bounds, left: ^int) -> (c: Cell, touched: bool, spent: bool) {
-	lo := Cell{max(b.lo.x, m.bounds.lo.x), max(b.lo.y, m.bounds.lo.y), max(b.lo.z, m.bounds.lo.z)}
-	hi := Cell{min(b.hi.x, m.bounds.hi.x), min(b.hi.y, m.bounds.hi.y), min(b.hi.z, m.bounds.hi.z)}
+	lo, hi := b.lo, b.hi
+	if !m.outside { 	// (only the cells of its bounds can be in it)
+		lo = {max(lo.x, m.bounds.lo.x), max(lo.y, m.bounds.lo.y), max(lo.z, m.bounds.lo.z)}
+		hi = {min(hi.x, m.bounds.hi.x), min(hi.y, m.bounds.hi.y), min(hi.z, m.bounds.hi.z)}
+	}
 	for y in lo.y ..< hi.y {
 		for z in lo.z ..< hi.z {
 			for x in lo.x ..< hi.x {

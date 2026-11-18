@@ -239,10 +239,18 @@ least_cost :: proc(
 			allowed: []u64 // (the cells of the move's own, from from[0] on)
 			buf: [MAX_STRIDE]u64
 			if m.from != nil {
-				f := row_at(m.from^, domain.bounds.lo.y + y, domain.bounds.lo.z + z) or_continue
 				allowed = buf[:(b - a + 63) / 64]
 				start := int(domain.bounds.lo.x - m.from.bounds.lo.x) + a
-				bits_at(row_words(m.from^, f), start, allowed)
+				n := int(m.from.bounds.hi.x - m.from.bounds.lo.x)
+				f, found := row_at(m.from^, domain.bounds.lo.y + y, domain.bounds.lo.z + z)
+				switch {
+				case found:
+					bits_at(row_words(m.from^, f), start, allowed, m.from.outside, n)
+				case m.from.outside:
+					allowed = nil // (from every cell)
+				case:
+					continue
+				}
 			}
 			best := cost_spread(there, from, m.cost, allowed)
 			if best > 0 {rows_mark(&r, t, a + o, b + o, best)}

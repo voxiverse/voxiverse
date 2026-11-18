@@ -3,8 +3,9 @@ package voxel
 import "core:slice"
 
 // The set algebra and the Minkowski operations. Each writes its result into dst, within
-// dst's bounds (what falls outside them is cut off), so the caller chooses the box and
-// owns the memory; a source moved by an offset is the source translated.
+// dst's bounds (what falls outside them is cut off) and as dst's outside (the result far
+// from every bounds), so the caller chooses the box and owns the memory; a source moved
+// by an offset is the source translated.
 
 // unite: dst becomes dst ∪ (src moved by offset).
 unite :: proc(dst: ^Mask, src: Mask, offset := Cell{}) {
@@ -21,8 +22,9 @@ subtract :: proc(dst: ^Mask, src: Mask, offset := Cell{}) {
 	combine(dst, src, offset, .And_Not)
 }
 
-// complement: dst becomes the cells of its bounds it did not hold.
+// complement: dst becomes the cells it did not hold, within its bounds and outside them.
 complement :: proc(dst: ^Mask) {
+	dst.outside = !dst.outside
 	if dst.stride == 0 {return}
 	tail := tail_bits(dst^)
 	for &w, i in dst.words {
@@ -37,7 +39,7 @@ translate :: proc(m: ^Mask, offset: Cell) {
 	m.bounds.hi += offset
 }
 
-// mask_copy: dst becomes src's cells within dst's bounds.
+// mask_copy: dst becomes src's cells within dst's bounds, and src's outside.
 mask_copy :: proc(dst: ^Mask, src: Mask) {
 	mask_clear(dst)
 	unite(dst, src)
@@ -45,8 +47,8 @@ mask_copy :: proc(dst: ^Mask, src: Mask) {
 
 // dilate: dst becomes src ⊕ element, the Minkowski sum {a + b : a in src, b in element}:
 // every cell within reach of the set, where element is the reach (a neighbourhood, a
-// brush, a body's footprint). `bounds_sum` gives the bounds that hold all of it. dst is
-// not src.
+// brush, a body's footprint). `bounds_sum` gives the bounds that hold all of it when src's
+// outside is empty. dst is not src.
 dilate :: proc(dst: ^Mask, src: Mask, element: Mask, allocator := context.allocator) {
 	assert(
 		raw_data(dst.words) != raw_data(src.words) || len(src.words) == 0,
@@ -58,8 +60,9 @@ dilate :: proc(dst: ^Mask, src: Mask, element: Mask, allocator := context.alloca
 
 // erode: dst becomes src ⊖ element, the Minkowski difference {c : c + b in src for every b
 // in element}: the cells where all of element, put there, lies in the set. With the free
-// cells as src and a body's footprint as element, the cells where the body fits. dst is
-// not src; an empty element leaves every cell of dst's bounds.
+// cells as src and a body's footprint as element, the cells where the body fits; a cell
+// past src's bounds is free when src's outside says so. dst is not src; an empty element
+// leaves every cell.
 erode :: proc(dst: ^Mask, src: Mask, element: Mask, allocator := context.allocator) {
 	assert(
 		raw_data(dst.words) != raw_data(src.words) || len(src.words) == 0,
@@ -97,8 +100,8 @@ minkowski :: proc(dst: ^Mask, src: Mask, element: Mask, op: Op, allocator := con
 	}
 	// along: src summed with the segment of n cells from the origin (for the sum), or the
 	// cells from which all n of it lies in src (for the difference), n growing.
-	along_bounds := src.bounds
-	if op == .Or {along_bounds.hi.x += longest - 1}
+	along_bounds := src.bounds // (cut where it only repeats src's outside)
+	if op == .Or {along_bounds.hi.x += longest - 1} else {along_bounds.lo.x -= longest - 1}
 	along := mask_make(along_bounds, allocator)
 	defer mask_destroy(&along, allocator)
 	unite(&along, src)

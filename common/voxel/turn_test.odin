@@ -62,5 +62,20 @@ test_turns_compose_as_the_cube_group :: proc(t: ^testing.T) {
 		defer mask_destroy(&back)
 		turn(&back, direct, turn_inverse(b * a))
 		testing.expect(t, same(back, ref_of_tmp(m)))
+		// With every cell past its bounds in the set, so is every cell past the turned ones.
+		full := m
+		full.outside = true
+		around := turn_bounds(a, m.bounds)
+		around = {around.lo - 2, around.hi + 2}
+		wide := mask_make(around)
+		defer mask_destroy(&wide)
+		turn(&wide, full, a)
+		testing.expect(t, wide.outside)
+		for c in ref_cells(around) {
+			if mask_get(wide, c) != mask_get(full, turn_cell(turn_inverse(a), c)) {
+				testing.expectf(t, false, "turned outside differs at %v", c)
+				break
+			}
+		}
 	}
 }

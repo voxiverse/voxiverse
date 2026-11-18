@@ -80,8 +80,7 @@ field_grid :: proc(f: ^Field) -> voxel.Bounds {
 @(private = "file")
 field_solid :: proc(f: ^Field) -> Solid {
 	return {f, proc(data: rawptr, p: game.Block_Pos) -> bool {
-			f := (^Field)(data)
-			return !voxel.bounds_has(f.solid.bounds, p) || voxel.mask_get(f.solid, p)
+			return voxel.mask_get((^Field)(data).solid, p)
 		}}
 }
 
@@ -111,6 +110,7 @@ field_build :: proc(f: ^Field, solid: voxel.Mask, goal: game.Block_Pos, body := 
 	covers &&= s.hi.x >= g.hi.x && s.hi.y >= g.hi.y && s.hi.z >= g.hi.z
 	assert(covers, "a field built from blocks short of its grid")
 	voxel.mask_copy(&f.solid, solid)
+	f.solid.outside = true // (past the grid: a search never reads there)
 	return field_search(f, goal, body)
 }
 

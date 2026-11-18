@@ -8,8 +8,9 @@ import "common:base"
 // over a box, and each operation written as its definition, a cell at a time.
 
 Ref :: struct {
-	bounds: Bounds,
-	cells:  []bool,
+	bounds:  Bounds,
+	cells:   []bool,
+	outside: bool, // every cell outside the bounds is in the set
 }
 
 ref_make :: proc(b: Bounds) -> Ref {
@@ -27,7 +28,7 @@ ref_index :: proc(r: Ref, c: Cell) -> int {
 }
 
 ref_get :: proc(r: Ref, c: Cell) -> bool {
-	return bounds_has(r.bounds, c) && r.cells[ref_index(r, c)]
+	return r.cells[ref_index(r, c)] if bounds_has(r.bounds, c) else r.outside
 }
 
 ref_set :: proc(r: ^Ref, c: Cell, v := true) {
@@ -36,6 +37,7 @@ ref_set :: proc(r: ^Ref, c: Cell, v := true) {
 
 ref_of :: proc(m: Mask) -> Ref {
 	r := ref_make(m.bounds)
+	r.outside = m.outside
 	for c in ref_cells(m.bounds) {ref_set(&r, c, mask_get(m, c))}
 	return r
 }
@@ -106,6 +108,8 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 		defer mask_destroy(&a)
 		b := random_mask(&rng, random_bounds(&rng), base.rng_int_max(&rng, 100))
 		defer mask_destroy(&b)
+		a.outside = base.rng_int_max(&rng, 3) == 0
+		b.outside = base.rng_int_max(&rng, 3) == 0
 		o := random_offset(&rng)
 		ra, rb := ref_of(a), ref_of(b)
 		defer ref_destroy(&ra)
@@ -129,6 +133,15 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 			}
 			want := ref_make(a.bounds)
 			defer ref_destroy(&want)
+			switch law {
+			case .Unite:
+				want.outside = a.outside || b.outside
+			case .Intersect:
+				want.outside = a.outside && b.outside
+			case .Subtract:
+				want.outside = a.outside && !b.outside
+			}
+			testing.expect_value(t, d.outside, want.outside)
 			for c in ref_cells(a.bounds) {
 				x, y := ref_get(ra, c), ref_get(rb, c - o)
 				switch law {
@@ -161,7 +174,7 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 		mask_copy(&right, a)
 		complement(&right)
 		subtract(&right, b)
-		testing.expect(t, same(left, ref_of_tmp(right)))
+		testing.expect(t, same(left, ref_of_tmp(right)) && left.outside == right.outside)
 		// Translation moves the set: what was at c is at c + o.
 		moved := a
 		translate(&moved, o)
@@ -178,12 +191,16 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 		tight, ok := mask_bounds(a)
 		testing.expect_value(t, ok, n > 0)
 		if ok {testing.expect_value(t, mask_count(a, tight), n)}
-		// Runs cover exactly the set, each a maximal span in order.
+		// Runs cover exactly the set within its bounds, each a maximal span in order.
+		in_bounds :: proc(a: Mask, c: Cell) -> bool {return(
+				bounds_has(a.bounds, c) &&
+				mask_get(a, c) \
+			)}
 		runs := ref_make(a.bounds)
 		defer ref_destroy(&runs)
 		cursor := 0
 		for lo, length in runs_next(a, &cursor) {
-			testing.expect(t, !mask_get(a, lo - {1, 0, 0}) && !mask_get(a, lo + {length, 0, 0}))
+			testing.expect(t, !in_bounds(a, lo - {1, 0, 0}) && !in_bounds(a, lo + {length, 0, 0}))
 			for k in 0 ..< length {ref_set(&runs, lo + {k, 0, 0})}
 		}
 		testing.expect(t, same(a, runs))
@@ -192,7 +209,7 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 		inside := ref_make(sub)
 		defer ref_destroy(&inside)
 		in_sub :: proc(a: Mask, sub: Bounds, c: Cell) -> bool {
-			return bounds_has(sub, c) && mask_get(a, c)
+			return bounds_has(sub, c) && bounds_has(a.bounds, c) && mask_get(a, c)
 		}
 		cursor = 0
 		last := [3]i32{min(i32), 0, 0} // (y, z, x of the last run)
@@ -213,7 +230,7 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 				ref_set(&inside, lo + {k, 0, 0})
 			}
 		}
-		for c in ref_cells(sub) {testing.expect(t, ref_get(inside, c) == mask_get(a, c))}
+		for c in ref_cells(sub) {testing.expect(t, ref_get(inside, c) == in_sub(a, sub, c))}
 	}
 }
 
@@ -245,8 +262,9 @@ test_a_mask_over_borrowed_words_is_a_mask :: proc(t: ^testing.T) {
 // ref_of_tmp: ref_of, freed with the temp allocator.
 ref_of_tmp :: proc(m: Mask) -> Ref {
 	r := Ref {
-		bounds = m.bounds,
-		cells  = make([]bool, bounds_volume(m.bounds), context.temp_allocator),
+		bounds  = m.bounds,
+		cells   = make([]bool, bounds_volume(m.bounds), context.temp_allocator),
+		outside = m.outside,
 	}
 	for c in ref_cells(m.bounds) {ref_set(&r, c, mask_get(m, c))}
 	return r
