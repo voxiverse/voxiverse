@@ -8,6 +8,7 @@ import "core:time"
 
 import "common:base"
 import "common:game"
+import "common:voxel"
 
 // The simulation framework: what a block does by itself is data (data/sim/*.json in a
 // pack, game.Sim_Rules in the registry). Cells wake, wait in a queue and, when due, run
@@ -216,12 +217,20 @@ sim_run_scheduled :: proc(w: ^World) {
 }
 
 // sim_update runs the rules of the block at p, in order; a rule that changed the block
-// there ends the old block's turn.
+// there ends the old block's turn. A supported block is settled first (its settle may
+// have waited for this tick: plants.odin).
 @(private = "file")
 sim_update :: proc(w: ^World, p: game.Block_Pos, action: Action_Id) {
 	sim := &w.server.registry.sim
 	b, loaded := chunks_block(&w.chunks, p)
-	if !loaded || int(b) >= len(sim.scheduled) {return}
+	if !loaded {return}
+	if game.has_support_rule(&w.server.registry.blocks, b) {
+		here := voxel.mask_make({p, p + 1}, context.temp_allocator)
+		voxel.mask_set(&here, p)
+		supports_settle(w, here, action)
+		if now, _ := chunks_block(&w.chunks, p); now != b {return}
+	}
+	if int(b) >= len(sim.scheduled) {return}
 	for r in sim.scheduled[b] {
 		if sim.rules[r].is_program {
 			act := Act{action, .Rule} if action != 0 else world_act(w, .Rule)

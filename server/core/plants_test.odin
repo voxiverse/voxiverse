@@ -2,6 +2,7 @@ package core
 
 import "core:fmt"
 import "core:math"
+import "core:os"
 import "core:testing"
 
 import "common:game"
@@ -169,4 +170,80 @@ bulk_at :: proc(cmd: string, x, y, z: i32, block: string) -> string {
 @(private = "file")
 bulk_row :: proc(cmd: string, x0, x1, y, z: i32, block: string) -> string {
 	return fmt.tprintf("%s %d %d %d %d %d %d %s", cmd, x0, y, z, x1, y, z, block)
+}
+
+CANE_BLOCK :: `{"cane": {"collides": false, "opaque": false, "render": "cross", "layer": "cutout", "support": {"below": "sim_test:cane_soil"}, "textures": {"all": "voxiverse:water"}}}`
+CANE_TAG :: `{"cane_soil": {"values": ["voxiverse:grass", "sim_test:cane"]}}`
+
+// A cascade is bounded: a stack of plants each standing on the one under it, taller than
+// a settle reaches, goes over several ticks, no tick taking more than a settle's reach,
+// and ends as it did when it went all at once: every cane gone, each dropping its item,
+// every change journaled with the cause of the change under the stack, how Support.
+@(test)
+test_support_cascade_is_bounded :: proc(t: ^testing.T) {
+	dir := "build/tmp/support_cascade"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	cfg := grief_config(dir)
+	files := make([]game.Pack_File, 3, context.temp_allocator)
+	files[0] = {"pack.json", transmute([]u8)string(SIM_MANIFEST)}
+	files[1] = {"data/blocks/cane.json", transmute([]u8)string(CANE_BLOCK)}
+	files[2] = {"data/block_tags/cane.json", transmute([]u8)string(CANE_TAG)}
+	cfg.extra_packs = []game.Pack_Source{{"sim_test", files}}
+	g, opened := grief_open(t, dir, cfg)
+	defer grief_close(g)
+	if !opened {return}
+	w := grief_world(g)
+	reg := grief_srv(g).registry
+	cane, found := game.registry_block(reg, "sim_test:cane")
+	if !testing.expect(t, found) {return}
+	HEIGHT :: 24
+	ground := at(g, 6, 2, 0)
+	cmd(g, "fill %s air", box(g, {6, 2, 0}, {6, 2 + HEIGHT + 1, 0}))
+	set_block(w, ground, .Grass, test_act(w))
+	for y in i32(1) ..= HEIGHT {set_block(w, ground + {0, y, 0}, cane, test_act(w))}
+	standing :: proc(w: ^World, ground: game.Block_Pos, cane: game.Block) -> (n: int) {
+		for y in i32(1) ..= HEIGHT {if block_at_pos(w, ground + {0, y, 0}) == cane {n += 1}}
+		return
+	}
+	if !testing.expect_value(t, standing(w, ground, cane), HEIGHT) {return}
+
+	act := Act{action_begin(w, {}, .Command), .Command}
+	head := w.journal.head
+	set_block(w, ground, .Air, act)
+	left := standing(w, ground, cane)
+	reach := 2 * SUPPORT_REACH + 1
+	testing.expectf(t, left > 0, "all %d canes went in the tick of the change", HEIGHT)
+	testing.expectf(t, HEIGHT - left <= reach, "%d canes went at once", HEIGHT - left)
+	ticks := 0
+	for left > 0 && ticks < HEIGHT {
+		run(g, 1)
+		ticks += 1
+		now := standing(w, ground, cane)
+		testing.expectf(t, left - now <= reach, "%d canes went in one tick", left - now)
+		left = now
+	}
+	testing.expectf(t, left == 0, "%d canes stand after %d ticks", left, ticks)
+	testing.expect(t, ticks > 1, "the stack did not take several ticks")
+
+	gone := 0
+	for k in head + 1 ..< w.journal.head {
+		e := ring_at(&w.journal, k)
+		if e.new != .Air || e.old != cane {continue}
+		gone += 1
+		testing.expectf(
+			t,
+			e.action == u32(act.action) && e.how == .Support,
+			"a cane went by %v",
+			e^,
+		)
+	}
+	testing.expect_value(t, gone, HEIGHT)
+	dropped := 0
+	for e in entities_snapshot(w) {
+		if entity_kind(w, e) == reg.engine.item &&
+		   entity_stack(w, e)^.item ==
+			   game.item_of_block(reg, cane) {dropped += entity_stack(w, e)^.count}
+	}
+	testing.expect_value(t, dropped, HEIGHT)
 }

@@ -5,6 +5,7 @@ import "core:log"
 import "common:base"
 import "common:game"
 import "common:protocol"
+import "common:voxel"
 
 // Block changes: every block the world changes in a tick (a player's edit,
 // a bulk edit, an explosion; flowing water next) goes through set_block or
@@ -78,8 +79,15 @@ set_block :: proc(
 	ch.blocks[p] = who
 	if column_edited(w, p, b) {ch.columns[{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}] = {}}
 	sim_wake(w, p, cause.action)
+	// A plant or a ladder beside lost its footing, perhaps (not when this is a settle's own
+	// change: what it unsettles, the settle took already).
 	for d in ([6][3]i32{{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) {
-		support_check(w, p + d, cause.action) // (a plant or a ladder beside lost its footing, perhaps)
+		if cause.how == .Support || !support_fails(w, p + d) {continue}
+		beside := voxel.mask_make({p - 1, p + 2}, context.temp_allocator)
+		voxel.diamond(&beside, p, 1)
+		voxel.mask_set(&beside, p, false)
+		supports_settle(w, beside, cause.action)
+		break
 	}
 	updates: [4]game.Block_Change
 	for u in updates[:game.neighbour_updates(s.registry, p, query, &updates)] {
