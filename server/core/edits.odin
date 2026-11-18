@@ -90,19 +90,13 @@ bulk_edit :: proc(
 
 	refused := admit_box(w, cause, lo, hi)
 	mask, is_mask := e.shape.(voxel.Mask)
-	runs := mask_runs(mask, clo, chi) if is_mask else nil
 	for cy in clo.y ..= chi.y {
 		for cz in clo.z ..= chi.z {
 			for cx in clo.x ..= chi.x {
 				pos := game.Chunk_Pos{cx, cy, cz}
 				c := chunks_get(&w.chunks, pos)
 				if c == nil || c.state != .Ready {continue}
-				spans: []Span
-				if is_mask {
-					spans = runs[chunk_slot(pos, clo, chi)][:]
-				} else {
-					spans = box_rows(pos, lo, hi)
-				}
+				spans := mask_rows(mask, pos) if is_mask else box_rows(pos, lo, hi)
 				n, skipped := edit_chunk(w, c, e, spans, cause, refused)
 				protected += skipped
 				if n > 0 {
@@ -154,33 +148,17 @@ box_rows :: proc(pos: game.Chunk_Pos, lo, hi: game.Block_Pos) -> []Span {
 	return rows[:]
 }
 
-// mask_runs: the mask's runs (voxel.runs_next) cut at the chunks' edges, by chunk of
-// clo..chi (chunk_slot; a run in no chunk of them is left out), each chunk's in the order
-// of the runs: by y, then z, then x, as box_rows gives a box's (temp).
+// mask_rows: the mask's runs within chunk pos (voxel.runs_next), by y, then z, then x, as
+// box_rows gives a box's (temp).
 @(private = "file")
-mask_runs :: proc(m: voxel.Mask, clo, chi: game.Chunk_Pos) -> [][dynamic]Span {
-	n := chi - clo + 1
-	runs := make([][dynamic]Span, int(n.x) * int(n.y) * int(n.z), context.temp_allocator)
-	for &r in runs {r.allocator = context.temp_allocator}
+mask_rows :: proc(m: voxel.Mask, pos: game.Chunk_Pos) -> []Span {
+	origin := game.chunk_origin(pos)
+	rows := make([dynamic]Span, context.temp_allocator)
 	cursor := 0
-	for lo, length in voxel.runs_next(m, &cursor) {
-		if cy := lo.y >> game.CHUNK_SHIFT; cy < clo.y || cy > chi.y {continue} 	// (beyond the world's height)
-		at, left := lo, length
-		for left > 0 {
-			piece := min(left, game.CHUNK_SIZE - (at.x & game.CHUNK_MASK))
-			append(&runs[chunk_slot(game.chunk_of(at), clo, chi)], Span{at, piece})
-			at.x += piece
-			left -= piece
-		}
+	for lo, length in voxel.runs_next(m, &cursor, voxel.Bounds{origin, origin + game.CHUNK_SIZE}) {
+		append(&rows, Span{lo, length})
 	}
-	return runs
-}
-
-// chunk_slot: the place of chunk pos among clo..chi, x fastest, then z, then y.
-@(private = "file")
-chunk_slot :: proc(pos, clo, chi: game.Chunk_Pos) -> int {
-	n, d := chi - clo + 1, pos - clo
-	return (int(d.y) * int(n.z) + int(d.z)) * int(n.x) + int(d.x)
+	return rows[:]
 }
 
 // edit_chunk applies e to the cells of spans, all in chunk c.

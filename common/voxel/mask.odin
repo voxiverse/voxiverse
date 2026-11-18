@@ -106,15 +106,44 @@ mask_bounds :: proc(m: Mask) -> (b: Bounds, ok: bool) {
 	return
 }
 
-// runs_next: the next run of cells of the set along x, in order of y, then z, then x: the
-// cells lo, lo + {1, 0, 0} ... lo + {length - 1, 0, 0}. cursor starts at 0; ok false when
-// there is none left. A run is a span of a world edit, or one box of a mask cut into boxes.
-runs_next :: proc(m: Mask, cursor: ^int) -> (lo: Cell, length: i32, ok: bool) {
+// runs_next: the next run of cells of the set within b (all of them by default) along x,
+// in order of y, then z, then x: the cells lo, lo + {1, 0, 0} ... lo + {length - 1, 0, 0},
+// a run that crosses b's sides cut at them. cursor starts at 0 (and is the mask's, not
+// b's: give the same b until it is done); ok false when there is none left. A run is a
+// span of a world edit (b one chunk's cells), or one box of a mask cut into boxes.
+runs_next :: proc(
+	m: Mask,
+	cursor: ^int,
+	b: Maybe(Bounds) = nil,
+) -> (
+	lo: Cell,
+	length: i32,
+	ok: bool,
+) {
+	within := b.? or_else m.bounds
 	s := bounds_size(m.bounds)
+	l := within.lo - m.bounds.lo
+	h := within.hi - m.bounds.lo
+	x0, y0, z0 := max(int(l.x), 0), max(int(l.y), 0), max(int(l.z), 0)
+	x1, y1, z1 := min(int(h.x), int(s.x)), min(int(h.y), int(s.y)), min(int(h.z), int(s.z))
+	if x0 >= x1 || z0 >= z1 {return}
 	row_bits := m.stride * 64
-	for cursor^ < row_bits * int(s.y) * int(s.z) {
+	for {
 		row, i := cursor^ / row_bits, cursor^ % row_bits
-		if i >= int(s.x) {
+		y, z := row / int(s.z), row % int(s.z)
+		switch {
+		case y < y0 || (y < y1 && z < z0):
+			cursor^ = (max(y, y0) * int(s.z) + z0) * row_bits + x0
+			continue
+		case y >= y1:
+			return
+		case z >= z1:
+			cursor^ = ((y + 1) * int(s.z) + z0) * row_bits + x0
+			continue
+		case i < x0:
+			cursor^ = row * row_bits + x0
+			continue
+		case i >= x1:
 			cursor^ = (row + 1) * row_bits
 			continue
 		}
@@ -124,8 +153,12 @@ runs_next :: proc(m: Mask, cursor: ^int) -> (lo: Cell, length: i32, ok: bool) {
 			continue
 		}
 		start := i + int(bits.count_trailing_zeros(w))
+		if start >= x1 {
+			cursor^ = (row + 1) * row_bits
+			continue
+		}
 		end := start
-		for end < int(s.x) {
+		for end < x1 {
 			rest := 64 - end & 63 // (the bits of this word from end on)
 			ones := int(
 				bits.count_trailing_zeros(~(m.words[row * m.stride + end >> 6] >> uint(end & 63))),
@@ -133,12 +166,10 @@ runs_next :: proc(m: Mask, cursor: ^int) -> (lo: Cell, length: i32, ok: bool) {
 			end += min(ones, rest)
 			if ones < rest {break}
 		}
-		end = min(end, int(s.x))
+		end = min(end, x1)
 		cursor^ = row * row_bits + end
-		y, z := i32(row / int(s.z)), i32(row % int(s.z))
-		return m.bounds.lo + {i32(start), y, z}, i32(end - start), true
+		return m.bounds.lo + {i32(start), i32(y), i32(z)}, i32(end - start), true
 	}
-	return
 }
 
 @(private)

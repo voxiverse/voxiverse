@@ -187,6 +187,33 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 			for k in 0 ..< length {ref_set(&runs, lo + {k, 0, 0})}
 		}
 		testing.expect(t, same(a, runs))
+		// Within a box: the set's cells in it, each run a maximal span of them, in order.
+		sub := random_bounds(&rng)
+		inside := ref_make(sub)
+		defer ref_destroy(&inside)
+		in_sub :: proc(a: Mask, sub: Bounds, c: Cell) -> bool {
+			return bounds_has(sub, c) && mask_get(a, c)
+		}
+		cursor = 0
+		last := [3]i32{min(i32), 0, 0} // (y, z, x of the last run)
+		for lo, length in runs_next(a, &cursor, sub) {
+			testing.expect(
+				t,
+				!in_sub(a, sub, lo - {1, 0, 0}) && !in_sub(a, sub, lo + {length, 0, 0}),
+			)
+			at := [3]i32{lo.y, lo.z, lo.x}
+			testing.expect(
+				t,
+				at.x > last.x ||
+				(at.x == last.x && (at.y > last.y || (at.y == last.y && at.z > last.z))),
+			)
+			last = at
+			for k in 0 ..< length {
+				testing.expect(t, in_sub(a, sub, lo + {k, 0, 0}))
+				ref_set(&inside, lo + {k, 0, 0})
+			}
+		}
+		for c in ref_cells(sub) {testing.expect(t, ref_get(inside, c) == mask_get(a, c))}
 	}
 }
 
