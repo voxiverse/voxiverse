@@ -73,7 +73,7 @@ splash_reveal :: proc(
 // splashes_parse: the entries of a splashes file (slices of text), skipping
 // comment lines and section headers ([<holiday>] starts a holiday's texts).
 splashes_parse :: proc(text: string, allocator := context.temp_allocator) -> []string {
-	parsed := splashes_parse_file(text, allocator)
+	parsed := splashes_parse_file(text, nil, allocator)
 	return parsed.all
 }
 
@@ -110,7 +110,7 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	title_text := engine.tr(.Title_Voxiverse)
 	ui.title(ctx, title_text, logo)
 	if app.splash == "" {
-		parsed := splashes_parse_file(SPLASHES)
+		parsed := splashes_parse_file(SPLASHES, app.games)
 		y, m, d := 1970, 1, 1
 		if o, ok := app.title_date_override.?;
 		   ok {y, m, d = o[0], o[1], o[2]} else if ly, lm, ld, ok2 := engine.local_date_of(engine.app_wall(app)); ok2 {y, m, d = ly, lm, ld}

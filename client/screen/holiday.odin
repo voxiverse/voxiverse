@@ -13,12 +13,13 @@ import "client:ui"
 // the console's `title_date`.
 
 // Splashes: the splashes file, read. Its sections: [game <id>], a game's lines, which
-// join the everyday pool; [<holiday>], that holiday's one line. Any other section is an
+// join the everyday pool while this build has the game (a shelved game's do not:
+// docs/games.md); [<holiday>], that holiday's one line. Any other section is an
 // authoring mistake, its lines skipped (a [game] section naming no game in games/ is
 // `check`'s to refuse).
 Splashes :: struct {
 	all:      []string, // every line in file order
-	everyday: []string, // the lines outside the holidays: the everyday ones and every game's
+	everyday: []string, // the lines outside the holidays: the everyday ones and each built game's
 	holidays: [engine.Holiday][]string, // each holiday's lines (one, as the file must have it)
 	games:    []string, // the ids the [game <id>] sections name, in file order
 }
@@ -30,8 +31,13 @@ holiday_from_section :: proc(s: string) -> (holiday: engine.Holiday, ok: bool) {
 	return .None, false
 }
 
-// splashes_parse_file: the splashes file as a struct (Splashes).
-splashes_parse_file :: proc(text: string, allocator := context.temp_allocator) -> Splashes {
+// splashes_parse_file: the splashes file as a struct (Splashes), for a build with these
+// games.
+splashes_parse_file :: proc(
+	text: string,
+	games_built: []engine.Game,
+	allocator := context.temp_allocator,
+) -> Splashes {
 	all := make([dynamic]string, allocator)
 	everyday := make([dynamic]string, allocator)
 	games := make([dynamic]string, allocator)
@@ -39,15 +45,18 @@ splashes_parse_file :: proc(text: string, allocator := context.temp_allocator) -
 	for h in engine.Holiday {holidays[h] = make([dynamic]string, allocator)}
 	current := engine.Holiday.None
 	skipping := false
+	pooled := true // (false in the section of a game this build lacks)
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
 		l := strings.trim_space(line)
 		if l == "" || strings.has_prefix(l, "#") {continue}
 		if strings.has_prefix(l, "[") && strings.has_suffix(l, "]") {
 			section := strings.trim_space(l[1:len(l) - 1])
-			current, skipping = .None, false
+			current, skipping, pooled = .None, false, true
 			if strings.has_prefix(section, "game ") {
-				append(&games, strings.trim_space(section[len("game "):]))
+				id := strings.trim_space(section[len("game "):])
+				append(&games, id)
+				_, pooled = engine.game_find(games_built, id)
 			} else if h, ok := holiday_from_section(section); ok {
 				current = h
 			} else {
@@ -57,7 +66,7 @@ splashes_parse_file :: proc(text: string, allocator := context.temp_allocator) -
 		}
 		if skipping {continue}
 		append(&all, l)
-		if current != .None {append(&holidays[current], l)} else {append(&everyday, l)}
+		if current != .None {append(&holidays[current], l)} else if pooled {append(&everyday, l)}
 	}
 	out := Splashes {
 		all      = all[:],

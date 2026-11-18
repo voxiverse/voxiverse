@@ -7,6 +7,7 @@ import "core:testing"
 import "client:engine"
 import "client:screen"
 import "client:ui"
+import games_client "generated:games/client"
 
 Holiday_Date :: struct {
 	y, m, d: int,
@@ -66,29 +67,30 @@ test_holiday_windows :: proc(t: ^testing.T) {
 	check(t, 2027, 3, 30, .None)
 }
 
-// The file's sections: a game's lines join the everyday ones, a holiday's are its own, an
-// unknown section's are skipped. The shipped file gives each holiday exactly one line
+// The file's sections: a game's lines join the everyday ones while the build has the game
+// (a shelved game's do not), a holiday's are its own, an unknown section's are skipped. The shipped file gives each holiday exactly one line
 // (the greeting is written there and nowhere else) and has everyday lines.
 @(test)
 test_splashes_parse_sections :: proc(t: ^testing.T) {
 	text :=
 		"# everyday first\n" +
 		"Day one\nDay two\n\n" +
-		"[game flood]\nWet\n\n" +
+		"[game sandbox]\nWoolly\n\n" +
+		"[game nonesuch]\nGone\n\n" +
 		"[christmas]\n" +
 		"Merry Christmas!\n\n" +
 		"[not_a_holiday]\n" +
 		"Skipped text\n\n" +
 		"[Halloween]\n" +
 		"Happy Halloween!\n"
-	got := screen.splashes_parse_file(text)
-	testing.expect_value(t, len(got.all), 5)
+	got := screen.splashes_parse_file(text, games_client.CLIENT)
+	testing.expect_value(t, len(got.all), 6)
 	testing.expect_value(
 		t,
 		fmt.tprint(got.everyday),
-		fmt.tprint([]string{"Day one", "Day two", "Wet"}),
+		fmt.tprint([]string{"Day one", "Day two", "Woolly"}),
 	)
-	testing.expect_value(t, fmt.tprint(got.games), fmt.tprint([]string{"flood"}))
+	testing.expect_value(t, fmt.tprint(got.games), fmt.tprint([]string{"sandbox", "nonesuch"}))
 	testing.expect_value(
 		t,
 		fmt.tprint(got.holidays[.Christmas]),
@@ -105,7 +107,7 @@ test_splashes_parse_sections :: proc(t: ^testing.T) {
 		"an unknown section's line was kept",
 	)
 
-	shipped := screen.splashes_parse_file(screen.SPLASHES)
+	shipped := screen.splashes_parse_file(screen.SPLASHES, games_client.CLIENT)
 	testing.expect(t, len(shipped.everyday) >= 12)
 	testing.expect(t, len(shipped.games) >= 1, "no game's lines")
 	for h in engine.Holiday {
@@ -124,7 +126,7 @@ test_splashes_parse_sections :: proc(t: ^testing.T) {
 // day an everyday line (a game's among them), picked by the second.
 @(test)
 test_splash_for :: proc(t: ^testing.T) {
-	parsed := screen.splashes_parse_file(screen.SPLASHES)
+	parsed := screen.splashes_parse_file(screen.SPLASHES, games_client.CLIENT)
 	days := []Holiday_Date {
 		{2026, 12, 31, .New_Year},
 		{2027, 1, 1, .New_Year},
