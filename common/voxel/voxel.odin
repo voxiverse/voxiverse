@@ -19,8 +19,9 @@
 //
 // Everything is integer arithmetic: the same inputs give the same bits on every machine
 // (docs/determinism.md), so the server may run it in its tick. An operation whose cost
-// depends on the cells (rather than on the sizes it is given) takes a budget of cells
-// and says when it ran out, leaving what it promised.
+// depends on the cells (rather than on the sizes it is given) takes a budget of cells,
+// takes what it spends from it (so that several share one) and says when it ran out,
+// leaving what it promised.
 package voxel
 
 // Cell: a cell of the grid (a block's position, an offset).

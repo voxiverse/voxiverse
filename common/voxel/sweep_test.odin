@@ -98,7 +98,7 @@ test_a_sweep_touches_what_the_definition_touches :: proc(t: ^testing.T) {
 			if axis >= 0 {first.normal[axis] = -1 if delta[axis] > 0 else 1}
 		}
 		any := first_axis < 3
-		hit, found, exhausted := sweep(m, from, size, delta, max(int))
+		hit, found, exhausted := sweep(m, from, size, delta, no_limit())
 		testing.expect(t, !exhausted)
 		testing.expect_value(t, found, any)
 		if found &&
@@ -117,7 +117,8 @@ test_a_sweep_touches_what_the_definition_touches :: proc(t: ^testing.T) {
 		testing.expect(t, same(mirrored, ref_of_tmp(turned)))
 		// Spent: nothing found, and said so.
 		if found {
-			_, found_spent, spent := sweep(m, from, size, delta, 0)
+			none := 0
+			_, found_spent, spent := sweep(m, from, size, delta, &none)
 			testing.expect(t, spent && !found_spent)
 		}
 	}

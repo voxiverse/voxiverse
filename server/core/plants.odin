@@ -91,11 +91,17 @@ supports_settle :: proc(w: ^World, checked: voxel.Mask, action: Action_Id) {
 		grew := false
 		for step, i in SUPPORT_STEPS {
 			if on[i].words == nil {continue}
-			before := voxel.mask_count(held)
 			voxel.mask_copy(&domain, held)
 			voxel.unite(&domain, on[i])
-			voxel.fill(&held, domain, step_element(step), SUPPORT_BUDGET, context.temp_allocator)
-			if voxel.mask_count(held) > before {grew = true}
+			budget := SUPPORT_BUDGET
+			added, _ := voxel.fill(
+				&held,
+				domain,
+				step_element(step),
+				&budget,
+				context.temp_allocator,
+			)
+			if added > 0 {grew = true}
 		}
 		if !grew {break}
 	}
@@ -107,7 +113,8 @@ supports_settle :: proc(w: ^World, checked: voxel.Mask, action: Action_Id) {
 	beside := voxel.neighbours(1, voxel.CUBE, context.temp_allocator)
 	may := voxel.mask_make(region, context.temp_allocator)
 	voxel.mask_copy(&may, failing)
-	voxel.fill(&may, lost, beside, SUPPORT_BUDGET, context.temp_allocator)
+	budget := SUPPORT_BUDGET
+	voxel.fill(&may, lost, beside, &budget, context.temp_allocator)
 
 	// What goes, lowest first, again until a pass takes nothing: a block that fails once
 	// what it stood on has gone, checked or beside one that went.

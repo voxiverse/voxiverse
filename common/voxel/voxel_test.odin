@@ -50,14 +50,14 @@ test_results_are_the_same_bits_everywhere :: proc(t: ^testing.T) {
 		hash_mask(&h, d)
 		seed := random_mask(&rng, b, 1)
 		defer mask_destroy(&seed)
-		fill(&seed, m, n6, max(int))
+		fill(&seed, m, n6, no_limit())
 		hash_mask(&h, seed)
 		f := field_make(b)
 		defer field_destroy(&f)
-		count, _ := components(&f, m, n26, max(int))
+		count, _ := components(&f, m, n26, no_limit())
 		hash_u64(&h, u64(count))
 		hash_field(&h, f)
-		distance(&f, seed, m, n26, 50, max(int))
+		distance(&f, seed, m, n26, 50, no_limit())
 		hash_field(&h, f)
 		shapes := mask_make(b)
 		defer mask_destroy(&shapes)
@@ -70,7 +70,13 @@ test_results_are_the_same_bits_everywhere :: proc(t: ^testing.T) {
 		defer mask_destroy(&turned)
 		turn(&turned, m, TURN_X * TURN_Y)
 		hash_mask(&h, turned)
-		hit, found, _ := sweep(m, {-10000, 500, 700}, {128, 0, 64}, {30000, -900, 1300}, max(int))
+		hit, found, _ := sweep(
+			m,
+			{-10000, 500, 700},
+			{128, 0, 64},
+			{30000, -900, 1300},
+			no_limit(),
+		)
 		hash_u64(&h, u64(found))
 		for v in ([5]i64{i64(hit.cell.x), i64(hit.cell.y), i64(hit.cell.z), i64(hit.normal.x), hit.t}) {
 			hash_u64(&h, u64(v))
@@ -111,13 +117,13 @@ test_least_cost_is_the_same_bits_everywhere :: proc(t: ^testing.T) {
 		seeds := field_make(b)
 		defer field_destroy(&seeds)
 		copy(seeds.values, f.values)
-		least_cost(&f, m, octile, 900, max(int))
+		least_cost(&f, m, octile, 900, no_limit())
 		hash_field(&h, f)
 		goal := Cell{80, 8, 10}
 		stop := mask_make({goal, goal + 1})
 		defer mask_destroy(&stop)
 		mask_set(&stop, goal)
-		least_cost(&seeds, m, octile, max(int), max(int), stop)
+		least_cost(&seeds, m, octile, max(int), no_limit(), stop)
 		hash_field(&h, seeds)
 		at := goal
 		for next in descend(seeds, at, octile) {at = next}

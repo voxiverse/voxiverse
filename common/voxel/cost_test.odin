@@ -100,7 +100,7 @@ test_least_cost_is_dijkstra :: proc(t: ^testing.T) {
 		f := field_make(b)
 		defer field_destroy(&f)
 		copy(f.values, seeds.values)
-		testing.expect(t, !least_cost(&f, domain, moves, int(limit), max(int)))
+		testing.expect(t, !least_cost(&f, domain, moves, int(limit), no_limit()))
 		for v, i in f.values {
 			if v != want[i] {
 				testing.expectf(
@@ -133,7 +133,7 @@ test_a_least_cost_field_is_consistent_and_descends_to_a_seed :: proc(t: ^testing
 		f := field_make(b)
 		defer field_destroy(&f)
 		copy(f.values, seeds.values)
-		least_cost(&f, domain, moves, max(int), max(int))
+		least_cost(&f, domain, moves, max(int), no_limit())
 		for c in ref_cells(b) {
 			v := field_get(f, c)
 			if v == UNREACHED {continue}
@@ -185,7 +185,7 @@ test_unit_moves_and_zero_seeds_are_breadth_first_distance :: proc(t: ^testing.T)
 		f := field_make(b)
 		defer field_destroy(&f)
 		for c in ref_cells(b) {if mask_get(sources, c) {f.values[field_index(f, c)] = 0}}
-		least_cost(&f, domain, moves_of(e, 1, context.temp_allocator), max(int), max(int))
+		least_cost(&f, domain, moves_of(e, 1, context.temp_allocator), max(int), no_limit())
 		rs, rd := ref_of(sources), ref_of(domain)
 		defer ref_destroy(&rs)
 		defer ref_destroy(&rd)
@@ -193,7 +193,7 @@ test_unit_moves_and_zero_seeds_are_breadth_first_distance :: proc(t: ^testing.T)
 		defer delete(want)
 		d := field_make(b)
 		defer field_destroy(&d)
-		distance(&d, sources, domain, e, max(int), max(int))
+		distance(&d, sources, domain, e, max(int), no_limit())
 		for v, i in f.values {
 			testing.expect(t, v == want[i] && d.values[i] == v)
 		}
@@ -215,7 +215,7 @@ test_a_stopped_or_spent_spread_is_the_whole_cut_short :: proc(t: ^testing.T) {
 		whole := field_make(b)
 		defer field_destroy(&whole)
 		copy(whole.values, seeds.values)
-		least_cost(&whole, domain, moves, max(int), max(int))
+		least_cost(&whole, domain, moves, max(int), no_limit())
 		// cut_below: part is whole without the cells that cost more than its dearest.
 		cut_below :: proc(part, whole: Field) -> bool {
 			dearest := i32(-1)
@@ -235,7 +235,7 @@ test_a_stopped_or_spent_spread_is_the_whole_cut_short :: proc(t: ^testing.T) {
 		part := field_make(b)
 		defer field_destroy(&part)
 		copy(part.values, seeds.values)
-		testing.expect(t, !least_cost(&part, domain, moves, max(int), max(int), stop))
+		testing.expect(t, !least_cost(&part, domain, moves, max(int), no_limit(), stop))
 		g := field_get(whole, goal)
 		testing.expectf(t, field_get(part, goal) == g, "round %d: goal %v", round, goal)
 		if g != UNREACHED {
@@ -244,8 +244,10 @@ test_a_stopped_or_spent_spread_is_the_whole_cut_short :: proc(t: ^testing.T) {
 		testing.expect(t, cut_below(part, whole))
 		// Spent: the whole cut short, and said so.
 		copy(part.values, seeds.values)
-		budget := base.rng_int_max(&rng, 400)
-		spent := least_cost(&part, domain, moves, max(int), budget)
+		given := base.rng_int_max(&rng, 400)
+		budget := given
+		spent := least_cost(&part, domain, moves, max(int), &budget)
+		testing.expect(t, budget >= 0 && (given - budget) % int(bounds_size(b).x) == 0)
 		testing.expect(t, cut_below(part, whole))
 		if !spent {
 			for v, i in part.values {testing.expect(t, v == whole.values[i])}

@@ -22,27 +22,27 @@ Hit :: struct {
 // sweep: the first cell of m the box from + [0, size] touches moving by delta, at the
 // earliest instant; among cells touched first at the same instant, the one met across the
 // lowest axis (x, y, z; cells touched from the start before all), then the lowest by y,
-// z and x. The budget counts the instants and cells looked at. Each of size and delta is
-// at most MAX_EXTENT cells on each axis.
+// z and x. The budget counts the instants and cells looked at, taken from what the caller
+// gives. Each of size and delta is at most MAX_EXTENT cells on each axis.
 sweep :: proc(
 	m: Mask,
 	from, size, delta: [3]i64,
-	budget: int,
+	budget: ^int,
 ) -> (
 	hit: Hit,
 	found: bool,
 	exhausted: bool,
 ) {
 	w := walk_make(from, size, delta)
-	left := budget
-	if c, touched, spent := look(m, {w.lo, w.hi + 1}, &left); touched || spent {
+	if c, touched, spent := look(m, {w.lo, w.hi + 1}, budget); touched || spent {
 		return {cell = c}, touched, spent
 	}
 	for !walk_past(w, m.bounds) && walk_next(&w) {
-		left -= 1
+		if budget^ <= 0 {return {}, false, true}
+		budget^ -= 1
 		slabs, axes, n := walk_slabs(w)
 		for slab, i in slabs[:n] {
-			c, touched, spent := look(m, slab, &left)
+			c, touched, spent := look(m, slab, budget)
 			if spent {return {}, false, true}
 			if !touched {continue}
 			hit = {
@@ -52,7 +52,6 @@ sweep :: proc(
 			hit.normal[axes[i]] = -1 if w.d[axes[i]] > 0 else 1
 			return hit, true, false
 		}
-		if left < 0 {return {}, false, true}
 	}
 	return
 }
@@ -76,8 +75,8 @@ look :: proc(m: Mask, b: Bounds, left: ^int) -> (c: Cell, touched: bool, spent: 
 	for y in lo.y ..< hi.y {
 		for z in lo.z ..< hi.z {
 			for x in lo.x ..< hi.x {
+				if left^ <= 0 {return {}, false, true}
 				left^ -= 1
-				if left^ < 0 {return {}, false, true}
 				if mask_get(m, {x, y, z}) {return {x, y, z}, true, false}
 			}
 		}

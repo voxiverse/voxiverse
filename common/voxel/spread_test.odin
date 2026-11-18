@@ -64,7 +64,12 @@ test_a_fill_is_the_least_closed_set_holding_the_seed :: proc(t: ^testing.T) {
 		reached := mask_make(b)
 		defer mask_destroy(&reached)
 		mask_copy(&reached, seed)
-		testing.expect(t, !fill(&reached, domain, e, max(int)))
+		intersect(&reached, domain)
+		start := mask_count(reached)
+		added, ran_out := fill(&reached, domain, e, no_limit())
+		testing.expect(t, !ran_out)
+		// It says how many cells joined.
+		testing.expect_value(t, added, mask_count(reached) - start)
 		// It equals the reference: the cells at a finite distance from the seed.
 		rs, rd := ref_of(seed), ref_of(domain)
 		defer ref_destroy(&rs)
@@ -89,19 +94,30 @@ test_a_fill_is_the_least_closed_set_holding_the_seed :: proc(t: ^testing.T) {
 			}
 		}
 		// Spent budgets: a part of it, holding the seed, said so; the domain is untouched.
+		// What it spent is taken from the budget, whole rows of the bounds at a time, and
+		// never more than there was.
 		before := ref_of(domain)
 		defer ref_destroy(&before)
-		for budget in ([]int{0, 7, 150, 600}) {
+		for given in ([]int{0, 7, 150, 600}) {
 			part := mask_make(b)
 			defer mask_destroy(&part)
 			mask_copy(&part, seed)
-			exhausted := fill(&part, domain, e, budget)
+			budget := given
+			_, exhausted := fill(&part, domain, e, &budget)
+			testing.expect(t, budget >= 0 && budget <= given)
+			testing.expect(t, (given - budget) % int(bounds_size(b).x) == 0)
 			for c in ref_cells(b) {
 				if mask_get(part, c) {testing.expect(t, mask_get(reached, c))}
 				if mask_get(seed, c) && mask_get(domain, c) {testing.expect(t, mask_get(part, c))}
 			}
 			if !exhausted {testing.expect(t, same(part, ref_of_tmp(reached)))}
-			if budget == 0 && mask_count(part) > 0 {testing.expect(t, exhausted)}
+			if given == 0 && mask_count(part) > 0 {testing.expect(t, exhausted)}
+			// Going on from where it stopped, with more budget, ends at the whole and adds nothing more after.
+			more := max(int)
+			fill(&part, domain, e, &more)
+			testing.expect(t, same(part, ref_of_tmp(reached)))
+			again, _ := fill(&part, domain, e, &more)
+			testing.expect_value(t, again, 0)
 		}
 		testing.expect(t, same(domain, before))
 	}
@@ -120,7 +136,7 @@ test_components_partition_the_set :: proc(t: ^testing.T) {
 		e := elements[round % 4] // (the symmetric ones)
 		labels := field_make(b)
 		defer field_destroy(&labels)
-		count, exhausted := components(&labels, m, e, max(int))
+		count, exhausted := components(&labels, m, e, no_limit())
 		testing.expect(t, !exhausted)
 		// The reference: label each unlabelled cell's part in order, by relaxation.
 		rm := ref_of(m)
@@ -148,7 +164,8 @@ test_components_partition_the_set :: proc(t: ^testing.T) {
 		// Spent: the parts numbered are whole, every other cell is 0.
 		part := field_make(b)
 		defer field_destroy(&part)
-		done, spent := components(&part, m, e, base.rng_int_max(&rng, 400))
+		budget := base.rng_int_max(&rng, 400)
+		done, spent := components(&part, m, e, &budget)
 		if spent {
 			for c in ref_cells(b) {
 				got := field_get(part, c)
@@ -175,7 +192,7 @@ test_a_distance_field_steps_by_one_and_is_zero_on_the_sources :: proc(t: ^testin
 		limit := base.rng_int_range(&rng, 1, 40)
 		f := field_make(b)
 		defer field_destroy(&f)
-		testing.expect(t, !distance(&f, sources, domain, e, limit, max(int)))
+		testing.expect(t, !distance(&f, sources, domain, e, limit, no_limit()))
 		rs, rd := ref_of(sources), ref_of(domain)
 		defer ref_destroy(&rs)
 		defer ref_destroy(&rd)
@@ -211,7 +228,7 @@ test_a_distance_field_steps_by_one_and_is_zero_on_the_sources :: proc(t: ^testin
 			one := mask_make({from, from + 1})
 			defer mask_destroy(&one)
 			mask_set(&one, from)
-			distance(&back, one, domain, e, max(int), max(int))
+			distance(&back, one, domain, e, max(int), no_limit())
 			targets := mask_make(b)
 			defer mask_destroy(&targets)
 			unite(&targets, sources)
@@ -222,7 +239,7 @@ test_a_distance_field_steps_by_one_and_is_zero_on_the_sources :: proc(t: ^testin
 				   v != UNREACHED &&
 				   (best_d < 0 || v < best_d) {best, best_d = c, v}
 			}
-			c, steps, found, _ := nearest(targets, from, domain, e, max(int), max(int))
+			c, steps, found, _ := nearest(targets, from, domain, e, max(int), no_limit())
 			testing.expect_value(t, found, best_d >= 0)
 			if found {
 				testing.expect_value(t, c, best)
@@ -232,7 +249,8 @@ test_a_distance_field_steps_by_one_and_is_zero_on_the_sources :: proc(t: ^testin
 		// Spent: the cells within the last whole step have their distances, no other has one.
 		part := field_make(b)
 		defer field_destroy(&part)
-		if distance(&part, sources, domain, e, limit, base.rng_int_max(&rng, 300)) {
+		budget := base.rng_int_max(&rng, 300)
+		if distance(&part, sources, domain, e, limit, &budget) {
 			reached := i32(-1)
 			for v in part.values {reached = max(reached, v)}
 			for c in ref_cells(b) {

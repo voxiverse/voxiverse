@@ -62,14 +62,15 @@ moves_of :: proc(element: Mask, cost: i32 = 1, allocator := context.allocator) -
 // its cost: out is then the full result cut to that cost (each cell costing at most that
 // has its cost, every other cell is UNREACHED). A goal is a mask of one cell.
 //
-// The budget counts cells: each row taken costs its length. Exhausted: out is the full
-// result cut to the costs below that of the cheapest change still waiting.
+// The budget counts cells: each row taken costs its length, taken from what the caller
+// gives (what is left stays there). Exhausted: out is the full result cut to the costs
+// below that of the cheapest change still waiting.
 least_cost :: proc(
 	out: ^Field,
 	domain: Mask,
 	moves: []Move,
 	limit: int,
-	budget: int,
+	budget: ^int,
 	stop := Mask{},
 	allocator := context.allocator,
 ) -> (
@@ -156,17 +157,16 @@ least_cost :: proc(
 	}
 	stopping := len(stop.words) > 0
 	goal := i32(0) // the potential of the cheapest cell of stop reached
-	left := budget
 	for pq.len(r.queue) > 0 {
 		next := pq.pop(&r.queue)
 		row := int(next.row)
 		if next.potential != r.waiting[row] {continue} 	// (cheaper since)
 		if goal > 0 && next.potential < goal {break}
-		if left < sx {
+		if budget^ < sx {
 			rows_finish(out, top, next.potential)
 			return true
 		}
-		left -= sx
+		budget^ -= sx
 		r.waiting[row] = 0
 		lo, hi := int(r.lo[row]), int(r.hi[row])
 		r.lo[row], r.hi[row] = i32(sx), 0
@@ -280,7 +280,7 @@ distance :: proc(
 	domain: Mask,
 	element: Mask,
 	max_steps: int,
-	budget: int,
+	budget: ^int,
 	allocator := context.allocator,
 ) -> (
 	exhausted: bool,
@@ -305,7 +305,7 @@ nearest :: proc(
 	domain: Mask,
 	element: Mask,
 	max_steps: int,
-	budget: int,
+	budget: ^int,
 	allocator := context.allocator,
 ) -> (
 	c: Cell,

@@ -59,6 +59,11 @@ same :: proc(m: Mask, r: Ref) -> bool {
 	return true
 }
 
+// no_limit: a budget that does not run out (in the temp allocator).
+no_limit :: proc() -> ^int {
+	return new_clone(max(int), context.temp_allocator)
+}
+
 // random_bounds: a box of up to 150 cells along x (rows of up to three words) and a few
 // along y and z, near the origin.
 random_bounds :: proc(rng: ^base.Rng, wide := 150) -> Bounds {

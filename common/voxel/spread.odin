@@ -10,20 +10,22 @@ import "core:math/bits"
 //
 // The work is a row at a time: a row that grew is queued, and taking it spreads it along
 // x within the row and then to the rows its offsets reach. The budget counts cells: each
-// row taken costs its length.
+// row taken costs its length, taken from the budget the caller gives (what is left stays
+// there, for the next spread to share).
 
 // fill: reached (the seed) becomes the cells of domain the seed reaches: the least set
 // that holds the seed's cells in domain and every cell of domain one offset of element
-// from a cell it holds. reached and domain share their bounds. Exhausted (the budget
-// spent first): reached holds part of that set, the seed's cells among it, and nothing
-// outside it.
+// from a cell it holds; added is how many cells joined (0: nothing changed). reached and
+// domain share their bounds. Exhausted (the budget spent first): reached holds part of
+// that set, the seed's cells among it, and nothing outside it.
 fill :: proc(
 	reached: ^Mask,
 	domain: Mask,
 	element: Mask,
-	budget: int,
+	budget: ^int,
 	allocator := context.allocator,
 ) -> (
+	added: int,
 	exhausted: bool,
 ) {
 	assert(reached.bounds == domain.bounds, "voxel: fill of masks with different bounds")
@@ -33,8 +35,9 @@ fill :: proc(
 	for row in 0 ..< rows_of(domain) {
 		for w in row_words(reached^, row) {if w != 0 {spread_push(&s, row); break}}
 	}
-	left := budget
-	return !spread_close(reached, domain, &s, &left)
+	done: bool
+	added, done = spread_close(reached, domain, &s, budget)
+	return added, !done
 }
 
 // components: labels gets each cell of m the number of its connected part, 1, 2 ... in the
@@ -47,7 +50,7 @@ components :: proc(
 	labels: ^Field,
 	m: Mask,
 	element: Mask,
-	budget: int,
+	budget: ^int,
 	allocator := context.allocator,
 ) -> (
 	count: int,
@@ -65,14 +68,13 @@ components :: proc(
 	mask_copy(&remaining, m)
 	reached := mask_make(m.bounds, allocator)
 	defer mask_destroy(&reached, allocator)
-	left := budget
 	for row in 0 ..< rows_of(m) {
 		for i in 0 ..< m.stride {
 			for remaining.words[row * m.stride + i] != 0 {
 				w := remaining.words[row * m.stride + i]
 				reached.words[row * m.stride + i] = w & (~w + 1) // (the part's first cell)
 				spread_push(&s, row)
-				if !spread_close(&reached, remaining, &s, &left) {
+				if _, done := spread_close(&reached, remaining, &s, budget); !done {
 					return count, true
 				}
 				count += 1
@@ -155,52 +157,64 @@ spread_push :: proc(s: ^Spread, row: int) {
 	}
 }
 
-// spread_close: takes queued rows until none is left (true) or the budget is spent (false),
-// spreading reached through domain.
+// spread_close: takes queued rows until none is left (done) or the budget is spent,
+// spreading reached through domain; added is how many cells joined.
 @(private)
-spread_close :: proc(reached: ^Mask, domain: Mask, s: ^Spread, left: ^int) -> bool {
+spread_close :: proc(
+	reached: ^Mask,
+	domain: Mask,
+	s: ^Spread,
+	left: ^int,
+) -> (
+	added: int,
+	done: bool,
+) {
 	sz := int(domain.bounds.hi.z - domain.bounds.lo.z)
 	cost := max(int(domain.bounds.hi.x - domain.bounds.lo.x), 1)
 	buf: [MAX_STRIDE]u64
 	moved := buf[:domain.stride]
 	for s.waiting > 0 {
-		if left^ < cost {return false}
+		if left^ < cost {return}
 		left^ -= cost
 		row := int(s.queue[s.head])
 		s.head = (s.head + 1) % len(s.queue)
 		s.waiting -= 1
 		flag_off(s.queued, row)
 		words := row_words(reached^, row)
-		spread_row(words, row_words(domain, row), s)
+		added += spread_row(words, row_words(domain, row), s)
 		y, z := domain.bounds.lo.y + i32(row / sz), domain.bounds.lo.z + i32(row % sz)
 		for o in s.offsets {
 			if o.y == 0 && o.z == 0 {continue}
 			t := row_at(domain, y + o.y, z + o.z) or_continue
 			bits_at(words, -int(o.x), moved)
-			if grow(row_words(reached^, t), row_words(domain, t), moved) {spread_push(s, t)}
+			if n := grow(row_words(reached^, t), row_words(domain, t), moved); n > 0 {
+				added += n
+				spread_push(s, t)
+			}
 		}
 	}
-	return true
+	return added, true
 }
 
 // spread_row: words (a row of the spread) becomes what it reaches within its row through
-// dom by the element's moves along x.
+// dom by the element's moves along x; added is how many cells joined.
 @(private)
-spread_row :: proc(words, dom: []u64, s: ^Spread) {
+spread_row :: proc(words, dom: []u64, s: ^Spread) -> (added: int) {
 	buf: [MAX_STRIDE]u64
 	moved := buf[:len(words)]
 	for {
-		changed := false
-		if s.up && spread_up(words, dom) {changed = true}
-		if s.down && spread_down(words, dom) {changed = true}
+		n := 0
+		if s.up {n += spread_up(words, dom)}
+		if s.down {n += spread_down(words, dom)}
 		along := false
 		for o in s.offsets {
 			if o.y != 0 || o.z != 0 || abs(o.x) == 1 {continue}
 			along = true
 			bits_at(words, -int(o.x), moved)
-			if grow(words, dom, moved) {changed = true}
+			n += grow(words, dom, moved)
 		}
-		if !along || !changed {return}
+		added += n
+		if !along || n == 0 {return}
 	}
 }
 
@@ -208,7 +222,7 @@ spread_row :: proc(words, dom: []u64, s: ^Spread) {
 // higher x: a word at a time, the carry crossing from word to word, and within a word by
 // doubling (the bits reached 1, 2, 4 ... 32 cells on).
 @(private)
-spread_up :: proc(words, dom: []u64) -> (changed: bool) {
+spread_up :: proc(words, dom: []u64) -> (added: int) {
 	carry := u64(0)
 	for i in 0 ..< len(words) {
 		p := dom[i]
@@ -224,7 +238,7 @@ spread_up :: proc(words, dom: []u64) -> (changed: bool) {
 		g |= q & (g << 16)
 		q &= q << 16
 		g |= q & (g << 32)
-		if g != words[i] {changed = true}
+		added += int(bits.count_ones(g &~ words[i]))
 		words[i] = g
 		carry = g >> 63
 	}
@@ -233,7 +247,7 @@ spread_up :: proc(words, dom: []u64) -> (changed: bool) {
 
 // spread_down: spread_up toward lower x.
 @(private)
-spread_down :: proc(words, dom: []u64) -> (changed: bool) {
+spread_down :: proc(words, dom: []u64) -> (added: int) {
 	carry := u64(0)
 	for i := len(words) - 1; i >= 0; i -= 1 {
 		p := dom[i]
@@ -249,21 +263,21 @@ spread_down :: proc(words, dom: []u64) -> (changed: bool) {
 		g |= q & (g >> 16)
 		q &= q >> 16
 		g |= q & (g >> 32)
-		if g != words[i] {changed = true}
+		added += int(bits.count_ones(g &~ words[i]))
 		words[i] = g
 		carry = g << 63
 	}
 	return
 }
 
-// grow: words gains the bits of moved that dom allows; whether it gained any.
+// grow: words gains the bits of moved that dom allows; how many it gained.
 @(private)
-grow :: #force_inline proc(words, dom, moved: []u64) -> (grew: bool) {
+grow :: #force_inline proc(words, dom, moved: []u64) -> (added: int) {
 	for &w, i in words {
 		n := moved[i] & dom[i] &~ w
 		if n != 0 {
 			w |= n
-			grew = true
+			added += int(bits.count_ones(n))
 		}
 	}
 	return
