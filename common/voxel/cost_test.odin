@@ -10,9 +10,8 @@ ref_least_cost :: proc(seeds: []i32, domain: Ref, moves: []Move, limit: i32) -> 
 	d := make([]i32, len(domain.cells))
 	settled := make([]bool, len(domain.cells), context.temp_allocator)
 	cells := ref_cells(domain.bounds)
-	for c, i in cells {
-		ok := seeds[i] != UNREACHED && seeds[i] <= limit && ref_get(domain, c)
-		d[i] = seeds[i] if ok else UNREACHED
+	for v, i in seeds {
+		d[i] = v if v != UNREACHED && v <= limit else UNREACHED
 	}
 	for {
 		at := -1

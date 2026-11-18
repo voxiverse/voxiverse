@@ -29,7 +29,7 @@ ref_distance :: proc(sources, domain: Ref, e: Mask) -> []i32 {
 	d := make([]i32, len(domain.cells))
 	for &v in d {v = UNREACHED}
 	for c in ref_cells(domain.bounds) {
-		if ref_get(domain, c) && ref_get(sources, c) {d[ref_index(domain, c)] = 0}
+		if ref_get(sources, c) {d[ref_index(domain, c)] = 0}
 	}
 	offsets := ref_offsets(e)
 	for changed := true; changed; {
@@ -64,7 +64,6 @@ test_a_fill_is_the_least_closed_set_holding_the_seed :: proc(t: ^testing.T) {
 		reached := mask_make(b)
 		defer mask_destroy(&reached)
 		mask_copy(&reached, seed)
-		intersect(&reached, domain)
 		start := mask_count(reached)
 		added, ran_out := fill(&reached, domain, e, no_limit())
 		testing.expect(t, !ran_out)
@@ -82,13 +81,13 @@ test_a_fill_is_the_least_closed_set_holding_the_seed :: proc(t: ^testing.T) {
 				break
 			}
 		}
-		// It holds the seed's cells in the domain, lies in the domain and is closed.
+		// It holds the seed, lies in the seed and the domain and is closed.
 		for c in ref_cells(b) {
 			if !mask_get(reached, c) {
-				testing.expect(t, !(mask_get(seed, c) && mask_get(domain, c)))
+				testing.expect(t, !mask_get(seed, c))
 				continue
 			}
-			testing.expect(t, mask_get(domain, c))
+			testing.expect(t, mask_get(domain, c) || mask_get(seed, c))
 			for o in ref_offsets(e) {
 				testing.expect(t, !mask_get(domain, c + o) || mask_get(reached, c + o))
 			}
@@ -108,7 +107,7 @@ test_a_fill_is_the_least_closed_set_holding_the_seed :: proc(t: ^testing.T) {
 			testing.expect(t, (given - budget) % int(bounds_size(b).x) == 0)
 			for c in ref_cells(b) {
 				if mask_get(part, c) {testing.expect(t, mask_get(reached, c))}
-				if mask_get(seed, c) && mask_get(domain, c) {testing.expect(t, mask_get(part, c))}
+				if mask_get(seed, c) {testing.expect(t, mask_get(part, c))}
 			}
 			if !exhausted {testing.expect(t, same(part, ref_of_tmp(reached)))}
 			if given == 0 && mask_count(part) > 0 {testing.expect(t, exhausted)}
@@ -203,8 +202,8 @@ test_a_distance_field_steps_by_one_and_is_zero_on_the_sources :: proc(t: ^testin
 			if int(w) > limit {w = UNREACHED}
 			got := field_get(f, c)
 			testing.expect(t, got == w)
-			// Zero exactly on the sources in the domain, and one move adds at most one.
-			testing.expect(t, (got == 0) == (mask_get(sources, c) && mask_get(domain, c)))
+			// Zero exactly on the sources, and one move adds at most one.
+			testing.expect(t, (got == 0) == mask_get(sources, c))
 			if got == UNREACHED {continue}
 			for o in ref_offsets(e) {
 				n := field_get(f, c + o)
@@ -222,7 +221,7 @@ test_a_distance_field_steps_by_one_and_is_zero_on_the_sources :: proc(t: ^testin
 		}
 		// The nearest source from a cell, through the domain, is the lowest of the nearest.
 		from := ref_cells(b)[base.rng_int_max(&rng, bounds_volume(b))]
-		if mask_get(domain, from) {
+		{
 			back := field_make(b)
 			defer field_destroy(&back)
 			one := mask_make({from, from + 1})

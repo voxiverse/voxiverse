@@ -21,10 +21,11 @@ import "core:slice"
 // taken (in the open, under unit steps, each row is taken once).
 //
 // While it runs, a cell holds its potential, top less its cost (top one more than the
-// limit), 0 or less when it is not reached and BLOCKED outside the domain: a move is
-// then max(there, here - cost), a run of cells at a time without a branch, and a cost
-// past the limit falls out as a potential of 0 or less. Light is this form already: a
-// level is 15 less a distance.
+// limit), 0 or less when it is not reached, and SEALED plus its potential outside the
+// domain (a seed there keeps its own, every other cell 0): a move is then max(there,
+// here - cost), a run of cells at a time without a branch, a sealed cell being above
+// every potential so that no move raises it, and a cost past the limit falls out as a
+// potential of 0 or less. Light is this form already: a level is 15 less a distance.
 
 // Move: a step of a spread to the cell `offset` away, for `cost` (0 or more). With `from`,
 // the step is taken only from a cell of that mask: the move's own condition (a diagonal
@@ -54,9 +55,10 @@ moves_of :: proc(element: Mask, cost: i32 = 1, allocator := context.allocator) -
 // least_cost: out (the seeds: each source cell's start value, 0 or more, and UNREACHED on
 // every other cell) becomes each cell's least cost: the least, over the seeds and the
 // chains of moves leading from them to the cell through cells of domain, of the seed's
-// value plus the moves' costs. A seed outside domain is dropped; a cell whose least cost
-// is more than limit, or that nothing reaches, is UNREACHED. Each cost is at most
-// MAX_COST. out and domain share their bounds.
+// value plus the moves' costs. A seed need not be in domain (a lamp in a wall): it keeps
+// its value and moves start from it, for domain says only which cells a move may enter.
+// A cell whose least cost is more than limit, or that nothing reaches, is UNREACHED.
+// Each move and seed costs at most MAX_COST. out and domain share their bounds.
 //
 // stop (none by default): the spread ends once the cheapest cell of stop it can reach has
 // its cost: out is then the full result cut to that cost (each cell costing at most that
@@ -79,8 +81,8 @@ least_cost :: proc(
 	assert(out.bounds == domain.bounds, "voxel: least_cost into a field of other bounds")
 	size := bounds_size(domain.bounds)
 	sx, sz := int(size.x), int(size.z)
-	limit := i32(clamp(limit, -1, int(BLOCKED) - 2))
-	top := limit + 1 // a cell's potential is top less its cost (below BLOCKED)
+	limit := i32(clamp(limit, -1, int(SEALED) - 2))
+	top := limit + 1 // a cell's potential is top less its cost (below SEALED)
 	// The moves along the row toward higher x, toward lower x, and to other rows; how far
 	// the first two reach, and whether each is one cell (then a pass each way is enough).
 	for m in moves {
@@ -133,24 +135,24 @@ least_cost :: proc(
 	for m in sorted[:ends[1]] {if m.from != nil {slide = false}}
 	r := rows_make(rows_of(domain), sx, allocator)
 	defer rows_destroy(&r)
-	// The cells outside the domain are BLOCKED, the seeds potentials.
+	// The seeds become potentials, and the cells outside the domain are sealed.
 	for row in 0 ..< rows_of(domain) {
 		values := out.values[row * sx:][:sx]
-		dom := row_words(domain, row)
-		for w, i in dom {
-			for rest := ~w & span_bits(i, 0, sx); rest != 0; rest &= rest - 1 {
-				values[i * 64 + int(bits.count_trailing_zeros(rest))] = BLOCKED
-			}
-		}
 		lo, hi := sx, 0
 		dearest := i32(0)
 		for &v, x in values {
-			if v == UNREACHED || v == BLOCKED {continue}
+			if v == UNREACHED {continue}
 			assert(v >= 0 && v <= MAX_COST, "voxel: a seed out of range")
 			v = top - v if v <= limit else UNREACHED
 			if v > 0 {
 				lo, hi = min(lo, x), x + 1
 				dearest = max(dearest, v)
+			}
+		}
+		for w, i in row_words(domain, row) {
+			for rest := ~w & span_bits(i, 0, sx); rest != 0; rest &= rest - 1 {
+				v := &values[i * 64 + int(bits.count_trailing_zeros(rest))]
+				v^ = SEALED + max(v^, 0)
 			}
 		}
 		if lo < hi {rows_mark(&r, row, lo, hi, dearest)}
@@ -207,10 +209,9 @@ least_cost :: proc(
 		}
 		if stopping {
 			for x in lo ..< hi {
-				if values[x] > goal &&
-				   values[x] != BLOCKED &&
-				   mask_get(stop, domain.bounds.lo + {i32(x), y, z}) {
-					goal = values[x]
+				if p := own(values[x]);
+				   p > goal && mask_get(stop, domain.bounds.lo + {i32(x), y, z}) {
+					goal = p
 				}
 			}
 		}
@@ -268,8 +269,8 @@ descend :: proc(f: Field, at: Cell, moves: []Move) -> (next: Cell, ok: bool) {
 	return
 }
 
-// distance: out gets each cell of domain the fewest steps (one offset of element each,
-// through cells of domain) from a cell of sources, 0 on the sources' cells in domain, and
+// distance: out gets each cell the fewest steps (one offset of element each, into cells
+// of domain) from a cell of sources, 0 on the sources' cells (in domain or not), and
 // UNREACHED for a cell further than max_steps or out of reach: least_cost with every
 // move costing 1 and every source 0. out and domain share their bounds. Exhausted: every
 // cell within the last step completed has its distance and every other cell is
@@ -356,17 +357,24 @@ move_side :: proc(m: Move) -> int {
 	return -1
 }
 
-// BLOCKED: the potential least_cost gives a cell outside the domain while it runs: no
-// move raises it, and a move from it gives nothing.
+// SEALED: what least_cost adds to the potential of a cell outside the domain while it
+// runs (0 when it is not a seed): above every potential, so no move raises it, while a
+// move from it gives its own potential less the cost.
 @(private)
-BLOCKED :: max(i32)
+SEALED :: i32(1) << 30
 
-// cost_step: the potential a move from a cell of potential p (at from) gives: p less the
-// move's cost, or -1 from a cell not reached, outside the domain or outside the move's
-// own cells.
+// own: the potential of a cell that holds v, sealed or not.
 @(private)
-cost_step :: #force_inline proc(p: i32, m: Move, from: Cell) -> i32 {
-	if p <= 0 || p == BLOCKED || (m.from != nil && !mask_get(m.from^, from)) {return -1}
+own :: #force_inline proc(v: i32) -> i32 {
+	return v - SEALED if v >= SEALED else v
+}
+
+// cost_step: the potential a move from a cell holding v (at from) gives: its potential less
+// the move's cost, or -1 from a cell not reached or outside the move's own cells.
+@(private)
+cost_step :: #force_inline proc(v: i32, m: Move, from: Cell) -> i32 {
+	p := own(v)
+	if p <= 0 || (m.from != nil && !mask_get(m.from^, from)) {return -1}
 	return p - m.cost
 }
 
@@ -375,11 +383,11 @@ cost_step :: #force_inline proc(p: i32, m: Move, from: Cell) -> i32 {
 @(private)
 cost_slide_up :: proc(values: []i32, lo, hi: int, cost: i32) -> int {
 	hi := hi
-	carry := values[lo - 1] if lo > 0 && values[lo - 1] != BLOCKED else -1
+	carry := own(values[lo - 1]) if lo > 0 else -1
 	#no_bounds_check for x in lo ..< len(values) {
 		v := values[x]
-		if v == BLOCKED {
-			carry = -1
+		if v >= SEALED {
+			carry = v - SEALED
 		} else {
 			if carry - cost > v {
 				v = carry - cost
@@ -397,11 +405,11 @@ cost_slide_up :: proc(values: []i32, lo, hi: int, cost: i32) -> int {
 @(private)
 cost_slide_down :: proc(values: []i32, lo, hi: int, cost: i32) -> int {
 	lo := lo
-	carry := values[hi] if hi < len(values) && values[hi] != BLOCKED else -1
+	carry := own(values[hi]) if hi < len(values) else -1
 	#no_bounds_check for x := hi - 1; x >= 0; x -= 1 {
 		v := values[x]
-		if v == BLOCKED {
-			carry = -1
+		if v >= SEALED {
+			carry = v - SEALED
 		} else {
 			if carry - cost > v {
 				v = carry - cost
@@ -424,9 +432,8 @@ Cost_Span :: struct {
 	from:   ^Mask,
 }
 
-// cost_window: window[x] becomes the most of values[x - o - k] over 0 <= k < width (a
-// cell outside the domain counting -1), for each x one of the cells lo <= x - o - k < hi
-// reaches.
+// cost_window: window[x] becomes the most potential of values[x - o - k] over 0 <= k <
+// width, for each x one of the cells lo <= x - o - k < hi reaches.
 @(private)
 cost_window :: proc(window, values: []i32, lo, hi, o, width: int) {
 	a, b := max(lo + o, 0), min(hi + o + width - 1, len(values))
@@ -435,7 +442,7 @@ cost_window :: proc(window, values: []i32, lo, hi, o, width: int) {
 		shift := o + k
 		#no_bounds_check for x in max(lo, a - shift) ..< min(hi, b - shift) {
 			p := values[x]
-			window[x + shift] = max(window[x + shift], p if p != BLOCKED else -1)
+			window[x + shift] = max(window[x + shift], own(p))
 		}
 	}
 }
@@ -448,7 +455,7 @@ cost_window :: proc(window, values: []i32, lo, hi, o, width: int) {
 cost_spread :: proc(there, from: []i32, cost: i32, allowed: []u64 = nil) -> (best: i32) {
 	if allowed == nil {
 		#no_bounds_check for p, i in from {
-			q := p - cost if p != BLOCKED else -1
+			q := own(p) - cost
 			old := there[i]
 			new := max(old, q)
 			there[i] = new
@@ -532,5 +539,8 @@ rows_mark :: proc(r: ^Rows, row, lo, hi: int, p: i32) {
 @(private)
 rows_finish :: proc(out: ^Field, top, below: i32) {
 	cut := max(below, 0)
-	#no_bounds_check for &v in out.values {v = top - v if v > cut && v != BLOCKED else UNREACHED}
+	#no_bounds_check for &v in out.values {
+		p := own(v)
+		v = top - p if p > cut else UNREACHED
+	}
 }

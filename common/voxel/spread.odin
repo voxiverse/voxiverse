@@ -13,11 +13,13 @@ import "core:math/bits"
 // row taken costs its length, taken from the budget the caller gives (what is left stays
 // there, for the next spread to share).
 
-// fill: reached (the seed) becomes the cells of domain the seed reaches: the least set
-// that holds the seed's cells in domain and every cell of domain one offset of element
-// from a cell it holds; added is how many cells joined (0: nothing changed). reached and
+// fill: reached (the seed) becomes what the seed reaches through domain: the least set
+// that holds every cell of the seed and every cell of domain one offset of element from
+// a cell it holds; added is how many cells joined (0: nothing changed). A cell of the
+// seed need not be in domain (an anchor the spread starts beside): it stays, and the
+// spread starts from it, for domain says only which cells a step may enter. reached and
 // domain share their bounds. Exhausted (the budget spent first): reached holds part of
-// that set, the seed's cells among it, and nothing outside it.
+// that set, the seed among it, and nothing outside it.
 fill :: proc(
 	reached: ^Mask,
 	domain: Mask,
@@ -29,7 +31,6 @@ fill :: proc(
 	exhausted: bool,
 ) {
 	assert(reached.bounds == domain.bounds, "voxel: fill of masks with different bounds")
-	intersect(reached, domain)
 	s := spread_make(domain.bounds, element, allocator)
 	defer spread_destroy(&s, allocator)
 	for row in 0 ..< rows_of(domain) {

@@ -82,7 +82,7 @@ test_results_are_the_same_bits_everywhere :: proc(t: ^testing.T) {
 			hash_u64(&h, u64(v))
 		}
 	}
-	testing.expect_value(t, h.h, 2964763567486446444)
+	testing.expect_value(t, h.h, 14376611612761203187)
 }
 
 // The bits a least-cost spread gives for fixed inputs, weighted, seeded and stopped.
@@ -130,5 +130,5 @@ test_least_cost_is_the_same_bits_everywhere :: proc(t: ^testing.T) {
 		hash_u64(&h, u64(u32(at.x)) | u64(u32(at.y)) << 16 | u64(u32(at.z)) << 32)
 		octile[round].from = nil
 	}
-	testing.expect_value(t, h.h, 7472160107628367187)
+	testing.expect_value(t, h.h, 10656741752318266006)
 }

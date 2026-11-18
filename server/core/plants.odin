@@ -86,17 +86,14 @@ supports_settle :: proc(w: ^World, checked: voxel.Mask, action: Action_Id) {
 	// block joins only from the one it stands on. A chain that turns needs a round per
 	// turn; one turning more often than there are rounds, or a spread out of budget,
 	// leaves blocks counted as lost that hold, which costs a look, never a wrong block.
-	domain := voxel.mask_make(region, context.temp_allocator)
 	for _ in 0 ..< len(SUPPORT_STEPS) {
 		grew := false
 		for step, i in SUPPORT_STEPS {
 			if on[i].words == nil {continue}
-			voxel.mask_copy(&domain, held)
-			voxel.unite(&domain, on[i])
 			budget := SUPPORT_BUDGET
 			added, _ := voxel.fill(
 				&held,
-				domain,
+				on[i],
 				step_element(step),
 				&budget,
 				context.temp_allocator,
