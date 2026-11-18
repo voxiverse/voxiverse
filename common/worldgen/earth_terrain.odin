@@ -47,7 +47,7 @@ columns_fill :: proc(p: ^Params, seed: i64, column: [2]i32, cols: ^Columns) {
 // grid_fill samples the overhang noise of a chunk column for y lo..hi.
 @(private = "file")
 grid_fill :: proc(seed: i64, column: [2]i32, lo, hi: i32, g: ^Overhang_Grid) {
-	g.y0 = floor_div(max(lo, game.WORLD_MIN_Y), GRID_Y) * GRID_Y
+	g.y0 = base.floor_div(max(lo, game.WORLD_MIN_Y), GRID_Y) * GRID_Y
 	top := min(hi, game.WORLD_MAX_Y)
 	g.levels = min(int((top - g.y0) / GRID_Y) + 2, MAX_LEVELS)
 	origin := column * game.CHUNK_SIZE
@@ -510,12 +510,6 @@ in_cave :: proc(g: ^Cave_Grid, l: [3]i32, size: f32) -> bool {
 		v += w * g[s.y][s.z][s.x]
 	}
 	return abs(v[0]) < size && abs(v[1]) < size
-}
-
-@(private)
-floor_div :: proc(a, b: i32) -> i32 {
-	q := a / b
-	return q - 1 if (a % b != 0) && ((a < 0) != (b < 0)) else q
 }
 
 // pieces_write writes the structure pieces reaching the chunk at origin,

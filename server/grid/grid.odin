@@ -3,6 +3,7 @@ package grid
 import "base:runtime"
 import "core:slice"
 
+import "common:base"
 import "common:game"
 
 // Networks over blocks (power lines, pipes): blocks of the kinds a grid names and the machines
@@ -69,11 +70,8 @@ grid_destroy :: proc(g: ^Grid) {
 
 @(private = "file")
 bucket_of :: proc(p: game.Block_Pos) -> game.Block_Pos {
-	return {floor_div(p.x, BUCKET), floor_div(p.y, BUCKET), floor_div(p.z, BUCKET)}
+	return {base.floor_div(p.x, BUCKET), base.floor_div(p.y, BUCKET), base.floor_div(p.z, BUCKET)}
 }
-
-@(private = "file")
-floor_div :: proc(a, b: i32) -> i32 {return a / b - (1 if a % b < 0 else 0)}
 
 // connected: a and b join: neither is a node, or one is a conductor that reaches the other.
 @(private = "file")

@@ -2,6 +2,8 @@ package music_tool
 
 import "core:fmt"
 
+import "common:base"
+
 // Motifs: a figure declared once and played back transformed. The score
 // parser (score.odin) reads the words; this file is the figure and what can be
 // done to it. The operations are pure functions of the figure, so each is
@@ -93,18 +95,11 @@ scale_of :: proc(key, mode: string) -> (s: Scale) {
 	return
 }
 
-@(private = "file")
-fdiv :: proc(a, b: int) -> int {
-	q := a / b
-	if a % b != 0 && (a < 0) != (b < 0) {q -= 1}
-	return q
-}
-
 // degree_shift moves a key along the scale by n degrees. A note off the scale
 // keeps its distance above the scale note under it.
 degree_shift :: proc(key, n: int, s: Scale) -> int {
 	rel := key - s.tonic
-	oct := fdiv(rel, 12)
+	oct := base.floor_div(rel, 12)
 	r := rel - 12 * oct
 	d := 0
 	for step, i in s.steps {
@@ -112,7 +107,7 @@ degree_shift :: proc(key, n: int, s: Scale) -> int {
 	}
 	off := r - s.steps[d]
 	to := oct * 7 + d + n
-	q := fdiv(to, 7)
+	q := base.floor_div(to, 7)
 	return s.tonic + 12 * q + s.steps[to - 7 * q] + off
 }
 

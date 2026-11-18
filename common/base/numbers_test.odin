@@ -310,3 +310,23 @@ test_fmod_exact :: proc(t: ^testing.T) {
 libc_fmod :: proc(x, y: f64) -> f64 {
 	return libc.fmod(x, y)
 }
+
+// floor_div is the definition: the q with q*b <= a < (q+1)*b for b > 0 (reversed for
+// b < 0), so a = q*b + a %% b; for both signs of both, across zero.
+@(test)
+test_floor_div :: proc(t: ^testing.T) {
+	for a in -40 ..= 40 {
+		for b in -9 ..= 9 {
+			if b == 0 {continue}
+			q := floor_div(a, b)
+			ok := q * b <= a && a < (q + 1) * b if b > 0 else q * b >= a && a > (q + 1) * b
+			testing.expectf(t, ok, "floor_div(%d, %d) = %d", a, b, q)
+			testing.expect(t, q * b + a %% b == a)
+			testing.expect(
+				t,
+				i32(q) == floor_div(i32(a), i32(b)) && i64(q) == floor_div(i64(a), i64(b)),
+			)
+		}
+	}
+	testing.expect_value(t, floor_div(min(i32) + 1, i32(-1)), max(i32))
+}

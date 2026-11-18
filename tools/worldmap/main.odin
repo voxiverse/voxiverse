@@ -197,8 +197,8 @@ bench :: proc(gen: ^worldgen.Generator, o: ^Options) {
 	arr := new(game.Block_Array)
 	blocks: [game.Block]int
 	for i in 0 ..< side * side {
-		cx := i32(o.x / game.CHUNK_SIZE + i % side - side / 2)
-		cz := i32(o.z / game.CHUNK_SIZE + i / side - side / 2)
+		cx := i32(base.floor_div(o.x, game.CHUNK_SIZE) + i % side - side / 2)
+		cz := i32(base.floor_div(o.z, game.CHUNK_SIZE) + i / side - side / 2)
 		start := time.tick_now()
 		tops: worldgen.Tops
 		worldgen.column_tops(gen, {cx, cz}, &tops)

@@ -1,5 +1,6 @@
 package base
 
+import "base:intrinsics"
 import "core:math"
 import "core:slice"
 
@@ -414,4 +415,12 @@ fmod :: proc "contextless" (x, y: f64) -> f64 {
 		ux >>= u64(-ex + 1)
 	}
 	return transmute(f64)(ux | sx << 63)
+}
+
+// floor_div: a / b rounded down (towards minus infinity), for either sign of b; Odin's
+// `/` rounds towards zero. Its remainder is Odin's `a %% b`, which has b's sign.
+floor_div :: #force_inline proc "contextless" (a, b: $T) -> T where intrinsics.type_is_integer(T) {
+	q := a / b
+	if a % b != 0 && (a < 0) != (b < 0) {q -= 1}
+	return q
 }

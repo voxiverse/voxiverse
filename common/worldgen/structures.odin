@@ -3,6 +3,7 @@ package worldgen
 
 import "core:math"
 
+import "common:base"
 import "common:game"
 
 // Structures in the world: a ruin and a well (templates shipped with the
@@ -185,10 +186,10 @@ structures_near :: proc(gen: ^Generator, lo, hi: [2]i32, out: ^[dynamic]Structur
 	if gen.kind != .Earth {return}
 	for set, k in SETS {
 		c0 := [2]i32 {
-			floor_div(lo.x - MAX_STRUCTURE, set.spacing),
-			floor_div(lo.y - MAX_STRUCTURE, set.spacing),
+			base.floor_div(lo.x - MAX_STRUCTURE, set.spacing),
+			base.floor_div(lo.y - MAX_STRUCTURE, set.spacing),
 		}
-		c1 := [2]i32{floor_div(hi.x, set.spacing), floor_div(hi.y, set.spacing)}
+		c1 := [2]i32{base.floor_div(hi.x, set.spacing), base.floor_div(hi.y, set.spacing)}
 		for cz in c0.y ..= c1.y {
 			for cx in c0.x ..= c1.x {
 				s, ok := structure_in_cell(gen, k, {cx, cz})
@@ -209,10 +210,10 @@ overlaps_earlier :: proc(gen: ^Generator, k: int, s: Structure) -> bool {
 	for j in 0 ..< k {
 		set := SETS[j]
 		c0 := [2]i32 {
-			floor_div(s.lo.x - MAX_STRUCTURE, set.spacing),
-			floor_div(s.lo.z - MAX_STRUCTURE, set.spacing),
+			base.floor_div(s.lo.x - MAX_STRUCTURE, set.spacing),
+			base.floor_div(s.lo.z - MAX_STRUCTURE, set.spacing),
 		}
-		c1 := [2]i32{floor_div(s.hi.x, set.spacing), floor_div(s.hi.z, set.spacing)}
+		c1 := [2]i32{base.floor_div(s.hi.x, set.spacing), base.floor_div(s.hi.z, set.spacing)}
 		for cz in c0.y ..= c1.y {
 			for cx in c0.x ..= c1.x {
 				o, ok := structure_in_cell(gen, j, {cx, cz})
