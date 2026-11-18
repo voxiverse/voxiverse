@@ -19,6 +19,7 @@ DETERMINISM_DIRS :: []string {
 	"common/worldgen",
 	"common/planet",
 	"common/island",
+	"common/voxel",
 	"common/script",
 	"games", // (a game's shared rules and its server part run in the server's tick)
 }

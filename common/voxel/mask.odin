@@ -1,0 +1,255 @@
+package voxel
+
+import "core:math/bits"
+
+// Mask: a finite set of cells, those of its bounds whose bit is set (a cell outside the
+// bounds is not in the set). The bounds are storage, not part of the set's meaning: two
+// masks with different bounds holding the same cells are the same set.
+//
+// The cells are bits in rows along x, 64 to a word: the row of (y, z) is the `stride`
+// words from `row * stride`, row = (y - lo.y) * size.z + (z - lo.z), and its bit i is the
+// cell x = lo.x + i. The bits past size.x in a row's last word are always clear.
+Mask :: struct {
+	bounds: Bounds,
+	stride: int,
+	words:  []u64,
+}
+
+// MAX_STRIDE: the most words in a row (MAX_EXTENT cells).
+@(private)
+MAX_STRIDE :: MAX_EXTENT / 64
+
+// mask_make: an empty mask over b.
+mask_make :: proc(b: Bounds, allocator := context.allocator, loc := #caller_location) -> Mask {
+	check_bounds(b, loc)
+	s := bounds_size(b)
+	stride := (int(s.x) + 63) / 64
+	return {
+		bounds = b,
+		stride = stride,
+		words = make([]u64, stride * int(s.y) * int(s.z), allocator, loc),
+	}
+}
+
+mask_destroy :: proc(m: ^Mask, allocator := context.allocator) {
+	delete(m.words, allocator)
+	m^ = {}
+}
+
+// mask_clear: no cell.
+mask_clear :: proc(m: ^Mask) {
+	for &w in m.words {w = 0}
+}
+
+// mask_get: c is in the set.
+mask_get :: proc(m: Mask, c: Cell) -> bool {
+	if !bounds_has(m.bounds, c) {return false}
+	i := cell_bit(m, c)
+	return m.words[i >> 6] & (1 << uint(i & 63)) != 0
+}
+
+// mask_set: c joins the set (value true) or leaves it; c is within the bounds.
+mask_set :: proc(m: ^Mask, c: Cell, value := true, loc := #caller_location) {
+	assert(bounds_has(m.bounds, c), "voxel: mask_set outside the mask's bounds", loc)
+	i := cell_bit(m^, c)
+	bit := u64(1) << uint(i & 63)
+	if value {m.words[i >> 6] |= bit} else {m.words[i >> 6] &~= bit}
+}
+
+// mask_count: how many cells the set has within b (all of them by default): any cell of
+// a box is `mask_count(m, b) > 0`.
+mask_count :: proc(m: Mask, b: Maybe(Bounds) = nil) -> int {
+	within := b.? or_else m.bounds
+	lo := Cell {
+		max(within.lo.x, m.bounds.lo.x),
+		max(within.lo.y, m.bounds.lo.y),
+		max(within.lo.z, m.bounds.lo.z),
+	}
+	hi := Cell {
+		min(within.hi.x, m.bounds.hi.x),
+		min(within.hi.y, m.bounds.hi.y),
+		min(within.hi.z, m.bounds.hi.z),
+	}
+	if lo.x >= hi.x || lo.y >= hi.y || lo.z >= hi.z {return 0}
+	x0, x1 := int(lo.x - m.bounds.lo.x), int(hi.x - m.bounds.lo.x)
+	n := 0
+	for y in lo.y ..< hi.y {
+		for z in lo.z ..< hi.z {
+			row := row_words(m, row_of(m, y, z))
+			for i in x0 >> 6 ..= (x1 - 1) >> 6 {
+				n += int(bits.count_ones(row[i] & span_bits(i, x0, x1)))
+			}
+		}
+	}
+	return n
+}
+
+// mask_bounds: the smallest bounds holding every cell of the set; ok false when it is empty.
+mask_bounds :: proc(m: Mask) -> (b: Bounds, ok: bool) {
+	s := bounds_size(m.bounds)
+	for y in 0 ..< s.y {
+		for z in 0 ..< s.z {
+			row := row_words(m, int(y) * int(s.z) + int(z))
+			for w, i in row {
+				if w == 0 {continue}
+				c := m.bounds.lo + {i32(i * 64) + i32(bits.count_trailing_zeros(w)), y, z}
+				if !ok {b, ok = {c, c + 1}, true}
+				b.lo = {min(b.lo.x, c.x), b.lo.y, min(b.lo.z, c.z)}
+				b.hi.y, b.hi.z = c.y + 1, max(b.hi.z, c.z + 1)
+				b.hi.x = max(
+					b.hi.x,
+					m.bounds.lo.x + i32(i * 64 + 64) - i32(bits.count_leading_zeros(w)),
+				)
+			}
+		}
+	}
+	return
+}
+
+// runs_next: the next run of cells of the set along x, in order of y, then z, then x: the
+// cells lo, lo + {1, 0, 0} ... lo + {length - 1, 0, 0}. cursor starts at 0; ok false when
+// there is none left. A run is a span of a world edit, or one box of a mask cut into boxes.
+runs_next :: proc(m: Mask, cursor: ^int) -> (lo: Cell, length: i32, ok: bool) {
+	s := bounds_size(m.bounds)
+	row_bits := m.stride * 64
+	for cursor^ < row_bits * int(s.y) * int(s.z) {
+		row, i := cursor^ / row_bits, cursor^ % row_bits
+		if i >= int(s.x) {
+			cursor^ = (row + 1) * row_bits
+			continue
+		}
+		w := m.words[row * m.stride + i >> 6] >> uint(i & 63)
+		if w == 0 {
+			cursor^ += 64 - i & 63
+			continue
+		}
+		start := i + int(bits.count_trailing_zeros(w))
+		end := start
+		for end < int(s.x) {
+			rest := 64 - end & 63 // (the bits of this word from end on)
+			ones := int(
+				bits.count_trailing_zeros(~(m.words[row * m.stride + end >> 6] >> uint(end & 63))),
+			)
+			end += min(ones, rest)
+			if ones < rest {break}
+		}
+		end = min(end, int(s.x))
+		cursor^ = row * row_bits + end
+		y, z := i32(row / int(s.z)), i32(row % int(s.z))
+		return m.bounds.lo + {i32(start), y, z}, i32(end - start), true
+	}
+	return
+}
+
+@(private)
+cell_bit :: #force_inline proc(m: Mask, c: Cell) -> int {
+	l := c - m.bounds.lo
+	return row_of(m, c.y, c.z) * m.stride * 64 + int(l.x)
+}
+
+// row_of: the index of the row (y, z), which is within the bounds.
+@(private)
+row_of :: #force_inline proc(m: Mask, y, z: i32) -> int {
+	return int(y - m.bounds.lo.y) * int(m.bounds.hi.z - m.bounds.lo.z) + int(z - m.bounds.lo.z)
+}
+
+// row_at: the index of the row (y, z), ok false when it is outside the bounds.
+@(private)
+row_at :: #force_inline proc(m: Mask, y, z: i32) -> (row: int, ok: bool) {
+	if y < m.bounds.lo.y || y >= m.bounds.hi.y || z < m.bounds.lo.z || z >= m.bounds.hi.z {return}
+	return row_of(m, y, z), true
+}
+
+@(private)
+row_words :: #force_inline proc(m: Mask, row: int) -> []u64 {
+	return m.words[row * m.stride:][:m.stride]
+}
+
+// span_bits: the bits of word i that are cells x0 <= x < x1 of a row (x from the row's start).
+@(private)
+span_bits :: #force_inline proc(i, x0, x1: int) -> u64 {
+	lo, hi := max(x0 - i * 64, 0), min(x1 - i * 64, 64)
+	if lo >= hi {return 0}
+	w := ~u64(0) >> uint(64 - (hi - lo))
+	return w << uint(lo)
+}
+
+// tail_bits: the bits of a row's last word that are cells.
+@(private)
+tail_bits :: #force_inline proc(m: Mask) -> u64 {
+	r := int(m.bounds.hi.x - m.bounds.lo.x) & 63
+	return ~u64(0) if r == 0 else (u64(1) << uint(r)) - 1
+}
+
+// bits_at: out's bit i is row's bit start + i (start may be negative), clear past either end.
+@(private)
+bits_at :: proc(row: []u64, start: int, out: []u64) {
+	shift := uint(start & 63)
+	first := start >> 6 // (rounds down)
+	word :: #force_inline proc(row: []u64, j: int) -> u64 {
+		return row[j] if j >= 0 && j < len(row) else 0
+	}
+	for i in 0 ..< len(out) {
+		j := first + i
+		if shift == 0 {
+			out[i] = word(row, j)
+		} else {
+			out[i] = word(row, j) >> shift | word(row, j + 1) << (64 - shift)
+		}
+	}
+}
+
+// set_span: the cells x0 <= x < x1 of row (y, z) become value; the span is clipped to the
+// bounds, the row is within them.
+@(private)
+set_span :: proc(m: ^Mask, row: int, x0, x1: i32, value: bool) {
+	a := int(max(x0, m.bounds.lo.x) - m.bounds.lo.x)
+	b := int(min(x1, m.bounds.hi.x) - m.bounds.lo.x)
+	if a >= b {return}
+	words := row_words(m^, row)
+	for i in a >> 6 ..= (b - 1) >> 6 {
+		if value {words[i] |= span_bits(i, a, b)} else {words[i] &~= span_bits(i, a, b)}
+	}
+}
+
+// Op: how `combine` folds a source row into a destination row.
+@(private)
+Op :: enum u8 {
+	Or,
+	And,
+	And_Not,
+}
+
+// combine: dst becomes dst op (src moved by offset), cell by cell within dst's bounds, a
+// cell outside src's bounds being outside the set. The one loop under the set algebra and
+// the Minkowski operations: a row at a time, a word at a time.
+@(private)
+combine :: proc(dst: ^Mask, src: Mask, offset: Cell, op: Op) {
+	ds := bounds_size(dst.bounds)
+	buf: [MAX_STRIDE]u64
+	moved := buf[:dst.stride]
+	start := int(dst.bounds.lo.x - offset.x - src.bounds.lo.x)
+	tail := tail_bits(dst^)
+	row := 0
+	for y in dst.bounds.lo.y ..< dst.bounds.lo.y + ds.y {
+		for z in dst.bounds.lo.z ..< dst.bounds.lo.z + ds.z {
+			defer row += 1
+			words := row_words(dst^, row)
+			src_row, found := row_at(src, y - offset.y, z - offset.z)
+			if !found {
+				if op == .And {for &w in words {w = 0}}
+				continue
+			}
+			bits_at(row_words(src, src_row), start, moved)
+			switch op {
+			case .Or:
+				for &w, i in words {w |= moved[i]}
+			case .And:
+				for &w, i in words {w &= moved[i]}
+			case .And_Not:
+				for &w, i in words {w &~= moved[i]}
+			}
+			if len(words) > 0 {words[len(words) - 1] &= tail}
+		}
+	}
+}
