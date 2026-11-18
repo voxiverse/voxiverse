@@ -369,7 +369,7 @@ banned :: proc(s: ^Server, name, address: string, account: access.Account) -> (s
 	how :=
 		fmt.tprintf("for %s more", duration_text(b.until - now_unix())) if b.until != 0 else "for good"
 	why := fmt.tprintf("Banned %s: %s", how, b.reason)
-	return why[:min(len(why), protocol.MAX_REASON_LENGTH)], true
+	return base.text_cut(why, protocol.MAX_REASON_LENGTH), true
 }
 
 // --- Who and status ---

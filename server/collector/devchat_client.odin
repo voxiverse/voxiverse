@@ -199,7 +199,7 @@ chat_replies :: proc(c: ^Chat) -> u64 {
 }
 
 @(private)
-clip :: proc(s: string) -> string {return s[:min(len(s), protocol.MAX_DEV_FIELD)]}
+clip :: proc(s: string) -> string {return base.text_cut(s, protocol.MAX_DEV_FIELD)}
 
 @(private)
 entry_free :: proc(e: ^Chat_Entry) {

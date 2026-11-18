@@ -34,6 +34,15 @@ text_format :: proc(text: string, args: ..any) -> string {
 	return strings.to_string(b)
 }
 
+// text_cut: s cut to at most max_bytes bytes at the start of a letter, so a UTF-8
+// sequence is never split (a limit of the wire or a file is in bytes, a letter is not).
+text_cut :: proc(s: string, max_bytes: int) -> string {
+	if len(s) <= max_bytes {return s}
+	n := max(max_bytes, 0)
+	for n > 0 && s[n] & 0xc0 == 0x80 {n -= 1}
+	return s[:n]
+}
+
 // text_missing: the first key of a table with no text (false: every key has its own), for
 // the test every table has.
 text_missing :: proc(table: [$K]string) -> (key: K, missing: bool) {

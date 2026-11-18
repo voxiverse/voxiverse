@@ -189,7 +189,7 @@ upload_pass :: proc(u: ^Uploader) {
 	for path in reports {
 		data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 		if err != nil {continue}
-		text := string(data[:min(len(data), protocol.MAX_BATCH_TEXT)])
+		text := base.text_cut(string(data), protocol.MAX_BATCH_TEXT)
 		if !send_batch(u, {.Report, "", 0, text}, "", u64(len(text))) {return}
 		os.remove(path)
 	}

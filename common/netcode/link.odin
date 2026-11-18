@@ -75,7 +75,7 @@ link_close :: proc(l: ^Link, reason: string) {
 		put_u32(&w, MAGIC)
 		put_u8(&w, u8(Packet_Kind.Disconnect))
 		put_u32(&w, l.conn.token)
-		put_blob(&w, transmute([]u8)reason[:min(len(reason), MAX_REASON)])
+		put_blob(&w, transmute([]u8)base.text_cut(reason, MAX_REASON))
 		now := link_now(l)
 		for _ in 0 ..< 3 {socket_send(&l.socket, l.server, buf[:w.n], now)}
 		socket_pump(&l.socket, time.tick_add(now, time.Hour))

@@ -175,7 +175,7 @@ actor_index :: proc(j: ^Journal, a: Actor) -> u32 {
 	key := actor_key(a.kind, a.name)
 	if i, ok := j.actor_keys[key]; ok {return i}
 	i := u32(len(j.actors))
-	name := a.name[:min(len(a.name), game.MAX_ACTOR_NAME)]
+	name := base.text_cut(a.name, game.MAX_ACTOR_NAME)
 	append(&j.actors, Actor_Entry{a.kind, strings.clone(name)})
 	j.actor_keys[strings.clone(key)] = i
 	return i
@@ -198,10 +198,7 @@ action_begin :: proc(
 	from := timed(s)
 	defer spent(w, from)
 	j := &w.journal
-	cmd := command[:min(len(command), game.MAX_ACTION_COMMAND)]
-	for len(cmd) < len(command) && len(cmd) > 0 && command[len(cmd)] & 0xc0 == 0x80 {
-		cmd = cmd[:len(cmd) - 1] // (not in the middle of a character)
-	}
+	cmd := base.text_cut(command, game.MAX_ACTION_COMMAND)
 	rec := Live_Action {
 		id      = j.next_action,
 		age     = age_of(s),

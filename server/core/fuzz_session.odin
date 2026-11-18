@@ -2,7 +2,6 @@ package core
 
 import "base:runtime"
 import "core:strings"
-import "core:unicode/utf8"
 
 import "common:access"
 import "common:base"
@@ -216,8 +215,7 @@ fuzz_commands_player :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 		"?",
 		context.temp_allocator,
 	)
-	line = line[:min(len(line), protocol.MAX_ADMIN_TEXT)]
-	for len(line) > 0 && !utf8.valid_string(line) {line = line[:len(line) - 1]}
+	line = base.text_cut(line, protocol.MAX_ADMIN_TEXT)
 	rest := line
 	name, _ := strings.split_iterator(&rest, " ") // (the first word)
 

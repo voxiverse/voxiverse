@@ -1267,13 +1267,7 @@ broadcast :: proc(s: ^Server, m: protocol.Server_Message, world: ^World = nil) {
 // Public: a game (Game) speaks to its players with it.
 notice :: proc(s: ^Server, c: ^Client, text: string) {
 	log.info("server notice ", text)
-	text := text
-	if len(text) > protocol.MAX_NOTICE_TEXT {
-		cut := protocol.MAX_NOTICE_TEXT
-		for cut > 0 && text[cut] & 0xc0 == 0x80 {cut -= 1} 	// (a whole letter)
-		text = text[:cut]
-	}
-	shown := protocol.Notice{text}
+	shown := protocol.Notice{base.text_cut(text, protocol.MAX_NOTICE_TEXT)}
 	event_send(s, c, .Notice, &shown)
 }
 
@@ -1327,12 +1321,12 @@ server_info :: proc(s: ^Server) -> protocol.Server_Info {
 	g := s.config.game.info
 	return {
 		protocol = protocol.PROTOCOL_VERSION,
-		name = name[:min(len(name), protocol.MAX_SERVER_NAME)],
+		name = base.text_cut(name, protocol.MAX_SERVER_NAME),
 		players = players,
 		max_players = s.config.max_players,
 		password = s.config.password != "",
 		game = g.id,
-		game_name = g.name[:min(len(g.name), protocol.MAX_SERVER_NAME)],
+		game_name = base.text_cut(g.name, protocol.MAX_SERVER_NAME),
 	}
 }
 

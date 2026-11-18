@@ -2,11 +2,11 @@ package overlay
 
 import "core:strings"
 import "core:time"
-import "core:unicode/utf8"
 
 import "client:engine"
 import "client:formatted"
 import "client:ui"
+import "common:base"
 import "common:protocol"
 
 // Chat: `t` opens it, `/` opens it with a command started; Enter says the
@@ -57,9 +57,7 @@ chat_send :: proc(app: ^engine.App, line: string) {
 		return
 	}
 	// At most what a message holds (whole letters).
-	cut := min(len(text), protocol.MAX_CHAT_TEXT)
-	for cut < len(text) && cut > 0 && !utf8.rune_start(text[cut]) {cut -= 1}
-	engine.send_message(s, protocol.Chat{text[:cut]})
+	engine.send_message(s, protocol.Chat{base.text_cut(text, protocol.MAX_CHAT_TEXT)})
 }
 
 // chat_ui: the open chat (an overlay): the line, and every line kept above.

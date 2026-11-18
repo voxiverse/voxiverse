@@ -1,5 +1,6 @@
 package core
 
+import "core:strings"
 import "core:testing"
 
 import "common:game"
@@ -143,6 +144,26 @@ test_server_tells_its_game :: proc(t: ^testing.T) {
 	testing.expect_value(t, info.game_name, "Probe")
 	testing.expect_value(t, info.players, 1) // (the mirror)
 	testing.expect_value(t, info.max_players, config.max_players)
+}
+
+// A server's name too long for the info is cut at a whole letter: cut in the middle of
+// one, the info would carry text that is no UTF-8.
+@(test)
+test_server_info_cuts_at_a_letter :: proc(t: ^testing.T) {
+	s := new(Server)
+	defer free(s)
+	name := strings.concatenate(
+		{strings.repeat("a", protocol.MAX_SERVER_NAME - 1, context.temp_allocator), "é"},
+		context.temp_allocator,
+	)
+	s.config.name = name
+	s.config.game.info = {
+		id   = "probe",
+		name = name,
+	}
+	info := server_info(s)
+	testing.expect_value(t, info.name, name[:protocol.MAX_SERVER_NAME - 1])
+	testing.expect_value(t, info.game_name, name[:protocol.MAX_SERVER_NAME - 1])
 }
 
 // The mirror reads blocks and modes by the server's registry, as a client that took the

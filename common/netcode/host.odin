@@ -189,7 +189,7 @@ host_kick :: proc(h: ^Host, id: Peer_Id, reason: string, now: time.Tick) {
 	put_u32(&w, MAGIC)
 	put_u8(&w, u8(Packet_Kind.Disconnect))
 	put_u32(&w, p.conn.token)
-	put_blob(&w, transmute([]u8)reason[:min(len(reason), MAX_REASON)])
+	put_blob(&w, transmute([]u8)base.text_cut(reason, MAX_REASON))
 	for _ in 0 ..< 3 {socket_send(&h.socket, p.address, buf[:w.n], now)}
 	conn_destroy(&p.conn)
 	p^ = {}

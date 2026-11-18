@@ -435,13 +435,8 @@ float_text :: proc(s: ^Session, at: [3]f64, text: string, color: [4]u8, scale: f
 		if x.len == 0 {slot = i; break}
 		if x.born < oldest {slot, oldest = i, x.born}
 	}
-	n := len(text)
-	if n > FLOAT_TEXT_MAX {
-		n = FLOAT_TEXT_MAX
-		for n > 0 && text[n] & 0xc0 == 0x80 {n -= 1} 	// (a whole letter)
-	}
 	x := &f.floats[slot]
-	x.len = copy(x.text[:], text[:n])
+	x.len = copy(x.text[:], base.text_cut(text, FLOAT_TEXT_MAX))
 	x.at, x.color, x.scale, x.born = at, color, scale, feel_now(s)
 }
 

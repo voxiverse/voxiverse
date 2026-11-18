@@ -1,6 +1,25 @@
 package base
 
+import "core:strings"
 import "core:testing"
+import "core:unicode/utf8"
+
+// text_cut keeps the longest prefix of whole letters within the limit, for every limit
+// and every letter width.
+@(test)
+test_text_cut :: proc(t: ^testing.T) {
+	s := "aé€😀b"
+	for limit in -1 ..= len(s) + 1 {
+		cut := text_cut(s, limit)
+		testing.expect(t, utf8.valid_string(cut) && strings.has_prefix(s, cut))
+		testing.expect(t, len(cut) <= max(limit, 0))
+		// The next letter would not have fitted.
+		if len(cut) < len(s) {
+			_, width := utf8.decode_rune_in_string(s[len(cut):])
+			testing.expect(t, len(cut) + width > limit)
+		}
+	}
+}
 
 @(test)
 test_text_format :: proc(t: ^testing.T) {
