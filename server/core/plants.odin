@@ -21,7 +21,7 @@ import "common:voxel"
 // goes over as many ticks as it takes, never all in one.
 
 SUPPORT_REACH :: 8 // blocks around the checked ones a settle looks at
-SUPPORT_BUDGET :: 1 << 20 // cells each of a settle's spreads takes at most
+SUPPORT_BUDGET :: 1 << 20 // cells a settle's spreads take at most, together
 
 // SUPPORT_STEPS: from a block to one it holds, as the support rules allow: up (a plant on
 // a plant, a door's upper half) or across (a ladder on what it is against).
@@ -82,26 +82,31 @@ supports_settle :: proc(w: ^World, checked: voxel.Mask, action: Action_Id) {
 			}
 		}
 	}
-	// A fill along one step at a time through what holds and what stands that way: a
-	// block joins only from the one it stands on. A chain that turns needs a round per
-	// turn; one turning more often than there are rounds, or a spread out of budget,
-	// leaves blocks counted as lost that hold, which costs a look, never a wrong block.
-	for _ in 0 ..< len(SUPPORT_STEPS) {
-		grew := false
-		for step, i in SUPPORT_STEPS {
-			if on[i].words == nil {continue}
-			budget := SUPPORT_BUDGET
-			added, _ := voxel.fill(
-				&held,
-				on[i],
-				step_element(step),
-				&budget,
-				context.temp_allocator,
-			)
-			if added > 0 {grew = true}
+	// What holds is what those reach, a step at a time from a block to one standing on it
+	// that way (a move from the blocks one step back of on[i], at no cost): one spread,
+	// however often a chain turns. Out of budget, it leaves blocks counted as lost that
+	// hold, which costs a look, never a wrong block.
+	domain := voxel.mask_make(region, context.temp_allocator)
+	behind: [len(SUPPORT_STEPS)]voxel.Mask
+	moves: [len(SUPPORT_STEPS)]voxel.Move
+	count := 0
+	for step, i in SUPPORT_STEPS {
+		if on[i].words == nil {continue}
+		voxel.unite(&domain, on[i])
+		behind[i] = on[i]
+		voxel.translate(&behind[i], -step)
+		moves[count] = {
+			offset = step,
+			from   = &behind[i],
 		}
-		if !grew {break}
+		count += 1
 	}
+	reach := voxel.field_make(region)
+	defer voxel.field_destroy(&reach)
+	voxel.field_write(&reach, held, 0)
+	budget := SUPPORT_BUDGET
+	voxel.least_cost(&reach, domain, moves[:count], 0, &budget, allocator = context.temp_allocator)
+	voxel.field_mask(&held, reach, 0, 0)
 	lost := voxel.mask_make(region, context.temp_allocator)
 	voxel.mask_copy(&lost, supported)
 	voxel.subtract(&lost, held)
@@ -110,7 +115,6 @@ supports_settle :: proc(w: ^World, checked: voxel.Mask, action: Action_Id) {
 	beside := voxel.neighbours(1, voxel.CUBE, context.temp_allocator)
 	may := voxel.mask_make(region, context.temp_allocator)
 	voxel.mask_copy(&may, failing)
-	budget := SUPPORT_BUDGET
 	voxel.fill(&may, lost, beside, &budget, context.temp_allocator)
 
 	// What goes, lowest first, again until a pass takes nothing: a block that fails once
@@ -217,19 +221,6 @@ support_steps :: proc(t: ^game.Block_Table, b: game.Block) -> (steps: [2][3]i32,
 		}
 	}
 	return
-}
-
-// step_element: the origin and one step, a fill's moves along it.
-@(private = "file")
-step_element :: proc(step: [3]i32) -> voxel.Mask {
-	lo := [3]i32{min(step.x, 0), min(step.y, 0), min(step.z, 0)}
-	m := voxel.mask_make(
-		{lo, lo + {abs(step.x), abs(step.y), abs(step.z)} + 1},
-		context.temp_allocator,
-	)
-	voxel.mask_set(&m, {})
-	voxel.mask_set(&m, step)
-	return m
 }
 
 // touches: a block beside p (one of the six) is in m.

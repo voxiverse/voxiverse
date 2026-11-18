@@ -102,6 +102,43 @@ field_destroy :: proc(f: ^Field, allocator := context.allocator) {
 	f^ = {}
 }
 
+// field_write: the cells of m within the field's bounds get value (seeds of one value for
+// least_cost, a label).
+field_write :: proc(f: ^Field, m: Mask, value: i32) {
+	cursor := 0
+	for lo, n in runs_next(m, &cursor, f.bounds) {
+		for &v in f.values[field_index(f^, lo):][:n] {v = value}
+	}
+}
+
+// field_mask: dst becomes the cells of the field's bounds (within its own) whose value is
+// lo ..= hi: what a spread reached at a cost of at most hi, the cells lit at least so much.
+field_mask :: proc(dst: ^Mask, f: Field, lo, hi: i32) {
+	mask_clear(dst)
+	b := Bounds {
+		{
+			max(f.bounds.lo.x, dst.bounds.lo.x),
+			max(f.bounds.lo.y, dst.bounds.lo.y),
+			max(f.bounds.lo.z, dst.bounds.lo.z),
+		},
+		{
+			min(f.bounds.hi.x, dst.bounds.hi.x),
+			min(f.bounds.hi.y, dst.bounds.hi.y),
+			min(f.bounds.hi.z, dst.bounds.hi.z),
+		},
+	}
+	if bounds_volume(b) == 0 {return}
+	for y in b.lo.y ..< b.hi.y {
+		for z in b.lo.z ..< b.hi.z {
+			values := f.values[field_index(f, {b.lo.x, y, z}):][:b.hi.x - b.lo.x]
+			at := cell_bit(dst^, {b.lo.x, y, z})
+			for v, i in values {
+				if v >= lo && v <= hi {dst.words[(at + i) >> 6] |= 1 << uint((at + i) & 63)}
+			}
+		}
+	}
+}
+
 // field_get: the value at c, UNREACHED outside the field's bounds.
 field_get :: proc(f: Field, c: Cell) -> i32 {
 	if !bounds_has(f.bounds, c) {return UNREACHED}

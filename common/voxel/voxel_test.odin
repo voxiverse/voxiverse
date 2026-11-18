@@ -28,6 +28,33 @@ hash_field :: proc(h: ^Hash, f: Field) {
 	for v in f.values {hash_u64(h, u64(u32(v)))}
 }
 
+@(test)
+test_a_field_writes_a_mask_and_reads_one_back :: proc(t: ^testing.T) {
+	rng := base.rng_make(0xf1e1)
+	for _ in 0 ..< 60 {
+		defer free_all(context.temp_allocator)
+		m := random_mask(&rng, random_bounds(&rng), 40)
+		defer mask_destroy(&m)
+		f := field_make(random_bounds(&rng))
+		defer field_destroy(&f)
+		for &v in f.values {v = i32(base.rng_int_max(&rng, 5))}
+		before := make([]i32, len(f.values), context.temp_allocator)
+		copy(before, f.values)
+		field_write(&f, m, 9)
+		back := mask_make(random_bounds(&rng))
+		defer mask_destroy(&back)
+		field_mask(&back, f, 3, 9)
+		for c in ref_cells(f.bounds) {
+			i := field_index(f, c)
+			testing.expect(t, f.values[i] == (9 if mask_get(m, c) else before[i]))
+		}
+		for c in ref_cells(back.bounds) {
+			v := field_get(f, c)
+			testing.expect(t, mask_get(back, c) == (bounds_has(f.bounds, c) && v >= 3 && v <= 9))
+		}
+	}
+}
+
 // The bits every operation gives for fixed inputs: a change to any result fails here, on
 // every machine alike.
 @(test)

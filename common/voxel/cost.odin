@@ -296,10 +296,7 @@ distance :: proc(
 ) {
 	assert(out.bounds == domain.bounds, "voxel: distance into a field of other bounds")
 	for &v in out.values {v = UNREACHED}
-	seeds := mask_make(domain.bounds, allocator)
-	defer mask_destroy(&seeds, allocator)
-	unite(&seeds, sources)
-	for row in 0 ..< rows_of(seeds) {write_row(out, seeds, row, 0)}
+	field_write(out, sources, 0)
 	moves := moves_of(element, 1, allocator)
 	defer delete(moves, allocator)
 	return least_cost(out, domain, moves, max_steps, budget, {}, allocator)
