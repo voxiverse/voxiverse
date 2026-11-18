@@ -18,7 +18,16 @@ import "core:slice"
 // when the cheapest change waiting costs c, every cell that costs less than c has its
 // cost: a spread can stop at a cost, or at the first cell of a goal, and what it has is
 // exact. A row is taken again only when a cheaper way into it is found after it was
-// taken (in the open, under unit steps, each row is taken once).
+// taken (in the open, under unit steps, each row is taken once), and never more often
+// than it has cells that get their cost: each take settles the cell whose change queued
+// it (the queue gives rows in order of their dearest change, which is then final), and
+// a settled cell never changes again. So a spread that reaches n cells takes at most n
+// rows, whatever the maze.
+//
+// Only the rows a spread touches are worked on: finding the seeds reads the field once,
+// and a row is made ready for the spread (its seeds' potentials, its cells outside the
+// domain sealed) when it is first seeded or reached, and turned back into costs at the
+// end only then.
 //
 // While it runs, a cell holds its potential, top less its cost (top one more than the
 // limit), 0 or less when it is not reached, and SEALED plus its potential outside the
@@ -64,9 +73,11 @@ moves_of :: proc(element: Mask, cost: i32 = 1, allocator := context.allocator) -
 // its cost: out is then the full result cut to that cost (each cell costing at most that
 // has its cost, every other cell is UNREACHED). A goal is a mask of one cell.
 //
-// The budget counts cells: each row taken costs its length, taken from what the caller
-// gives (what is left stays there). Exhausted: out is the full result cut to the costs
-// below that of the cheapest change still waiting.
+// The budget counts cells: each pass over a row costs its length (a row taken is one; a
+// row whose moves along x need another pass to settle pays for each), taken from what the
+// caller gives (what is left stays there), so the work is bounded by the budget exactly.
+// Exhausted: out is the full result cut to the costs below that of the cheapest change
+// still waiting.
 least_cost :: proc(
 	out: ^Field,
 	domain: Mask,
@@ -135,27 +146,11 @@ least_cost :: proc(
 	for m in sorted[:ends[1]] {if m.from != nil {slide = false}}
 	r := rows_make(rows_of(domain), sx, allocator)
 	defer rows_destroy(&r)
-	// The seeds become potentials, and the cells outside the domain are sealed.
+	// The rows holding seeds are made ready, and with them queued.
 	for row in 0 ..< rows_of(domain) {
-		values := out.values[row * sx:][:sx]
-		lo, hi := sx, 0
-		dearest := i32(0)
-		for &v, x in values {
-			if v == UNREACHED {continue}
-			assert(v >= 0 && v <= MAX_COST, "voxel: a seed out of range")
-			v = top - v if v <= limit else UNREACHED
-			if v > 0 {
-				lo, hi = min(lo, x), x + 1
-				dearest = max(dearest, v)
-			}
-		}
-		for w, i in row_words(domain, row) {
-			for rest := ~w & span_bits(i, 0, sx); rest != 0; rest &= rest - 1 {
-				v := &values[i * 64 + int(bits.count_trailing_zeros(rest))]
-				v^ = SEALED + max(v^, 0)
-			}
-		}
-		if lo < hi {rows_mark(&r, row, lo, hi, dearest)}
+		other := i32(0) // (any bit of a value that is not UNREACHED, without a branch)
+		#no_bounds_check for v in out.values[row * sx:][:sx] {other |= v ~ UNREACHED}
+		if other != 0 {rows_ready(&r, out, domain, row, top)}
 	}
 	stopping := len(stop.words) > 0
 	goal := i32(0) // the potential of the cheapest cell of stop reached
@@ -165,7 +160,7 @@ least_cost :: proc(
 		if next.potential != r.waiting[row] {continue} 	// (cheaper since)
 		if goal > 0 && next.potential < goal {break}
 		if budget^ < sx {
-			rows_finish(out, top, next.potential)
+			rows_finish(&r, out, top, next.potential)
 			return true
 		}
 		budget^ -= sx
@@ -179,7 +174,15 @@ least_cost :: proc(
 			if len(up_moves) > 0 {hi = cost_slide_up(values, lo, hi, up_moves[0].cost)}
 			if len(down_moves) > 0 {lo = cost_slide_down(values, lo, hi, down_moves[0].cost)}
 		}
-		for reach > 0 && !slide {
+		for pass := 0; reach > 0 && !slide; pass += 1 {
+			if pass > 0 {
+				// (every cell above next.potential is settled; the rest is cut)
+				if budget^ < sx {
+					rows_finish(&r, out, top, next.potential)
+					return true
+				}
+				budget^ -= sx
+			}
 			changed := false
 			for x := lo; x < sx && x < hi + reach; x += 1 {
 				for m in up_moves {
@@ -220,6 +223,7 @@ least_cost :: proc(
 		for m in spans {
 			ty, tz := domain.bounds.lo.y + y + m.offset.y, domain.bounds.lo.z + z + m.offset.z
 			t := row_at(domain, ty, tz) or_continue
+			rows_ready(&r, out, domain, t, top)
 			o := int(m.offset.x)
 			if m.width > 1 {
 				a, b := max(lo + o, 0), min(hi + o + int(m.width) - 1, sx)
@@ -256,7 +260,7 @@ least_cost :: proc(
 			if best > 0 {rows_mark(&r, t, a + o, b + o, best)}
 		}
 	}
-	rows_finish(out, top, goal - 1)
+	rows_finish(&r, out, top, goal - 1)
 	return false
 }
 
@@ -320,25 +324,40 @@ nearest :: proc(
 	exhausted: bool,
 ) {
 	assert(targets.bounds == domain.bounds, "voxel: nearest in masks with different bounds")
-	f := field_make(domain.bounds, allocator)
+	if !bounds_has(domain.bounds, from) {return}
+	// Only the box max_steps of the element's steps reach from `from` is looked at (a short
+	// search in a big box pays for its reach, not for the box).
+	near := domain
+	if max_steps < MAX_EXTENT {
+		far := Cell{} // the most a step moves along each axis
+		for k in 0 ..< 3 {far[k] = max(abs(element.bounds.lo[k]), abs(element.bounds.hi[k] - 1))}
+		r := far * i32(max_steps)
+		b := domain.bounds
+		lo, hi := from - r, from + r + 1
+		b = {
+			{max(b.lo.x, lo.x), max(b.lo.y, lo.y), max(b.lo.z, lo.z)},
+			{min(b.hi.x, hi.x), min(b.hi.y, hi.y), min(b.hi.z, hi.z)},
+		}
+		if b != domain.bounds {
+			near = mask_make(b, allocator)
+			mask_copy(&near, domain)
+		}
+	}
+	defer if near.bounds != domain.bounds {mask_destroy(&near, allocator)}
+	f := field_make(near.bounds, allocator)
 	defer field_destroy(&f, allocator)
-	if !bounds_has(f.bounds, from) {return}
 	f.values[field_index(f, from)] = 0
 	moves := moves_of(element, 1, allocator)
 	defer delete(moves, allocator)
-	if least_cost(&f, domain, moves, max_steps, budget, targets, allocator) {
+	if least_cost(&f, near, moves, max_steps, budget, targets, allocator) {
 		return {}, 0, false, true
 	}
 	// Every target reached costs what the first one settled did.
-	sx := int(f.bounds.hi.x - f.bounds.lo.x)
-	sz := int(f.bounds.hi.z - f.bounds.lo.z)
-	for w, i in targets.words {
-		for rest := w; rest != 0; rest &= rest - 1 {
-			row := i / targets.stride
-			x := (i % targets.stride) * 64 + int(bits.count_trailing_zeros(rest))
-			v := f.values[row * sx + x]
-			if v == UNREACHED {continue}
-			return domain.bounds.lo + {i32(x), i32(row / sz), i32(row % sz)}, int(v), true, false
+	cursor := 0
+	for lo, n in runs_next(targets, &cursor, f.bounds) {
+		for k in 0 ..< n {
+			v := field_get(f, lo + {k, 0, 0})
+			if v != UNREACHED {return lo + {k, 0, 0}, int(v), true, false}
 		}
 	}
 	return
@@ -491,12 +510,13 @@ cost_spread :: proc(there, from: []i32, cost: i32, allowed: []u64 = nil) -> (bes
 }
 
 // Rows: what least_cost keeps of each row: the potential of its cheapest change waiting
-// (0: none) and the span of x that changed since it was taken; and the queue of rows by
-// that potential.
+// (0: none), the span of x that changed since it was taken and whether it is ready (its
+// values potentials); and the queue of rows by that potential.
 @(private)
 Rows :: struct {
 	waiting: []i32,
 	lo, hi:  []i32,
+	ready:   []u64,
 	queue:   pq.Priority_Queue(Rows_Entry),
 }
 
@@ -511,6 +531,7 @@ rows_make :: proc(rows, width: int, allocator := context.allocator) -> Rows {
 		waiting = make([]i32, rows, allocator),
 		lo      = make([]i32, rows, allocator),
 		hi      = make([]i32, rows, allocator),
+		ready   = make([]u64, (rows + 63) / 64, allocator),
 	}
 	for &v in r.lo {v = i32(width)}
 	pq.init(&r.queue, proc(a, b: Rows_Entry) -> bool {
@@ -525,7 +546,36 @@ rows_destroy :: proc(r: ^Rows) {
 	delete(r.waiting, a)
 	delete(r.lo, a)
 	delete(r.hi, a)
+	delete(r.ready, a)
 	pq.destroy(&r.queue)
+}
+
+// rows_ready: the row's seeds become potentials and its cells outside the domain are
+// sealed, once, the row queued for its seeds.
+@(private)
+rows_ready :: proc(r: ^Rows, out: ^Field, domain: Mask, row: int, top: i32) {
+	if flag_get(r.ready, row) {return}
+	flag_on(r.ready, row)
+	sx := int(out.bounds.hi.x - out.bounds.lo.x)
+	values := out.values[row * sx:][:sx]
+	lo, hi := sx, 0
+	dearest := i32(0)
+	for &v, x in values {
+		if v == UNREACHED {continue}
+		assert(v >= 0 && v <= MAX_COST, "voxel: a seed out of range")
+		v = top - v if v < top else UNREACHED
+		if v > 0 {
+			lo, hi = min(lo, x), x + 1
+			dearest = max(dearest, v)
+		}
+	}
+	for w, i in row_words(domain, row) {
+		for rest := ~w & span_bits(i, 0, sx); rest != 0; rest &= rest - 1 {
+			v := &values[i * 64 + int(bits.count_trailing_zeros(rest))]
+			v^ = SEALED + max(v^, 0)
+		}
+	}
+	if lo < hi {rows_mark(r, row, lo, hi, dearest)}
 }
 
 // rows_mark: the cells lo <= x < hi of row changed, the dearest of them now at potential
@@ -540,12 +590,19 @@ rows_mark :: proc(r: ^Rows, row, lo, hi: int, p: i32) {
 	}
 }
 
-// rows_finish: the potentials above cut become costs, every other cell UNREACHED.
+// rows_finish: in the ready rows (the others hold UNREACHED throughout), the potentials
+// above cut become costs, every other cell UNREACHED.
 @(private)
-rows_finish :: proc(out: ^Field, top, below: i32) {
+rows_finish :: proc(r: ^Rows, out: ^Field, top, below: i32) {
 	cut := max(below, 0)
-	#no_bounds_check for &v in out.values {
-		p := own(v)
-		v = top - p if p > cut else UNREACHED
+	sx := int(out.bounds.hi.x - out.bounds.lo.x)
+	for set, i in r.ready {
+		for rest := set; rest != 0; rest &= rest - 1 {
+			row := i * 64 + int(bits.count_trailing_zeros(rest))
+			#no_bounds_check for &v in out.values[row * sx:][:sx] {
+				p := own(v)
+				v = top - p if p > cut else UNREACHED
+			}
+		}
 	}
 }

@@ -199,6 +199,62 @@ test_unit_moves_and_zero_seeds_are_breadth_first_distance :: proc(t: ^testing.T)
 	}
 }
 
+// A comb: corridors along z joined at alternate ends, so that the way from one end crosses
+// every row of the plane once in each corridor, further each time, and a spread by rows
+// has to take each row again for each corridor: the most work a maze can ask of it.
+@(test)
+test_a_spread_takes_no_more_rows_than_it_reaches_cells :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	W, H :: 64, 40
+	b := Bounds{{0, 0, 0}, {W, 1, H}}
+	maze := mask_make(b)
+	defer mask_destroy(&maze)
+	for x := i32(0); x < W; x += 2 {
+		box(&maze, {{x, 0, 0}, {x + 1, 1, H}})
+		if x + 2 < W {mask_set(&maze, {x + 1, 0, 0 if x % 4 == 2 else H - 1})}
+	}
+	n4 := neighbours(1, SQUARE)
+	defer mask_destroy(&n4)
+	moves := moves_of(n4, 1, context.temp_allocator)
+	f := field_make(b)
+	defer field_destroy(&f)
+	f.values[0] = 0
+	budget := max(int)
+	testing.expect(
+		t,
+		!least_cost(&f, maze, moves, max(int), &budget, allocator = context.temp_allocator),
+	)
+	spent := max(int) - budget
+	reached := 0
+	for v in f.values {if v != UNREACHED {reached += 1}}
+	testing.expect_value(t, reached, mask_count(maze))
+	takes := spent / W
+	testing.expect_value(t, spent % W, 0)
+	testing.expectf(t, takes <= reached, "%d rows taken for %d cells", takes, reached)
+	testing.expectf(t, takes >= H * W / 4, "only %d rows taken: not a hard maze", takes)
+	// The budget it spent is exactly what it needs: one row less and it stops, cut short.
+	for given in ([]int{spent, spent - W, spent / 2, 0}) {
+		part := field_make(b)
+		defer field_destroy(&part)
+		part.values[0] = 0
+		left := given
+		ran_out := least_cost(
+			&part,
+			maze,
+			moves,
+			max(int),
+			&left,
+			allocator = context.temp_allocator,
+		)
+		testing.expect_value(t, ran_out, given < spent)
+		if given < spent {
+			testing.expect(t, left >= 0 && left < W) // (it stopped when it could not pay for a row)
+		} else {
+			testing.expect_value(t, left, given - spent)
+		}
+	}
+}
+
 @(test)
 test_a_stopped_or_spent_spread_is_the_whole_cut_short :: proc(t: ^testing.T) {
 	rng := base.rng_make(0x5709)
