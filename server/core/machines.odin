@@ -136,7 +136,9 @@ machine_slots :: proc(w: ^World, p: game.Block_Pos) -> []game.Stack {
 }
 
 // machine_wake: the machine at p thinks in `ticks` ticks (at least one), unless it is
-// already to think sooner. A machine thinks once each time it is woken.
+// already to think sooner. A machine thinks once each time it is woken. The sooner wake
+// wins (unlike a block update's schedule, on purpose): the game asks when it must think,
+// and a later ask must not put off one it already made; the queue skips stale entries.
 machine_wake :: proc(w: ^World, p: game.Block_Pos, ticks: int) {
 	e := machine_entity(w, p)
 	if e == nil {return}

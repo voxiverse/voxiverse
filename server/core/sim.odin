@@ -44,7 +44,10 @@ updates_init :: proc(u: ^Updates, allocator := context.allocator) -> (err: mem.A
 	return
 }
 
-// schedule wakes the block at p in delay ticks (unless already waiting).
+// schedule wakes the block at p in delay ticks (unless already waiting, even when this
+// wake would be sooner: unlike machine_wake, on purpose). A block's delay is its pace (water
+// spreads a block every so many ticks): kept to the first wake, edits around a cell
+// cannot hurry it, and the fixed heap holds each cell once, with no stale entries.
 schedule :: proc(w: ^World, p: game.Block_Pos, delay: u64, action: Action_Id) {
 	s := w.server
 	u := &w.updates
