@@ -343,11 +343,13 @@ display_name :: proc(s: ^Server, c: ^Client) -> string {
 	return name
 }
 
-// duration_text: "5m", "2h", "3d" (for mutes and bans; 0: for good).
+// duration_text: "5m", "2h", "3d", rounded up ("0m": none), for how long a mute or a ban
+// lasts and how long ago someone was seen: a length only, never "for good" (which a ban
+// read in the second it ends, or someone seen this second, used to get).
 duration_text :: proc(seconds: i64) -> string {
 	switch {
 	case seconds <= 0:
-		return "for good"
+		return "0m"
 	case seconds < 3600:
 		return fmt.tprintf("%dm", (seconds + 59) / 60)
 	case seconds < 86400:

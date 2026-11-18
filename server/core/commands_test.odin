@@ -47,6 +47,18 @@ near :: proc(a, b: [3]f64) -> bool {
 // the role's max_homes), teleport requests and back, whispers and answers,
 // actions, nicknames, who is here, kicking, bans by name and address, the
 // server's status; kept with the world.
+// What a ban says reads as one phrase: a ban read in the second it ends, or someone seen
+// this second, said "for for good more" and "for good ago"; a ban given no reason said
+// "Banned for good: Banned".
+@(test)
+test_ban_words :: proc(t: ^testing.T) {
+	testing.expect_value(t, duration_text(0), "0m")
+	testing.expect_value(t, duration_text(-5), "0m")
+	testing.expect_value(t, duration_text(90), "2m")
+	testing.expect_value(t, ban_text("for good", "Banned"), "Banned for good")
+	testing.expect_value(t, ban_text("for 2h more", "griefing"), "Banned for 2h more: griefing")
+}
+
 @(test)
 test_commands_over_the_network :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "net_commands"}, context.temp_allocator) or_else ""
@@ -200,7 +212,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 		{back_again, alice},
 		proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""},
 	)
-	testing.expect_value(t, back_again.rejected, "Banned: spam")
+	testing.expect_value(t, back_again.rejected, "Banned for good: spam")
 	carol := new(Net_Client)
 	defer free(carol)
 	net_connect(carol, 0, "carol", h = h)

@@ -300,8 +300,7 @@ ban :: proc(s: ^Server, c: ^Client, args: []string, seconds: i64) -> bool {
 	}
 	how := fmt.tprintf("for %s", duration_text(seconds)) if seconds > 0 else "for good"
 	notice(s, c, fmt.tprintf("Banned %s %s", name, how))
-	if who := client_by_name(s, name);
-	   who != nil {kick(s, who, c, fmt.tprintf("Banned %s: %s", how, reason))}
+	if who := client_by_name(s, name); who != nil {kick(s, who, c, ban_text(how, reason))}
 	return true
 }
 
@@ -341,7 +340,7 @@ admin_ban_ip :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	notice(s, c, fmt.tprintf("Banned the address %s", address))
 	for &other in s.clients {
 		if other.state == .Playing && other.address == address && &other != c {
-			kick(s, &other, c, fmt.tprintf("Banned: %s", reason))
+			kick(s, &other, c, ban_text("for good", reason))
 		}
 	}
 	return true
@@ -368,8 +367,15 @@ banned :: proc(s: ^Server, name, address: string, account: access.Account) -> (s
 	if !is {return "", false}
 	how :=
 		fmt.tprintf("for %s more", duration_text(b.until - now_unix())) if b.until != 0 else "for good"
-	why := fmt.tprintf("Banned %s: %s", how, b.reason)
-	return base.text_cut(why, protocol.MAX_REASON_LENGTH), true
+	return base.text_cut(ban_text(how, b.reason), protocol.MAX_REASON_LENGTH), true
+}
+
+// ban_text: what a banned player is told, "Banned for 2h more: griefing", or "Banned for
+// good" for a ban given no reason (whose reason is kept as the word "Banned").
+@(private)
+ban_text :: proc(how, reason: string) -> string {
+	if reason == "" || reason == "Banned" {return fmt.tprintf("Banned %s", how)}
+	return fmt.tprintf("Banned %s: %s", how, reason)
 }
 
 // --- Who and status ---
