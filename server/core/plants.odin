@@ -195,9 +195,7 @@ supports_check_box :: proc(w: ^World, lo, hi: game.Block_Pos, action: Action_Id)
 					min(y + PIECE, all.hi.y),
 					min(z + PIECE, all.hi.z),
 				}
-				checked := voxel.mask_make({from, to}, context.temp_allocator)
-				voxel.box(&checked, checked.bounds)
-				supports_settle(w, checked, action)
+				supports_settle(w, voxel.mask_full({from, to}, context.temp_allocator), action)
 			}
 		}
 	}

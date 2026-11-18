@@ -217,6 +217,31 @@ test_set_algebra_is_the_cellwise_definition :: proc(t: ^testing.T) {
 	}
 }
 
+@(test)
+test_a_mask_over_borrowed_words_is_a_mask :: proc(t: ^testing.T) {
+	rng := base.rng_make(0xb0a)
+	for _ in 0 ..< 50 {
+		defer free_all(context.temp_allocator)
+		b := random_bounds(&rng, 130)
+		s := bounds_size(b)
+		need := (int(s.x) + 63) / 64 * int(s.y) * int(s.z)
+		words := make([]u64, need + 3, context.temp_allocator)
+		for &w in words {w = ~u64(0)} 	// (whatever was there before)
+		m := mask_over(b, words)
+		testing.expect_value(t, len(m.words), need)
+		testing.expect_value(t, mask_count(m), 0)
+		testing.expect_value(t, words[need], ~u64(0)) // (the words past it are not its)
+		// It holds what a made mask holds, and is full when made full.
+		src := random_mask(&rng, b, 40)
+		defer mask_destroy(&src)
+		mask_copy(&m, src)
+		testing.expect(t, same(m, ref_of_tmp(src)))
+		full := mask_full(b)
+		defer mask_destroy(&full)
+		testing.expect_value(t, mask_count(full), bounds_volume(b))
+	}
+}
+
 // ref_of_tmp: ref_of, freed with the temp allocator.
 ref_of_tmp :: proc(m: Mask) -> Ref {
 	r := Ref {

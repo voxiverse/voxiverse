@@ -22,13 +22,38 @@ MAX_STRIDE :: MAX_EXTENT / 64
 // mask_make: an empty mask over b.
 mask_make :: proc(b: Bounds, allocator := context.allocator, loc := #caller_location) -> Mask {
 	check_bounds(b, loc)
-	s := bounds_size(b)
-	stride := (int(s.x) + 63) / 64
-	return {
+	return mask_over(b, make([]u64, mask_words(b), allocator, loc), loc)
+}
+
+// mask_full: a mask holding every cell of b.
+mask_full :: proc(b: Bounds, allocator := context.allocator, loc := #caller_location) -> Mask {
+	m := mask_make(b, allocator, loc)
+	box(&m, b)
+	return m
+}
+
+// mask_over: an empty mask over b whose words are the caller's (a fixed array, a buffer on
+// the stack), at least as many as it needs: (size.x + 63) / 64 for each of its size.y *
+// size.z rows, so 9 for a box of 3 by 3 by 3. It allocates nothing, has nothing to
+// destroy, and lives as long as the words do.
+mask_over :: proc(b: Bounds, words: []u64, loc := #caller_location) -> Mask {
+	check_bounds(b, loc)
+	n := mask_words(b)
+	assert(len(words) >= n, "voxel: too few words for a mask's bounds", loc)
+	m := Mask {
 		bounds = b,
-		stride = stride,
-		words = make([]u64, stride * int(s.y) * int(s.z), allocator, loc),
+		stride = (int(bounds_size(b).x) + 63) / 64,
+		words  = words[:n],
 	}
+	mask_clear(&m)
+	return m
+}
+
+// mask_words: how many words a mask over b keeps.
+@(private)
+mask_words :: proc(b: Bounds) -> int {
+	s := bounds_size(b)
+	return (int(s.x) + 63) / 64 * int(s.y) * int(s.z)
 }
 
 mask_destroy :: proc(m: ^Mask, allocator := context.allocator) {

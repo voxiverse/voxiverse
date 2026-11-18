@@ -83,7 +83,8 @@ set_block :: proc(
 	// change: what it unsettles, the settle took already).
 	for d in ([6][3]i32{{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		if cause.how == .Support || !support_fails(w, p + d) {continue}
-		beside := voxel.mask_make({p - 1, p + 2}, context.temp_allocator)
+		words: [9]u64 // (a 3 by 3 by 3 box's)
+		beside := voxel.mask_over({p - 1, p + 2}, words[:])
 		voxel.diamond(&beside, p, 1)
 		voxel.mask_set(&beside, p, false)
 		supports_settle(w, beside, cause.action)
