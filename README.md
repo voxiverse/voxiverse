@@ -145,7 +145,8 @@ played. From a game's page you can:
 - rename a save or open its folder, delete it (asked first), export it to one file, or
   import one.
 
-A game whose rounds keep nothing between plays (Flood) has **Play** instead of saves.
+A game whose rounds keep nothing between plays has **Play** instead of saves (none of the
+games built now is one).
 
 **Continue**, first on the title, opens the save you played last (it says which game and
 which save); it is not there when that save is gone.

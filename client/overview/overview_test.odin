@@ -8,7 +8,8 @@ import "client:ui"
 // The parts of commanding from above that need no frame: a selection's picks and its
 // control groups, entities that leave the session or the side falling out of both, the
 // minimap's points both ways and the fog's cells. (A box drawn with the pointer over a
-// battle is played whole by games/skirmish's client tests.)
+// battle is played whole by games/skirmish's client tests, which do not run while the game
+// is shelved.)
 
 @(test)
 test_a_selection_keeps_groups_and_drops_the_gone :: proc(t: ^testing.T) {

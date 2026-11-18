@@ -604,10 +604,11 @@ table, while the server's notices and announcements are still English in place.
 
 ## A game's look
 
-Each game has an air of its own: Delve's dungeon dark and close, Rally's midday bright and
-far, Horde's night cold, Flood's sky overcast. The sandbox declares none. A game's
-client part declares it once, as data, in `engine.Game.look` (an `engine.Look`, which is
-`render.Look`), beside its camera and its HUD:
+Each game has an air of its own: Horde's night cold, Arena's afternoon warm (and, among
+the shelved games, Delve's dungeon dark and close, Rally's midday bright and far). The
+sandbox declares none. A game's client part declares it once, as data, in
+`engine.Game.look` (an `engine.Look`, which is `render.Look`), beside its camera and its
+HUD:
 
 ```odin
 // games/horde/client/game.odin: a moonlit night that never ends
@@ -672,8 +673,9 @@ name and description over its saves and no other game's. New is at the top: sand
 the universe creation screen, another game's asks a name and makes a save of it on the
 scratch world's seed (`screen.save_create`, the world the game is made on). A game whose
 server part keeps nothing between runs (`engine.game_keeps`: no `save`, `world_save`,
-`character_data` or `machine_data`; Flood) has Play instead, which starts a scratch world
-playing it (`App.launch`, `engine.play_game`), the same path as `--game <id>`. `--game <id>`
+`character_data` or `machine_data`; none of the built games, so `client/main`'s tests add
+one) has Play instead, which starts a scratch world playing it (`App.launch`,
+`engine.play_game`), the same path as `--game <id>`. `--game <id>`
 with no `--exec`, `--scene`, `--check` or `--benchmark` skips the title and goes straight
 into that world. A new game appears in the list with nothing more to do. The title's splash
 may carry a game's flavour: `assets/splashes.txt`'s `[game <id>]` section, whose lines join
