@@ -181,10 +181,17 @@ find :: proc(
 	came := make(map[game.Block_Pos]game.Block_Pos, 256, context.temp_allocator)
 	cost := make(map[game.Block_Pos]f32, 256, context.temp_allocator)
 	cost[start] = 0
+	// What each block was expanded at: popped again at that cost (a stale entry) it would
+	// move nothing, so it is skipped and costs none of the budget. Found cheaper since, it
+	// is expanded again, as it always was.
+	expanded_at := make(map[game.Block_Pos]f32, 256, context.temp_allocator)
 	pq.push(&open, Node{start, guess(start, goal)})
 	best, best_h := start, guess(start, goal)
-	for expanded := 0; pq.len(open) > 0 && expanded < budget; expanded += 1 {
+	for expanded := 0; pq.len(open) > 0 && expanded < budget; {
 		at := pq.pop(&open).pos
+		if c, seen := expanded_at[at]; seen && c == cost[at] {continue}
+		expanded_at[at] = cost[at]
+		expanded += 1
 		if at == goal {
 			best, best_h = at, 0
 			break

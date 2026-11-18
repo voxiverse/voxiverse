@@ -186,3 +186,20 @@ test_standable_mask_is_standable :: proc(t: ^testing.T) {
 		testing.expectf(t, count > 0, "body %v stands nowhere", body)
 	}
 }
+
+// A block popped again at the cost it was expanded at is skipped and spends none of the
+// budget: around a wall, 100 expansions reach the goal (117 did, when such a pop counted),
+// by the same way as an unbounded search.
+@(test)
+test_path_stale_entries_cost_nothing :: proc(t: ^testing.T) {
+	b := Blocks {
+		region = {40, 40},
+	}
+	defer delete(b.solid)
+	wall(&b, 4, -6, 6, 1, 3)
+	q := query(&b)
+	full, _ := find(q, {0, 1, 0}, {12, 1, 0}, 100000)
+	p, ok := find(q, {0, 1, 0}, {12, 1, 0}, 100)
+	testing.expect(t, ok && p.whole, "the way round the wall not found within 100 expansions")
+	testing.expect(t, p == full, "a different way from the unbounded search's")
+}
