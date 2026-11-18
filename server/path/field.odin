@@ -4,6 +4,7 @@ import pq "core:container/priority_queue"
 import "core:mem"
 
 import "common:game"
+import "common:voxel"
 
 // Fields: the cost of the way to one goal from every block a body can stand in
 // within an area, found by one search outward from the goal (Dijkstra over the
@@ -26,13 +27,11 @@ Field :: struct {
 	body:      Body,
 	cost:      []f32, // per block of the area: x fastest, then z, then y
 	reached:   int, // blocks from which the goal is reached (the last field_build)
-	// The blocks as they were at the last field_build, solid or not, over the area and
-	// the margin a body's moves look at (GRID_BELOW under it, MAX_BODY beyond): a search
+	// The solid blocks as they were at the last field_build, over the area and the margin
+	// a body's moves look at (field_grid: GRID_BELOW under it, MAX_BODY beyond): a search
 	// reads them here, not through a query, and a walker's next move is judged against
 	// the same blocks its cost was found with. Outside it, everything is solid.
-	grid_lo:   game.Block_Pos,
-	grid_size: [3]i32,
-	solid:     []bool,
+	solid:     voxel.Mask,
 	allocator: mem.Allocator,
 }
 
@@ -51,33 +50,30 @@ field_make :: proc(
 	size := hi - lo + 1
 	if size.x <= 0 || size.y <= 0 || size.z <= 0 {return false}
 	if i64(size.x) * i64(size.y) * i64(size.z) > MAX_FIELD_BLOCKS {return false}
-	grid_lo := lo - {1, GRID_BELOW, 1}
-	grid_size := size + {1 + MAX_BODY, GRID_BELOW + MAX_BODY + 1, 1 + MAX_BODY}
 	cost, err := make([]f32, int(size.x * size.y * size.z), allocator, loc)
 	if err != nil {return false}
-	solid, err2 := make([]bool, int(grid_size.x * grid_size.y * grid_size.z), allocator, loc)
-	if err2 != nil {
-		delete(cost, allocator)
-		return false
-	}
 	f^ = {
 		lo        = lo,
 		hi        = hi,
 		size      = size,
 		cost      = cost,
-		grid_lo   = grid_lo,
-		grid_size = grid_size,
-		solid     = solid,
 		allocator = allocator,
 	}
+	f.solid = voxel.mask_make(field_grid(f), allocator, loc)
 	for &c in f.cost {c = NO_WAY}
 	return true
 }
 
 field_destroy :: proc(f: ^Field) {
 	delete(f.cost, f.allocator)
-	delete(f.solid, f.allocator)
+	voxel.mask_destroy(&f.solid, f.allocator)
 	f^ = {}
+}
+
+// field_grid: the cells a field keeps the blocks of: its area, GRID_BELOW under it, a
+// block before it and MAX_BODY beyond it along x and z, MAX_BODY + 1 over it.
+field_grid :: proc(f: ^Field) -> voxel.Bounds {
+	return {f.lo - {1, GRID_BELOW, 1}, f.hi + 1 + {MAX_BODY, MAX_BODY + 1, MAX_BODY}}
 }
 
 // field_solid: the field's copy of the blocks, as a search reads them.
@@ -85,10 +81,7 @@ field_destroy :: proc(f: ^Field) {
 field_solid :: proc(f: ^Field) -> Solid {
 	return {f, proc(data: rawptr, p: game.Block_Pos) -> bool {
 			f := (^Field)(data)
-			d := p - f.grid_lo
-			if d.x < 0 || d.y < 0 || d.z < 0 {return true}
-			if d.x >= f.grid_size.x || d.y >= f.grid_size.y || d.z >= f.grid_size.z {return true}
-			return f.solid[d.x + f.grid_size.x * (d.z + f.grid_size.z * d.y)]
+			return !voxel.bounds_has(f.solid.bounds, p) || voxel.mask_get(f.solid, p)
 		}}
 }
 
@@ -108,19 +101,16 @@ field_cost :: proc(f: ^Field, p: game.Block_Pos) -> (cost: f32, ok: bool) {
 	return f.cost[i], f.cost[i] != NO_WAY
 }
 
-// field_build searches from the goal (a block the body stands in) over the area: every
-// block a body of that size can reach the goal from gets its cost. Returns how many
-// it reached (0: the goal is not standable or outside). Moves never leave the area.
-field_build :: proc(f: ^Field, q: game.Block_Query, goal: game.Block_Pos, body := SMALL) -> int {
-	cell := 0
-	for y in 0 ..< f.grid_size.y {
-		for z in 0 ..< f.grid_size.z {
-			for x in 0 ..< f.grid_size.x {
-				f.solid[cell] = game.solid_at(q, f.grid_lo + {x, y, z})
-				cell += 1
-			}
-		}
-	}
+// field_build searches from the goal (a block the body stands in) over the area, with
+// solid the solid blocks (game.solid_at's) over field_grid at least: every block a body
+// of that size can reach the goal from gets its cost. Returns how many it reached (0: the
+// goal is not standable or outside). Moves never leave the area.
+field_build :: proc(f: ^Field, solid: voxel.Mask, goal: game.Block_Pos, body := SMALL) -> int {
+	g, s := f.solid.bounds, solid.bounds
+	covers := s.lo.x <= g.lo.x && s.lo.y <= g.lo.y && s.lo.z <= g.lo.z
+	covers &&= s.hi.x >= g.hi.x && s.hi.y >= g.hi.y && s.hi.z >= g.hi.z
+	assert(covers, "a field built from blocks short of its grid")
+	voxel.mask_copy(&f.solid, solid)
 	return field_search(f, goal, body)
 }
 
@@ -130,16 +120,8 @@ field_build :: proc(f: ^Field, q: game.Block_Query, goal: game.Block_Pos, body :
 // again, so a question costs a search, not a look at every block of the area.
 field_trial :: proc(trial, from: ^Field, at: game.Block_Pos, solid: bool) -> int {
 	assert(trial.lo == from.lo && trial.hi == from.hi, "a trial field over another area")
-	copy(trial.solid, from.solid)
-	d := at - from.grid_lo
-	if d.x >= 0 &&
-	   d.y >= 0 &&
-	   d.z >= 0 &&
-	   d.x < from.grid_size.x &&
-	   d.y < from.grid_size.y &&
-	   d.z < from.grid_size.z {
-		trial.solid[d.x + from.grid_size.x * (d.z + from.grid_size.z * d.y)] = solid
-	}
+	voxel.mask_copy(&trial.solid, from.solid)
+	if voxel.bounds_has(trial.solid.bounds, at) {voxel.mask_set(&trial.solid, at, solid)}
 	return field_search(trial, from.goal, from.body)
 }
 
@@ -148,21 +130,12 @@ field_trial :: proc(trial, from: ^Field, at: game.Block_Pos, solid: bool) -> int
 field_search :: proc(f: ^Field, goal: game.Block_Pos, body: Body) -> int {
 	f.goal, f.body, f.reached = goal, body, 0
 	for &c in f.cost {c = NO_WAY}
-	cell := 0
 	solid := field_solid(f)
-	at, inside := field_index(f, goal)
-	if !inside || !stands(solid, goal, body) {return 0}
 	// Where the body stands, once (most blocks are air in midair, or inside the ground).
-	stand := make([]bool, len(f.cost), context.temp_allocator)
-	cell = 0
-	for y in f.lo.y ..= f.hi.y {
-		for z in f.lo.z ..= f.hi.z {
-			for x in f.lo.x ..= f.hi.x {
-				stand[cell] = stands(solid, {x, y, z}, body)
-				cell += 1
-			}
-		}
-	}
+	stand := voxel.mask_make({f.lo, f.hi + 1}, context.temp_allocator)
+	standable_mask(&stand, f.solid, body)
+	at, inside := field_index(f, goal)
+	if !inside || !voxel.mask_get(stand, goal) {return 0}
 	Node :: struct {
 		pos:  game.Block_Pos,
 		cost: f32,
@@ -188,7 +161,7 @@ field_search :: proc(f: ^Field, goal: game.Block_Pos, body: Body) -> int {
 			for dy in i32(-1) ..= MAX_DROP {
 				from := game.Block_Pos{n.pos.x - d.x, n.pos.y + dy, n.pos.z - d.y}
 				j, in_area := field_index(f, from)
-				if !in_area || !stand[j] || f.cost[j] <= n.cost {continue}
+				if !in_area || !voxel.mask_get(stand, from) || f.cost[j] <= n.cost {continue}
 				to, length, extra, can := move(solid, from, d, body)
 				if !can || to != n.pos {continue}
 				c := n.cost + length + extra

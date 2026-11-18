@@ -36,7 +36,7 @@ test_field_open_ground :: proc(t: ^testing.T) {
 	f: Field
 	if !testing.expect(t, field_make(&f, {-10, 1, -10}, {10, 3, 10})) {return}
 	defer field_destroy(&f)
-	reached := field_build(&f, q, {8, 1, 0})
+	reached := field_build(&f, solid_mask(q, field_grid(&f)), {8, 1, 0})
 	testing.expect_value(t, reached, 21 * 21) // (the ground floor: y 2 and 3 are midair)
 	c, ok := field_cost(&f, {0, 1, 0})
 	testing.expect(t, ok && abs(c - 8) < 0.001)
@@ -60,7 +60,7 @@ test_field_walls_and_the_last_gap :: proc(t: ^testing.T) {
 	if !testing.expect(t, field_make(&f, {-12, 1, -12}, {12, 4, 12})) {return}
 	defer field_destroy(&f)
 	wall(&b, 0, -12, 9, 1, 2) // x 0, from the edge to z 9: a gap at z 10..12
-	field_build(&f, q, {6, 1, 0})
+	field_build(&f, solid_mask(q, field_grid(&f)), {6, 1, 0})
 	c, ok := field_cost(&f, {-6, 1, 0})
 	testing.expect(t, ok && c > 20, "went through the wall")
 	for p in walk(&f, q, {-6, 1, 0}) {
@@ -69,20 +69,20 @@ test_field_walls_and_the_last_gap :: proc(t: ^testing.T) {
 
 	// Filling the gap but one: the way squeezes through it.
 	wall(&b, 0, 10, 11, 1, 2)
-	field_build(&f, q, {6, 1, 0})
+	field_build(&f, solid_mask(q, field_grid(&f)), {6, 1, 0})
 	_, ok = field_cost(&f, {-6, 1, 0})
 	testing.expect(t, ok, "one gap left, and no way")
 
 	// Would a block in the last gap shut the way? Not for a climber, which steps up on
 	// it; for a walker that does not climb, it would. Asked first, then done.
 	ask := With_Block{q, {0, 1, 12}, .Stone}
-	field_build(&f, with_block(&ask), {6, 1, 0})
+	field_build(&f, solid_mask(with_block(&ask), field_grid(&f)), {6, 1, 0})
 	_, ok = field_cost(&f, {-6, 1, 0})
 	testing.expect(t, ok, "a climber does not step up on the block")
-	field_build(&f, with_block(&ask), {6, 1, 0}, {1, 1, 0})
+	field_build(&f, solid_mask(with_block(&ask), field_grid(&f)), {6, 1, 0}, {1, 1, 0})
 	_, ok = field_cost(&f, {-6, 1, 0})
 	testing.expect(t, !ok, "a block in the last gap left a way")
-	field_build(&f, q, {6, 1, 0}, {1, 1, 0})
+	field_build(&f, solid_mask(q, field_grid(&f)), {6, 1, 0}, {1, 1, 0})
 	_, ok = field_cost(&f, {-6, 1, 0})
 	testing.expect(t, ok, "asking changed the blocks")
 
@@ -116,18 +116,18 @@ test_field_bodies :: proc(t: ^testing.T) {
 	wall(&b, 0, -8, -1, 1, 3)
 	wall(&b, 0, 1, 8, 1, 3)
 	b.solid[{0, 2, 0}], b.solid[{0, 3, 0}] = true, true
-	field_build(&f, q, {5, 1, 0}, SMALL)
+	field_build(&f, solid_mask(q, field_grid(&f)), {5, 1, 0}, SMALL)
 	_, ok := field_cost(&f, {-5, 1, 0})
 	testing.expect(t, ok, "a small body does not pass the gap")
-	field_build(&f, q, {5, 1, 0}, {1, 2, 1})
+	field_build(&f, solid_mask(q, field_grid(&f)), {5, 1, 0}, {1, 2, 1})
 	_, ok = field_cost(&f, {-5, 1, 0})
 	testing.expect(t, !ok, "a tall body passed under the beam")
 	delete_key(&b.solid, game.Block_Pos{0, 2, 0})
 	delete_key(&b.solid, game.Block_Pos{0, 3, 0})
-	field_build(&f, q, {5, 1, 0}, {1, 2, 1})
+	field_build(&f, solid_mask(q, field_grid(&f)), {5, 1, 0}, {1, 2, 1})
 	_, ok = field_cost(&f, {-5, 1, 0})
 	testing.expect(t, ok, "a tall body does not pass the open gap")
-	field_build(&f, q, {5, 1, 0}, {2, 1, 1})
+	field_build(&f, solid_mask(q, field_grid(&f)), {5, 1, 0}, {2, 1, 1})
 	_, ok = field_cost(&f, {-5, 1, 0})
 	testing.expect(t, !ok, "a wide body passed a gap one wide")
 }
@@ -146,8 +146,8 @@ test_field_limits :: proc(t: ^testing.T) {
 	q := query(&b)
 	if !testing.expect(t, field_make(&f, {-4, 1, -4}, {4, 2, 4})) {return}
 	defer field_destroy(&f)
-	testing.expect_value(t, field_build(&f, q, {20, 1, 0}), 0)
-	testing.expect_value(t, field_build(&f, q, {0, 2, 0}), 0)
+	testing.expect_value(t, field_build(&f, solid_mask(q, field_grid(&f)), {20, 1, 0}), 0)
+	testing.expect_value(t, field_build(&f, solid_mask(q, field_grid(&f)), {0, 2, 0}), 0)
 }
 
 // A path crosses a changed block when it goes through it or beside it.

@@ -5,6 +5,7 @@ import "core:sync"
 import "core:testing"
 
 import "common:game"
+import "common:voxel"
 
 @(private)
 Blocks :: struct {
@@ -28,6 +29,19 @@ wall :: proc(b: ^Blocks, x: i32, z_from, z_to: i32, y_from, y_to: i32) {
 	for z in z_from ..= z_to {
 		for y in y_from ..= y_to {b.solid[{x, y, z}] = true}
 	}
+}
+
+// solid_mask: the cells of b that are solid as q has them (game.solid_at), in the temp
+// allocator: what a server's world_mask gives.
+@(private)
+solid_mask :: proc(q: game.Block_Query, b: voxel.Bounds) -> voxel.Mask {
+	m := voxel.mask_make(b, context.temp_allocator)
+	for y in b.lo.y ..< b.hi.y {
+		for z in b.lo.z ..< b.hi.z {
+			for x in b.lo.x ..< b.hi.x {if game.solid_at(q, {x, y, z}) {voxel.mask_set(&m, {x, y, z})}}
+		}
+	}
+	return m
 }
 
 @(private = "file")
@@ -128,4 +142,47 @@ registry :: proc() -> ^game.Registry {
 		shared_registry = game.registry_base(runtime.default_allocator())
 	})
 	return shared_registry
+}
+
+// One rule for where a body stands: standable_mask over a box of cells gives the cells
+// standable says one at a time, for bodies one wide and one high up to the widest and
+// tallest, over a step, a wall, an overhang, a comb in midair and the edge of the loaded ground.
+@(test)
+test_standable_mask_is_standable :: proc(t: ^testing.T) {
+	b := Blocks {
+		region = {6, 9},
+	}
+	defer delete(b.solid)
+	wall(&b, 2, -3, 3, 1, 1) // a step
+	wall(&b, -2, -9, 9, 1, 4) // a wall
+	wall(&b, 4, 0, 5, 3, 3) // an overhang
+	for x := i32(-4); x <= 3; x += 2 {b.solid[{x, 2, -6}] = true} 	// a comb in midair
+	q := query(&b)
+	area := voxel.Bounds{{-8, -1, -11}, {9, 6, 12}} // (past the loaded ground)
+	solid := solid_mask(q, {area.lo - {0, 1, 0}, area.hi + MAX_BODY})
+	for body in ([]Body{{1, 1, 1}, {1, 2, 0}, {2, 1, 1}, {2, 3, 0}, {3, 2, 1}, {MAX_BODY, MAX_BODY, 1}}) {
+		m := voxel.mask_make(area, context.temp_allocator)
+		standable_mask(&m, solid, body)
+		count := 0
+		for y in area.lo.y ..< area.hi.y {
+			for z in area.lo.z ..< area.hi.z {
+				for x in area.lo.x ..< area.hi.x {
+					want := standable(q, {x, y, z}, body)
+					if want {count += 1}
+					if voxel.mask_get(m, {x, y, z}) != want {
+						testing.expectf(
+							t,
+							false,
+							"body %v at %v: the mask says %v",
+							body,
+							[3]i32{x, y, z},
+							!want,
+						)
+						return
+					}
+				}
+			}
+		}
+		testing.expectf(t, count > 0, "body %v stands nowhere", body)
+	}
 }

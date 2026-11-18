@@ -76,7 +76,7 @@ single package; what needs none of its state lives below it (`server/path`, `ser
 
 No package sits at the root of `client/` or `server/`; each feature has its own. `server/core`
 is the server's one package (its state is one cycle around `Server`, `Client` and `World`);
-below it, `server/path` finds ways through the blocks from a `game.Block_Query` alone,
+below it, `server/path` finds ways through the blocks from a `game.Block_Query` or a `voxel.Mask` of the solid cells alone,
 `server/grid` keeps a network's parts over the blocks it is told of, and
 `server/store` keeps a universe's files as files (the save transaction, backups, export,
 migrations, compaction), so neither knows a server and the server imports both;

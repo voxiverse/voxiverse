@@ -4,6 +4,7 @@ import pq "core:container/priority_queue"
 import "core:math"
 
 import "common:game"
+import "common:voxel"
 
 // Pathfinding for walking entities: A* over the block grid. A walker of a Body
 // stands in blocks of air (its footprint, as tall as it is) over solid ground;
@@ -79,12 +80,44 @@ open :: proc(q: game.Block_Query, p: game.Block_Pos, body := SMALL) -> bool {
 }
 
 // standable: a walker can stand in p: it fits, with solid ground under its footprint
-// (under one of its blocks at least).
+// (under one of its blocks at least). standable_mask says it of a box of cells at once.
 standable :: proc(q: game.Block_Query, p: game.Block_Pos, body := SMALL) -> bool {
 	q := q
 	return stands(solid_of(&q), p, body)
 }
 
+// standable_mask: dst becomes the cells of its bounds a body stands in over the solid
+// cells: erode(free, body) ∩ (solid moved up one ⊕ the footprint turned back), the cells
+// where all of the body is free and some of its footprint is over solid ground. A cell
+// outside solid's bounds is neither free nor ground, so solid's bounds hold the body
+// and the row under it for every cell of dst (a field's grid does). The cells
+// `standable` says one at a time.
+standable_mask :: proc(
+	dst: ^voxel.Mask,
+	solid: voxel.Mask,
+	body: Body,
+	allocator := context.temp_allocator,
+) {
+	free := voxel.mask_make(solid.bounds, allocator)
+	defer voxel.mask_destroy(&free, allocator)
+	voxel.mask_copy(&free, solid)
+	voxel.complement(&free)
+	room := voxel.mask_make({{}, {body.width, body.height, body.width}}, allocator)
+	defer voxel.mask_destroy(&room, allocator)
+	voxel.box(&room, room.bounds)
+	voxel.erode(dst, free, room)
+	under := voxel.mask_make({{1 - body.width, 0, 1 - body.width}, {1, 1, 1}}, allocator)
+	defer voxel.mask_destroy(&under, allocator)
+	voxel.box(&under, under.bounds)
+	ground := voxel.mask_make({dst.bounds.lo - {0, 1, 0}, dst.bounds.hi - {0, 1, 0}}, allocator)
+	defer voxel.mask_destroy(&ground, allocator)
+	voxel.dilate(&ground, solid, under)
+	voxel.translate(&ground, {0, 1, 0})
+	voxel.intersect(dst, ground)
+}
+
+// fits and stands: standable_mask's rule at one cell (a search with no box of cells to
+// make masks over asks them as it goes).
 @(private)
 fits :: proc(s: Solid, p: game.Block_Pos, body: Body) -> bool {
 	for dy in 0 ..< body.height {

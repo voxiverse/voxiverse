@@ -5,6 +5,7 @@ import "core:slice"
 
 import "common:game"
 import "server:core"
+import "server:path"
 
 // Squads: many steered walkers ordered together (a real-time strategy's army, a town's
 // work gang, a horde's wave), built on the steering of docs/games.md ("Walkers"):
@@ -85,21 +86,13 @@ routes_free :: proc(w: ^core.World, rs: ^Routes) {
 	rs.count = 0
 }
 
-// standable: a walker one block wide and two high stands in block p: solid under it,
-// nothing in it or over it (blocks not loaded are not).
+// standable: a walker one block wide and two high stands in block p (path.standable:
+// solid under it, nothing in it or over it, a block not loaded being solid).
 standable :: proc(s: ^core.Server, w: ^core.World, p: game.Block_Pos) -> bool {
-	under, l1 := core.block_at(w, p - {0, 1, 0})
-	feet, l2 := core.block_at(w, p)
-	head, l3 := core.block_at(w, p + {0, 1, 0})
-	t := &s.registry.blocks
-	return(
-		l1 &&
-		l2 &&
-		l3 &&
-		game.block_collides(t, under) &&
-		!game.block_collides(t, feet) &&
-		!game.block_collides(t, head) \
-	)
+	read :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
+		return core.block_at((^core.World)(data), p)
+	}
+	return path.standable({w, read, &s.registry.blocks, {}}, p, {1, 2, 0})
 }
 
 // ground_at: the block a walker stands in at column (x, z), searching from y down to

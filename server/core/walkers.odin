@@ -6,6 +6,7 @@ import "core:slice"
 
 import "common:base"
 import "common:game"
+import "common:voxel"
 import "server:path"
 
 // Walkers a game steers: entities whose kind has `"brain": "steered"` (a walker
@@ -170,7 +171,14 @@ route_field :: proc(w: ^World, h: Route_Handle) -> ^path.Field {
 	if r == nil {return nil}
 	if r.dirty {
 		r.dirty = false
-		path.field_build(&r.field, walk_query(w), r.field.goal, route_body(w, r))
+		t := &w.server.registry.blocks
+		solid_blocks := make([]bool, t.count, context.temp_allocator) // (game.solid_at's)
+		for b in 0 ..< t.count {
+			solid_blocks[b] = len(game.shape_boxes(t, t.collision[b])) > 0
+		}
+		solid := voxel.mask_make(path.field_grid(&r.field), context.temp_allocator)
+		world_mask(w, &solid, solid_blocks, unloaded = true)
+		path.field_build(&r.field, solid, r.field.goal, route_body(w, r))
 		wk.builds += 1
 	}
 	return &r.field
