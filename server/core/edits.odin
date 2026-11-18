@@ -4,17 +4,21 @@ import "core:log"
 import "core:math"
 
 import "common:game"
+import "common:voxel"
 
-// Bulk edits: a shape (sphere, box) and an operation applied to every
-// block in it, chunk by chunk, each touched column's top found again once;
-// the touched chunks are sent whole at the end of the tick (changes.odin)
-// instead of a message per block.
+// Bulk edits: a shape (sphere, box, any set of cells as a voxel.Mask) and an
+// operation applied to every block in it, chunk by chunk and in each a row of
+// cells at a time, each touched column's top found again once; the touched
+// chunks are sent whole at the end of the tick (changes.odin) instead of a
+// message per block. However many cells, a bulk edit is one cause in the
+// journal, one change told to the game and one wake of the simulation.
 
 MAX_BULK_VOLUME :: 64 * 64 * 64 // blocks in the shape's box
 
 Bulk_Shape :: union {
 	Sphere,
 	Box,
+	voxel.Mask, // its cells (world_mask reads one from the world)
 }
 
 // Sphere: the blocks whose centres lie within radius of center.
@@ -85,13 +89,21 @@ bulk_edit :: proc(
 	}
 
 	refused := admit_box(w, cause, lo, hi)
+	mask, is_mask := e.shape.(voxel.Mask)
+	runs := mask_runs(mask, clo, chi) if is_mask else nil
 	for cy in clo.y ..= chi.y {
 		for cz in clo.z ..= chi.z {
 			for cx in clo.x ..= chi.x {
 				pos := game.Chunk_Pos{cx, cy, cz}
 				c := chunks_get(&w.chunks, pos)
 				if c == nil || c.state != .Ready {continue}
-				n, skipped := edit_chunk(w, c, e, lo, hi, cause, refused)
+				spans: []Span
+				if is_mask {
+					spans = runs[chunk_slot(pos, clo, chi)][:]
+				} else {
+					spans = box_rows(pos, lo, hi)
+				}
+				n, skipped := edit_chunk(w, c, e, spans, cause, refused)
 				protected += skipped
 				if n > 0 {
 					changed += n
@@ -118,76 +130,122 @@ bulk_edit :: proc(
 	return changed, .Done, protected
 }
 
-// edit_chunk applies e to the part of chunk c inside lo..hi.
+// Span: the cells lo, lo + {1, 0, 0} ... lo + {length - 1, 0, 0} of a row, within one chunk.
+@(private = "file")
+Span :: struct {
+	lo:     game.Block_Pos,
+	length: i32,
+}
+
+// box_rows: the rows of the part of chunk pos inside lo..hi, by y, then z (temp).
+@(private = "file")
+box_rows :: proc(pos: game.Chunk_Pos, lo, hi: game.Block_Pos) -> []Span {
+	origin := game.chunk_origin(pos)
+	from := [3]i32{max(lo.x, origin.x), max(lo.y, origin.y), max(lo.z, origin.z)}
+	to := [3]i32 {
+		min(hi.x, origin.x + game.CHUNK_SIZE - 1),
+		min(hi.y, origin.y + game.CHUNK_SIZE - 1),
+		min(hi.z, origin.z + game.CHUNK_SIZE - 1),
+	}
+	rows := make([dynamic]Span, 0, game.CHUNK_SIZE * game.CHUNK_SIZE, context.temp_allocator)
+	for y in from.y ..= to.y {
+		for z in from.z ..= to.z {append(&rows, Span{{from.x, y, z}, to.x - from.x + 1})}
+	}
+	return rows[:]
+}
+
+// mask_runs: the mask's runs (voxel.runs_next) cut at the chunks' edges, by chunk of
+// clo..chi (chunk_slot; a run in no chunk of them is left out), each chunk's in the order
+// of the runs: by y, then z, then x, as box_rows gives a box's (temp).
+@(private = "file")
+mask_runs :: proc(m: voxel.Mask, clo, chi: game.Chunk_Pos) -> [][dynamic]Span {
+	n := chi - clo + 1
+	runs := make([][dynamic]Span, int(n.x) * int(n.y) * int(n.z), context.temp_allocator)
+	for &r in runs {r.allocator = context.temp_allocator}
+	cursor := 0
+	for lo, length in voxel.runs_next(m, &cursor) {
+		if cy := lo.y >> game.CHUNK_SHIFT; cy < clo.y || cy > chi.y {continue} 	// (beyond the world's height)
+		at, left := lo, length
+		for left > 0 {
+			piece := min(left, game.CHUNK_SIZE - (at.x & game.CHUNK_MASK))
+			append(&runs[chunk_slot(game.chunk_of(at), clo, chi)], Span{at, piece})
+			at.x += piece
+			left -= piece
+		}
+	}
+	return runs
+}
+
+// chunk_slot: the place of chunk pos among clo..chi, x fastest, then z, then y.
+@(private = "file")
+chunk_slot :: proc(pos, clo, chi: game.Chunk_Pos) -> int {
+	n, d := chi - clo + 1, pos - clo
+	return (int(d.y) * int(n.z) + int(d.z)) * int(n.x) + int(d.x)
+}
+
+// edit_chunk applies e to the cells of spans, all in chunk c.
 @(private = "file")
 edit_chunk :: proc(
 	w: ^World,
 	c: ^Chunk,
 	e: Bulk_Edit,
-	lo, hi: game.Block_Pos,
+	spans: []Span,
 	act: Act,
 	refused: []Box, // protected boxes the actor may not edit
 ) -> (
 	changed, protected: int,
 ) {
 	origin := game.chunk_origin(c.pos)
-	from := [3]i32{max(lo.x - origin.x, 0), max(lo.y - origin.y, 0), max(lo.z - origin.z, 0)}
-	to := [3]i32 {
-		min(hi.x - origin.x, game.CHUNK_SIZE - 1),
-		min(hi.y - origin.y, game.CHUNK_SIZE - 1),
-		min(hi.z - origin.z, game.CHUNK_SIZE - 1),
-	}
+	_, is_mask := e.shape.(voxel.Mask) // (a mask's spans are its cells)
 	entries := make([dynamic]game.Journal_Entry, 0, 256, context.temp_allocator)
 	defer journal_batch(w, act, entries[:])
-	for y in from.y ..= to.y {
-		for z in from.z ..= to.z {
-			for x in from.x ..= to.x {
-				l := [3]i32{x, y, z}
-				p := origin + l
-				if !shape_has(e.shape, p) {continue}
-				old := game.chunk_get(&c.blocks, l)
-				if !game.can_change(&w.server.registry.blocks, old) {continue} 	// the world's floor stays
-				new := old
-				switch e.op {
-				case .Set:
-					new = e.block
-				case .Replace:
-					if old == e.from {new = e.block}
-				case .Carve:
-					new = .Air
-				case .Paste:
-					corner, _ := shape_box(e.shape)
-					cell := game.template_cell(e.template, p - corner, e.rotation)
-					if cell == game.VOID {continue}
-					new = game.Block(cell)
-				case .Unpaste:
-					corner, _ := shape_box(e.shape)
-					cell := game.template_cell(e.template, p - corner, e.rotation)
-					if cell == game.VOID || game.Block(cell) != old {continue}
-					new = .Air
-				}
-				if new == old {continue}
-				if len(refused) > 0 {
-					blocked := false
-					for b in refused {if box_has(b, p) {blocked = true}}
-					if blocked {
-						protected += 1
-						continue
-					}
-				}
-				chunk_cow(&w.chunks, c)
-				if err := game.chunk_set(&c.blocks, &w.chunks.arrays, l, new); err != nil {
-					log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
-					return
-				}
-				if block_has_rules(&w.chunks, new) {c.restless = true}
-				if block_has_random(&w.chunks, old) {c.random_blocks -= 1}
-				if block_has_random(&w.chunks, new) {c.random_blocks += 1}
-				channels_reset_cell(w, p, false)
-				entity_lifecycle(w, p, old, new, act)
-				append(&entries, game.Journal_Entry{pos = p, old = old, new = new})
-				changed += 1
+	for span in spans {
+		for x in span.lo.x ..< span.lo.x + span.length {
+			p := game.Block_Pos{x, span.lo.y, span.lo.z}
+			l := p - origin
+			if !is_mask && !shape_has(e.shape, p) {continue}
+			old := game.chunk_get(&c.blocks, l)
+			if !game.can_change(&w.server.registry.blocks, old) {continue} 	// the world's floor stays
+			new := old
+			switch e.op {
+			case .Set:
+				new = e.block
+			case .Replace:
+				if old == e.from {new = e.block}
+			case .Carve:
+				new = .Air
+			case .Paste:
+				corner, _ := shape_box(e.shape)
+				cell := game.template_cell(e.template, p - corner, e.rotation)
+				if cell == game.VOID {continue}
+				new = game.Block(cell)
+			case .Unpaste:
+				corner, _ := shape_box(e.shape)
+				cell := game.template_cell(e.template, p - corner, e.rotation)
+				if cell == game.VOID || game.Block(cell) != old {continue}
+				new = .Air
 			}
+			if new == old {continue}
+			if len(refused) > 0 {
+				blocked := false
+				for b in refused {if box_has(b, p) {blocked = true}}
+				if blocked {
+					protected += 1
+					continue
+				}
+			}
+			chunk_cow(&w.chunks, c)
+			if err := game.chunk_set(&c.blocks, &w.chunks.arrays, l, new); err != nil {
+				log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
+				return
+			}
+			if block_has_rules(&w.chunks, new) {c.restless = true}
+			if block_has_random(&w.chunks, old) {c.random_blocks -= 1}
+			if block_has_random(&w.chunks, new) {c.random_blocks += 1}
+			channels_reset_cell(w, p, false)
+			entity_lifecycle(w, p, old, new, act)
+			append(&entries, game.Journal_Entry{pos = p, old = old, new = new})
+			changed += 1
 		}
 	}
 	return
@@ -211,6 +269,8 @@ shape_box :: proc(shape: Bulk_Shape) -> (lo, hi: game.Block_Pos) {
 	case Box:
 		lo = {min(v.lo.x, v.hi.x), min(v.lo.y, v.hi.y), min(v.lo.z, v.hi.z)}
 		hi = {max(v.lo.x, v.hi.x), max(v.lo.y, v.hi.y), max(v.lo.z, v.hi.z)}
+	case voxel.Mask:
+		lo, hi = v.bounds.lo, v.bounds.hi - 1 // (empty bounds: hi below lo)
 	}
 	return
 }
@@ -232,6 +292,8 @@ shape_has :: proc(shape: Bulk_Shape, p: game.Block_Pos) -> bool {
 			p.z >= lo.z &&
 			p.z <= hi.z \
 		)
+	case voxel.Mask:
+		return voxel.mask_get(v, p)
 	}
 	return false
 }

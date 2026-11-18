@@ -8,6 +8,7 @@ import "core:time"
 
 import "common:base"
 import "common:game"
+import "common:voxel"
 import "common:worldgen"
 
 // The server's chunks: a fixed pool, a position -> handle map and recycled
@@ -166,6 +167,67 @@ chunks_block :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 	c := chunks_get((^Chunk_Store)(data), game.chunk_of(p))
 	if c == nil || c.state != .Ready {return .Air, false}
 	return game.chunk_get(&c.blocks, game.local_of(p)), true
+}
+
+// world_mask: dst becomes the cells of its bounds whose block is in class (class[b], a
+// flag for each block of the registry), a cell whose chunk is not loaded or still
+// generating counting as `unloaded` says, above the world's height as air and below it
+// as not loaded. complete: every chunk under the bounds within the world's height is
+// ready. A chunk of one block throughout is taken a box at a time, and any other a run
+// of cells at a time; what the caller does with the cells it applies back by bulk_edit
+// with the mask as its shape.
+world_mask :: proc(
+	w: ^World,
+	dst: ^voxel.Mask,
+	class: []bool,
+	unloaded := false,
+) -> (
+	complete: bool,
+) {
+	voxel.mask_clear(dst)
+	complete = true
+	b := dst.bounds
+	if voxel.bounds_volume(b) == 0 {return}
+	first, last := game.chunk_of(b.lo), game.chunk_of(b.hi - 1)
+	for cy in first.y ..= last.y {
+		for cz in first.z ..= last.z {
+			for cx in first.x ..= last.x {
+				origin := game.chunk_origin({cx, cy, cz})
+				part := voxel.Bounds {
+					{max(b.lo.x, origin.x), max(b.lo.y, origin.y), max(b.lo.z, origin.z)},
+					{
+						min(b.hi.x, origin.x + game.CHUNK_SIZE),
+						min(b.hi.y, origin.y + game.CHUNK_SIZE),
+						min(b.hi.z, origin.z + game.CHUNK_SIZE),
+					},
+				}
+				c := chunks_get(&w.chunks, {cx, cy, cz})
+				if c == nil || c.state != .Ready {
+					above := origin.y >= game.WORLD_MAX_Y
+					if !above && origin.y >= game.WORLD_MIN_Y {complete = false}
+					if (class[int(game.Block.Air)] if above else unloaded) {voxel.box(dst, part)}
+					continue
+				}
+				if c.blocks.array == nil {
+					if class[int(c.blocks.uniform)] {voxel.box(dst, part)}
+					continue
+				}
+				for y in part.lo.y ..< part.hi.y {
+					for z in part.lo.z ..< part.hi.z {
+						row := game.local_index({0, y - origin.y, z - origin.z}) - int(origin.x)
+						start := part.lo.x // the first cell of the run being read
+						for x in part.lo.x ..= part.hi.x {
+							held := x < part.hi.x && class[int(c.blocks.array[row + int(x)])]
+							if held {continue}
+							if x > start {voxel.box(dst, {{start, y, z}, {x, y + 1, z + 1}})}
+							start = x + 1
+						}
+					}
+				}
+			}
+		}
+	}
+	return
 }
 
 // chunks_set_block changes one block of a ready chunk; false if the chunk is
