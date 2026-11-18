@@ -2,6 +2,7 @@ package voxel
 
 import pq "core:container/priority_queue"
 import "core:math/bits"
+import "core:slice"
 
 // Least cost: a spread in which each move has an integer cost and each source a start
 // value, and each cell gets the least, over the sources and the chains of moves that lead
@@ -92,7 +93,34 @@ least_cost :: proc(
 		ends[side] = len(sorted)
 	}
 	up_moves, down_moves := sorted[:ends[0]], sorted[ends[0]:ends[1]]
-	other_moves := sorted[ends[1]:ends[2]]
+	// The moves to other rows as spans: those of one offset across rows and one cost, taken
+	// from anywhere, whose offsets along x are a run, push the most over that run of a row
+	// once instead of each its own (the 26 neighbours are 8 spans of 3 instead of 24
+	// moves: the Minkowski sum of a segment and the cross).
+	across := sorted[ends[1]:ends[2]]
+	slice.sort_by(across, proc(a, b: Move) -> bool {
+		ka := [4]i32{a.offset.y, a.offset.z, a.cost, a.offset.x}
+		kb := [4]i32{b.offset.y, b.offset.z, b.cost, b.offset.x}
+		for k in 0 ..< 4 {if ka[k] != kb[k] {return ka[k] < kb[k]}}
+		return false
+	})
+	spans := make([dynamic]Cost_Span, 0, len(across), allocator)
+	defer delete(spans)
+	for m in across {
+		if n := len(spans); n > 0 && m.from == nil {
+			last := &spans[n - 1]
+			if last.from == nil &&
+			   last.offset.yz == m.offset.yz &&
+			   last.cost == m.cost &&
+			   last.offset.x + last.width == m.offset.x {
+				last.width += 1
+				continue
+			}
+		}
+		append(&spans, Cost_Span{offset = m.offset, width = 1, cost = m.cost, from = m.from})
+	}
+	window := make([]i32, sx, allocator) // the most over a span's run, along a row
+	defer delete(window, allocator)
 	reach := 0
 	single := true
 	for m in sorted[:ends[1]] {
@@ -187,10 +215,22 @@ least_cost :: proc(
 			}
 		}
 		// To the other rows.
-		for m in other_moves {
+		held := Cost_Span{} // the span whose run window holds for this row
+		for m in spans {
 			ty, tz := domain.bounds.lo.y + y + m.offset.y, domain.bounds.lo.z + z + m.offset.z
 			t := row_at(domain, ty, tz) or_continue
 			o := int(m.offset.x)
+			if m.width > 1 {
+				a, b := max(lo + o, 0), min(hi + o + int(m.width) - 1, sx)
+				if a >= b {continue}
+				if held.width != m.width || held.offset.x != m.offset.x {
+					cost_window(window, values, lo, hi, o, int(m.width))
+					held = m
+				}
+				best := cost_spread(out.values[t * sx + a:][:b - a], window[a:b], m.cost)
+				if best > 0 {rows_mark(&r, t, a, b, best)}
+				continue
+			}
 			a, b := max(lo, -o), min(hi, sx - o)
 			if a >= b {continue}
 			from := values[a:b]
@@ -373,6 +413,31 @@ cost_slide_down :: proc(values: []i32, lo, hi: int, cost: i32) -> int {
 		if x < lo {break}
 	}
 	return lo
+}
+
+// Cost_Span: moves to another row, from offset to offset + {width - 1, 0, 0}, of one cost.
+@(private)
+Cost_Span :: struct {
+	offset: Cell,
+	width:  i32,
+	cost:   i32,
+	from:   ^Mask,
+}
+
+// cost_window: window[x] becomes the most of values[x - o - k] over 0 <= k < width (a
+// cell outside the domain counting -1), for each x one of the cells lo <= x - o - k < hi
+// reaches.
+@(private)
+cost_window :: proc(window, values: []i32, lo, hi, o, width: int) {
+	a, b := max(lo + o, 0), min(hi + o + width - 1, len(values))
+	for &w in window[a:b] {w = -1}
+	for k in 0 ..< width {
+		shift := o + k
+		#no_bounds_check for x in max(lo, a - shift) ..< min(hi, b - shift) {
+			p := values[x]
+			window[x + shift] = max(window[x + shift], p if p != BLOCKED else -1)
+		}
+	}
 }
 
 // cost_spread: each cell of there gets what a move of that cost gives it from the cell of

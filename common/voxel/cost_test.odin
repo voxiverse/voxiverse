@@ -80,8 +80,15 @@ test_least_cost_is_dijkstra :: proc(t: ^testing.T) {
 		b := random_bounds(&rng, 80)
 		domain := random_mask(&rng, b, base.rng_int_range(&rng, 40, 95))
 		defer mask_destroy(&domain)
-		moves := random_moves(&rng, b, 0)
-		defer destroy_moves(moves)
+		drawn := random_moves(&rng, b, 0)
+		defer destroy_moves(drawn)
+		moves := drawn
+		if round % 3 == 0 {
+			// An element's moves at one cost: runs along x, taken as spans.
+			e := random_element(&rng)
+			defer mask_destroy(&e)
+			moves = moves_of(e, i32(base.rng_int_range(&rng, 1, 6)), context.temp_allocator)
+		}
 		seeds := random_seeds(&rng, b)
 		defer field_destroy(&seeds)
 		limit := i32(base.rng_int_range(&rng, 0, 200))
