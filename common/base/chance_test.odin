@@ -153,3 +153,23 @@ test_chance_pinned_bits :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, h, 0x13f1_9d90_88c0_adad)
 }
+
+// The two linear congruential steps: a * state + c, the new state being the
+// draw. lcg32 from 0 is the sequence Numerical Recipes prints for it.
+@(test)
+test_lcg_steps :: proc(t: ^testing.T) {
+	small := u32(0)
+	for want in ([?]u32{1013904223, 1196435762, 3519870697, 2868466484}) {
+		testing.expect_value(t, lcg32(&small), want)
+		testing.expect_value(t, small, want)
+	}
+	state := u64(0)
+	testing.expect_value(t, lcg64(&state), 1442695040888963407)
+	r := rng_make(0x1c6)
+	for _ in 0 ..< 1000 {
+		s := rng_u64(&r)
+		next := s
+		testing.expect_value(t, lcg64(&next), s * 6364136223846793005 + 1442695040888963407)
+		testing.expect_value(t, next, s * 6364136223846793005 + 1442695040888963407)
+	}
+}

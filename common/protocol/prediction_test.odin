@@ -1,5 +1,6 @@
 package protocol
 
+import "common:base"
 import "common:game"
 import "core:math"
 import "core:testing"
@@ -176,8 +177,7 @@ test_input_jitter_buffer :: proc(t: ^testing.T) {
 	for seed in u64(1) ..= 20 {
 		state := seed * 0x9E3779B97F4A7C15
 		rnd :: proc(s: ^u64, n: u64) -> u64 {
-			s^ = s^ * 6364136223846793005 + 1442695040888963407
-			return (s^ >> 33) % n
+			return (base.lcg64(s) >> 33) % n
 		}
 		Late :: struct {
 			due: int,

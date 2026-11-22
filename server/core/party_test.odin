@@ -8,6 +8,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
+import "common:base"
 import "common:game"
 import "common:protocol"
 import "common:telemetry"
@@ -48,8 +49,7 @@ Bot :: struct {
 
 @(private = "file")
 roll :: proc(b: ^Bot) -> u64 {
-	b.rng = b.rng * 6364136223846793005 + 1442695040888963407
-	return b.rng >> 33
+	return base.lcg64(&b.rng) >> 33
 }
 
 @(private = "file")

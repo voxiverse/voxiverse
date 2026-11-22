@@ -380,8 +380,7 @@ bot_input :: proc(b: ^Bot) {
 @(private = "file")
 party_input :: proc(b: ^Bot) {
 	roll :: proc(b: ^Bot) -> u64 {
-		b.rng = b.rng * 6364136223846793005 + 1442695040888963407
-		return b.rng >> 33
+		return base.lcg64(&b.rng) >> 33
 	}
 	b.stage = .Flying // (nothing to wait for: joined is welcomed)
 	b.ticks += 1

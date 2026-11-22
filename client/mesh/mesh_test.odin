@@ -6,6 +6,7 @@ import "core:strings"
 import "core:testing"
 
 import "client:texture"
+import "common:base"
 import "common:game"
 
 // bp: a vertex's position in blocks (the whole-cell quads of cubes lie on block boundaries).
@@ -127,7 +128,7 @@ test_greedy_meshing_is_exact :: proc(t: ^testing.T) {
 	for y in i32(-1) ..= 16 {
 		for z in i32(-1) ..= 16 {
 			for x in i32(-1) ..= 16 {
-				n = n * 1664525 + 1013904223
+				base.lcg32(&n)
 				ground := 4 + (x / 5 + z / 3) % 4
 				b := game.Block.Air
 				if y <= ground {b = .Stone if y < ground else .Grass}

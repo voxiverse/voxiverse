@@ -60,3 +60,21 @@ unit_f32_u32 :: proc "contextless" (bits: u32) -> f32 {
 unit_f64 :: proc "contextless" (bits: u64) -> f64 {
 	return f64(bits >> 11) * (1.0 / 9007199254740992.0)
 }
+
+// lcg64 is Knuth's MMIX linear congruential step: the state moves on and is
+// the draw. Its low bits are weak, so a draw is read from the top (>> 33, or
+// unit_f32). It is no stream for new state, which is an Rng: a gate world's
+// kind, the test and benchmark bots and the Ogg fuzzer's seeks drew from it
+// before Rng existed, and keep it.
+lcg64 :: proc "contextless" (state: ^u64) -> u64 {
+	state^ = state^ * 6364136223846793005 + 1442695040888963407
+	return state^
+}
+
+// lcg32 is the 32-bit step of Numerical Recipes, kept in the same way for the
+// starfield, the holiday backdrop and the patterns of a few tests and the
+// audio benchmark. Its draw is read from the top too (unit_f32).
+lcg32 :: proc "contextless" (state: ^u32) -> u32 {
+	state^ = state^ * 1664525 + 1013904223
+	return state^
+}

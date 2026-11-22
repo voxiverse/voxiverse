@@ -5,6 +5,7 @@ import "core:strings"
 
 import "client:engine"
 import "client:ui"
+import "common:base"
 
 // The title screen's holiday themes (docs/polish.md, #300): on a holiday's
 // dates the splash is that holiday's one line (assets/splashes.txt is where the
@@ -99,8 +100,7 @@ today_holiday :: proc(app: ^engine.App) -> engine.Holiday {
 
 @(private = "file")
 fx_random :: proc(f: ^engine.Holiday_Fx) -> f32 {
-	f.random = f.random * 1664525 + 1013904223
-	return f32(f.random >> 8) / f32(1 << 24)
+	return base.unit_f32(base.lcg32(&f.random))
 }
 
 @(private = "file")

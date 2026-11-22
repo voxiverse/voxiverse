@@ -32,7 +32,7 @@ fuzz_one :: proc(data: []byte, allocator := context.allocator, max_frames := FUZ
 	h := digest_bytes(data)
 	for _ in 0 ..< 3 {
 		frame := h % (d.total + 1)
-		h = h * 6364136223846793005 + 1442695040888963407
+		base.lcg64(&h)
 		if seek(d, frame) != .None {continue}
 		for _ in 0 ..< 4 {
 			n, e := read(d, block[:])

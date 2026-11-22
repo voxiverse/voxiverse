@@ -3,6 +3,7 @@ package starfield
 import "core:math"
 
 import "client:ui"
+import "common:base"
 
 // The menus' background: a starfield streaming towards the
 // viewer, a warp, unhurried. Each star is a point in a box ahead of the
@@ -48,8 +49,7 @@ Starfield :: struct {
 
 @(private = "file")
 star_random :: proc(f: ^Starfield) -> f32 {
-	f.random = f.random * 1664525 + 1013904223
-	return f32(f.random >> 8) / f32(1 << 24)
+	return base.unit_f32(base.lcg32(&f.random))
 }
 
 @(private = "file")

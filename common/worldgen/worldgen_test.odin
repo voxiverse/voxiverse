@@ -541,7 +541,7 @@ test_column_cache :: proc(t: ^testing.T) {
 	// Scrambled: columns and heights interleaved, revisited, colliding.
 	n := u32(12345)
 	for _ in 0 ..< 400 {
-		n = n * 1664525 + 1013904223
+		base.lcg32(&n)
 		c := game.Chunk_Pos{i32(n >> 8 % 24) - 12, i32(n >> 16 % 10) - 4, i32(n >> 24 % 24) - 12}
 		check(t, &g, cache, a, b, c)
 		if n >> 4 % 4 == 0 {

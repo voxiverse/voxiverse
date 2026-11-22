@@ -212,9 +212,11 @@ world_kind :: proc(w: ^World) {
 	w.seed = i64(u64(s.config.seed) ~ h * 0x9e37_79b9_7f4a_7c15)
 	w.generator = .Earth
 	n := h
+	// pick draws from base.lcg64, not an Rng (docs/determinism.md, rule 3): a
+	// gate world works out its kind from its address each time it loads, so
+	// another stream would change the kind of every gate world already played.
 	pick :: proc(n: ^u64, lo, hi: f32) -> f32 {
-		n^ = n^ * 6364136223846793005 + 1442695040888963407
-		return lo + f32(n^ >> 40) / f32(1 << 24) * (hi - lo)
+		return lo + base.unit_f32(base.lcg64(n)) * (hi - lo)
 	}
 	p := &w.params
 	p^ = worldgen.PARAMS_DEFAULTS

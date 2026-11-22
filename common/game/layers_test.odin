@@ -2,6 +2,8 @@ package game
 
 import "core:testing"
 
+import "common:base"
+
 @(private = "file")
 pools_for :: proc(cap: int) -> Layer_Pools {
 	p: Layer_Pools
@@ -93,8 +95,7 @@ test_channel_random_sets_match_array :: proc(t: ^testing.T) {
 	plain: [CHANNEL_CELLS]u16
 	s := u64(12345)
 	next :: proc(s: ^u64) -> u64 {
-		s^ = s^ * 6364136223846793005 + 1442695040888963407
-		return s^ >> 33
+		return base.lcg64(s) >> 33
 	}
 	for n in 0 ..< 10000 {
 		i := int(next(&s) % CHANNEL_CELLS)

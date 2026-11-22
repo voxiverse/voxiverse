@@ -492,8 +492,7 @@ bench_audio :: proc(app: ^engine.App) {
 		for &id, k in sounds {
 			samples[k] = make([]f32, 8000 + 500 * k)
 			for &x, i in samples[k] {
-				seed = seed * 1664525 + 1013904223
-				noise := f32(seed >> 8) / f32(1 << 24) - 0.5
+				noise := base.unit_f32(base.lcg32(&seed)) - 0.5
 				x = 0.12 * (noise + f32(math.sin(f64(i) * (0.05 + 0.01 * f64(k)))))
 			}
 			// As the game does at load: at the mixer's rate, so a voice at its own
