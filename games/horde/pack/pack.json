@@ -4,5 +4,14 @@
 	"version": "1.0.0",
 	"title": "Horde",
 	"description": "Horde's guns and the rounds they load, the shop's and the lairs' blocks, and the survivor's and the watcher's modes.",
-	"requires": ["voxiverse"]
+	"requires": ["voxiverse"],
+	// The creatures it gave the base pack, so whatever names them by their old ids finds them.
+	"renamed": {
+		"shambler": "voxiverse:shambler",
+		"skitter": "voxiverse:skitter",
+		"spitter": "voxiverse:spitter",
+		"hulk": "voxiverse:hulk",
+		"matriarch": "voxiverse:matriarch",
+		"spit": "voxiverse:spit"
+	}
 }

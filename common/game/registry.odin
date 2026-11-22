@@ -512,7 +512,22 @@ Pack_Info :: struct {
 	title:       string,
 	description: string,
 	requires:    []string,
+	renamed:     []Rename, // ids it no longer has, each with the id that took its place
 	files:       int,
+}
+
+// Rename: an id a pack no longer has (from) and the id that took its place (to), both
+// full ("horde:pistol", "voxiverse:pistol"); where pack.json says so.
+Rename :: struct {
+	from, to:     string,
+	line, column: i32,
+}
+
+// renamed_id: the id that took the place of full, an id no pack has any more ("": none
+// was renamed so). Asked only after a lookup missed.
+renamed_id :: proc(reg: ^Registry, full: string) -> string {
+	for p in reg.packs {for r in p.renamed {if r.from == full {return r.to}}}
+	return ""
 }
 
 Registry :: struct {
@@ -658,6 +673,7 @@ registry_block :: proc(reg: ^Registry, text: string) -> (Block, bool) {
 	buf: [96]u8
 	full := fmt.bprintf(buf[:], "%s:%s", id.namespace, id.name)
 	n, found := reg.ids[.Block][full]
+	if !found {n, found = reg.ids[.Block][renamed_id(reg, full)]}
 	return Block(n), found
 }
 
@@ -700,6 +716,7 @@ registry_item :: proc(reg: ^Registry, text: string) -> (Item, bool) {
 	buf: [96]u8
 	full := fmt.bprintf(buf[:], "%s:%s", id.namespace, id.name)
 	n, found := reg.ids[.Item][full]
+	if !found {n, found = reg.ids[.Item][renamed_id(reg, full)]}
 	return Item(n), found
 }
 
@@ -963,6 +980,7 @@ registry_text_of :: proc(
 	}
 	registry_sim_text(reg, &b)
 	entity_kinds_text(reg, &b)
+	for p in reg.packs {for r in p.renamed {fmt.sbprintf(&b, "renamed %s %s\n", r.from, r.to)}}
 	if all {
 		for s in reg.structures {
 			fmt.sbprintf(&b, "structure %s %v %x\n", s.id, s.template.size, s.hash)

@@ -188,7 +188,15 @@ RECIPE_FIELDS := []string {
 	"time",
 }
 @(private)
-PACK_FIELDS := []string{"format", "namespace", "version", "title", "description", "requires"}
+PACK_FIELDS := []string {
+	"format",
+	"namespace",
+	"version",
+	"title",
+	"description",
+	"requires",
+	"renamed",
+}
 
 @(private)
 Def_Field :: struct {
@@ -578,7 +586,7 @@ read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 		append(&b.packs, info)
 		return
 	}
-	seen: [6]bool
+	seen: [7]bool
 	for m in root.members {
 		idx := -1
 		for n, i in PACK_FIELDS {if n == m.key {idx = i}}
@@ -673,6 +681,8 @@ read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 				append(&req, item.s)
 			}
 			info.requires = req[:]
+		case "renamed":
+			info.renamed = read_renamed(b, pi, src.namespace, v)
 		}
 	}
 	for n, i in PACK_FIELDS {
@@ -681,6 +691,103 @@ read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 		}
 	}
 	append(&b.packs, info)
+}
+
+// read_renamed: pack.json's "renamed", {"<old name>": "<new id>"}: ids this pack had and
+// no longer has, each with the id that took its place, so a save or a command that names
+// the old one finds the new (registry_block, registry_item, registry_kind). A pack renames
+// only its own ids; renames_check says, once every id is known, that each old one is gone
+// and each new one there.
+@(private)
+read_renamed :: proc(b: ^Reg_Build, pi: int, namespace: string, v: Json_Value) -> []Rename {
+	if v.kind != .Object {
+		fail(
+			b,
+			pi,
+			"pack.json",
+			v.line,
+			v.column,
+			"renamed is an object of \"old name\": \"new id\"",
+		)
+		return nil
+	}
+	out := make([dynamic]Rename)
+	for m in v.members {
+		from := m.key
+		if strings.index_byte(from, ':') < 0 {from = strings.concatenate({namespace, ":", from})}
+		old, old_ok := id_parse(from)
+		if !old_ok || old.namespace != namespace {
+			fail(
+				b,
+				pi,
+				"pack.json",
+				m.key_line,
+				m.key_column,
+				fmt.aprintf(
+					"\"%s\" is not an id of this pack's; a pack renames only its own (\"%s:name\")",
+					m.key,
+					namespace,
+				),
+			)
+			continue
+		}
+		to: Id
+		to_ok := false
+		if m.value.kind == .String {to, to_ok = id_parse(m.value.s)}
+		if !to_ok {
+			fail(
+				b,
+				pi,
+				"pack.json",
+				m.value.line,
+				m.value.column,
+				"a renamed id's new id is a string, \"namespace:name\"",
+			)
+			continue
+		}
+		append(&out, Rename{id_text(old), id_text(to), m.key_line, m.key_column})
+	}
+	return out[:]
+}
+
+// renames_check: every renamed id is gone (no pack defines it, of any kind) and the id
+// that took its place is there (of some kind).
+@(private)
+renames_check :: proc(b: ^Reg_Build, reg: ^Registry) {
+	defined :: proc(b: ^Reg_Build, reg: ^Registry, id: string) -> bool {
+		for kind in Content_Kind {
+			if id in b.index[kind] || id in reg.ids[kind] {return true}
+		}
+		return false
+	}
+	for p, pi in b.packs {
+		for r in p.renamed {
+			switch {
+			case defined(b, reg, r.from):
+				fail(
+					b,
+					pi,
+					"pack.json",
+					r.line,
+					r.column,
+					fmt.aprintf("\"%s\" is still defined; rename only an id that is gone", r.from),
+				)
+			case !defined(b, reg, r.to):
+				fail(
+					b,
+					pi,
+					"pack.json",
+					r.line,
+					r.column,
+					fmt.aprintf(
+						"\"%s\" is renamed to \"%s\", which no pack defines",
+						r.from,
+						r.to,
+					),
+				)
+			}
+		}
+	}
 }
 
 @(private)

@@ -557,6 +557,10 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	build_entity_kinds(b, reg)
 	if len(b.errs) > 0 {return}
 
+	// --- Renamed ids (every id is known now). ---
+	renames_check(b, reg)
+	if len(b.errs) > 0 {return}
+
 	reg.packs = make([]Pack_Info, len(b.packs))
 	copy(reg.packs, b.packs[:])
 	reg.hash = registry_hash_of(reg)

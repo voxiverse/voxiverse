@@ -11,7 +11,7 @@ every change in [journal.md](journal.md).
 
 ```
 <namespace>/
-  pack.json        format, namespace, version, title, description, requires
+  pack.json        format, namespace, version, title, description, requires, renamed
   assets/          client-only: textures (PNG), sounds (Ogg)
   data/            both sides: blocks, items, tags, recipes, shapes, models, game modes,
                    channels, simulation rules
@@ -44,6 +44,17 @@ assigned in load order; packs load in the order the universe lists them.
 `./build.sh packs [<dir>...]` loads the base pack plus the given pack directories the way a
 universe does, prints every error and a summary with the registry hash (`tools/packcheck`). A directory's name is its pack's namespace, but for a game's own pack, `games/<game>/pack`,
 which takes the game's ([games.md](games.md#the-games-pack)).
+
+## Renamed ids
+
+An id a pack no longer has, because its thing moved to another pack or took another name,
+stays found: `pack.json`'s `renamed` maps each old name of the pack's own to the id that took
+its place (`"renamed": {"pistol": "voxiverse:pistol"}`; a bare name is the pack's). A lookup by
+id that misses (`registry_block`, `registry_item`, `registry_kind`: what a region's item table,
+a character file, a dropped stack, a chest, `entities.cfg` and a command read) asks the packs'
+renames, so a save that names the old id loads the new. The registry refuses a rename of
+another pack's id, of an id still defined, or to an id no pack defines. Horde's pack keeps the
+names of the creatures it gave the base pack (`games/horde/pack/pack.json`).
 
 ## Materials
 

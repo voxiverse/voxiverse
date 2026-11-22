@@ -237,6 +237,7 @@ registry_kind :: proc(reg: ^Registry, text: string) -> (Kind_Id, bool) {
 	if !ok {return 0, false}
 	full := strings.concatenate({id.namespace, ":", id.name}, context.temp_allocator)
 	at, found := reg.ids[.Entity][full]
+	if !found {at, found = reg.ids[.Entity][renamed_id(reg, full)]}
 	return Kind_Id(at + 1), found
 }
 
