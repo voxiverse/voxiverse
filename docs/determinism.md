@@ -58,8 +58,8 @@ completion order may reach state or the wire.
    `base.hash(seed, SALT)`; the streams older than it (`seed ~ SALT`) keep the XOR, since
    changing one changes every world made with it. What is drawn by position rather than in
    order (a block's moment, a lattice point) is `base.hash(key, x, y, ...)`, read as a
-   number by `base.unit_f32` or `base.unit_f64`; the family, its laws and the older copies
-   it replaced are in `common/base/chance.odin`. Cryptographic randomness (nonces, keys)
+   number by `base.unit_f32` or `base.unit_f64`; the family, its laws and the older hashes
+   kept beside it are in `common/base/chance.odin`. Cryptographic randomness (nonces, keys)
    is never state.
 4. **Map order.** Map iteration order never reaches state or the wire. Walk a pool in slot
    order, or walk the keys sorted (`base.keys_sorted(m, less, allocator)` with

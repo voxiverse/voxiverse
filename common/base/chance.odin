@@ -6,6 +6,14 @@ package base
 // Rng is seeded from it; unit_f32 and unit_f64 read any of their bits as a number
 // in [0, 1). A seed for a stream of its own is hash(seed, SALT), never seed ~ SALT:
 // an XOR leaves two streams' seeds a known distance apart.
+//
+// Beside the family are hashes and steps that came before it and keep their
+// own bits, because what was made of them would move: lcg64 and lcg32 below,
+// hash32 (the client's speckles), Earth's 32-bit hash (worldgen/earth.odin),
+// the planet's mix64 (planet/history.odin) and tectonic lattice
+// (planet/tectonics.odin), the texture toolkit's hash01, the sound effects'
+// xorshift32 and a pellet spread's hash (game/pellets.odin). Where they read a
+// number in [0, 1), they read it with unit_f32 or unit_f64.
 
 // GOLDEN is the counter's step: 2^64 over the golden ratio, rounded to odd.
 @(private = "file")
