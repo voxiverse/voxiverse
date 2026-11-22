@@ -512,6 +512,75 @@ test_gates :: proc(t: ^testing.T) {
 	testing.expect_value(t, sum, [3]i64{19264, 131, -31347})
 }
 
+// A home gate (a new sandbox universe's home world) stands in front of the
+// spawn, which stays where it was without one: its ring 8 to 16 blocks
+// north, whole, clear inside, on something to stand on in front; it is the
+// world's arrival gate, a block of it finds it, and it is the same every
+// time. A world without the parameter has none.
+@(test)
+test_home_gate :: proc(t: ^testing.T) {
+	arr := new(game.Block_Array)
+	defer free(arr)
+	block_at :: proc(g: ^Generator, arr: ^game.Block_Array, p: game.Block_Pos) -> game.Block {
+		uniform, is_uniform := generate(g, game.chunk_of(p), arr)
+		if is_uniform {return uniform}
+		return arr[game.local_index(game.local_of(p))]
+	}
+	for seed in i64(1) ..= 6 {
+		plain := generator_make(.Earth, seed, test_reg())
+		_, plain_has := plain.home.?
+		testing.expectf(t, !plain_has, "seed %d: a home gate without the parameter", seed)
+		params := PARAMS_DEFAULTS
+		params.home_gate = 1
+		g := generator_make(.Earth, seed, test_reg(), params)
+		s, has := g.home.?
+		if !testing.expectf(t, has, "seed %d: no home gate", seed) {continue}
+		again := generator_make(.Earth, seed, test_reg(), params)
+		testing.expect_value(t, again.home, g.home)
+		spawn := spawn_point(&g)
+		testing.expect_value(t, spawn, spawn_point(&plain))
+		ring := gate_at(s, 5, 1)
+		north := i32(math.floor(spawn.z)) - ring.z
+		testing.expectf(
+			t,
+			north >= 8 && north <= 16 && ring.x == i32(math.floor(spawn.x)) && s.rotation == 0,
+			"seed %d: the home gate's ring at %v, the spawn at %v",
+			seed,
+			ring,
+			spawn,
+		)
+		for c in gate_chevrons(s) {
+			testing.expectf(
+				t,
+				block_at(&g, arr, c) == .Gate_Chevron,
+				"seed %d: no chevron at %v",
+				seed,
+				c,
+			)
+		}
+		testing.expect_value(t, block_at(&g, arr, gate_at(s, 0, 5)), game.Block.Gate_Ring)
+		inside := make([dynamic]game.Block_Pos, context.temp_allocator)
+		gate_inside(s, &inside)
+		for p in inside {testing.expectf(t, block_at(&g, arr, p) == .Air, "seed %d: %v inside the ring", seed, p)}
+		front, _ := gate_front(s)
+		feet := game.Block_Pos {
+			i32(math.floor(front.x)),
+			i32(math.floor(front.y)),
+			i32(math.floor(front.z)),
+		}
+		testing.expectf(
+			t,
+			game.block_collides(test_blocks(), block_at(&g, arr, feet - {0, 1, 0})),
+			"seed %d: nothing to stand on in front of the home gate",
+			seed,
+		)
+		arrival, _ := arrival_gate(&g)
+		testing.expect_value(t, arrival, s)
+		found, is_gate := gate_containing(&g, gate_chevrons(s)[3])
+		testing.expect(t, is_gate && found == s, "a chevron does not find the home gate")
+	}
+}
+
 // A worker's Column_Cache changes nothing: chunks come out the same with it
 // as without, in any order, and after the generator changes (live tuning).
 @(test)

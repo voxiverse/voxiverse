@@ -8,9 +8,12 @@ import "common:game"
 // first 7 lit to dial a world in the galaxy; the other 8 dark until a gate
 // can reach other galaxies). They are rare (a structure set), and none
 // stands within Params.gate_distance of the world's middle: something to
-// find late (`locate gate`). Travellers to a world arrive at its gate
-// nearest the middle (arrival_gate). The server opens them
-// (server/core/gates.odin): lit chevrons, and horizon blocks inside the ring.
+// find late (`locate gate`). A world may also have a home gate, standing
+// a few blocks in front of its spawn (Params.home_gate: a new sandbox
+// universe's home world; home_gate_place). Travellers to a world arrive at
+// its home gate, or else at its gate nearest the middle (arrival_gate).
+// The server opens them (server/core/gates.odin): lit chevrons, and
+// horizon blocks inside the ring.
 
 GATE_SIZE :: [2]i32{11, 10} // across, up (the ring's plane), on a platform
 GATE_DEPTH :: 3
@@ -148,9 +151,50 @@ gate_containing :: proc(gen: ^Generator, p: game.Block_Pos) -> (s: Structure, ok
 // ARRIVAL_SEARCH: how far from the world's middle arrival_gate looks.
 ARRIVAL_SEARCH :: 16384
 
-// arrival_gate: the gate travellers to this world arrive at: the nearest
-// its middle (none in a world without gates, or none found).
+// arrival_gate: the gate travellers to this world arrive at: its home gate,
+// else the nearest its middle (none in a world without gates, or none
+// found).
 arrival_gate :: proc(gen: ^Generator) -> (s: Structure, ok: bool) {
+	if home, has_home := gen.home.?; has_home {return home, true}
 	if gen.kind != .Earth || gen.params.gates == 0 {return}
 	return locate_structure(gen, .Gate, 0, 0, ARRIVAL_SEARCH)
+}
+
+// HOME_GATE_STEPS: how far in front of the spawn the home gate's ring may
+// stand (blocks along -z, where a newcomer looks: yaw 0), nearest first.
+@(private = "file", rodata)
+HOME_GATE_STEPS := [?]i32{8, 10, 12, 14, 16}
+
+// home_gate_place: the home gate in front of spawn (where the generator
+// put it, before the gate stood), facing it: the nearest of
+// HOME_GATE_STEPS whose foot is on dry land without overhangs and whose box
+// meets no other structure, else the nearest (its foundation and its
+// cleared box make room). A pure function of the generator, like every
+// structure.
+home_gate_place :: proc(gen: ^Generator, spawn: [3]f64) -> Structure {
+	p := &gen.params
+	size := gate_size(0)
+	x, z := i32(math.floor(spawn.x)), i32(math.floor(spawn.z))
+	found := make([dynamic]Structure, context.temp_allocator)
+	place :: proc(gen: ^Generator, x, z, step: i32, size: [3]i32) -> Structure {
+		lo := [2]i32{x - size.x / 2, z - step - 1} // (its ring one block into its box)
+		ground := column_at(&gen.params, gen.seed, x, lo.y + 1).height
+		s := Structure {
+			kind = .Gate,
+			lo   = {lo.x, i32(math.floor(ground)), lo.y},
+		}
+		s.hi = s.lo + size - 1
+		return s
+	}
+	steps: for step in HOME_GATE_STEPS {
+		s := place(gen, x, z, step, size)
+		for c in ([4][2]i32{{s.lo.x, s.lo.z}, {s.hi.x, s.lo.z}, {s.lo.x, s.hi.z}, {s.hi.x, s.hi.z}}) {
+			col := column_at(p, gen.seed, c.x, c.y)
+			if col.rough > 0 || col.height < f32(p.sea_level) + 2 {continue steps}
+		}
+		clear(&found)
+		structures_near(gen, {s.lo.x, s.lo.z}, {s.hi.x, s.hi.z}, &found)
+		if len(found) == 0 {return s}
+	}
+	return place(gen, x, z, HOME_GATE_STEPS[0], size)
 }

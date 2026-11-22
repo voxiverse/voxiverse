@@ -41,6 +41,7 @@ Params :: struct {
 	spawn_lat:       f32, // planet worlds: the spawn is sought from this latitude (degrees north)
 	spawn_lon:       f32, // and longitude (degrees east); Marseille by default
 	planet:          f32, // 1: built on common/planet, the height Earth's real relief (earth_planet.odin); 0: noise (worlds made before it)
+	home_gate:       f32, // 1: a gate stands by the spawn (home_gate_place); 0: none (every world but a new sandbox universe's home)
 }
 
 @(rodata)

@@ -38,6 +38,13 @@ PARAMS_VARS := [?]base.Var {
 		step = 100,
 	},
 	{
+		field = "home_gate",
+		help = "a gate stands by the spawn (1) or not (0)",
+		min = 0,
+		max = 1,
+		step = 1,
+	},
+	{
 		field = "planet",
 		help = "the height is Earth's real relief (1) or noise (0)",
 		min = 0,

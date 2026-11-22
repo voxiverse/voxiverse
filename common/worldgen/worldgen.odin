@@ -32,20 +32,32 @@ Generator :: struct {
 	params:  Params, // (Earth)
 	reg:     ^game.Registry, // what the blocks are, and the structures templates
 	shipped: [Structure_Kind]i32, // the registry's structure of each kind (-1: none)
+	home:    Maybe(Structure), // the gate by the spawn (Params.home_gate; home_gate_place)
+	spawn:   [3]f64, // with a home gate: the spawn, found before the gate stood beside it
 }
 
-// generator_make: a generator with the default parameters.
+// generator_make: a generator with the default parameters. One with a home
+// gate finds its spawn first, then stands the gate beside it.
 generator_make :: proc(
 	kind: Kind,
 	seed: i64,
 	reg: ^game.Registry,
 	params := PARAMS_DEFAULTS,
 ) -> Generator {
-	g := Generator{kind, seed, params, reg, {}}
+	g := Generator {
+		kind   = kind,
+		seed   = seed,
+		params = params,
+		reg    = reg,
+	}
 	for k in Structure_Kind {
 		index, found :=
 			reg.ids[.Structure][fmt.tprintf("%s:%s", game.BASE_NAMESPACE, STRUCTURE_NAMES[k])]
 		g.shipped[k] = i32(index) if found else -1
+	}
+	if kind == .Earth && params.home_gate != 0 {
+		g.spawn = earth_spawn(&g)
+		g.home = home_gate_place(&g, g.spawn)
 	}
 	return g
 }
@@ -158,6 +170,7 @@ biome_by_name :: proc(name: string) -> (Biome, bool) {
 spawn_point :: proc(g: ^Generator) -> [3]f64 {
 	switch g.kind {
 	case .Earth:
+		if _, has_home := g.home.?; has_home {return g.spawn}
 		return earth_spawn(g)
 	case .Classic:
 	case .Flat:

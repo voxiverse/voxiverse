@@ -184,6 +184,10 @@ structure_in_cell :: proc(gen: ^Generator, k: int, cell: [2]i32) -> (s: Structur
 // structures_near appends the structures whose boxes reach (x, z) lo..hi.
 structures_near :: proc(gen: ^Generator, lo, hi: [2]i32, out: ^[dynamic]Structure) {
 	if gen.kind != .Earth {return}
+	if h, has_home := gen.home.?;
+	   has_home && h.hi.x >= lo.x && h.lo.x <= hi.x && h.hi.z >= lo.y && h.lo.z <= hi.y {
+		append(out, h)
+	}
 	for set, k in SETS {
 		c0 := [2]i32 {
 			base.floor_div(lo.x - MAX_STRUCTURE, set.spacing),
