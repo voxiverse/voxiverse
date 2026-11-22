@@ -79,12 +79,14 @@ start :: proc(s: ^core.Server) -> bool {
 KIT :: "rocket_launcher 1"
 
 // configure: a new world is made by the Earth generator (continents, biomes, rivers,
-// caves, trees) and new players are given KIT unless the caller names a kit; whether the
-// home world is Earth itself or one made from the seed is the caller's (Config.earth),
-// as are the mode, the spawn and whether animals appear by themselves. A saved world
-// keeps its own generator and kit.
+// caves, trees), a new universe's home world has a dead gate in front of its spawn (what
+// wakes it is not decided yet: core.gate_wake is the call), and new players are given KIT
+// unless the caller names a kit; whether the home world is Earth itself or one made from
+// the seed is the caller's (Config.earth), as are the mode, the spawn and whether animals
+// appear by themselves. A saved world keeps its own generator, gates and kit.
 configure :: proc(config: ^core.Config) {
 	config.generator = .Earth
+	config.home_gate = true
 	if config.kit == "" {config.kit = KIT}
 }
 
