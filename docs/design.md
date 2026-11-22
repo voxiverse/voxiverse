@@ -231,10 +231,21 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   client and server in dev, dev with `--profile`, release with `--profile`, the client's
   release with its embedded shaders, the fuzz driver), so code under `when base.DEV` is
   checked on every commit; a test fails a new boolean `#config` switch no configuration sets.
-  This adds eight one-second jobs, about 2 s to the 24 s check. `test` runs the
+  This adds eight one-second jobs, about 2 s to a full check. A job is skipped when its
+  inputs are, byte for byte, those of a job that passed before (`tools/build/check_cache.odin`):
+  its command, the driver's executable, the compiler (its version and executable, and every
+  file under its root by size and time), every `.odin` file of its package and of each
+  package that one imports through a collection, all the way down, and every file a `#load`,
+  `#load_directory` or `#exists` there names (a path built from a literal and a constant: the
+  literal's folder, all of it; a path with no literal: never skipped). What passed is kept
+  as digests in `build/check_passes`; a failure never is. The format check skips a file it
+  passed with the same contents, odinfmt and driver. `check --all`, and the gate's `check
+  --cross --all`, skip nothing. With nothing changed `check` takes about 2 s; from cold,
+  about 30. `test` runs the
   packages the same way, the slowest last time first, each printing its output whole when it ends;
   `test <package>...` runs only those. Builds and tests execute directly in parallel without
-  intermediate compiler cache state: builds stay fast, reproducible, and deterministic, eliminating
+  intermediate compiler cache state (check's record of passes holds no compiler output, only
+  what not to run again): builds stay fast, reproducible, and deterministic, eliminating
   state invalidation and stale cache artifacts. A test that loops over independent cases that each take
   seconds (the music, the audio scenarios, seeking in each file) is one test per case, so the runner's
   threads share them; an `#assert` on the count says when a case lacks its test.
@@ -243,7 +254,7 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   for `main` (not published), and tests nothing. A change needs `check` and its packages'
   tests; the whole gate runs once a day and before a version tag. The `pre-commit` hook runs `check`, and
   `test` passes before a change lands on `main`. `./build.sh gate` runs all of it in one
-  blocking command (`check --cross`, `test`, `bench budgets -check`, `fuzz --smoke`, each a
+  blocking command (`check --cross --all`, `test`, `bench budgets -check`, `fuzz --smoke`, each a
   child of the gate's under its build lock, logged in `build/gate/`), goes on past a failed
   stage and ends with one line, `gate PASSED` or `gate FAILED: <stages>`; it refuses to
   start beside another gate or test (on POSIX, where it can read the lock's holder; on

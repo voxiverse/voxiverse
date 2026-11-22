@@ -24,7 +24,7 @@ Gate_Stage :: struct {
 // GATE_STAGES, in order: the type checks first (with the other targets'), then every test
 // (the packages, then the image baselines), the benchmark budgets, the fuzzers' smoke run.
 GATE_STAGES :: []Gate_Stage {
-	{"check --cross", {"check", "--cross"}},
+	{"check --cross --all", {"check", "--cross", "--all"}},
 	{"test", {"test"}},
 	{"bench budgets", {"bench", "budgets", "-check"}},
 	{"fuzz --smoke", {"fuzz", "--smoke"}},

@@ -92,7 +92,7 @@ Run `./build.sh <command>` on Linux and macOS, and `build <command>` on Windows
 
 | Command | Description |
 |---|---|
-| `check` | Type-checks every package (`-vet -strict-style`; warnings are errors) and verifies formatting. |
+| `check` | Type-checks every package (`-vet -strict-style`; warnings are errors), runs the lints and verifies formatting, skipping what passed before with the same inputs; `check --all` skips nothing. |
 | `test` | Runs the unit tests. |
 | `fmt` | Formats all sources in place. |
 | `shaders` | Compiles `assets/shaders` to SPIR-V (only what changed). |

@@ -471,7 +471,7 @@ release_build_lock :: proc() {
 usage :: proc() {
 	fmt.println("usage: build <command>")
 	fmt.println(
-		"  check     type-check every package (-vet -strict-style), run the lints, verify formatting; --cross: also build objects for the other Tier 1 targets",
+		"  check     type-check every package (-vet -strict-style), run the lints, verify formatting, skipping a job or file whose inputs passed before; --all: every one again; --cross: also build objects for the other Tier 1 targets",
 	)
 	fmt.println(
 		"  test      run the unit tests, the packages in parallel (VX_JOBS=n at once, else one per core), then the image baselines (Linux); `test <package>...`: only those packages",
@@ -907,6 +907,9 @@ run_game :: proc(args: []string) -> bool {
 }
 
 check :: proc() -> bool {
+	// A job or a file whose inputs passed before is not checked again (check_cache.odin);
+	// --all checks every one.
+	passes := check_passes_read(CHECK_PASSES, slice.contains(os.args[1:], "--all"))
 	// The host's type checks and the other targets' object builds share one pool.
 	jobs := make([dynamic]Check_Job)
 	for pkg in all_packages() {
@@ -915,6 +918,7 @@ check :: proc() -> bool {
 			&jobs,
 			Check_Job {
 				label = strings.concatenate({"check  ", pkg, " (shelved)" if shelved else ""}),
+				pkg = pkg,
 				target = host_target(),
 				cmd = slice.concatenate(
 					[][]string{{"odin", "check", pkg}, ODIN_FLAGS, COLLECTIONS, CHECK_FLAGS},
@@ -933,6 +937,7 @@ check :: proc() -> bool {
 			&jobs,
 			Check_Job {
 				label = strings.concatenate({"check  ", config.pkg, " (", config.name, ")"}),
+				pkg = config.pkg,
 				target = host_target(),
 				cmd = slice.concatenate(
 					[][]string {
@@ -953,9 +958,10 @@ check :: proc() -> bool {
 	}
 	ok := true
 	if cross {ok = cross_jobs(&jobs)}
-	ok = run_checks(jobs[:]) && ok
+	checked, _ := check_cached(jobs[:], &passes)
+	ok = checked && ok
 	if note := games_shelved_note(); note != "" {fmt.println(note)}
-	return(
+	ok =
 		determinism_lint() &&
 		source_lint() &&
 		import_lint() &&
@@ -965,10 +971,11 @@ check :: proc() -> bool {
 		package_lists_lint() &&
 		scratch_lint() &&
 		test_lint() &&
-		check_format() &&
+		check_format(&passes) &&
 		check_no_binaries() &&
-		ok \
-	)
+		ok
+	check_passes_write(&passes, CHECK_PASSES)
+	return ok
 }
 
 // Build_Config: an executable as a build of the driver's makes it, by the defines that change
@@ -1003,8 +1010,12 @@ BUILD_CONFIGS :: []Build_Config {
 // Check_Job: one of check's commands.
 Check_Job :: struct {
 	label:  string,
+	pkg:    string, // the package folder whose inputs it reads (check_cache.odin)
 	target: string, // what it builds for: named when it fails
 	cmd:    []string,
+	inputs: Digest, // the digest of its inputs; exact: all of them were read
+	exact:  bool,
+	passed: bool,
 }
 
 // run_checks runs check's jobs in parallel; each prints its label, FAILED after it when it failed.
@@ -1034,6 +1045,7 @@ run_checks :: proc(jobs: []Check_Job) -> bool {
 		case .Ok:
 			if len(log) > 0 {os.write(os.stdout, log)}
 			fmt.println(job.label)
+			job.passed = true
 		case .Interrupted:
 			fmt.eprintfln("%s interrupted", job.label)
 			state.ok = false
@@ -1142,6 +1154,7 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 				jobs,
 				Check_Job {
 					label = strings.concatenate({"cross  ", target, " ", b[0], " ", b[1]}),
+					pkg = b[1],
 					target = target,
 					cmd = cmd,
 				},
@@ -1804,12 +1817,32 @@ format_sources :: proc() -> bool {
 	return ok
 }
 
-// check_format compares every source file with odinfmt's output, in parallel.
-check_format :: proc() -> bool {
+// check_format compares every source file with odinfmt's output, in parallel, but for the
+// files it passed before as they are now (file_passed, format_kind).
+check_format :: proc(passes: ^Check_Passes) -> bool {
 	if !have_odinfmt() {return false}
+	odinfmt := odinfmt_kind()
+	kinds := make(map[string]string)
 	files := odin_files()
-	jobs := make([]limited.Job, len(files))
-	for path, i in files {
+	compare := make([dynamic]string)
+	digests := make([dynamic]Digest) // compare's (zero: not to be kept)
+	for path in files {
+		text, err := os.read_entire_file_from_path(path, context.allocator)
+		kind := format_kind(&kinds, odinfmt, filepath.dir(path))
+		d: Digest
+		if err == nil && kind != "" {
+			passed: bool
+			d, passed = file_passed(passes, kind, path, text)
+			if passed {
+				file_pass(passes, d)
+				continue
+			}
+		}
+		append(&compare, path)
+		append(&digests, d)
+	}
+	jobs := make([]limited.Job, len(compare))
+	for path, i in compare {
 		jobs[i] = limited.Job {
 			cmd    = slice.clone([]string{"odinfmt", path}),
 			log    = job_log(i),
@@ -1817,9 +1850,9 @@ check_format :: proc() -> bool {
 			quiet  = true,
 		}
 	}
-	results := parallel(jobs[:], jobs_width())
+	results := parallel(jobs[:], jobs_width()) if len(jobs) > 0 else nil
 	dirty := 0
-	for path, i in files {
+	for path, i in compare {
 		formatted, ferr := os.read_entire_file_from_path(jobs[i].log, context.allocator)
 		current, cerr := os.read_entire_file_from_path(path, context.allocator)
 		if results[i] != .Ok ||
@@ -1828,13 +1861,23 @@ check_format :: proc() -> bool {
 		   string(formatted) != string(current) {
 			fmt.eprintfln("fmt    %s needs formatting", path)
 			dirty += 1
+			continue
+		}
+		// Kept only when what was compared is what was read before.
+		kind := format_kind(&kinds, odinfmt, filepath.dir(path))
+		if again, _ := file_passed(passes, kind, path, current); again == digests[i] {
+			file_pass(passes, digests[i])
 		}
 	}
 	if dirty > 0 {
 		fmt.eprintfln("fmt    %d file(s) not formatted - run `build fmt`", dirty)
 		return false
 	}
-	fmt.printfln("fmt    clean (%d files checked)", len(files))
+	fmt.printfln(
+		"fmt    clean (%d files, %d compared: the others unchanged since they passed)",
+		len(files),
+		len(compare),
+	)
 	return true
 }
 

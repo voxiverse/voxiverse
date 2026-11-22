@@ -6,8 +6,9 @@ The code is written by agents and read by a person, so it has to read well.
 ## How work lands
 
 - There is one branch, `main`. Commit to it directly: there are no pull requests, and no
-  commit waits on a remote machine. Every commit passes `./build.sh check` (half a minute;
-  the hook runs it) and the tests of the packages it touched. That is all a change needs.
+  commit waits on a remote machine. Every commit passes `./build.sh check` (the hook runs
+  it: half a minute from cold, seconds when little changed) and the tests of the packages
+  it touched. That is all a change needs.
 - The whole gate (`./build.sh gate`, twenty minutes) runs once a day and before a version
   tag, not for every change. Whoever finds it failing fixes it first.
 - The one workflow on GitHub (`.github/workflows/release.yml`) builds the three platforms'
@@ -22,13 +23,13 @@ The code is written by agents and read by a person, so it has to read well.
 
 ```sh
 ./build.sh fmt              # format what you changed
-./build.sh check            # type checks, lints, layout, formatting (the pre-commit hook runs it)
+./build.sh check            # type checks, lints, layout, formatting, skipping what passed unchanged (the pre-commit hook runs it)
 ./build.sh test <package>   # every package you touched; all of them for a change in common/
 ./build.sh check --cross    # also compiles for Windows and macOS: for any change to platform code
 ./build.sh gate             # the whole gate: once a day and before a version tag, not per change
 ```
 
-`./build.sh gate` is the whole gate in one command: `check --cross`, every test package
+`./build.sh gate` is the whole gate in one command: `check --cross --all`, every test package
 then the image baselines on lavapipe (about ten minutes on 8 cores), `bench budgets -check`
 and `fuzz --smoke`. It blocks until done, goes on past a failed stage, and ends with a
 table and one line, `gate PASSED` or `gate FAILED: <stages>`, with each failed stage's log
