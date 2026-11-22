@@ -248,8 +248,9 @@ lint_test_servers :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// test_lint scans the unit tests (every `_test.odin` outside tests/) with the two rules above.
-test_lint :: proc() -> bool {
+// test_lint scans the unit tests (every `_test.odin` outside tests/) with the two rules
+// above, but for the files it passed before as they are now (file_passed).
+test_lint :: proc(passes: ^Check_Passes) -> bool {
 	ok := true
 	for dir in ([]string{"client", "server", "common", "tools", GAMES_DIR}) {
 		w := os.walker_create(dir)
@@ -263,21 +264,25 @@ test_lint :: proc() -> bool {
 				continue
 			}
 			path, _ := strings.replace_all(info.fullpath, "\\", "/")
+			digest, passed := file_passed(passes, "lint test", path, data)
+			if passed {
+				file_pass(passes, digest)
+				continue
+			}
 			msgs := make([dynamic]string)
 			append(&msgs, ..lint_test_timing(path, string(data)))
 			append(&msgs, ..lint_test_servers(path, string(data)))
-			for msg in msgs {
-				fmt.eprintln(msg)
-				ok = false
-			}
+			for msg in msgs {fmt.eprintln(msg)}
+			if len(msgs) > 0 {ok = false} else {file_pass(passes, digest)}
 		}
 	}
 	if ok {fmt.println("lint   unit tests neither sleep, read a clock nor start a threaded server")}
 	return ok
 }
 
-// source_lint runs the source lints over the first-party code.
-source_lint :: proc() -> bool {
+// source_lint runs the source lints over the first-party code, but for the files it
+// passed before as they are now (file_passed): tools/ and the tests get process_exec alone.
+source_lint :: proc(passes: ^Check_Passes) -> bool {
 	ok := true
 	for dir in ([]string{"client", "server", "common", "tools", GAMES_DIR}) {
 		w := os.walker_create(dir)
@@ -292,32 +297,28 @@ source_lint :: proc() -> bool {
 			}
 			text := string(data)
 			path, _ := strings.replace_all(info.fullpath, "\\", "/")
+			digest, passed := file_passed(
+				passes,
+				strings.concatenate({"lint source ", dir}),
+				path,
+				data,
+			)
+			if passed {
+				file_pass(passes, digest)
+				continue
+			}
 			msgs := make([dynamic]string)
 			append(&msgs, ..lint_process_exec(path, text))
-			if dir == "tools" {
-				for msg in msgs {
-					fmt.eprintln(msg)
-					ok = false
+			if dir != "tools" && !strings.has_suffix(info.name, "_test.odin") {
+				append(&msgs, ..lint_mode_names(path, text))
+				append(&msgs, ..lint_os_quarantine(path, text))
+				if dir == "client" && is_layer_file(path) {
+					append(&msgs, ..lint_ui_literals(path, text))
+					append(&msgs, ..lint_colour_literals(path, text))
 				}
-				continue
 			}
-			if strings.has_suffix(info.name, "_test.odin") {
-				for msg in msgs {
-					fmt.eprintln(msg)
-					ok = false
-				}
-				continue
-			}
-			append(&msgs, ..lint_mode_names(path, text))
-			append(&msgs, ..lint_os_quarantine(path, text))
-			if dir == "client" && is_layer_file(path) {
-				append(&msgs, ..lint_ui_literals(path, text))
-				append(&msgs, ..lint_colour_literals(path, text))
-			}
-			for msg in msgs {
-				fmt.eprintln(msg)
-				ok = false
-			}
+			for msg in msgs {fmt.eprintln(msg)}
+			if len(msgs) > 0 {ok = false} else {file_pass(passes, digest)}
 		}
 	}
 	if ok {fmt.println("lint   ui text, colours, mode names, process_exec and the OS quarantine clean")}

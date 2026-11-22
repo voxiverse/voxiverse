@@ -290,3 +290,41 @@ test_check_cached_catches_a_break_through_a_dependency :: proc(t: ^testing.T) {
 	testing.expect(t, ok)
 	testing.expect_value(t, ran, len(CACHE_PACKAGES))
 }
+
+// A per-file check (the format check, the source lints) skips a file only as it passed
+// it: the same contents, path, kind and driver, and never with --all.
+@(test)
+test_file_passed :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	passes := Check_Passes {
+		driver = 7,
+		known  = true,
+	}
+	text := transmute([]u8)string("package a\n")
+	d, passed := file_passed(&passes, "lint source client", "client/a/a.odin", text)
+	testing.expect(t, !passed, "passed with nothing kept")
+	file_pass(&passes, d)
+	again := Check_Passes {
+		driver = 7,
+		known  = true,
+	}
+	for kept in passes.now {again.before[kept] = true}
+	_, passed = file_passed(&again, "lint source client", "client/a/a.odin", text)
+	testing.expect(t, passed, "not skipped as it passed")
+	edited := transmute([]u8)string("package a // edited\n")
+	_, passed = file_passed(&again, "lint source client", "client/a/a.odin", edited)
+	testing.expect(t, !passed, "skipped with its contents edited")
+	_, passed = file_passed(&again, "lint source server", "client/a/a.odin", text)
+	testing.expect(t, !passed, "skipped for another check")
+	_, passed = file_passed(&again, "lint source client", "client/b/a.odin", text)
+	testing.expect(t, !passed, "skipped at another path")
+	again.driver = 8
+	_, passed = file_passed(&again, "lint source client", "client/a/a.odin", text)
+	testing.expect(t, !passed, "skipped by another driver")
+	again.driver, again.all = 7, true
+	_, passed = file_passed(&again, "lint source client", "client/a/a.odin", text)
+	testing.expect(t, !passed, "skipped with --all")
+	unknown := Check_Passes{}
+	d, passed = file_passed(&unknown, "lint source client", "client/a/a.odin", text)
+	testing.expect(t, !passed && d == 0, "skipped or kept with the driver unread")
+}

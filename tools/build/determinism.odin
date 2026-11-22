@@ -112,7 +112,9 @@ is_ident_char :: proc(c: u8) -> bool {
 	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-determinism_lint :: proc() -> bool {
+// determinism_lint runs lint_numbers over DETERMINISM_DIRS, and lint_pipeline over the
+// server's, but for the files it passed before as they are now (file_passed).
+determinism_lint :: proc(passes: ^Check_Passes) -> bool {
 	ok := true
 	for dir in DETERMINISM_DIRS {
 		w := os.walker_create(dir)
@@ -126,18 +128,21 @@ determinism_lint :: proc() -> bool {
 				ok = false
 				continue
 			}
-			for msg in lint_numbers(info.fullpath, string(data)) {
-				fmt.eprintln(msg)
-				ok = false
+			kind := strings.concatenate({"lint determinism ", dir})
+			digest, passed := file_passed(passes, kind, info.fullpath, data)
+			if passed {
+				file_pass(passes, digest)
+				continue
 			}
+			msgs := make([dynamic]string)
+			append(&msgs, ..lint_numbers(info.fullpath, string(data)))
 			if strings.has_prefix(dir, "server/") {
 				slash, _ := strings.replace_all(info.fullpath, "\\", "/", context.temp_allocator)
 				rel := slash[strings.last_index(slash, "/server/") + 1:]
-				for msg in lint_pipeline(rel, string(data)) {
-					fmt.eprintln(msg)
-					ok = false
-				}
+				append(&msgs, ..lint_pipeline(rel, string(data)))
 			}
+			for msg in msgs {fmt.eprintln(msg)}
+			if len(msgs) > 0 {ok = false} else {file_pass(passes, digest)}
 		}
 	}
 	if ok {fmt.println("lint   numbers and block writes clean")}

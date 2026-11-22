@@ -21,11 +21,18 @@ import "core:strings"
 // literal's folder with everything under it; one that starts with no literal leaves its
 // package's jobs never skipped. What passed is kept in CHECK_PASSES as a digest of those
 // inputs; a failed job is not kept, nor one whose inputs changed while it ran.
+//
+// The checks that read one file at a time, the format check and the per-file lints
+// (determinism_lint, source_lint, test_lint), skip a file the same way (file_passed): by
+// its path, its contents, the driver and whatever else the check reads (odinfmt and the
+// odinfmt.json files for the format). The lints that read across files (import_lint,
+// engine_map_lint, layout_lint, package_lists_lint, collections_lint, scratch_lint,
+// check_no_binaries: the git index, the docs, folders) run every time.
 
 // Digest: an XXH3-128 of some bytes (a file, a folder's listing, a job's inputs).
 Digest :: u128
 
-// CHECK_PASSES: the digests of the inputs of the jobs (and of the files the format check
+// CHECK_PASSES: the digests of the inputs of the jobs (and of the files the per-file checks
 // passed) that passed, one in hex a line, the newest first; CHECK_PASSES_KEPT of them.
 CHECK_PASSES :: "build/check_passes"
 CHECK_PASSES_KEPT :: 20000

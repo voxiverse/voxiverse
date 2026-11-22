@@ -962,15 +962,15 @@ check :: proc() -> bool {
 	ok = checked && ok
 	if note := games_shelved_note(); note != "" {fmt.println(note)}
 	ok =
-		determinism_lint() &&
-		source_lint() &&
+		determinism_lint(&passes) &&
+		source_lint(&passes) &&
 		import_lint() &&
 		engine_map_lint() &&
 		collections_lint() &&
 		layout_lint() &&
 		package_lists_lint() &&
 		scratch_lint() &&
-		test_lint() &&
+		test_lint(&passes) &&
 		check_format(&passes) &&
 		check_no_binaries() &&
 		ok

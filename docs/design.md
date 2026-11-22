@@ -238,10 +238,13 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   package that one imports through a collection, all the way down, and every file a `#load`,
   `#load_directory` or `#exists` there names (a path built from a literal and a constant: the
   literal's folder, all of it; a path with no literal: never skipped). What passed is kept
-  as digests in `build/check_passes`; a failure never is. The format check skips a file it
-  passed with the same contents, odinfmt and driver. `check --all`, and the gate's `check
-  --cross --all`, skip nothing. With nothing changed `check` takes about 2 s; from cold,
-  about 30. `test` runs the
+  as digests in `build/check_passes`; a failure never is. The format check and the lints
+  that read one file at a time (numbers and block writes, the source lints, the unit-test
+  rules) skip a file they passed with the same contents and driver (and odinfmt); the lints
+  that read across files (imports, the engine map, layout, package lists, collections,
+  scratch, binaries) always run. `check --all`, and the gate's `check --cross --all`, skip
+  nothing. With nothing changed `check` takes under a second; from cold, about 30 s. `test`
+  runs the
   packages the same way, the slowest last time first, each printing its output whole when it ends;
   `test <package>...` runs only those. Builds and tests execute directly in parallel without
   intermediate compiler cache state (check's record of passes holds no compiler output, only
