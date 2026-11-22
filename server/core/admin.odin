@@ -105,6 +105,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"close_lan", "", {0, 0}, admin_close_lan, "server.open_lan"},
 	{"locate", "[biome|structure] <name>", {1, 2}, admin_locate, "teleport.locate"},
 	{"spawn", "", {0, 0}, admin_spawn, "teleport.spawn"},
+	{"gate", "wake|kill", {1, 1}, admin_gate, "world.gate"},
 	{"delmsg", "<player> [count]", {1, 2}, admin_delmsg, "chat.delete"},
 	{"mute", "<player> [30m|2h|7d]", {1, 2}, admin_mute, "moderation.mute"},
 	{"unmute", "<player>", {1, 1}, admin_unmute, "moderation.mute"},

@@ -1,5 +1,6 @@
 package core
 
+import "core:fmt"
 import "core:log"
 import "core:math"
 
@@ -15,6 +16,12 @@ import "common:worldgen"
 // travels to the far gate's front. Each gate's blocks follow its state
 // every tick wherever they are loaded (the far gate catches up when its
 // world's chunks arrive), and go back when it closes.
+//
+// A gate may be dead instead: its chevrons dark, it cannot be dialled and
+// nobody arrives through it, until gate_wake (the game's, whatever wakes
+// it; the `gate wake` command for admins). A new world's home gate starts
+// dead (gates_begin). Dead gates are saved with their world (world.cfg:
+// `gate.dead`); a world saved before them has none, so its gates live.
 
 GATE_LOCK_TICKS :: game.TICK_RATE * 2 / 5 // a chevron locks every 0.4 s
 GATE_OPEN_TICKS :: game.TICK_RATE * 30 // then the gate stays open 30 s
@@ -24,11 +31,12 @@ GATE_LOOK_PITCH :: -1.0 // radians: from gate_front, at the ring's foot
 Gate_Phase :: enum u8 {
 	Dialing,
 	Open,
+	Dead, // dark until woken (gate_wake): never dialled, never arrived at
 }
 
 Gate :: struct {
 	structure: worldgen.Structure,
-	phase:     Gate_Phase,
+	phase:     Gate_Phase, // (Dead: the rest is zero)
 	locked:    int, // chevrons lit
 	next_at:   u64, // tick of the next lock, or of closing
 	outgoing:  bool, // dialed here (travelling in goes to `to`); else the far end
@@ -36,7 +44,7 @@ Gate :: struct {
 	far:       worldgen.Structure, // the far end's gate (outgoing only)
 }
 
-// gate_find: the active gate of w that s is, if any.
+// gate_find: the gate of w that s is (dialing, open or dead), if any.
 @(private = "file")
 gate_find :: proc(w: ^World, s: worldgen.Structure) -> ^Gate {
 	for &g in w.gates {if g.structure.lo == s.lo {return &g}}
@@ -48,19 +56,24 @@ gate_dial :: proc(s: ^Server, c: ^Client, d: protocol.Dial) -> string {
 	w := c.world
 	gs, is_gate := worldgen.gate_containing(&w.chunks.gen, d.gate)
 	if !is_gate {return "that is not a gate"}
+	here := gate_find(w, gs)
+	if here != nil && here.phase == .Dead {return "the gate is dark"}
 	if !starmap.address_valid(d.address) {return "that is not an address"}
 	centre := worldgen.gate_at(gs, 5, 5)
 	dx := c.player.position - {f64(centre.x), f64(centre.y), f64(centre.z)}
 	if dx.x * dx.x + dx.y * dx.y + dx.z * dx.z >
 	   GATE_REACH * GATE_REACH {return "the gate is too far"}
-	if gate_find(w, gs) != nil {return "the gate is busy"}
+	if here != nil {return "the gate is busy"}
 	if d.address.galaxy != w.address.galaxy {return "this gate reaches only its own galaxy"}
 	if d.address == w.address {return "a gate cannot dial its own world"}
 	to := world_load(s, d.address)
 	if to == nil {return "nothing answers at that address"}
 	far, has_far := worldgen.arrival_gate(&to.chunks.gen)
 	if !has_far {return "nothing answers at that address"}
-	if gate_find(to, far) != nil {return "the gate there is busy"}
+	if there := gate_find(to, far); there != nil {
+		if there.phase == .Dead {return "nothing answers at that address"}
+		return "the gate there is busy"
+	}
 	next := s.tick + GATE_LOCK_TICKS
 	append(
 		&w.gates,
@@ -84,11 +97,13 @@ gate_open_ticks :: proc(s: ^Server) -> u64 {
 }
 
 // gates_tick moves w's gates on (locking, opening, closing), sets their
-// blocks, and sends whoever walks into an open outgoing gate through.
+// blocks, and sends whoever walks into an open outgoing gate through. A
+// dead gate stays as it is.
 gates_tick :: proc(w: ^World) {
 	s := w.server
 	for i := len(w.gates) - 1; i >= 0; i -= 1 {
 		g := &w.gates[i]
+		if g.phase == .Dead {continue}
 		if s.tick >= g.next_at {
 			switch g.phase {
 			case .Dialing:
@@ -102,6 +117,7 @@ gates_tick :: proc(w: ^World) {
 				gate_blocks(w, g, closed = true)
 				unordered_remove(&w.gates, i)
 				continue
+			case .Dead:
 			}
 		}
 		gate_blocks(w, g)
@@ -114,6 +130,84 @@ gates_tick :: proc(w: ^World) {
 		}
 	}
 }
+
+// gates_active: w has a gate dialing or open (it stays loaded meanwhile).
+gates_active :: proc(w: ^World) -> bool {
+	for g in w.gates {if g.phase != .Dead {return true}}
+	return false
+}
+
+// gate_wake brings the dead gate a block of which is at p (its ring, a
+// chevron, its platform) to life: from now on it is dialled and arrived at
+// as any gate. False if no gate is there or it is not dead.
+gate_wake :: proc(w: ^World, p: game.Block_Pos) -> bool {
+	gs, is_gate := worldgen.gate_containing(&w.chunks.gen, p)
+	if !is_gate {return false}
+	for g, i in w.gates {
+		if g.structure.lo == gs.lo && g.phase == .Dead {
+			ordered_remove(&w.gates, i)
+			log.infof("server gate woken at=%v world=%s", gs.lo, starmap.address_dir(w.address))
+			return true
+		}
+	}
+	return false
+}
+
+// gate_kill makes the gate a block of which is at p dead (gate_wake's
+// reverse). False if no gate is there, or it is dead, dialing or open.
+gate_kill :: proc(w: ^World, p: game.Block_Pos) -> bool {
+	gs, is_gate := worldgen.gate_containing(&w.chunks.gen, p)
+	if !is_gate || gate_find(w, gs) != nil {return false}
+	append(&w.gates, Gate{structure = gs, phase = .Dead})
+	log.infof("server gate killed at=%v world=%s", gs.lo, starmap.address_dir(w.address))
+	return true
+}
+
+// gates_begin: a new world's home gate (worldgen.Params.home_gate) stands
+// dead. (Run once, when the world is made; a saved world keeps its own.)
+@(private)
+gates_begin :: proc(w: ^World) {
+	if home, has_home := w.chunks.gen.home.?; has_home {gate_kill(w, home.lo)}
+}
+
+// admin_gate: `gate wake|kill`: the gate nearest the player (within
+// GATE_ADMIN_REACH) comes to life, or dies.
+@(private)
+admin_gate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	if args[0] != "wake" && args[0] != "kill" {return false}
+	w := c.world
+	p := c.player.position
+	gs, found := worldgen.locate_structure(
+		&w.chunks.gen,
+		.Gate,
+		i32(math.floor(p.x)),
+		i32(math.floor(p.z)),
+		GATE_ADMIN_REACH,
+	)
+	if !found {
+		notice(s, c, fmt.tprintf("No gate within %d blocks", GATE_ADMIN_REACH))
+		return true
+	}
+	done := gate_wake(w, gs.lo) if args[0] == "wake" else gate_kill(w, gs.lo)
+	switch {
+	case done && args[0] == "wake":
+		notice(s, c, fmt.tprintf("The gate at %d %d %d is alive", gs.lo.x, gs.lo.y, gs.lo.z))
+	case done:
+		notice(s, c, fmt.tprintf("The gate at %d %d %d is dead", gs.lo.x, gs.lo.y, gs.lo.z))
+	case args[0] == "wake":
+		notice(s, c, fmt.tprintf("The gate at %d %d %d is not dead", gs.lo.x, gs.lo.y, gs.lo.z))
+	case:
+		notice(
+			s,
+			c,
+			fmt.tprintf("The gate at %d %d %d is dead or in use", gs.lo.x, gs.lo.y, gs.lo.z),
+		)
+	}
+	return true
+}
+
+// GATE_ADMIN_REACH: blocks: how far `gate wake|kill` looks for a gate.
+GATE_ADMIN_REACH :: 256
 
 // gate_blocks sets g's blocks to its state (or back, closed) where loaded.
 @(private = "file")

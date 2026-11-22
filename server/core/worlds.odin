@@ -57,7 +57,7 @@ World :: struct {
 	idle_since:        u64, // the last tick someone was in it
 	touched:           [dynamic]game.Chunk_Pos, // chunks changed this tick (a stepped server's hash; heap)
 	kept:              [dynamic]Box, // boxes of chunks (not blocks) kept loaded whoever is near (world_keep; heap)
-	gates:             [dynamic]Gate, // active: dialing or open (gates.odin)
+	gates:             [dynamic]Gate, // not at rest: dialing, open or dead (gates.odin)
 	tops_pending:      map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
 	journal:           Journal, // who changed which block (journal.odin)
 	journal_resume:    Journal_Resume, // where its world.cfg says the journal ends
@@ -148,6 +148,7 @@ world_start :: proc(w: ^World) -> bool {
 	journal_init(w, arena)
 	protections_load(w)
 	w.started = true
+	if !w.spawn.known {gates_begin(w)} 	// (a new world: no spawn chosen yet)
 	spawn_choose(w)
 	load_entities(w)
 	load_stats(w)
@@ -342,7 +343,7 @@ worlds_unload_idle :: proc(s: ^Server) {
 		occupied := false
 		for &c in s.clients {occupied ||= c.state == .Playing && c.world == w}
 		if occupied ||
-		   len(w.gates) > 0 ||
+		   gates_active(w) ||
 		   len(w.kept) > 0 {w.idle_since = max(w.idle_since, s.tick)}
 		if s.tick < w.idle_since + idle {continue}
 		world_save(w)

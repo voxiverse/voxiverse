@@ -46,6 +46,7 @@ game, and `/help` does not list them.
 | `/tp <x y z> [yaw pitch]`, `/tp <player>`, `/tp <who> <player>`, `/tphere <player>` | Moves (angles in degrees; `/tp ~ ~10 ~` goes up ten blocks); moving others needs `teleport.tp.others`. |
 | `/spawn`, `/setworldspawn [x y z]` | Returns to the world spawn; sets where new players arrive. A new world's spawn is found by the generator's search (dry open land, no tree or structure nearby), chosen once and kept in `world.cfg`. |
 | `/locate [biome\|structure] <name>` | Takes you to the nearest biome or structure (`teleport.locate`): `tower`, `ruin`, `well`, `dungeon`, `gate`. |
+| `/gate wake\|kill` | Brings the nearest dead gate (within 256 blocks) to life, or makes the nearest gate at rest dead (`world.gate`; [world.md](world.md#gates)). |
 | `/home [name]`, `/sethome [name]`, `/delhome <name>`, `/homes` | Your homes (`teleport.home`; at most your role's `max_homes` metadata, 3 for `default`). |
 | `/warp [name]`, `/warps` / `/setwarp <name>`, `/delwarp <name>` | The world's warps (`teleport.warp` / `teleport.warp.set`). |
 | `/tpa <player>`, `/tpahere <player>`, `/tpaccept`, `/tpdeny` | Requests to go to someone, or for them to come to you (`teleport.tpa`; two minutes to answer). |
@@ -80,7 +81,7 @@ What a player may do is a set of nodes: dotted lower-case words. The families in
 
 - `world.*`: `world.edit` (build), `world.edit.bulk`, `world.edit.undo`, `world.fire`,
   `world.summon`, `world.kill`, `world.tag`, `world.structure`, `world.time`, `world.gen`, `world.spawn`,
-  `world.travel`, `world.rollback`, `world.protect`, `world.interventions`;
+  `world.travel`, `world.gate`, `world.rollback`, `world.protect`, `world.interventions`;
 - `debug.coordinates`: F3 shows position, chunk and the block underneath when
   `rules.show_coordinates` is off;
 - `teleport.*`, `chat.*`, `moderation.*`, `info.*`, `items.*`: the nodes the commands use;

@@ -207,3 +207,154 @@ gate_seen :: proc(c: ^Net_Client, g: worldgen.Structure, b: game.Block) -> bool 
 	}
 	return true
 }
+
+// dead_gate_config: a new universe in dir whose home world has a home gate
+// (as the sandbox's has), on the stepped harness.
+@(private = "file")
+dead_gate_config :: proc(dir: string, home_gate := true) -> Config {
+	return {
+		rules = quiet_rules(),
+		seed = 1,
+		view_radius = 2,
+		view_height = 1,
+		save_dir = dir,
+		max_players = 2,
+		listen = true,
+		generator = .Earth,
+		gate_open = 2,
+		backups = 0,
+		home_gate = home_gate,
+	}
+}
+
+// A new universe's home gate stands dead in front of the spawn: dialling it
+// says only that it is dark, and dialling its world from elsewhere finds
+// nothing there. Woken, it dials and is travelled through as any gate.
+@(test)
+test_gate_dead_until_woken :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "dead_gate"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	h := new(Harness)
+	defer free(h)
+	p := new(Harness_Player)
+	defer free(p)
+	if !testing.expect(t, harness_start(h, dead_gate_config(dir))) {return}
+	harness_player_join(h, p, "alice")
+	defer harness_player_free(p)
+	defer harness_stop(h)
+	srv := &h.srv
+	w := srv.home
+	home, has_home := w.chunks.gen.home.?
+	if !testing.expect(t, has_home, "no home gate") {return}
+	testing.expect(t, len(w.gates) == 1 && w.gates[0] == Gate{structure = home, phase = .Dead})
+	// In front of the spawn, its front facing it.
+	front, _ := worldgen.gate_front(home)
+	ahead := w.spawn.position.z - front.z
+	testing.expectf(
+		t,
+		abs(w.spawn.position.x - front.x) < 1 && ahead > 0 && ahead < 16,
+		"the home gate's front %v, the spawn %v",
+		front,
+		w.spawn.position,
+	)
+	playing :: proc(data: rawptr) -> bool {
+		c := harness_player_client((^Harness_Player)(data))
+		return c != nil && c.state == .Playing
+	}
+	if _, ok := harness_step_until(h, playing, p, 900); !testing.expect(t, ok, "never played") {
+		return
+	}
+	c := harness_player_client(p)
+	away := starmap.address_derive(77)
+	away.galaxy = w.address.galaxy
+	ring := worldgen.gate_at(home, 0, 5)
+
+	// Dead: dark here, and nothing answers from elsewhere.
+	c.player.position = front
+	testing.expect_value(t, gate_dial(srv, c, {ring, away}), "the gate is dark")
+	testing.expect_value(t, len(w.gates), 1)
+	testing.expect_value(t, travel(srv, c, away), "")
+	far, has_far := worldgen.arrival_gate(&c.world.chunks.gen)
+	if !testing.expect(t, has_far, "no gate at the far end") {return}
+	c.player.position, _ = worldgen.gate_front(far)
+	testing.expect_value(
+		t,
+		gate_dial(srv, c, {worldgen.gate_at(far, 0, 5), w.address}),
+		"nothing answers at that address",
+	)
+	testing.expect_value(t, len(c.world.gates), 0)
+	testing.expect_value(t, travel(srv, c, w.address), "")
+
+	// Woken (once), and killed only at rest.
+	testing.expect(t, !gate_kill(w, ring), "a dead gate killed again")
+	testing.expect(t, gate_wake(w, ring), "the home gate did not wake")
+	testing.expect(t, !gate_wake(w, ring), "a live gate woken")
+	testing.expect_value(t, len(w.gates), 0)
+	testing.expect(t, !gate_wake(w, ring - {0, 40, 0}), "woke what is not a gate")
+
+	// Alive: dialled, and walked through to the far gate.
+	c.player.position = front
+	testing.expect_value(t, gate_dial(srv, c, {ring, away}), "")
+	testing.expect(t, !gate_kill(w, ring), "a gate in use killed")
+	Walk :: struct {
+		c:       ^Client,
+		horizon: [3]f64,
+		to:      starmap.Address,
+	}
+	centre := worldgen.gate_at(home, 5, 1)
+	walk := Walk{c, {f64(centre.x) + 0.5, f64(centre.y), f64(centre.z) + 0.5}, away}
+	through :: proc(data: rawptr) -> bool {
+		walk := (^Walk)(data)
+		if walk.c.world.address == walk.to {return true}
+		walk.c.player.position, walk.c.landing = walk.horizon, nil // (in the ring)
+		return false
+	}
+	_, through_ok := harness_step_until(h, through, &walk, 20 * game.TICK_RATE)
+	testing.expect(t, through_ok, "never went through the woken gate")
+}
+
+// Dead gates are saved with their world and come back with it; a woken one
+// stays alive. A universe made before home gates (none asked for) gets none
+// when opened by a game that asks: every gate of it lives.
+@(test)
+test_gate_dead_saved :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "dead_gate_saved"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, dead_gate_config(dir))) {return}
+	home, _ := h.srv.home.chunks.gen.home.?
+	testing.expect(t, harness_stop(h))
+
+	if !testing.expect(t, harness_start(h, dead_gate_config(dir))) {return}
+	w := h.srv.home
+	testing.expect(
+		t,
+		len(w.gates) == 1 && w.gates[0].phase == .Dead && w.gates[0].structure.lo == home.lo,
+		"the dead gate did not come back",
+	)
+	testing.expect(t, gate_wake(w, home.lo), "the reloaded gate did not wake")
+	testing.expect(t, harness_stop(h))
+
+	if !testing.expect(t, harness_start(h, dead_gate_config(dir))) {return}
+	testing.expect_value(t, len(h.srv.home.gates), 0)
+	testing.expect_value(t, h.srv.home.chunks.gen.home, home)
+	testing.expect(t, harness_stop(h))
+
+	// Made without a home gate, opened by a game that asks for one.
+	os.remove_all(dir)
+	if !testing.expect(t, harness_start(h, dead_gate_config(dir, home_gate = false))) {return}
+	testing.expect(t, harness_stop(h))
+	if !testing.expect(t, harness_start(h, dead_gate_config(dir))) {return}
+	w = h.srv.home
+	_, has_home := w.chunks.gen.home.?
+	testing.expect(t, !has_home, "an older universe was given a home gate")
+	testing.expect_value(t, len(w.gates), 0)
+	arrival, has := worldgen.arrival_gate(&w.chunks.gen)
+	testing.expect(t, has, "the older universe lost its gates")
+	d := f64(arrival.lo.x) * f64(arrival.lo.x) + f64(arrival.lo.z) * f64(arrival.lo.z)
+	testing.expect(t, d >= f64(w.params.gate_distance * w.params.gate_distance))
+	testing.expect(t, harness_stop(h))
+}

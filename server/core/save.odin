@@ -85,6 +85,7 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 	if dir == "" {
 		home.address = home_address(s)
 		world_set_planet(home)
+		if s.config.home_gate {home.params.home_gate = 1}
 		return true
 	}
 	if err := os.make_directory_all(dir); err != nil && err != .Exist {
@@ -120,6 +121,7 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 		log.infof("server new universe dir=%s seed=%d", dir, s.config.seed)
 		home.address = home_address(s)
 		world_set_planet(home)
+		if s.config.home_gate {home.params.home_gate = 1}
 		home.seed, home.generator = s.config.seed, s.config.generator
 		write_universe_file(s) or_return
 		st.format = store.SAVE_FORMAT
@@ -614,6 +616,11 @@ write_world_file :: proc(w: ^World) -> bool {
 	for pos in w.working {append(&working, pos)}
 	slice.sort_by(working[:], game.chunk_pos_less)
 	for pos in working {fmt.sbprintfln(&b, "working = %d,%d,%d", pos.x, pos.y, pos.z)}
+	for g in w.gates {
+		if g.phase != .Dead {continue} 	// (one dialing or open is not kept: it closes)
+		lo := g.structure.lo
+		fmt.sbprintfln(&b, "gate.dead = %d,%d,%d,%d", lo.x, lo.y, lo.z, g.structure.rotation)
+	}
 	strings.write_string(&b, "\n")
 	base.vars_write(game.rules_table(), &w.rules, &b)
 	base.vars_write(worldgen.params_table(), &w.params, &b)
@@ -691,6 +698,19 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 			if len(parts) != 3 {continue}
 			for part, i in parts {at[i] = i32(strconv.parse_int(part) or_else 0)}
 			if game.in_world(at) {working_note(w, at, true)}
+		case key == "gate.dead":
+			// A dead gate: its box's corner and its turn (the generator's gate there).
+			parts := strings.split(value, ",", context.temp_allocator)
+			if len(parts) != 4 {continue}
+			f: [4]i32
+			for part, i in parts {f[i] = i32(strconv.parse_int(part) or_else 0)}
+			gs := worldgen.Structure {
+				kind     = .Gate,
+				lo       = {f[0], f[1], f[2]},
+				rotation = u8(f[3] & 3),
+			}
+			gs.hi = gs.lo + worldgen.gate_size(gs.rotation) - 1
+			append(&w.gates, Gate{structure = gs, phase = .Dead})
 		case strings.has_prefix(key, "rules."), strings.has_prefix(key, "worldgen."):
 			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
 		}
