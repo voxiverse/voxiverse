@@ -26,11 +26,17 @@ Natural_Slot :: struct {
 	tops:   worldgen.Tops,
 }
 
+// natural_slot: the one slot column may sit in, by a 32-bit hash of its x and z.
+@(private = "file")
+natural_slot :: proc(w: ^World, column: [2]i32) -> ^Natural_Slot {
+	h := u32(column.x) * 0x9e37_79b1 ~ u32(column.y) * 0x85eb_ca6b
+	return &w.natural[(h ~ h >> 15) % NATURAL_CACHE]
+}
+
 // natural_top: the generator's top of (x, z).
 natural_top :: proc(w: ^World, x, z: i32) -> i32 {
 	column := [2]i32{x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT}
-	h := u32(column.x) * 0x9e37_79b1 ~ u32(column.y) * 0x85eb_ca6b
-	slot := &w.natural[(h ~ h >> 15) % NATURAL_CACHE]
+	slot := natural_slot(w, column)
 	if !slot.valid || slot.column != column {
 		worldgen.column_tops(&w.chunks.gen, column, &slot.tops)
 		slot.column, slot.valid = column, true
@@ -41,8 +47,7 @@ natural_top :: proc(w: ^World, x, z: i32) -> i32 {
 // natural_known: whether column's natural tops are at hand (a column
 // message for it costs nothing on the tick).
 natural_known :: proc(w: ^World, column: [2]i32) -> bool {
-	h := u32(column.x) * 0x9e37_79b1 ~ u32(column.y) * 0x85eb_ca6b
-	slot := &w.natural[(h ~ h >> 15) % NATURAL_CACHE]
+	slot := natural_slot(w, column)
 	return slot.valid && slot.column == column
 }
 
@@ -51,8 +56,7 @@ naturals_take :: proc(w: ^World) {
 	for &done in w.chunks.tops_done {
 		delete_key(&w.tops_pending, done.column)
 		if !done.fresh {continue}
-		h := u32(done.column.x) * 0x9e37_79b1 ~ u32(done.column.y) * 0x85eb_ca6b
-		slot := &w.natural[(h ~ h >> 15) % NATURAL_CACHE]
+		slot := natural_slot(w, done.column)
 		slot^ = {
 			column = done.column,
 			valid  = true,
