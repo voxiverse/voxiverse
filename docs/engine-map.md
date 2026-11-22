@@ -29,6 +29,7 @@ a game the server runs (docs/games.md): its id, the types of its state, and the 
 | `think` | `proc(s: ^Server, w: ^World, kind: game.Kind_Id, entities: []game.Entity_Handle)` | each tick, the creatures of each of its kinds whose brain is "game" (their ground loaded, lowest id first), before they are steered |
 | `joined` | `proc(s: ^Server, c: ^Client)` | c is playing (welcomed, in its world) |
 | `left` | `proc(s: ^Server, c: ^Client)` | c is leaving (still seated, its state still there) |
+| `travelled` | `proc(s: ^Server, c: ^Client, from, to: ^World)` | c changed world (a gate, the travel command, the game's travel): it left from (still loaded) and is landing in to |
 | `command` | `proc(s: ^Server, c: ^Client, name: string, args: []string) -> (known: bool)` | a command the server has none of; known false: "Unknown server command" |
 | `hurt` | `proc(s: ^Server, c: ^Client, harm: Harm)` | c was hurt and lives (its health already less) |
 | `died` | `proc(s: ^Server, c: ^Client, harm: Harm)` | c died of harm (already told, counted and its things dropped) |
@@ -117,6 +118,9 @@ a game's client part (docs/games.md): what the client does for the game its sess
 - `player_of :: proc(s: ^Server, ref: Player_Ref) -> ^Client`: the playing player ref names; nil when it left (its seat empty or another's) or is not playing.
 - `Player_Ref :: struct {...}`: a player held past the moment (a rocket's shooter): its seat and the seat's generation, which counts up each time a player takes the seat.
 - `teleport :: proc(s: ^Server, c: ^Client, position: [3]f64, look: [2]f32, flying := false)`: teleport moves c's player to position in its world, looking look (yaw, pitch), flying if flying (and its mode lets it fly) and else standing where it fits there once the blocks are loaded (land, Exact).
+- `travel :: proc(s: ^Server, c: ^Client, a: starmap.Address, there: Maybe(Place) = nil) -> string`: travel takes c to the world at address a (loaded if it was not), landing at its spawn or at there (a place in it); "" or why not (the world cannot be loaded).
+- `go_to :: proc(s: ^Server, c: ^Client, p: Place, mode := game.Landing_Mode.Exact) -> string`: go_to takes c to place p, travelling first (travel) if it is in another world; "" or why not.
+- `Place :: struct {...}`: a position in a world, and which way one looks there.
 - `game_mode :: proc(s: ^Server, c: ^Client, id: string) -> Mode_Result`: the game the server runs puts c in the mode called id ("survival", a pack's "flood:out"); journalled with the game as who changed it.
 - `kit_give :: proc(s: ^Server, c: ^Client)`: what the character's mode's kit has that they lack (so a kept inventory is not doubled); full magazines are the weapons' (weapons.odin).
 - `item_count :: proc(c: ^Client, item: game.Item) -> int`: how much of item c carries in its slots (not in its hand's cursor, not worn).
@@ -233,6 +237,7 @@ The types these name:
 - `grid.Part :: struct {...}`
 - `protocol.Game_Kinds :: struct {...}`: the state and event kinds a game replicates besides the engine's (docs/games.md), declared as data in its shared package.
 - `protocol.Key :: struct {...}`: an id in a, or a Block_Pos in a, b, c (and a channel id in d for a Cell).
+- `starmap.Address :: struct {...}`
 
 ## `server/play` (`play.`): What the games share: `server:play`
 

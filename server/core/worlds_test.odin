@@ -457,3 +457,90 @@ test_a_game_keeps_files_of_its_own_in_each_world :: proc(t: ^testing.T) {
 	game.world_files = {{name = "note.txt"}, {name = "note.txt"}}
 	testing.expect(t, harness_refused({game = game}), "a name twice was kept")
 }
+
+// A game sends a player to another world and back (travel, go_to), and is told of each
+// change of world through its travelled hook, as it is of a gate's; a move within one
+// world tells it nothing.
+@(private = "file")
+Trips :: struct {
+	n:        int,
+	from, to: [4]starmap.Address,
+}
+
+@(private = "file")
+TRIPS_GAME :: Game {
+	info = {id = "trips", name = "Trips", description = "Counts its players' trips."},
+	server_state = Trips,
+	travelled = proc(s: ^Server, c: ^Client, from, to: ^World) {
+		trips := game_state(s, Trips)
+		assert(c.world == to, "told of a trip before it was made")
+		if trips.n < len(trips.from) {
+			trips.from[trips.n], trips.to[trips.n] = from.address, to.address
+		}
+		trips.n += 1
+	},
+}
+
+@(test)
+test_a_game_sends_players_between_worlds :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.game = TRIPS_GAME
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	s := &sess.h.srv
+	if !testing.expect(t, harness_landed(&sess.h), "the player never landed") {return}
+	c := &s.clients[0]
+	trips := game_state(s, Trips)
+	home, away := s.home.address, starmap.address_derive(31)
+
+	testing.expect_value(t, travel(s, c, away), "")
+	testing.expect_value(t, c.world.address, away)
+	testing.expect_value(t, go_to(s, c, {home, {3.5, 0, 3.5}, {}}), "")
+	testing.expect_value(t, c.world, s.home)
+	testing.expect_value(t, go_to(s, c, {home, {0.5, 0, 0.5}, {}}), "")
+	testing.expect_value(t, trips.n, 2)
+	testing.expect_value(t, trips.from[0], home)
+	testing.expect_value(t, trips.to[0], away)
+	testing.expect_value(t, trips.from[1], away)
+	testing.expect_value(t, trips.to[1], home)
+
+	// Through an open gate at the player's feet, as one dialed would be.
+	for _ in 0 ..< 3 {session_step(sess, false)}
+	feet := c.player.position
+	ring := worldgen.Structure {
+		kind = .Gate,
+		lo   = {
+			i32(math.floor(feet.x)) - 5,
+			i32(math.floor(feet.y)) - 1,
+			i32(math.floor(feet.z)) - 1,
+		},
+	}
+	append(
+		&s.home.gates,
+		Gate {
+			structure = ring,
+			phase = .Open,
+			outgoing = true,
+			to = away,
+			far = ring,
+			next_at = s.tick + 100,
+		},
+	)
+	session_step(sess, false)
+	testing.expect_value(t, trips.n, 3)
+	testing.expect_value(t, c.world.address, away)
+	testing.expect_value(t, trips.from[2], home)
+	clear(&sess.failures) // (the mirror does not follow every record of a world it left)
+}
+
+// harness_landed steps the harness until its first seat plays and has landed; false if it
+// never does.
+harness_landed :: proc(h: ^Harness) -> bool {
+	_, ok := harness_step_until(h, proc(data: rawptr) -> bool {
+			c := &(^Server)(data).clients[0]
+			return c.state == .Playing && c.landing == nil
+		}, &h.srv, 600)
+	return ok
+}

@@ -118,6 +118,7 @@ Game :: struct {
 	), // each tick, the creatures of each of its kinds whose brain is "game" (their ground loaded, lowest id first), before they are steered
 	joined:         proc(s: ^Server, c: ^Client), // c is playing (welcomed, in its world)
 	left:           proc(s: ^Server, c: ^Client), // c is leaving (still seated, its state still there)
+	travelled:      proc(s: ^Server, c: ^Client, from, to: ^World), // c changed world (a gate, the travel command, the game's travel): it left from (still loaded) and is landing in to
 	command:        proc(s: ^Server, c: ^Client, name: string, args: []string) -> (known: bool), // a command the server has none of; known false: "Unknown server command"
 	hurt:           proc(s: ^Server, c: ^Client, harm: Harm), // c was hurt and lives (its health already less)
 	died:           proc(s: ^Server, c: ^Client, harm: Harm), // c died of harm (already told, counted and its things dropped)

@@ -332,8 +332,10 @@ worlds_unload_idle :: proc(s: ^Server) {
 	}
 }
 
-// travel takes c to the world at address (its spawn, or there: a place in
-// it); "" or why not.
+// travel takes c to the world at address a (loaded if it was not), landing at its spawn
+// or at there (a place in it); "" or why not (the world cannot be loaded). Every change of
+// world goes through it (gates, the travel command, a game), and the game's travelled hook
+// is told of each.
 travel :: proc(s: ^Server, c: ^Client, a: starmap.Address, there: Maybe(Place) = nil) -> string {
 	to := world_load(s, a)
 	if to == nil {return "that world cannot be reached"}
@@ -367,10 +369,13 @@ travel :: proc(s: ^Server, c: ^Client, a: starmap.Address, there: Maybe(Place) =
 		land_at_spawn(s, c)
 	}
 	c.back = back
+	if travelled := s.config.game.travelled;
+	   travelled != nil && to != from {travelled(s, c, from, to)}
 	return ""
 }
 
-// go_to takes c to place, travelling first if it is in another world.
+// go_to takes c to place p, travelling first (travel) if it is in another world; "" or why
+// not.
 go_to :: proc(s: ^Server, c: ^Client, p: Place, mode := game.Landing_Mode.Exact) -> string {
 	if p.world != c.world.address {return travel(s, c, p.world, p)}
 	land(s, c, p.position, p.look, mode)

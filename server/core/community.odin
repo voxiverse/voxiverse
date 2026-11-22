@@ -34,6 +34,7 @@ import steam_server "server:steam"
 
 COMMUNITY_FILE :: "community.cfg"
 
+// Place: a position in a world, and which way one looks there.
 Place :: struct {
 	world:    starmap.Address,
 	position: [3]f64,
