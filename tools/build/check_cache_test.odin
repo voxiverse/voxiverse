@@ -196,17 +196,18 @@ test_check_inputs_follow_imports_and_loads :: proc(t: ^testing.T) {
 }
 
 // The reading of a source file is not thrown off by a quote in a character literal or a
-// comment, and finds an import wherever its literal is.
+// comment, finds an import's path past a comment or a line break, and takes no other
+// literal for one.
 @(test)
 test_source_refs :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	refs := source_refs(
-		"c := '\"'\n// don't \"\n/* a /* nested */ \" */\nimport b \"common:base\"\nimport \"rel\"\nX :: #load_directory(`dir`)\nY :: #load(\"pre/\" + Z)\n",
+		"c := '\"'\n// don't \"\n/* a /* nested */ \" */\nimport b \"common:base\"\nimport /* c */\n\t\"common:voxel\"\nimport \"rel\"\nS :: \"common:game\"\nX :: #load_directory(`dir`)\nY :: #load(\"pre/\" + Z)\n",
 	)
 	testing.expect(
 		t,
-		slice.equal(refs.collection_paths[:], []string{"common:base"}),
-		"the import through a collection",
+		slice.equal(refs.collection_paths[:], []string{"common:base", "common:voxel"}),
+		"the imports through a collection, and no other literal",
 	)
 	testing.expect(t, slice.equal(refs.imports[:], []string{"rel"}), "the relative import")
 	testing.expect_value(t, len(refs.loads), 2)

@@ -14,9 +14,9 @@ import "core:strings"
 // compiler (its version, the `odin` on PATH, and every file under its root by size and
 // time: `core:`, `base:`, `vendor:`) and the files the compiler can read for it: every
 // `.odin` file in its package's folder whatever its build tags, the same for every folder
-// a string literal there names through one of the command's collections (`"common:base"`,
-// imports or not) or an `import` names by a relative path, and so on down, and the files a
-// `#load`, `#load_directory`, `#load_hash` or `#exists` names. A directive's path that
+// an `import` there names through one of the command's collections (`"common:base"`) or
+// by a relative path, and so on down, and the files a `#load`, `#load_directory`,
+// `#load_hash` or `#exists` names. A directive's path that
 // continues past its first literal (`"../../build/textures/" + NAME`) stands for that
 // literal's folder with everything under it; one that starts with no literal leaves its
 // package's jobs never skipped. What passed is kept in CHECK_PASSES as a digest of those
@@ -54,7 +54,7 @@ Tree_Digest :: struct {
 // Package_Inputs: a folder's `.odin` files, what they load and what they may import.
 Package_Inputs :: struct {
 	digest:           Digest,
-	collection_paths: []string, // literals of the form "<name>:<path>"
+	collection_paths: []string, // imports through a collection: "<name>:<path>"
 	folders:          []string, // folders a relative import names
 	exact:            bool, // every load was read: false, the jobs over it are never skipped
 }
@@ -216,12 +216,14 @@ package_inputs :: proc(inputs: ^Check_Inputs, dir: string) -> Package_Inputs {
 	return result
 }
 
-// source_refs reads an Odin file for what it can make the compiler read: every string
-// literal of the form "<name>:<path>" (an import through a collection is one), the path of
-// an `import` that names none (relative), and the paths of the loading directives. It
-// skips comments, character literals and the insides of strings, so a quote in one of
-// them does not throw the reading off. A loading directive whose argument does not start
-// with a literal clears exact.
+// source_refs reads an Odin file for what it can make the compiler read: the path of every
+// `import` (through a collection, "<name>:<path>", or relative) and the paths of the
+// loading directives. An import's path is the literal after the keyword, with at most a
+// name, spaces and comments between: the only form the compiler takes, and a file it
+// does not take fails its jobs, which are then never kept. It skips comments, character
+// literals and the insides of strings, so a quote in one of them does not throw the
+// reading off. A loading directive whose argument does not start with a literal clears
+// exact.
 source_refs :: proc(text: string) -> Source_Refs {
 	refs := Source_Refs {
 		exact = true,
@@ -250,15 +252,18 @@ source_refs :: proc(text: string) -> Source_Refs {
 		case c == '"' || c == '`':
 			literal: string
 			literal, i = read_literal(text, i)
-			if strings.index_byte(literal, ':') > 0 {
-				append(&refs.collection_paths, literal)
-			} else if after_import {
-				append(&refs.imports, literal)
+			if after_import {
+				if strings.index_byte(literal, ':') >= 0 {
+					append(&refs.collection_paths, literal)
+				} else {
+					append(&refs.imports, literal)
+				}
 				if strings.index_byte(literal, '\\') >= 0 {refs.exact = false}
 			}
 			after_import = false
 		case c == '\'':
 			_, i = read_literal(text, i)
+			after_import = false
 		case c == '#':
 			j := ident_end(text, i + 1)
 			name := text[i + 1:j]
@@ -270,11 +275,13 @@ source_refs :: proc(text: string) -> Source_Refs {
 				}
 			}
 			i = max(j, i + 1)
+			after_import = false
 		case ident_start(c):
 			j := ident_end(text, i)
-			if text[i:j] == "import" {after_import = true}
+			if text[i:j] == "import" {after_import = true} 	// (a name after it keeps it)
 			i = j
 		case:
+			if strings.index_byte(" \t\r\n", c) < 0 {after_import = false}
 			i += 1
 		}
 	}
