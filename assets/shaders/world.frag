@@ -12,6 +12,7 @@ layout(set = 0, binding = 1) uniform sampler samplers[3];
 layout(location = 0) in vec3 in_uvw;
 layout(location = 1) in vec3 in_light;
 layout(location = 2) in vec3 in_pos;
+layout(location = 3) flat in uint in_portal; // (world.vert's for water.frag: never on this layer)
 layout(location = 0) out vec4 out_color;
 
 void main() {

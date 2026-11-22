@@ -9,7 +9,7 @@
 // chunk, so floats stay exact far from the origin.
 
 layout(location = 0) in uint in_packed; // x | y << 9 | z << 18 | face << 27 | ao << 30
-layout(location = 1) in uint in_layer; // texture layer (12 bits) | sky << 12 | block << 16 | surface << 20 | drop << 21
+layout(location = 1) in uint in_layer; // texture layer (12 bits) | sky << 12 | block << 16 | surface << 20 | drop << 21 | portal << 24 | rim sides << 25
 // The chunk draw table's record (Chunk_Draw), per instance: each indirect
 // command's firstInstance is its mesh's slot. xyz the chunk, w its mesh's
 // first vertex.
@@ -18,6 +18,7 @@ layout(location = 2) in ivec4 in_chunk;
 layout(location = 0) out vec3 out_uvw; // texture coordinates and layer
 layout(location = 1) out vec3 out_light;
 layout(location = 2) out vec3 out_pos; // from the camera chunk's origin
+layout(location = 3) flat out uint out_portal; // a gate's open surface: 1 | its rim's sides << 1 (client/mesh PORTAL)
 out float gl_ClipDistance[1]; // the cut: what is above it is clipped away
 
 // +x -x +y -y +z -z, then a plant's two diagonal planes.
@@ -75,4 +76,5 @@ void main() {
 	light = lifted(light, s.sky_light.w);
 	out_light = FACE_LIGHT[face] * AO_LIGHT[ao] * light;
 	out_pos = pos;
+	out_portal = (in_layer >> 24) & 31u;
 }

@@ -75,7 +75,14 @@ front of the nearest one.
 To use a gate, right-click its frame from within 8 blocks and pick seven symbols in the dial
 overlay. The symbols lock one by one (0.4 s each, shown nowhere on the gate) and the far
 world's gate, the one nearest its middle, locks with them; both ends open for 30 s, and
-walking into the horizon arrives at the dialed world's gate. Refusals are returned as notices. The server logs `gate dialed`.
+walking into the horizon arrives at the dialed world's gate.
+
+An open gate's horizon fills its opening at once (no burst, no fade). It is drawn by the
+translucent pass (`water.frag`'s `portal`, marked by the mesher: `client/mesh`'s `PORTAL`)
+rather than from its texture: a dark void with depth, four sheets of small motes at growing
+depths behind the plane (so they slide against each other as the eye moves), each drifting
+and turning slowly at its own rate, a faint shimmer, and a thin flickering rim where it
+meets the frame. A closed gate's opening, and a dead gate's, is empty. Refusals are returned as notices. The server logs `gate dialed`.
 
 A world may have a home gate (`worldgen.home_gate`): a gate standing in front of its spawn,
 its frame 8 blocks north of it (where a newcomer looks), or up to 16 where the land there is

@@ -20,7 +20,7 @@ A label names the pass in validation messages and GPU captures, and times it on 
 | `entities` | Avatars, creatures (their kinds' parts), items, projectiles. |
 | `held` | The item in hand, in third person (`held_draw_world`) and first person (`held_draw_view`). |
 | `sky` | The sky, after the world, at the far plane. |
-| `water` | Translucent terrain, sorted. |
+| `water` | Translucent terrain, sorted, and the open surfaces of gates (`water.frag`'s `portal`: drawn there, not from their texture). |
 | `debug lines` | Developer overlays (chunk borders, boxes). |
 | `ui` | The HUD and menus. |
 | `present copy` | Benchmarks only: the offscreen image copied onto the window. |

@@ -34,7 +34,8 @@ Vertex :: struct {
 	// (positions in sixteenths of a block, 0..256; ao: 0 darkest .. 3 open)
 	packed: u32,
 	// texture array layer (12 bits) | sky << 12 | block << 16 | surface << 20 | drop << 21
-	// (sky and block light 0..15; surface and drop: see SURFACE)
+	// | portal << 24 | rim sides << 25
+	// (sky and block light 0..15; surface and drop: see SURFACE; portal and rim: see PORTAL)
 	layer:  u32,
 }
 
@@ -125,6 +126,15 @@ CROSS_B :: 7
 // bits: the levels of the water around that corner).
 SURFACE :: u32(1) << 20 // (in the layer word)
 DROP_SHIFT :: 21
+
+// PORTAL: a vertex of a gate's open surface (the translucent shader draws
+// its depth instead of the texture). The four bits above it, PORTAL_RIM_SHIFT
+// on, say which sides of the cell's face meet something not the surface (the
+// frame), so the shader draws its rim along them: -h, +h, -y, +y, h being the
+// plane's horizontal axis (x, or z for a surface facing along x). The same
+// on every vertex of the face.
+PORTAL :: u32(1) << 24
+PORTAL_RIM_SHIFT :: 25
 
 // Face groups: within a layer, quads come grouped by the way they face,
 // with the plants' crossed quads (seen from both sides) as a group of their
@@ -381,8 +391,8 @@ face_hidden :: proc(reg: ^game.Registry, n: game.Block, f: Face, lo, hi: [3]u8) 
 }
 
 // cube_faces: a cube's faces that can be seen: those not hidden by the
-// block across (opaque, or a shape that covers the face), nor, for a liquid,
-// against more of it.
+// block across (opaque, or a shape that covers the face), nor, for a liquid
+// or a gate's open surface, against more of it.
 @(private = "file")
 cube_faces :: proc(
 	reg: ^game.Registry,
@@ -400,11 +410,13 @@ cube_faces :: proc(
 		_, water := game.water_level(b)
 		_, water_beside := game.water_level(n)
 		if water && water_beside {continue} 	// inside the same body of water
+		if b == .Gate_Horizon && n == .Gate_Horizon {continue} 	// inside one gate's surface
 		if b == n && game.block_has(&reg.blocks, b, .Cull_Same) {continue} 	// one pane (glass)
 		first := len(out)
 		values := cell_face_values(reg, s, light, p, face, axes)
 		at := i32(16) if axes.normal.x + axes.normal.y + axes.normal.z > 0 else 0
 		emit_rect(out, values, face, axes, p, {0, 0}, {16, 16}, at, block_texture(reg, b, face))
+		if b == .Gate_Horizon {portal_mark(s, out[first:], p, axes)}
 		if _, under_water := game.water_level(s[snapshot_index(p.x, p.y + 1, p.z)]);
 		   water && !under_water {
 			for &v in out[first:] {
@@ -415,6 +427,24 @@ cube_faces :: proc(
 			}
 		}
 	}
+}
+
+// portal_mark marks the vertices of a face of the gate horizon at p as the
+// portal's (PORTAL), with the sides of its plane where the cell beside is
+// not horizon (PORTAL_RIM_SHIFT). A face along y (a horizon's top or bottom,
+// against the frame or the platform: never seen) has no rim.
+@(private = "file")
+portal_mark :: proc(s: ^Snapshot, face: []Vertex, p: [3]i32, axes: Face_Axes) {
+	mark := PORTAL
+	if axes.normal.y == 0 {
+		h := [3]i32{1, 0, 0} if axes.normal.z != 0 else [3]i32{0, 0, 1}
+		for side, k in ([4][3]i32{-h, h, {0, -1, 0}, {0, 1, 0}}) {
+			q := p + side
+			if s[snapshot_index(q.x, q.y, q.z)] !=
+			   .Gate_Horizon {mark |= 1 << u32(PORTAL_RIM_SHIFT + k)}
+		}
+	}
+	for &vertex in face {vertex.layer |= mark}
 }
 
 // box_faces: the faces of a block drawn as boxes (a stair, a slab, a ladder,
