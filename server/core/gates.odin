@@ -10,23 +10,23 @@ import "common:starmap"
 import "common:worldgen"
 
 // Gates (common/worldgen/gates.odin has their shape and places): a player dials
-// one (Dial: seven symbols, a world of this galaxy); its chevrons lock one
-// by one, and the far world's arrival gate (the nearest its middle) with
-// it; both open for a while; walking into the dialing gate's horizon
-// travels to the far gate's front. Each gate's blocks follow its state
-// every tick wherever they are loaded (the far gate catches up when its
-// world's chunks arrive), and go back when it closes.
+// one (Dial: seven symbols, a world of this galaxy); the symbols lock one
+// by one (nothing shows it), and the far world's arrival gate with it;
+// both open for a while; walking into the dialing gate's horizon travels
+// to the far gate's front. Each gate's horizon follows its state every
+// tick wherever its blocks are loaded (the far gate catches up when its
+// world's chunks arrive), and goes when it closes.
 //
-// A gate may be dead instead: its chevrons dark, it cannot be dialled and
+// A gate may be dead instead: its opening empty, it cannot be dialled and
 // nobody arrives through it, until gate_wake (the game's, whatever wakes
 // it; the `gate wake` command for admins). A new world's home gate starts
 // dead (gates_begin). Dead gates are saved with their world (world.cfg:
 // `gate.dead`); a world saved before them has none, so its gates live.
 
-GATE_LOCK_TICKS :: game.TICK_RATE * 2 / 5 // a chevron locks every 0.4 s
+GATE_LOCK_TICKS :: game.TICK_RATE * 2 / 5 // a symbol locks every 0.4 s
 GATE_OPEN_TICKS :: game.TICK_RATE * 30 // then the gate stays open 30 s
 GATE_REACH :: 8 // blocks: how far from a gate one may dial it
-GATE_LOOK_PITCH :: -1.0 // radians: from gate_front, at the ring's foot
+GATE_LOOK_PITCH :: -1.0 // radians: from gate_front, at the opening's foot
 
 Gate_Phase :: enum u8 {
 	Dialing,
@@ -37,7 +37,7 @@ Gate_Phase :: enum u8 {
 Gate :: struct {
 	structure: worldgen.Structure,
 	phase:     Gate_Phase, // (Dead: the rest is zero)
-	locked:    int, // chevrons lit
+	locked:    int, // symbols locked so far
 	next_at:   u64, // tick of the next lock, or of closing
 	outgoing:  bool, // dialed here (travelling in goes to `to`); else the far end
 	to:        starmap.Address, // the far end's world
@@ -137,8 +137,8 @@ gates_active :: proc(w: ^World) -> bool {
 	return false
 }
 
-// gate_wake brings the dead gate a block of which is at p (its ring, a
-// chevron, its platform) to life: from now on it is dialled and arrived at
+// gate_wake brings the dead gate a block of which is at p (its frame, its
+// platform) to life: from now on it is dialled and arrived at
 // as any gate. False if no gate is there or it is not dead.
 gate_wake :: proc(w: ^World, p: game.Block_Pos) -> bool {
 	gs, is_gate := worldgen.gate_containing(&w.chunks.gen, p)
@@ -209,31 +209,26 @@ admin_gate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // GATE_ADMIN_REACH: blocks: how far `gate wake|kill` looks for a gate.
 GATE_ADMIN_REACH :: 256
 
-// gate_blocks sets g's blocks to its state (or back, closed) where loaded.
+// gate_blocks sets g's horizon to its state (or none, closed) where loaded:
+// open, its opening is horizon; else no cell of its plane is (nor one a
+// gate of the older, wider shape left in a world saved open).
 @(private = "file")
 gate_blocks :: proc(w: ^World, g: ^Gate, closed := false) {
-	for p, k in worldgen.gate_chevrons(g.structure) {
-		want: game.Block = .Gate_Chevron_Lit if !closed && k < g.locked else .Gate_Chevron
-		set_if(w, p, want)
-	}
-	inside := make([dynamic]game.Block_Pos, context.temp_allocator)
-	worldgen.gate_inside(g.structure, &inside)
 	open := !closed && g.phase == .Open
-	for p in inside {
-		current, loaded := chunks_block(&w.chunks, p)
-		if !loaded {continue}
-		if open && current != .Gate_Horizon {set_block(w, p, .Gate_Horizon, world_act(w, .Gate))}
-		if !open && current == .Gate_Horizon {set_block(w, p, .Air, world_act(w, .Gate))}
+	for v in i32(1) ..< worldgen.GATE_SIZE.y {
+		for u in i32(0) ..< worldgen.GATE_SIZE.x {
+			p := worldgen.gate_at(g.structure, u, v)
+			current, loaded := chunks_block(&w.chunks, p)
+			if !loaded {continue}
+			horizon := open && worldgen.gate_cell(u, v) == .Inside
+			if horizon &&
+			   current != .Gate_Horizon {set_block(w, p, .Gate_Horizon, world_act(w, .Gate))}
+			if !horizon && current == .Gate_Horizon {set_block(w, p, .Air, world_act(w, .Gate))}
+		}
 	}
 }
 
-@(private = "file")
-set_if :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
-	if current, loaded := chunks_block(&w.chunks, p);
-	   loaded && current != b {set_block(w, p, b, world_act(w, .Gate))}
-}
-
-// in_horizon: a player at feet stands in g's ring (its plane, inside).
+// in_horizon: a player at feet stands in g's opening (its plane, inside).
 @(private = "file")
 in_horizon :: proc(g: ^Gate, feet: [3]f64) -> bool {
 	inside := make([dynamic]game.Block_Pos, context.temp_allocator)

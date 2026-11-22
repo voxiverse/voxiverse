@@ -4,47 +4,22 @@ import "core:math"
 
 import "common:game"
 
-// Gates: a ring standing on a platform, its 15 chevrons around it (the
-// first 7 lit to dial a world in the galaxy; the other 8 dark until a gate
-// can reach other galaxies). They are rare (a structure set), and none
-// stands within Params.gate_distance of the world's middle: something to
-// find late (`locate gate`). A world may also have a home gate, standing
+// Gates: a heavy doorway of slabs standing on a platform, a tall narrow
+// opening in it under a stepped head. They are rare (a structure set), and
+// none stands within Params.gate_distance of the world's middle: something
+// to find late (`locate gate`). A world may also have a home gate, standing
 // a few blocks in front of its spawn (Params.home_gate: a new sandbox
 // universe's home world; home_gate_place). Travellers to a world arrive at
 // its home gate, or else at its gate nearest the middle (arrival_gate).
-// The server opens them (server/core/gates.odin): lit chevrons, and
-// horizon blocks inside the ring.
+// The server opens them (server/core/gates.odin): horizon blocks fill the
+// opening. Nothing on the frame lights.
+//
+// The box, the platform and the front are those of the ring gates the
+// frame replaced, and the opening lies wholly inside the ring's: a world
+// saved with the old ring still opens a horizon only where it had air.
 
-GATE_SIZE :: [2]i32{11, 10} // across, up (the ring's plane), on a platform
+GATE_SIZE :: [2]i32{11, 10} // across, up (the frame's plane), on a platform
 GATE_DEPTH :: 3
-
-// GATE_CHEVRONS: where each chevron is on the ring, in the plane (across,
-// up from the platform), first at the top, then clockwise. Fixed cells
-// (not computed: the same on every platform): a radius of 4.5 about (5,
-// 4.5), its lowest row set in the platform (so one walks in level).
-@(rodata)
-GATE_CHEVRONS := [15][2]i32 {
-	{5, 9},
-	{7, 9},
-	{8, 8},
-	{9, 6},
-	{9, 4},
-	{9, 2},
-	{8, 1},
-	{6, 0},
-	{4, 0},
-	{2, 1},
-	{1, 2},
-	{1, 4},
-	{1, 6},
-	{2, 8},
-	{3, 9},
-}
-
-@(private = "file")
-GATE_CENTRE :: [2]f32{5, 4.5}
-@(private = "file")
-GATE_RADIUS :: 4.5
 
 // gate_size: the box of a gate turned rotation quarters (its plane along x
 // for 0 and 2, along z for 1 and 3).
@@ -60,41 +35,31 @@ gate_plane :: proc(rotation: u8, l: [3]i32) -> (u, v, w: i32) {
 	return l.x, l.y, l.z
 }
 
-// gate_cell: the block at (u, v) of the ring's plane: ring, chevron k,
-// inside the ring (the horizon, when open), or outside.
+// gate_cell: the block at (u, v) of the frame's plane: the frame, the
+// opening (the horizon, when open), or outside. The opening is three wide
+// and seven high, one more cell in its head; the frame stands two thick
+// round it (a slab's width each side, a lintel above), its top corners cut.
 Gate_Cell :: enum u8 {
 	Outside,
-	Ring,
-	Chevron,
+	Frame,
 	Inside,
 }
 
-gate_cell :: proc(u, v: i32) -> (Gate_Cell, int) {
-	for c, k in GATE_CHEVRONS {if c == {u, v} {return .Chevron, k}}
-	du, dv := f32(u) - GATE_CENTRE.x, f32(v) - GATE_CENTRE.y
-	d := math.sqrt(du * du + dv * dv)
+gate_cell :: proc(u, v: i32) -> Gate_Cell {
 	switch {
-	case d < GATE_RADIUS - 0.6:
-		return .Inside, 0
-	case d <= GATE_RADIUS + 0.6:
-		return .Ring, 0
+	case u >= 4 && u <= 6 && v >= 1 && v <= 7, u == 5 && v == 8:
+		return .Inside
+	case u >= 2 && u <= 8 && v >= 1 && v <= 9 && !(v == 9 && (u == 2 || u == 8)):
+		return .Frame
 	}
-	return .Outside, 0
+	return .Outside
 }
 
-// gate_block: what a gate piece puts at l: its platform, ring and dark
-// chevrons; the rest of its box cleared.
+// gate_block: what a gate piece puts at l: its platform and frame; the
+// rest of its box cleared.
 gate_block :: proc(piece: ^Piece, l, size: [3]i32) -> (game.Block, int) {
 	u, v, w := gate_plane(piece.rotation, l)
-	cell := Gate_Cell.Outside
-	if w == 1 {cell, _ = gate_cell(u, v)}
-	switch cell {
-	case .Ring:
-		return .Gate_Ring, 1
-	case .Chevron:
-		return .Gate_Chevron, 1
-	case .Inside, .Outside:
-	}
+	if w == 1 && gate_cell(u, v) == .Frame {return .Gate_Ring, 1}
 	if v == 0 {return .Stone_Bricks, 1}
 	return .Air, 2
 }
@@ -105,24 +70,18 @@ gate_at :: proc(s: Structure, u, v: i32) -> game.Block_Pos {
 	return s.lo + {u, v, 1}
 }
 
-// gate_chevrons: where s's chevrons are.
-gate_chevrons :: proc(s: Structure) -> (out: [15]game.Block_Pos) {
-	for c, k in GATE_CHEVRONS {out[k] = gate_at(s, c.x, c.y)}
-	return
-}
-
-// gate_inside appends the cells inside s's ring (its horizon, when open).
+// gate_inside appends the cells of s's opening (its horizon, when open).
 gate_inside :: proc(s: Structure, out: ^[dynamic]game.Block_Pos) {
 	for v in i32(1) ..< GATE_SIZE.y {
 		for u in i32(0) ..< GATE_SIZE.x {
-			if cell, _ := gate_cell(u, v); cell == .Inside {append(out, gate_at(s, u, v))}
+			if gate_cell(u, v) == .Inside {append(out, gate_at(s, u, v))}
 		}
 	}
 }
 
 // gate_front: where a traveller arriving through s stands (on the
 // platform, on its +z side, or +x turned) and the yaw
-// facing away from the ring.
+// facing away from the frame.
 gate_front :: proc(s: Structure) -> (position: [3]f64, yaw: f32) {
 	centre := gate_at(s, 5, 1)
 	if s.rotation & 1 == 1 {
@@ -131,8 +90,8 @@ gate_front :: proc(s: Structure) -> (position: [3]f64, yaw: f32) {
 	return {f64(centre.x) + 0.5, f64(centre.y), f64(centre.z) + 1.5}, math.PI // facing +z
 }
 
-// gate_containing: the gate a block of p belongs to (its ring, a chevron,
-// its platform), if any.
+// gate_containing: the gate a block of p belongs to (its frame, its
+// platform), if any.
 gate_containing :: proc(gen: ^Generator, p: game.Block_Pos) -> (s: Structure, ok: bool) {
 	found := make([dynamic]Structure, context.temp_allocator)
 	structures_near(gen, {p.x, p.z}, {p.x, p.z}, &found)
@@ -160,7 +119,7 @@ arrival_gate :: proc(gen: ^Generator) -> (s: Structure, ok: bool) {
 	return locate_structure(gen, .Gate, 0, 0, ARRIVAL_SEARCH)
 }
 
-// HOME_GATE_STEPS: how far in front of the spawn the home gate's ring may
+// HOME_GATE_STEPS: how far in front of the spawn the home gate's frame may
 // stand (blocks along -z, where a newcomer looks: yaw 0), nearest first.
 @(private = "file", rodata)
 HOME_GATE_STEPS := [?]i32{8, 10, 12, 14, 16}
@@ -177,7 +136,7 @@ home_gate_place :: proc(gen: ^Generator, spawn: [3]f64) -> Structure {
 	x, z := i32(math.floor(spawn.x)), i32(math.floor(spawn.z))
 	found := make([dynamic]Structure, context.temp_allocator)
 	place :: proc(gen: ^Generator, x, z, step: i32, size: [3]i32) -> Structure {
-		lo := [2]i32{x - size.x / 2, z - step - 1} // (its ring one block into its box)
+		lo := [2]i32{x - size.x / 2, z - step - 1} // (its frame one block into its box)
 		ground := column_at(&gen.params, gen.seed, x, lo.y + 1).height
 		s := Structure {
 			kind = .Gate,

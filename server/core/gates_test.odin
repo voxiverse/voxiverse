@@ -136,26 +136,22 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 			c.notices[before:],
 		)
 	}
-	ring := worldgen.gate_at(here, 0, 5)
+	frame := worldgen.gate_at(here, 3, 5)
 	elsewhere := away
 	elsewhere.galaxy = starmap.address_derive(5).galaxy
-	misdial(t, alice, {ring, elsewhere}, "galaxy")
-	misdial(t, alice, {ring, home}, "own world")
-	misdial(t, alice, {ring - {0, 40, 0}, away}, "not a gate")
+	misdial(t, alice, {frame, elsewhere}, "galaxy")
+	misdial(t, alice, {frame, home}, "own world")
+	misdial(t, alice, {frame - {0, 40, 0}, away}, "not a gate")
 
-	// Dial: the chevrons light, the horizon forms; walk in.
+	// Dial: the horizon forms; walk in.
 	@(static) gate: worldgen.Structure
 	gate = here
-	net_send(alice, protocol.Dial{ring, away})
+	net_send(alice, protocol.Dial{frame, away})
 	ok = net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return gate_seen(cs[0], gate, .Gate_Horizon)
 		}, 10)
 	if !testing.expect(t, ok, "the gate never opened") {return}
-	chevrons := worldgen.gate_chevrons(here)
-	for c in chevrons[:starmap.WORLD_LENGTH] {
-		b, _ := net_block(alice, c)
-		testing.expect_value(t, b, game.Block.Gate_Chevron_Lit)
-	}
+
 	alice.move = {0, 1}
 	@(static) want: starmap.Address
 	@(static) front: [3]f64
@@ -196,7 +192,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	alice.move = {}
 }
 
-// gate_seen: whether c sees every cell inside g's ring as b.
+// gate_seen: whether c sees every cell of g's opening as b.
 @(private = "file")
 gate_seen :: proc(c: ^Net_Client, g: worldgen.Structure, b: game.Block) -> bool {
 	inside := make([dynamic]game.Block_Pos, context.temp_allocator)
@@ -268,11 +264,11 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	c := harness_player_client(p)
 	away := starmap.address_derive(77)
 	away.galaxy = w.address.galaxy
-	ring := worldgen.gate_at(home, 0, 5)
+	frame := worldgen.gate_at(home, 3, 5)
 
 	// Dead: dark here, and nothing answers from elsewhere.
 	c.player.position = front
-	testing.expect_value(t, gate_dial(srv, c, {ring, away}), "the gate is dark")
+	testing.expect_value(t, gate_dial(srv, c, {frame, away}), "the gate is dark")
 	testing.expect_value(t, len(w.gates), 1)
 	testing.expect_value(t, travel(srv, c, away), "")
 	far, has_far := worldgen.arrival_gate(&c.world.chunks.gen)
@@ -287,16 +283,16 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	testing.expect_value(t, travel(srv, c, w.address), "")
 
 	// Woken (once), and killed only at rest.
-	testing.expect(t, !gate_kill(w, ring), "a dead gate killed again")
-	testing.expect(t, gate_wake(w, ring), "the home gate did not wake")
-	testing.expect(t, !gate_wake(w, ring), "a live gate woken")
+	testing.expect(t, !gate_kill(w, frame), "a dead gate killed again")
+	testing.expect(t, gate_wake(w, frame), "the home gate did not wake")
+	testing.expect(t, !gate_wake(w, frame), "a live gate woken")
 	testing.expect_value(t, len(w.gates), 0)
-	testing.expect(t, !gate_wake(w, ring - {0, 40, 0}), "woke what is not a gate")
+	testing.expect(t, !gate_wake(w, frame - {0, 40, 0}), "woke what is not a gate")
 
 	// Alive: dialled, and walked through to the far gate.
 	c.player.position = front
-	testing.expect_value(t, gate_dial(srv, c, {ring, away}), "")
-	testing.expect(t, !gate_kill(w, ring), "a gate in use killed")
+	testing.expect_value(t, gate_dial(srv, c, {frame, away}), "")
+	testing.expect(t, !gate_kill(w, frame), "a gate in use killed")
 	Walk :: struct {
 		c:       ^Client,
 		horizon: [3]f64,
@@ -307,7 +303,7 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	through :: proc(data: rawptr) -> bool {
 		walk := (^Walk)(data)
 		if walk.c.world.address == walk.to {return true}
-		walk.c.player.position, walk.c.landing = walk.horizon, nil // (in the ring)
+		walk.c.player.position, walk.c.landing = walk.horizon, nil // (in the opening)
 		return false
 	}
 	_, through_ok := harness_step_until(h, through, &walk, 20 * game.TICK_RATE)

@@ -66,22 +66,24 @@ covers save, quit and load, edits surviving unloading, and damaged files.
 
 ### Gates
 
-Gates travel between the worlds of a galaxy. They are rare structures, none within
+Gates travel between the worlds of a galaxy. A gate is a heavy doorway of dark slabs on a
+stone platform: a tall opening three blocks wide under a stepped head, framed two blocks
+thick; nothing on the frame lights. They are rare structures, none within
 `worldgen.gate_distance` (2000) blocks of a world's middle. `/locate gate` places an admin in
 front of the nearest one.
 
-To use a gate, right-click its ring from within 8 blocks and pick seven symbols in the dial
-overlay. The chevrons lock one by one (0.4 s each) and the far world's gate, the one nearest
-its middle, locks with them; both ends open for 30 s, and walking into the horizon arrives
-at the dialed world's gate. Refusals are returned as notices. The server logs `gate dialed`.
+To use a gate, right-click its frame from within 8 blocks and pick seven symbols in the dial
+overlay. The symbols lock one by one (0.4 s each, shown nowhere on the gate) and the far
+world's gate, the one nearest its middle, locks with them; both ends open for 30 s, and
+walking into the horizon arrives at the dialed world's gate. Refusals are returned as notices. The server logs `gate dialed`.
 
 A world may have a home gate (`worldgen.home_gate`): a gate standing in front of its spawn,
-its ring 8 blocks north of it (where a newcomer looks), or up to 16 where the land there is
+its frame 8 blocks north of it (where a newcomer looks), or up to 16 where the land there is
 not dry and smooth or another structure stands (`home_gate_place`). The generator finds the
 spawn first, then stands the gate. A new universe whose game asks for it (`Config.home_gate`:
 the sandbox) gives its home world one. Travellers to a world with a home gate arrive there.
 
-A gate may be dead: its chevrons stay dark, dialling it says only that the gate is dark, and
+A gate may be dead: its opening stays empty, dialling it says only that the gate is dark, and
 dialling its world from elsewhere finds nothing answering there. A new world's home gate
 starts dead; `core.gate_wake` (a game's, when what wakes it is done) or `/gate wake`
 (`world.gate`: the nearest gate within 256 blocks) brings it to life, after which it is any

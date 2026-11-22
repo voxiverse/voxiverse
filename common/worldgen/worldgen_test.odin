@@ -426,9 +426,31 @@ test_spawn_on_open_ground :: proc(t: ^testing.T) {
 	}
 }
 
-// Every Earth world has gates, none near its middle: their chevrons and
-// ring where gates.odin says, inside the ring clear, a traveller's spot in
-// front free; a block of one finds it; worlds made before gates have none.
+// expect_frame: every cell of gate s's frame is a frame block, as the
+// generator made it (block_at: the chunk generated into arr), and nothing
+// on it is anything else.
+@(private = "file")
+expect_frame :: proc(
+	t: ^testing.T,
+	g: ^Generator,
+	arr: ^game.Block_Array,
+	s: Structure,
+	seed: i64,
+) {
+	for v in i32(0) ..< GATE_SIZE.y {
+		for u in i32(0) ..< GATE_SIZE.x {
+			if gate_cell(u, v) != .Frame {continue}
+			p := gate_at(s, u, v)
+			uniform, is_uniform := generate(g, game.chunk_of(p), arr)
+			b := uniform if is_uniform else arr[game.local_index(game.local_of(p))]
+			testing.expectf(t, b == .Gate_Ring, "seed %d: %v in the frame at %v", seed, b, p)
+		}
+	}
+}
+
+// Every Earth world has gates, none near its middle: their frame where
+// gates.odin says, its opening clear, a traveller's spot in front free; a
+// block of one finds it; worlds made before gates have none.
 @(test)
 test_gates :: proc(t: ^testing.T) {
 	arr := new(game.Block_Array)
@@ -450,22 +472,13 @@ test_gates :: proc(t: ^testing.T) {
 			seed,
 			d,
 		)
-		for c in gate_chevrons(s) {
-			testing.expectf(
-				t,
-				block_at(&g, arr, c) == .Gate_Chevron,
-				"seed %d: no chevron at %v",
-				seed,
-				c,
-			)
-		}
+		expect_frame(t, &g, arr, s, seed)
 		testing.expect_value(t, block_at(&g, arr, gate_at(s, 0, 0)), game.Block.Stone_Bricks)
-		testing.expect_value(t, block_at(&g, arr, gate_at(s, 5, 0)), game.Block.Gate_Ring)
-		testing.expect_value(t, block_at(&g, arr, gate_at(s, 0, 5)), game.Block.Gate_Ring)
+		testing.expect_value(t, block_at(&g, arr, gate_at(s, 0, 5)), game.Block.Air)
 		inside := make([dynamic]game.Block_Pos, context.temp_allocator)
 		gate_inside(s, &inside)
-		testing.expect(t, len(inside) > 30)
-		for p in inside {testing.expectf(t, block_at(&g, arr, p) == .Air, "seed %d: %v inside the ring", seed, p)}
+		testing.expect_value(t, len(inside), 22)
+		for p in inside {testing.expectf(t, block_at(&g, arr, p) == .Air, "seed %d: %v in the opening", seed, p)}
 		front, _ := gate_front(s)
 		feet := game.Block_Pos {
 			i32(math.floor(front.x)),
@@ -487,8 +500,8 @@ test_gates :: proc(t: ^testing.T) {
 			!game.block_collides(test_blocks(), block_at(&g, arr, feet + {0, 1, 0})),
 			"the arrival spot is in a block",
 		)
-		found, has := gate_containing(&g, gate_chevrons(s)[3])
-		testing.expect(t, has && found.lo == s.lo, "a chevron does not find its gate")
+		found, has := gate_containing(&g, gate_at(s, 3, 5))
+		testing.expect(t, has && found.lo == s.lo, "its frame does not find its gate")
 		old := g
 		old.params.gates = 0
 		_, has = arrival_gate(&old)
@@ -513,8 +526,8 @@ test_gates :: proc(t: ^testing.T) {
 }
 
 // A home gate (a new sandbox universe's home world) stands in front of the
-// spawn, which stays where it was without one: its ring 8 to 16 blocks
-// north, whole, clear inside, on something to stand on in front; it is the
+// spawn, which stays where it was without one: its frame 8 to 16 blocks
+// north, whole, its opening clear, on something to stand on in front; it is the
 // world's arrival gate, a block of it finds it, and it is the same every
 // time. A world without the parameter has none.
 @(test)
@@ -539,29 +552,20 @@ test_home_gate :: proc(t: ^testing.T) {
 		testing.expect_value(t, again.home, g.home)
 		spawn := spawn_point(&g)
 		testing.expect_value(t, spawn, spawn_point(&plain))
-		ring := gate_at(s, 5, 1)
-		north := i32(math.floor(spawn.z)) - ring.z
+		opening := gate_at(s, 5, 1)
+		north := i32(math.floor(spawn.z)) - opening.z
 		testing.expectf(
 			t,
-			north >= 8 && north <= 16 && ring.x == i32(math.floor(spawn.x)) && s.rotation == 0,
-			"seed %d: the home gate's ring at %v, the spawn at %v",
+			north >= 8 && north <= 16 && opening.x == i32(math.floor(spawn.x)) && s.rotation == 0,
+			"seed %d: the home gate's opening at %v, the spawn at %v",
 			seed,
-			ring,
+			opening,
 			spawn,
 		)
-		for c in gate_chevrons(s) {
-			testing.expectf(
-				t,
-				block_at(&g, arr, c) == .Gate_Chevron,
-				"seed %d: no chevron at %v",
-				seed,
-				c,
-			)
-		}
-		testing.expect_value(t, block_at(&g, arr, gate_at(s, 0, 5)), game.Block.Gate_Ring)
+		expect_frame(t, &g, arr, s, seed)
 		inside := make([dynamic]game.Block_Pos, context.temp_allocator)
 		gate_inside(s, &inside)
-		for p in inside {testing.expectf(t, block_at(&g, arr, p) == .Air, "seed %d: %v inside the ring", seed, p)}
+		for p in inside {testing.expectf(t, block_at(&g, arr, p) == .Air, "seed %d: %v in the opening", seed, p)}
 		front, _ := gate_front(s)
 		feet := game.Block_Pos {
 			i32(math.floor(front.x)),
@@ -576,8 +580,8 @@ test_home_gate :: proc(t: ^testing.T) {
 		)
 		arrival, _ := arrival_gate(&g)
 		testing.expect_value(t, arrival, s)
-		found, is_gate := gate_containing(&g, gate_chevrons(s)[3])
-		testing.expect(t, is_gate && found == s, "a chevron does not find the home gate")
+		found, is_gate := gate_containing(&g, gate_at(s, 3, 5))
+		testing.expect(t, is_gate && found == s, "its frame does not find the home gate")
 	}
 }
 
