@@ -40,6 +40,20 @@ pack's model.
 The statistics it keeps of a player: `sheep.sheared` (5 experience each) and `sheep.fed` (2),
 and of a world `sheep.born`, shown with the engine's.
 
+## Its nights
+
+From dusk to dawn (a fifth of the day either side of midnight) the base pack's hostile
+creatures come out in every world of the sandbox: shamblers in ones and twos, now and then a
+pack of two or three skitters, on open ground (grass, dirt, sand) under the sky, 24 to 40
+blocks from a player, never within 48 blocks of the world's spawn point, at most three of each
+kind near one player. The rules are the sandbox pack's data (`pack/data/entities/hostile.json`,
+overriding only the creatures' `spawn`) and the engine's spawner runs them, so they come from
+each world's seed and tick like everything else, within its entity budget; a natural one goes
+when nobody is near. Each goes for the nearest player within 16 blocks who can be hurt and
+strikes it (`play.hunt_tick`, `server/danger.odin`); one in creative mode, or watching, is left
+alone. They drop nothing (a kind has no drops as data). The spitters, hulks and the matriarch
+stay Horde's.
+
 ## Its peoples and markets
 
 On a world built on the planet (the home world when it is Earth), the sandbox keeps the
@@ -123,13 +137,15 @@ engine's files and the character's `trader`: the save migration made them the sa
 
 `rules.odin` (its name and description), `genetics.odin` (the sheep's genes), `pack.odin`
 (its pack: `pack/data/entities/sheep.json`, the sheep's body, looks, model and spawn rule;
-`pack/data/blocks/kit.json`, a block of every material),
+`pack/data/entities/hostile.json`, the nights' spawn rules; `pack/data/blocks/kit.json`, a
+block of every material),
 the markets' model (above), `records.odin` (what it replicates) and `text.odin`
 (what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
 and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and
 feeding, `entity_use`; their wild genes, `spawned`; their flight, `entity_hurt`), each sheep's
 record (`Sheep`) kept on its entity, and runs the markets (`economy.odin`, each world's
 economy, its `world_state` and file; `trader.odin`, the character's `Trader_Record` and the
-market on the wire; `interventions.odin`); `client/` draws the market's line and screen
+market on the wire; `interventions.odin`), and lets the night's creatures hunt
+(`danger.odin`); `client/` draws the market's line and screen
 (`market.odin`). Everything else the sandbox does (worlds and gates, climate, farming) is the
 engine's, chosen through the server's `Config`.

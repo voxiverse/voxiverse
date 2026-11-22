@@ -1,0 +1,38 @@
+// Danger by night: the base pack's hostile creatures come out in the sandbox's worlds
+// (their spawn rules are the sandbox's alone: "override"), and go for the players who can
+// be hurt (games/sandbox/server/danger.odin). From dusk to dawn, on open ground under the
+// sky, a few blocks off a player and never near a world's spawn point. Shamblers in ones
+// and twos, now and then a pack of skitters; the spitters, hulks and the matriarch stay
+// Horde's.
+{
+	"voxiverse:shambler": {
+		"override": true,
+		"spawn": {
+			"on": "#voxiverse:wild_plant_soil",
+			"day": [0.8, 0.2],
+			"every": 100,
+			"chance": 0.3,
+			"cap": 3,
+			"within": 48,
+			"distance": [24, 40],
+			"group": [1, 2],
+			"sky": true,
+			"safe": 48
+		}
+	},
+	"voxiverse:skitter": {
+		"override": true,
+		"spawn": {
+			"on": "#voxiverse:wild_plant_soil",
+			"day": [0.8, 0.2],
+			"every": 200,
+			"chance": 0.15,
+			"cap": 3,
+			"within": 48,
+			"distance": [24, 40],
+			"group": [2, 3],
+			"sky": true,
+			"safe": 48
+		}
+	}
+}

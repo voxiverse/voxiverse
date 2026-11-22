@@ -10,7 +10,7 @@ import "server:core"
 // keeps its sheep (sheep.odin: their minds, shearing and feeding, their statistics) and the
 // economy of a world built on the planet (economy.odin: its towns' markets; trader.odin: the
 // player as a trader; interventions.odin: what players did that the world's history carries
-// forward). The rest of that world (worlds and gates, climate, farming) is the engine's,
+// forward) and lets the base pack's hostile creatures out at night (danger.odin). The rest of that world (worlds and gates, climate, farming) is the engine's,
 // chosen by the config.
 
 GAME :: core.Game {
@@ -32,7 +32,7 @@ GAME :: core.Game {
 	},
 	configure      = configure,
 	start          = start,
-	tick           = economy_tick,
+	tick           = tick,
 	think          = think,
 	spawned        = spawned,
 	joined         = trader_joined,
@@ -71,6 +71,12 @@ start :: proc(s: ^core.Server) -> bool {
 	g.wool = game.item_of_block(reg, game.registry_block(reg, "wool") or_return)
 	g.black_wool = game.item_of_block(reg, game.registry_block(reg, "black_wool") or_return)
 	return true
+}
+
+// tick: the economy (economy.odin) and the night's creatures (danger.odin).
+tick :: proc(s: ^core.Server) {
+	economy_tick(s)
+	danger_tick(s)
 }
 
 // KIT: what a player new to a sandbox universe is given: the rocket launcher alone, in
