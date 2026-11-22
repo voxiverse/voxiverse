@@ -259,6 +259,7 @@ comment. Read it first; this file says how the names fit together.
 | `travel(s, c, address, there)`, `go_to(s, c, place, mode)`, `Place` | Send a player to another world (a `starmap.Address`, loaded if it was not): to its spawn, or to a place in it; to a place anywhere, travelling first if it is in another world. `""` or why not; the `travelled` hook is told |
 | `game_mode(s, c, id)`, `kit_give(s, c)` | Put a player in a mode by id (a pack's too: `flood:out`), journalled as the game's; give it what its mode's kit has that it lacks, weapons full |
 | `item_count(c, item)`, `item_give(s, c, item, count)`, `item_take(s, c, item, count)`, `item_clear(s, c, item)`, `item_spend(s, c, item, count)`, `hotbar_select(s, c, slot)` | A player's slots as the game's store: how many of an item it carries, give (what fits), take, take all, booked in the item ledger as the game's; spend on a use (fed to a creature: booked as used, kept by a mode that gives without end; false when it carries fewer); a hotbar slot put in its hand |
+| `inventory_set_aside(s, c)`, `inventory_give_back(s, c)` | A player's whole inventory (slots, what it wears, the cursor) set aside, leaving it empty, and given back later in place of what it holds then (that is gone, booked as the game's): an encounter's kit, then its own things again. One at a time (a second is refused: false); what is set aside is the character's, saved with it and untouched by death (`Client.aside` while it is) |
 | `item_drop(s, w, position, stack)` | Drop a stack into the world with its game data (`game.Stack.data`, a `u32` of the game's own: a rolled damage, a rarity, kept with the stack); the first player to walk over it picks it up, as the `picking` hook decides |
 | `head_in_water(s, c)`, `player_health_bonus(s, c, bonus)`, `heal_player(c, amount)` | A player's eyes are in water; add to its most health (it stays with the seat until changed, a respawn fills it); heal a living player up to its most |
 | `game_rule(s, w, name, value)` | Change a world's rule (as the `rule` command names it; the value as text), journalled as the game's and told to the world's players |
@@ -287,7 +288,7 @@ comment. Read it first; this file says how the names fit together.
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config`,
 `registry`, `sim_speed`, `sim_steps` and `listening` (others can join: opened to the LAN, or
 a dedicated server); `Client`'s `state`, `world`, `player` (its position, velocity, flying),
-`dead`, `mode` and `inventory`; `World`'s `rules`, `clock`, `address` (which world it is, a
+`dead`, `mode`, `inventory` and `aside` (its inventory set aside, if any); `World`'s `rules`, `clock`, `address` (which world it is, a
 `starmap.Address`: Earth's is the same in every universe), `seed` (its terrain's, from the
 universe's) and `params` (its generator's parameters: `params.planet` is 1 for a world built on
 the planet model). What a game knows of the planet beyond them is `common:`'s, called

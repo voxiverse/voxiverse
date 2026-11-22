@@ -346,6 +346,36 @@ item_spend :: proc(s: ^Server, c: ^Client, item: game.Item, count := 1) -> bool 
 	return true
 }
 
+// inventory_set_aside: c's whole inventory (its slots, what it wears, the cursor's stack) is
+// set aside and c holds nothing; false, and nothing changes, if one is set aside already (one
+// at a time). What is set aside is kept with c's character and saved with it, untouched by
+// death, until inventory_give_back. The hotbar slot in hand stays as it was.
+inventory_set_aside :: proc(s: ^Server, c: ^Client) -> bool {
+	if _, held := c.aside.?; held {return false}
+	c.aside = game.Inventory {
+		slots     = c.inventory.slots,
+		equipment = c.inventory.equipment,
+		cursor    = c.inventory.cursor,
+	}
+	c.inventory.slots, c.inventory.equipment, c.inventory.cursor = {}, {}, {}
+	c.inv_changed = true
+	return true
+}
+
+// inventory_give_back: the inventory set aside (inventory_set_aside) is c's again, in the
+// slots it was in; what c holds now is gone, booked in the item ledger as the game's (what
+// comes back was neither made nor lost). False, and nothing changes, if none is set aside.
+inventory_give_back :: proc(s: ^Server, c: ^Client) -> bool {
+	aside, held := c.aside.?
+	if !held {return false}
+	ledger_inventory(s, c.world, .Game, &c.inventory)
+	c.inventory.slots, c.inventory.equipment, c.inventory.cursor =
+		aside.slots, aside.equipment, aside.cursor
+	c.aside = nil
+	c.inv_changed = true
+	return true
+}
+
 // item_clear: all of item out of c's slots; how many there were.
 item_clear :: proc(s: ^Server, c: ^Client, item: game.Item) -> int {
 	return item_take(s, c, item, max(int))

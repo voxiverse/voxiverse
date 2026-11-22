@@ -40,8 +40,10 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		c.player = saved.state
 		c.look = saved.look
 		c.inventory = saved.inventory
+		c.aside = saved.aside
 		c.character_data = saved.character_data
 		ledger_inventory(s, w, .Scope_In, &c.inventory)
+		if aside, ok := &c.aside.?; ok {ledger_inventory(s, w, .Scope_In, aside)}
 		for st in saved.overflow {
 			if !game.stack_empty(st) {
 				ledger_stack(s, w, .Spill_Old, st)
@@ -118,6 +120,7 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	respawn(s, c) // (leaving at the death screen: kept alive, at the spawn)
 	record(s, c, .Session_End, n0 = i64((s.tick - c.joined_tick) / game.TICK_RATE))
 	ledger_inventory(s, c.world, .Scope_Out, &c.inventory)
+	if aside, ok := &c.aside.?; ok {ledger_inventory(s, c.world, .Scope_Out, aside)}
 	keep_player(s, c)
 	chat_system(s, game.format_join({display_name(s, c), "&e left"}))
 	base.crash_bundle_action("leave", fmt.tprintf("players=%d", players_online(s) - 1))

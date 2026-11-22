@@ -223,6 +223,14 @@ of its fields not at zero by their dotted paths, each value a number, `true` or 
 enum's name as a string. A file before has none: the record is zero. A path the game's type
 lacks, or a value it cannot hold, is skipped (and logged); the rest is read.
 
+### An inventory set aside
+
+A character file of format 6 may have an `aside` list (empty or not): the inventory the game
+set aside (`core.inventory_set_aside`, [games.md](games.md)), its stacks numbered as `items`'
+are (slots, equipment from 100, the cursor). A file before has none: nothing is set aside.
+The stacks set aside are the character's: they leave memory and come back with it, and the
+item ledger's audit counts them as held.
+
 ### The edit journal
 
 The edit journal stores block numbers, which are fixed for a universe. A universe's packs are

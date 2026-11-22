@@ -92,6 +92,7 @@ Client :: struct {
 	reply_len:       int,
 	tpa:             Tpa, // a teleport request to it
 	inventory:       game.Inventory,
+	aside:           Maybe(game.Inventory), // its inventory set aside (inventory_set_aside): its slots, equipment and cursor, kept with its character
 	character_data:  game.Character_Data, // the game's record on its character (character_data; player_data.odin)
 	stats:           Counters, // its character's counters (stats.odin; heap, keys owned)
 	joined_tick:     u64, // when it joined (session length)

@@ -29,7 +29,7 @@ import "common:starmap"
 
 CHARACTERS_DIR :: "characters"
 PLAYERS_DIR :: "players"
-PLAYER_FILE_FORMAT :: 5 // 5: the game's record on the character (`game`; before: none). 4: an item's game data (`data`; before: 0). 3: the trader (the sandbox's now: read by the save migration from format 8, ignored here). 2: a weapon's magazine (`ammo`); a file of 1 has none: full
+PLAYER_FILE_FORMAT :: 6 // 6: an inventory set aside (`aside`; before: none). 5: the game's record on the character (`game`; before: none). 4: an item's game data (`data`; before: 0). 3: the trader (the sandbox's now: read by the save migration from format 8, ignored here). 2: a weapon's magazine (`ammo`); a file of 1 has none: full
 
 Player_Record :: struct {
 	account:        Maybe(access.Account), // whose (none: from before accounts, unclaimed)
@@ -38,6 +38,7 @@ Player_Record :: struct {
 	look:           [2]f32, // yaw, pitch
 	mode:           base.Var_Text, // their game mode's id ("": none yet: the world's default)
 	inventory:      game.Inventory,
+	aside:          Maybe(game.Inventory), // the inventory set aside (inventory_set_aside; none: nothing is)
 	character_data: game.Character_Data, // the game's record on the character (Game.character_data)
 	dirty:          bool, // changed since its file was written
 	stats:          Counters, // its counters (heap; stats.odin)
@@ -58,6 +59,7 @@ Player_File :: struct {
 	selected: int,
 	mode:     string, // their game mode's id (absent in a file from before modes)
 	items:    []File_Stack,
+	aside:    Maybe([]File_Stack) `json:"aside,omitempty"`, // format 6: the inventory set aside (inventory_set_aside), its stacks numbered as items'
 	game:     json.Value `json:"game,omitempty"`, // format 5: the game's record, a field by its path (written by hand: player_json)
 }
 
@@ -194,8 +196,28 @@ player_parse :: proc(
 	if record, is_record := f.game.(json.Object); is_record && character != nil {
 		character_data_read(character, &r.character_data, record)
 	}
+	n := stacks_read(reg, f.format, f.items, &r.inventory, r.overflow[:])
+	if stacks, set_aside := f.aside.?; set_aside {
+		aside: game.Inventory
+		stacks_read(reg, f.format, stacks, &aside, r.overflow[n:])
+		r.aside = aside
+	}
+	return r, true
+}
+
+// stacks_read puts a player file's stacks (of a file of format) into inv, each in its
+// slot. What was in slots there are no more goes wherever there is room, and the rest
+// into overflow, to be dropped (as far as it holds): how many went there.
+@(private = "file")
+stacks_read :: proc(
+	reg: ^game.Registry,
+	format: int,
+	stacks: []File_Stack,
+	inv: ^game.Inventory,
+	overflow: []game.Stack,
+) -> int {
 	late := make([dynamic]game.Stack, context.temp_allocator)
-	for st in f.items {
+	for st in stacks {
 		item, known := game.item_by_name(reg, st.item)
 		if !known || st.count <= 0 {
 			log.warnf("server player file item dropped item=%q", st.item)
@@ -203,66 +225,36 @@ player_parse :: proc(
 		}
 		stack := game.Stack{item, min(st.count, game.item_stack_size(reg, item)), 0, 0}
 		stack.ammo = game.new_ammo(reg, item) // (a file of format 1 has no magazines: full)
-		if f.format >= 2 {stack.ammo = u8(clamp(st.ammo, 0, int(stack.ammo)))}
+		if format >= 2 {stack.ammo = u8(clamp(st.ammo, 0, int(stack.ammo)))}
 		stack.data = st.data
 		switch {
 		case st.slot >= 0 && st.slot < game.INVENTORY_SLOTS:
-			r.inventory.slots[st.slot] = stack
+			inv.slots[st.slot] = stack
 		case st.slot >= EQUIPMENT_FILE_SLOT &&
 		     st.slot < EQUIPMENT_FILE_SLOT + game.EQUIP_SLOTS &&
 		     game.item_fits(reg, stack, game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)) &&
-		     game.stack_empty(
-			     r.inventory.equipment[game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)],
-		     ):
-			r.inventory.equipment[game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)] = stack
+		     game.stack_empty(inv.equipment[game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)]):
+			inv.equipment[game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)] = stack
 		case st.slot == game.CURSOR_SLOT:
-			r.inventory.cursor = stack
+			inv.cursor = stack
 		case:
 			append(&late, stack) // a slot the inventory no longer has
 		}
 	}
-	// What was in slots there are no more: wherever there is room, the rest
-	// to be dropped.
 	n := 0
 	for st in late {
-		left := game.inventory_add(reg, &r.inventory, st)
-		if !game.stack_empty(left) && n < MAX_OVERFLOW {
-			r.overflow[n] = left
+		left := game.inventory_add(reg, inv, st)
+		if !game.stack_empty(left) && n < len(overflow) {
+			overflow[n] = left
 			n += 1
 		}
 	}
-	return r, true
+	return n
 }
 
 // player_json: a player file's text; character is the type of the game's record on a
 // character (Game.character_data; nil: none).
 player_json :: proc(reg: ^game.Registry, r: ^Player_Record, character: typeid) -> []u8 {
-	items := make([dynamic]File_Stack, context.temp_allocator)
-	for st, i in r.inventory.slots {
-		if !game.stack_empty(
-			st,
-		) {append(&items, File_Stack{i, game.item_id(reg, st.item), st.count, int(st.ammo), st.data})}
-	}
-	for st, e in r.inventory.equipment {
-		if !game.stack_empty(st) {
-			append(
-				&items,
-				File_Stack {
-					EQUIPMENT_FILE_SLOT + int(e),
-					game.item_id(reg, st.item),
-					st.count,
-					int(st.ammo),
-					st.data,
-				},
-			)
-		}
-	}
-	if c := r.inventory.cursor; !game.stack_empty(c) {
-		append(
-			&items,
-			File_Stack{game.CURSOR_SLOT, game.item_id(reg, c.item), c.count, int(c.ammo), c.data},
-		)
-	}
 	world := ""
 	if a, has := r.world.?; has {world = starmap.address_dir(a)}
 	f := Player_File {
@@ -273,8 +265,9 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record, character: typeid) -
 		flying   = r.state.flying,
 		selected = r.inventory.selected,
 		mode     = base.var_text(&r.mode),
-		items    = items[:],
+		items    = file_stacks(reg, &r.inventory),
 	}
+	if aside, set_aside := r.aside.?; set_aside {f.aside = file_stacks(reg, &aside)}
 	data, _ := json.marshal(
 		f,
 		{pretty = true, use_spaces = true, spaces = 2},
@@ -289,6 +282,24 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record, character: typeid) -
 	counters_write(&b, r.stats, "    ")
 	strings.write_string(&b, "\n}")
 	return b.buf[:]
+}
+
+// file_stacks: an inventory's stacks as a player file has them (temporary memory), each
+// numbered by its slot.
+@(private = "file")
+file_stacks :: proc(reg: ^game.Registry, inv: ^game.Inventory) -> []File_Stack {
+	items := make([dynamic]File_Stack, context.temp_allocator)
+	put :: proc(reg: ^game.Registry, items: ^[dynamic]File_Stack, slot: int, st: game.Stack) {
+		if game.stack_empty(st) {return}
+		append(
+			items,
+			File_Stack{slot, game.item_id(reg, st.item), st.count, int(st.ammo), st.data},
+		)
+	}
+	for st, i in inv.slots {put(reg, &items, i, st)}
+	for st, e in inv.equipment {put(reg, &items, EQUIPMENT_FILE_SLOT + int(e), st)}
+	put(reg, &items, game.CURSOR_SLOT, inv.cursor)
+	return items[:]
 }
 
 // split_stats takes the "stats" member out of a player file's JSON: the
@@ -408,6 +419,7 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 		state          = c.player,
 		look           = c.look,
 		inventory      = c.inventory,
+		aside          = c.aside,
 		character_data = c.character_data,
 		mode           = mode_record_text(s, c),
 		dirty          = true,

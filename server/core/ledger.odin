@@ -92,7 +92,7 @@ ledger_world_scope :: proc(w: ^World, reason: game.Reason) {
 }
 
 // held_sums: everything held in memory, per item: online players'
-// inventories, and the chests, machines, belts and item entities of loaded worlds.
+// inventories (and those set aside), and the chests, machines, belts and item entities of loaded worlds.
 @(private = "file")
 held_sums :: proc(s: ^Server) -> map[game.Item]i64 {
 	held := make(map[game.Item]i64, context.temp_allocator)
@@ -104,6 +104,11 @@ held_sums :: proc(s: ^Server) -> map[game.Item]i64 {
 		for st in c.inventory.slots {add(&held, st)}
 		for st in c.inventory.equipment {add(&held, st)}
 		add(&held, c.inventory.cursor)
+		if aside, ok := c.aside.?; ok {
+			for st in aside.slots {add(&held, st)}
+			for st in aside.equipment {add(&held, st)}
+			add(&held, aside.cursor)
+		}
 	}
 	for w in s.worlds {
 		for at in block_entities_all(w) {
