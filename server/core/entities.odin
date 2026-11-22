@@ -834,10 +834,11 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 
 // spawn_natural: the creatures of every kind with a spawn rule (its pack's `spawn`)
 // appear by themselves around the players of the world: every `every` ticks within its
-// hours, near each player with fewer than `cap` of the kind within `within` blocks, on a
-// draw of `chance`, a group of `group` at a place `distance` blocks away whose ground is
-// `on` (under the open sky, for a rule that says `sky`) and no player is nearer than its
-// least distance. Each is natural (it goes when nobody is near: system_age) and is told to
+// hours (a night's run past midnight), near each player with fewer than `cap` of the kind
+// within `within` blocks, on a draw of `chance`, a group of `group` at a place `distance`
+// blocks away whose ground is `on` (under the open sky, for a rule that says `sky`), no
+// player is nearer than its least distance and that is not within `safe` blocks of the
+// world's spawn point. Each is natural (it goes when nobody is near: system_age) and is told to
 // the game's `spawned` hook, which may make it what it is or refuse it (it goes again).
 spawn_natural :: proc(w: ^World) {
 	s := w.server
@@ -849,7 +850,7 @@ spawn_natural :: proc(w: ^World) {
 		rule, has := info.spawn.?
 		kind := game.Kind_Id(i + 1)
 		if !has || s.tick % u64(rule.every) != 0 {continue}
-		if day < f64(rule.day[0]) || day > f64(rule.day[1]) {continue}
+		if !spawn_hours(rule.day, day) {continue}
 		for &c in s.clients {
 			if c.state != .Playing || c.world != w {continue}
 			around := make([dynamic]game.Entity_Id, context.temp_allocator)
@@ -874,6 +875,10 @@ spawn_natural :: proc(w: ^World) {
 			   !path.standable(query, at) {continue}
 			center := [3]f64{f64(x) + 0.5, f64(at.y), f64(z) + 0.5}
 			if anyone_within(w, center, f64(rule.distance[0])) {continue}
+			if rule.safe > 0 {
+				d := center - w.spawn.position
+				if d.x * d.x + d.z * d.z < f64(rule.safe * rule.safe) {continue}
+			}
 			group := base.rng_int_range(r, rule.group[0], rule.group[1] + 1)
 			for _ in 0 ..< group {
 				jitter := [3]f64 {
@@ -892,6 +897,14 @@ spawn_natural :: proc(w: ^World) {
 			}
 		}
 	}
+}
+
+// spawn_hours: day (a fraction from midnight) is within a spawn rule's hours, from..to
+// (from above to: a night, across midnight).
+spawn_hours :: proc(hours: [2]f32, day: f64) -> bool {
+	from, to := f64(hours[0]), f64(hours[1])
+	if from <= to {return day >= from && day <= to}
+	return day >= from || day <= to
 }
 
 // under_sky: nothing stands above the block p (the sky's light reaches it).

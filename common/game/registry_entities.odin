@@ -175,7 +175,7 @@ Kind_Item_Info :: struct {
 Kind_Spawn_Rule :: struct {
 	on:       Matcher, // the block the spawn stands on
 	on_text:  string,
-	day:      [2]f32, // the fractions of the day it spawns between
+	day:      [2]f32, // the fractions of the day it spawns between (the first above the second: across midnight)
 	every:    int, // ticks
 	chance:   f32, // a draw above it skips
 	cap:      int, // creatures of the kind near the player before it stops
@@ -184,6 +184,7 @@ Kind_Spawn_Rule :: struct {
 	group:    [2]int, // size, inclusive
 	sky:      bool, // only under the open sky (nothing above its feet); optional
 	despawn:  int, // blocks: a natural one this far from every player of its world goes; optional (80)
+	safe:     int, // blocks (horizontally) around its world's spawn point where none appears; optional (0)
 }
 
 // SPAWN_DESPAWN: a spawn rule's despawn distance when it names none.
@@ -305,9 +306,10 @@ SPAWN_KEYS := []string {
 	"group",
 	"sky",
 	"despawn",
+	"safe",
 }
 @(private)
-SPAWN_OPTIONAL := []string{"sky", "despawn"}
+SPAWN_OPTIONAL := []string{"sky", "despawn", "safe"}
 
 @(private)
 json_number :: proc(v: Json_Value) -> (f64, bool) {
@@ -1097,7 +1099,7 @@ read_spawn_rule :: proc(
 		return
 	}
 	ok = true
-	seen: [10]bool
+	seen: [11]bool
 	rule.despawn = SPAWN_DESPAWN
 	for m in v.members {
 		at := -1
@@ -1136,9 +1138,24 @@ read_spawn_rule :: proc(
 				rule.on, rule.on_text = mt, m.value.s
 			}
 		case "day":
-			if p, pok := read_pair(b, f, m.value, "day", 0, 1, false); pok {
-				rule.day = {f32(p[0]), f32(p[1])}
-			} else {good = false}
+			// (not read_pair: a night runs past midnight, its first fraction above its second)
+			x, y: f64
+			xok, yok: bool
+			if m.value.kind == .Array && len(m.value.items) == 2 {
+				x, xok = json_number(m.value.items[0])
+				y, yok = json_number(m.value.items[1])
+			}
+			if !xok || !yok || x < 0 || x > 1 || y < 0 || y > 1 {
+				fail_field(
+					b,
+					f,
+					m.value,
+					"day is [from, to], fractions of the day 0..1 from midnight (from above to: across midnight)",
+				)
+				good = false
+			} else {
+				rule.day = {f32(x), f32(y)}
+			}
 		case "distance":
 			if p, pok := read_pair(b, f, m.value, "distance", 1, 256, false); pok {
 				rule.distance = {f32(p[0]), f32(p[1])}
@@ -1158,8 +1175,9 @@ read_spawn_rule :: proc(
 				fail_field(b, f, m.value, "sky is true or false")
 				good = false
 			} else {rule.sky = m.value.b}
-		case "every", "cap", "within", "despawn":
+		case "every", "cap", "within", "despawn", "safe":
 			lo, hi := 1, 256
+			if m.key == "safe" {lo = 0}
 			switch m.key {
 			case "every":
 				hi = 72000
@@ -1184,6 +1202,8 @@ read_spawn_rule :: proc(
 					rule.within = int(m.value.i)
 				case "despawn":
 					rule.despawn = int(m.value.i)
+				case "safe":
+					rule.safe = int(m.value.i)
 				}
 			}
 		}
@@ -1301,7 +1321,7 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 		if s, has := k.spawn.?; has {
 			fmt.sbprintf(
 				sb,
-				" spawn=%s %v %d %v %d %d %v %v",
+				" spawn=%s %v %d %v %d %d %v %v safe=%d",
 				s.on_text,
 				s.day,
 				s.every,
@@ -1310,6 +1330,7 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 				s.within,
 				s.distance,
 				s.group,
+				s.safe,
 			)
 		}
 		strings.write_byte(sb, '\n')

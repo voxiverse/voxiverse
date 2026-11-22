@@ -147,10 +147,11 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   blocks}}`: specks rising from it each frame by the chance while the look shows). The client
   draws it (`shaped` in `client/engine/entities.odin`) from this alone, knowing no creature;
   nothing about it is sent but the looks' bits.
-- `spawn`: natural spawning (`on` a block matcher, `day` fractions, `every` ticks, `chance`, `cap`
-  of the kind within `within` blocks of a player, `distance` from it, `group`), all required, and
-  optional `sky` (only under the open sky) and `despawn` (blocks from every player of its world
-  at which a natural one goes; 80). The engine's spawner (`spawn_natural`) is the same for every
+- `spawn`: natural spawning (`on` a block matcher, `day` fractions from midnight, from and to (from
+  above to: a night, across midnight), `every` ticks, `chance`, `cap` of the kind within `within`
+  blocks of a player, `distance` from it, `group`), all required, and optional `sky` (only under
+  the open sky), `despawn` (blocks from every player of its world at which a natural one goes;
+  80) and `safe` (blocks round its world's spawn point where none appears; 0). The engine's spawner (`spawn_natural`) is the same for every
   kind; its game's `spawned` hook makes each one what it is or refuses it
   ([games.md](games.md)).
 

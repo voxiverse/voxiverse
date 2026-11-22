@@ -212,7 +212,7 @@ testpack/data/entities/k.json:1:54: walker needs "step"; add it`,
 		{
 			"a day outside 0..1",
 			`{"k": {"box": [1, 1], "model": "item", "spawn": {"on": "voxiverse:grass", "day": [0.2, 1.5], "every": 60, "chance": 0.5, "cap": 6, "within": 48, "distance": [16, 40], "group": [1, 3]}}}`,
-			`testpack/data/entities/k.json:1:82: day is [low, high], numbers 0..1, low not above high`,
+			`testpack/data/entities/k.json:1:82: day is [from, to], fractions of the day 0..1 from midnight (from above to: across midnight)`,
 		},
 		{
 			"no box",
