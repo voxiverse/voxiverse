@@ -298,21 +298,19 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 		if x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1 {return ICE[3]}
 		if (x + y == 9 || x + y == 10) && x > 2 && x < 9 {return ICE[4]}
 		return {}
-	case .Gate_Ring:
-		// Dark metal plates, grooves between, a few engraved strokes.
-		if hash01(seed ~ 29, x / 2, y) > 0.93 {return GATE[4]}
-		if x % 8 == 0 || y % 8 == 0 {return GATE[0]}
-		return pick(GATE, 0.3 + 0.3 * coarse + 0.2 * fine)
-	case .Gate_Chevron, .Gate_Chevron_Lit:
-		// A V on the ring's metal: dim, or glowing.
-		ramp := CHEVRON_LIT if t == .Gate_Chevron_Lit else CHEVRON
-		dx := abs(x - SIZE / 2)
-		in_v := y >= 3 + dx / 2 && y <= 6 + dx / 2 && dx < 7
-		return pick(ramp, 0.5 + 0.4 * fine) if in_v else pick(GATE, 0.2 + 0.3 * coarse)
+	case .Gate_Ring, .Gate_Chevron, .Gate_Chevron_Lit:
+		// A heavy slab of dark stone: a plain face, its edges bevelled, a faint
+		// grain. (The chevrons of the ring gates before, still in a chunk saved
+		// with one, are the slab too; the server sets none lit any more.)
+		edge := bevel(x, y, SIZE, SIZE)
+		if edge > 0 {return GATE[3]}
+		if edge < 0 {return GATE[0]}
+		return pick(GATE, 0.2 + 0.25 * coarse + 0.1 * fine)
 	case .Gate_Horizon:
-		// Rippling blue light; see-through.
-		ripple := noise(seed ~ 31, x + y / 2, y + x / 3, 5, 5)
-		return pick(HORIZON, 0.3 + 0.5 * ripple + 0.2 * fine)
+		// A dark void, a mote here and there: the open surface's stand-in (the
+		// translucent pass draws its depth and drifting motes itself, water.frag).
+		if hash01(seed ~ 31, x, y) > 0.97 {return HORIZON[4]}
+		return pick(HORIZON, 0.3 * fine)
 	case .Chest_Side, .Chest_Top:
 		// Boards, banded with iron at the rim; the side has a latch.
 		rim := x < 2 || x >= SIZE - 2 || y < 2 || y >= SIZE - 2
