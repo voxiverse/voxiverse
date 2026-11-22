@@ -1,5 +1,6 @@
 package build
 
+import "base:runtime"
 import "core:fmt"
 import "core:hash/xxhash"
 import "core:os"
@@ -91,21 +92,14 @@ check_inputs_make :: proc() -> Check_Inputs {
 // it skips). ok is false when one of them cannot be read.
 check_tools_digest :: proc() -> (digest: Digest, ok: bool) {
 	b := strings.builder_make()
-	driver := os.read_entire_file_from_path(os.args[0], context.allocator) or_else nil
+	driver, driver_err := contents_digest(os.args[0])
 	odin_exe := exe_on_path("odin") or_return
-	odin, err := os.read_entire_file_from_path(odin_exe, context.allocator)
-	if driver == nil || err != nil {return}
+	odin, err := contents_digest(odin_exe)
+	if driver_err != nil || err != nil {return}
 	version := capture({"odin", "version"}) or_return
 	root := capture({"odin", "root"}) or_return
 	root = strings.trim_space(root)
-	fmt.sbprintf(
-		&b,
-		"driver %032x\nodin %s %032x\n%s\n",
-		digest_of(driver),
-		odin_exe,
-		digest_of(odin),
-		version,
-	)
+	fmt.sbprintf(&b, "driver %032x\nodin %s %032x\n%s\n", driver, odin_exe, odin, version)
 	lines := make([dynamic]string)
 	w := os.walker_create(root)
 	defer os.walker_destroy(&w)
@@ -136,9 +130,8 @@ exe_on_path :: proc(name: string) -> (path: string, ok: bool) {
 // file_digest: a file's contents, or (absent or unreadable) a digest saying so.
 file_digest :: proc(inputs: ^Check_Inputs, path: string) -> Digest {
 	if found, ok := inputs.files[path]; ok {return found}
-	data, err := os.read_entire_file_from_path(path, context.allocator)
-	d :=
-		digest_of(data) if err == nil else digest_of(transmute([]u8)fmt.tprintf("\x00absent %s", path))
+	d, err := contents_digest(path)
+	if err != nil {d = digest_of(transmute([]u8)fmt.tprintf("\x00absent %s", path))}
 	inputs.files[strings.clone(path)] = d
 	return d
 }
@@ -187,13 +180,14 @@ package_inputs :: proc(inputs: ^Check_Inputs, dir: string) -> Package_Inputs {
 	for entry in entries {
 		if entry.type == .Directory || filepath.ext(entry.name) != ".odin" {continue}
 		path := path_join({dir, entry.name})
-		text, read_err := os.read_entire_file_from_path(path, context.allocator)
+		text, read_err := os.read_entire_file_from_path(path, runtime.heap_allocator())
 		if read_err != nil {
 			result.exact = false
 			continue
 		}
 		fmt.sbprintf(&b, "file %s %032x\n", entry.name, digest_of(text))
-		refs := source_refs(string(text))
+		refs := source_refs(string(text)) // (its paths are copies)
+		delete(text, runtime.heap_allocator())
 		result.exact = result.exact && refs.exact
 		append(&collection_paths, ..refs.collection_paths[:])
 		for p in refs.imports {append(&folders, path_join({dir, p}))}
@@ -254,9 +248,9 @@ source_refs :: proc(text: string) -> Source_Refs {
 			literal, i = read_literal(text, i)
 			if after_import {
 				if strings.index_byte(literal, ':') >= 0 {
-					append(&refs.collection_paths, literal)
+					append(&refs.collection_paths, strings.clone(literal))
 				} else {
-					append(&refs.imports, literal)
+					append(&refs.imports, strings.clone(literal))
 				}
 				if strings.index_byte(literal, '\\') >= 0 {refs.exact = false}
 			}
@@ -269,7 +263,7 @@ source_refs :: proc(text: string) -> Source_Refs {
 			name := text[i + 1:j]
 			if strings.has_prefix(name, "load") || name == "exists" {
 				if ref, ok := load_ref(text, j); ok {
-					append(&refs.loads, ref)
+					append(&refs.loads, Load_Ref{strings.clone(ref.path), ref.folder})
 				} else {
 					refs.exact = false
 				}
@@ -450,8 +444,8 @@ check_passes_read :: proc(path: string, all: bool) -> Check_Passes {
 	passes := Check_Passes {
 		all = all,
 	}
-	if driver, err := os.read_entire_file_from_path(os.args[0], context.allocator); err == nil {
-		passes.driver, passes.known = digest_of(driver), true
+	if driver, err := contents_digest(os.args[0]); err == nil {
+		passes.driver, passes.known = driver, true
 	}
 	order := make([dynamic]Digest)
 	data, err := os.read_entire_file_from_path(path, context.allocator)
@@ -512,9 +506,9 @@ file_pass :: proc(passes: ^Check_Passes, digest: Digest) {
 // odinfmt_kind: the odinfmt on PATH, as format_kind names it ("" when it cannot be read).
 odinfmt_kind :: proc() -> string {
 	exe, found := exe_on_path("odinfmt")
-	odinfmt, err := os.read_entire_file_from_path(exe, context.allocator)
+	odinfmt, err := contents_digest(exe)
 	if !found || err != nil {return ""}
-	return fmt.aprintf("fmt %s %032x\n", exe, digest_of(odinfmt))
+	return fmt.aprintf("fmt %s %032x\n", exe, odinfmt)
 }
 
 // format_kind: what the format check of a file in folder dir reads beside the file and
@@ -539,4 +533,13 @@ format_kind :: proc(kinds: ^map[string]string, odinfmt, dir: string) -> string {
 	}
 	kinds[strings.clone(dir)] = strings.to_string(b)
 	return strings.to_string(b)
+}
+
+// contents_digest: the digest of a file's contents, read on the heap and freed at once:
+// the driver's own allocator keeps everything until it exits, and a process that has
+// grown by the hundred megabytes of files a check digests starts each of its jobs slower.
+contents_digest :: proc(path: string) -> (digest: Digest, err: os.Error) {
+	data := os.read_entire_file_from_path(path, runtime.heap_allocator()) or_return
+	defer delete(data, runtime.heap_allocator())
+	return digest_of(data), nil
 }
