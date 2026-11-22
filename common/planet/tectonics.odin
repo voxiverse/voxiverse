@@ -141,7 +141,7 @@ noise3 :: proc(x, y, z: f64, salt: u64) -> f64 {
 		h ~= h >> 32
 		h *= 0xd6e8_feb8_6659_fd93
 		h ~= h >> 32
-		return f64(h >> 11) / f64(1 << 52) - 1
+		return 2 * base.unit_f64(h) - 1
 	}
 	fx, fy, fz := math.floor(x), math.floor(y), math.floor(z)
 	ix, iy, iz := int(fx), int(fy), int(fz)
@@ -334,7 +334,7 @@ relief_generate :: proc(
 						salt
 					bh ~= bh >> 29
 					bh *= 0x94d0_49bb_1331_11eb
-					block = 0.55 + 0.45 * f64(bh >> 40) / f64(1 << 24)
+					block = 0.55 + 0.45 * f64(base.unit_f32(bh))
 				}
 				amp_up := strength * ch.mountains * block
 				if kind != .Cont_Cont_Converge &&

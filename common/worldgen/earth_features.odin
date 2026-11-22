@@ -2,6 +2,7 @@ package worldgen
 
 import "core:math"
 
+import "common:base"
 import "common:game"
 
 // Trees and plants. Trees are placed per chunk column from a hash of its
@@ -97,7 +98,7 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 		odds := TREE_ODDS[c.biome] * p.tree_density
 		if blend {odds *= f32(TREE_TRIES[c.biome]) / MOST_TREE_TRIES}
 		if p.planet != 0 && c.biome == .Desert {odds *= 0.25} 	// rare shrubs
-		if chance(hash(gen.seed ~ i64(Earth_Layer.Tree) + 1, x, z)) >= odds {continue}
+		if base.unit_f32(hash(gen.seed ~ i64(Earth_Layer.Tree) + 1, x, z)) >= odds {continue}
 		if c.rough > 0 {continue}
 		ground := i32(math.floor(c.height))
 		if ground <= p.sea_level {continue}
@@ -279,7 +280,8 @@ tree_shape :: proc(seed: i64, t: Tree, data: rawptr, put: Put) {
 				for dx in -r ..= r {
 					corner := abs(dx) == r && abs(dz) == r
 					if corner &&
-					   (y == top + 1 || chance(hash(seed, g.x + dx, y, g.z + dz)) < 0.5) {continue}
+					   (y == top + 1 ||
+							   base.unit_f32(hash(seed, g.x + dx, y, g.z + dz)) < 0.5) {continue}
 					put(data, {g.x + dx, y, g.z + dz}, .Leaves)
 				}
 			}
@@ -355,7 +357,9 @@ plant :: proc(
 	case .Mediterranean:
 		grass, flowers = 0.06, 0.04
 	}
-	r := chance(hash(seed ~ i64(Earth_Layer.Plant), origin.x + x, origin.z + z)) / p.plant_density
+	r :=
+		base.unit_f32(hash(seed ~ i64(Earth_Layer.Plant), origin.x + x, origin.z + z)) /
+		p.plant_density
 	b: game.Block
 	switch {
 	case r < flowers:

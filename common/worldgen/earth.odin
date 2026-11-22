@@ -373,7 +373,10 @@ spline :: proc(x: f32, points: [][2]f32) -> f32 {
 	return points[len(points) - 1].y
 }
 
-// hash: a well-mixed 32 bits from a seed and up to three integers.
+// hash: a well-mixed 32 bits from a seed and up to three integers, read as a
+// number by base.unit_f32. It is a 32-bit family of its own, not base.hash:
+// every Earth world's trees, plants, ores, bedrock and structures are placed by
+// it, and would move.
 @(private)
 hash :: proc(seed: i64, a, b: i32, c: i32 = 0) -> u32 {
 	h := u32(seed) ~ u32(seed >> 32) * 0x9e37_79b1
@@ -384,10 +387,4 @@ hash :: proc(seed: i64, a, b: i32, c: i32 = 0) -> u32 {
 	h ~= u32(c) * 0x9e37_79b9
 	h = (h ~ h >> 16) * 0x85eb_ca6b
 	return h ~ h >> 13
-}
-
-// chance: a hash as 0..1.
-@(private)
-chance :: proc(h: u32) -> f32 {
-	return f32(h >> 8) / f32(1 << 24)
 }

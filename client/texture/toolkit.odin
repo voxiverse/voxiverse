@@ -2,6 +2,8 @@ package texture
 
 import "core:math"
 
+import "common:base"
+
 // The generators' toolkit: small pure procedures of a pixel, each the same
 // for (x, y) and (x + SIZE, y) or (x, y + SIZE) and continuous across that
 // edge, so what is made of them tiles without a seam (toolkit_test.odin).
@@ -24,13 +26,14 @@ wrap :: proc(v: int) -> int {
 }
 
 // hash01: a well-mixed hash of (seed, x, y) in 0..<1 (white noise: no
-// structure, so on its own it reads as grit).
+// structure, so on its own it reads as grit). Its 32-bit mixing is not
+// base.hash: every texture and its baseline is made of it.
 hash01 :: proc(seed: u32, x, y: int) -> f32 {
 	h := seed ~ u32(x) * 0x27d4_eb2d ~ u32(y) * 0x1656_67b1
 	h = (h ~ h >> 15) * 0x85eb_ca6b
 	h = (h ~ h >> 13) * 0xc2b2_ae35
 	h ~= h >> 16
-	return f32(h >> 8) / f32(1 << 24)
+	return base.unit_f32(h)
 }
 
 // noise: value noise in 0..1 with nx by ny points across the texture, eased

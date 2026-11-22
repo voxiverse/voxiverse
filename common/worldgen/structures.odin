@@ -128,7 +128,7 @@ structure_in_cell :: proc(gen: ^Generator, k: int, cell: [2]i32) -> (s: Structur
 	set := SETS[k]
 	p := &gen.params
 	h := hash(gen.seed ~ i64(Earth_Layer.Structure) + i64(k), cell.x, cell.y)
-	if chance(h) >= set.chance {return}
+	if base.unit_f32(h) >= set.chance {return}
 	h2 := hash(gen.seed ~ i64(Earth_Layer.Structure) + i64(k) + 100, cell.x, cell.y)
 	room := set.spacing - MAX_STRUCTURE
 	x := cell.x * set.spacing + i32(h2 % u32(room))

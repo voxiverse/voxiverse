@@ -413,16 +413,16 @@ earth_biome :: proc(gen: ^Generator, x, z: i32) -> Biome {
 is_bedrock :: proc(seed: i64, x, z, y: i32) -> bool {
 	layer := y - game.WORLD_MIN_Y
 	if layer == 0 {return true}
-	return f32(layer) < 3 * chance(hash(seed ~ i64(Earth_Layer.Bedrock), x, z))
+	return f32(layer) < 3 * base.unit_f32(hash(seed ~ i64(Earth_Layer.Bedrock), x, z))
 }
 
 // ore_at: stone, or ore in small clusters (2x2x2 cells, not every block),
 // by depth: coal high, copper in the middle, iron deep.
 @(private = "file")
 ore_at :: proc(seed: i64, x, y, z: i32) -> game.Block {
-	cell := chance(hash(seed ~ i64(Earth_Layer.Ore), x >> 1, y >> 1, z >> 1))
+	cell := base.unit_f32(hash(seed ~ i64(Earth_Layer.Ore), x >> 1, y >> 1, z >> 1))
 	if cell >= 0.024 {return .Stone}
-	if chance(hash(seed ~ i64(Earth_Layer.Ore) + 1, x, y, z)) < 0.35 {return .Stone}
+	if base.unit_f32(hash(seed ~ i64(Earth_Layer.Ore) + 1, x, y, z)) < 0.35 {return .Stone}
 	switch {
 	case cell < 0.012 && y < 90:
 		return .Coal_Ore

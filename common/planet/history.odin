@@ -174,18 +174,15 @@ Ground :: struct {
 	cell_km:  f64,
 }
 
+// mix64 folds b into a. It is not base.mix or base.hash: it multiplies before
+// its first shift and swaps the finalizer's two constants, so it is a family
+// of its own, and every world's history is made of it.
 @(private)
 mix64 :: proc(a, b: u64) -> u64 {
 	z := (a ~ (b + 0x9e37_79b9_7f4a_7c15)) * 0xbf58_476d_1ce4_e5b9
 	z = (z ~ (z >> 30)) * 0x94d0_49bb_1331_11eb
 	z = (z ~ (z >> 27)) * 0xbf58_476d_1ce4_e5b9
 	return z ~ (z >> 31)
-}
-
-// unit is a hash as a number in [0, 1).
-@(private = "file")
-unit :: proc(h: u64) -> f64 {
-	return f64(h >> 11) / f64(u64(1) << 53)
 }
 
 // biogeography is which domesticable species a region had: a seeded field per world,
@@ -201,7 +198,7 @@ biogeography :: proc(root: u64, lat, lon: f64) -> f64 {
 		fx = fx * fx * (3 - 2 * fx)
 		fy = fy * fy * (3 - 2 * fy)
 		v :: proc(root, salt: u64, i, j, cols: int) -> f64 {
-			return unit(mix64(mix64(root, salt), u64(j * cols + i % cols)))
+			return base.unit_f64(mix64(mix64(root, salt), u64(j * cols + i % cols)))
 		}
 		a := v(root, salt, i0, j0, cols) * (1 - fx) + v(root, salt, i0 + 1, j0, cols) * fx
 		b := v(root, salt, i0, j0 + 1, cols) * (1 - fx) + v(root, salt, i0 + 1, j0 + 1, cols) * fx
@@ -403,7 +400,7 @@ drought_hit :: proc(dry: []f32, w: int, root: u64, step, k: int) -> bool {
 	i, j := k % w, k / w
 	cols := (w + DROUGHT_BLOCK - 1) / DROUGHT_BLOCK
 	block := (j / DROUGHT_BLOCK) * cols + i / DROUGHT_BLOCK
-	roll := unit(mix64(mix64(root, 0xd0d0), u64(step) << 32 | u64(block)))
+	roll := base.unit_f64(mix64(mix64(root, 0xd0d0), u64(step) << 32 | u64(block)))
 	return roll < f64(dry[k])
 }
 
@@ -592,7 +589,7 @@ history :: proc(
 	for k in 0 ..< n {
 		sv := f64(suit[k])
 		if sv <= 0 {continue}
-		onset := unit(mix64(root, u64(k))) / (FARMING_RATE * sv * sv * sv)
+		onset := base.unit_f64(mix64(root, u64(k))) / (FARMING_RATE * sv * sv * sv)
 		if onset < f64(steps) {append(&begins, u64(onset) << 32 | u64(k))}
 	}
 	slice.sort(begins[:])
@@ -694,7 +691,7 @@ history :: proc(
 			a_pe, b_pe := &res.peoples[o - 1], &res.peoples[ob - 1]
 			if a_pe.population * a_pe.knowledge <
 			   WAR_RATIO * b_pe.population * b_pe.knowledge {continue}
-			if unit(mix64(roll, 77)) >= WAR_TAKE {continue}
+			if base.unit_f64(mix64(roll, 77)) >= WAR_TAKE {continue}
 			if war_between(&s, o - 1, ob - 1) < 0 {
 				append(&s.wars, War{a = o - 1, b = ob - 1, since = year})
 				record(
@@ -818,7 +815,10 @@ settle_target :: proc(p: Planet, g: Ground, res: History, k: int, roll: u64) -> 
 			if jj < 0 || jj >= h {continue}
 			q := jj * w + (i + di + w) % w
 			if !p.land.is_land[q] || res.owner[q] != 0 || g.capacity[q] <= 0.01 {continue}
-			v := f64(g.capacity[q]) * f64(g.area[q]) * (0.9 + 0.2 * unit(mix64(roll, u64(q))))
+			v :=
+				f64(g.capacity[q]) *
+				f64(g.area[q]) *
+				(0.9 + 0.2 * base.unit_f64(mix64(roll, u64(q))))
 			if v > bv {best, bv = q, v}
 		}
 	}

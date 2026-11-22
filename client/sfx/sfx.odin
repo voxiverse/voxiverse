@@ -2,6 +2,7 @@ package sfx
 
 import "core:math"
 
+import "common:base"
 import "common:game"
 
 // Sound effects, synthesized: no recordings. Each sound is a few layers of
@@ -596,5 +597,5 @@ rand_range :: proc(state: ^u32, lo, hi: f32) -> f32 {
 	x ~= x >> 17
 	x ~= x << 5
 	state^ = x
-	return lo + (hi - lo) * f32(x >> 8) / f32(1 << 24)
+	return lo + (hi - lo) * base.unit_f32(x)
 }
