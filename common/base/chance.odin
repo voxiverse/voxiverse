@@ -61,6 +61,18 @@ unit_f64 :: proc "contextless" (bits: u64) -> f64 {
 	return f64(bits >> 11) * (1.0 / 9007199254740992.0)
 }
 
+// hash32 is a 32-bit hash of two integers, for what the client draws by
+// position (the title planet's speckle, the occlusion check's depths). It is
+// not hash cut to 32 bits but a mixing of its own: a multiply of each integer,
+// then xorshift, multiply, xorshift.
+hash32 :: proc "contextless" (a, b: u32) -> u32 {
+	h := a * 0x9e37_79b1 ~ b * 0x85eb_ca6b
+	h ~= h >> 15
+	h *= 0x2c1b_3c6d
+	h ~= h >> 12
+	return h
+}
+
 // lcg64 is Knuth's MMIX linear congruential step: the state moves on and is
 // the draw. Its low bits are weak, so a draw is read from the top (>> 33, or
 // unit_f32). It is no stream for new state, which is an Rng: a gate world's

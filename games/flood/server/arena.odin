@@ -2,6 +2,7 @@ package flood_server
 
 import "core:log"
 
+import "common:base"
 import "common:game"
 import "games:flood"
 import "server:core"
@@ -40,17 +41,13 @@ build :: proc(s: ^core.Server, force: bool) -> bool {
 	return true
 }
 
-// Arena_Rng: the arena's own generator, so its seed alone decides it.
+// Arena_Rng: the arena's own splitmix stream, so its seed alone decides it.
 Arena_Rng :: struct {
 	state: u64,
 }
 
 arena_next :: proc(r: ^Arena_Rng) -> u64 {
-	r.state += 0x9e3779b97f4a7c15
-	z := r.state
-	z = (z ~ (z >> 30)) * 0xbf58476d1ce4e5b9
-	z = (z ~ (z >> 27)) * 0x94d049bb133111eb
-	return z ~ (z >> 31)
+	return base.splitmix(&r.state)
 }
 
 // arena_int: lo..hi inclusive.

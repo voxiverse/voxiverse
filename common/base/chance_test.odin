@@ -173,3 +173,12 @@ test_lcg_steps :: proc(t: ^testing.T) {
 		testing.expect_value(t, next, s * 6364136223846793005 + 1442695040888963407)
 	}
 }
+
+// hash32's bits for fixed inputs, folded (recorded from the two copies it
+// replaced): a change to its mixing fails here.
+@(test)
+test_hash32_pinned_bits :: proc(t: ^testing.T) {
+	h := u32(0)
+	for i in u32(0) ..< 256 {h = hash32(h ~ i, i * 7 + 1)}
+	testing.expect_value(t, h, 1159063630)
+}

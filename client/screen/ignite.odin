@@ -6,6 +6,7 @@ import "client:engine"
 import planet "client:planet"
 import "client:starfield"
 import "client:ui"
+import "common:base"
 import "common:starmap"
 
 // Ignite: the big bang after
@@ -275,9 +276,5 @@ draw_planet :: proc(
 
 @(private = "file")
 planet_noise :: proc(a: f32, b: int) -> f32 {
-	h := u32(i32(a)) * 0x9e37_79b1 ~ u32(b) * 0x85eb_ca6b
-	h ~= h >> 15
-	h *= 0x2c1b_3c6d
-	h ~= h >> 12
-	return f32(h & 0xffff) / 65535
+	return f32(base.hash32(u32(i32(a)), u32(b)) & 0xffff) / 65535
 }

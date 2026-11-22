@@ -204,11 +204,7 @@ hiz_check :: proc(p: ^World_Pass, g: ^gpu.Gpu) -> (failures: [dynamic]string) {
 			if fill == 0 {
 				// A fixed hash, in [0, 1] (no denormals: 24 bits over 2^24).
 				for &d, i in depth {
-					h := u32(i) * 0x9e3779b1 ~ size.x * 0x85ebca6b
-					h ~= h >> 15
-					h *= 0x2c1b3c6d
-					h ~= h >> 12
-					d = f32(h >> 8) / f32(1 << 24)
+					d = base.unit_f32(base.hash32(u32(i), size.x))
 				}
 			} else {
 				c, boxes := check_scene(0, size)
