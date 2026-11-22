@@ -104,7 +104,7 @@ start :: proc(s: ^core.Server) -> bool {
 	reg := s.registry
 	ok := true
 	for &k, f in d.kinds {
-		k, ok = game.registry_kind(reg, fmt.tprintf("horde:%s", horde.FOES[f].kind))
+		k, ok = game.registry_kind(reg, horde.FOES[f].kind)
 		if !ok {return false}
 	}
 	d.round = game.registry_item(reg, horde.ROUND_ITEM) or_return

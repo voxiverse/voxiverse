@@ -90,8 +90,10 @@ family:
 
 Entity kinds are `data/entities/*.json` entries (`common/game/registry_entities.odin`); the base
 pack's are `engine.json`'s (`rocket`, `item`, `player`, and `dummy`, a creature that stands
-where it is put: a target to hit, what the engine's tests walk, hurt and save); a game's
-creatures are its own pack's (the sandbox's sheep: `games/sandbox/pack`). A kind is a `Kind_Id` (its registry index + 1; 0 is none)
+where it is put: a target to hit, what the engine's tests walk, hurt and save) and
+`hostile.json`'s, the creatures any game may set loose (`shambler`, `skitter`, `spitter`,
+`hulk`, `matriarch`, and the `spit` the spitter and the matriarch shoot: Horde's waves); a
+creature only one game has is its own pack's (the sandbox's sheep: `games/sandbox/pack`). A kind is a `Kind_Id` (its registry index + 1; 0 is none)
 and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the registry is built
 (a `Pack_Error` at the value, saying the fix):
 

@@ -54,7 +54,7 @@ Phase :: enum u8 {
 	Over, // everyone was down: the run's end is shown
 }
 
-// Foe: the creatures (the pack's kinds of the same names).
+// Foe: the creatures (the base pack's hostile kinds, which any game may use).
 Foe :: enum u8 {
 	Shambler, // closes in and strikes
 	Skitter, // small and fast, in swarms
@@ -64,7 +64,7 @@ Foe :: enum u8 {
 }
 
 Foe_Info :: struct {
-	kind:   string, // its pack kind's name
+	kind:   string, // its kind's id
 	label:  string,
 	bounty: int, // coins for its killer
 	keep:   [2]f32, // the distances it keeps from its prey (near, far)
@@ -72,11 +72,11 @@ Foe_Info :: struct {
 
 @(rodata)
 FOES := [Foe]Foe_Info {
-	.Shambler  = {"shambler", "shambler", 3, {0, 0.7}},
-	.Skitter   = {"skitter", "skitter", 1, {0, 0.5}},
-	.Spitter   = {"spitter", "spitter", 4, {5, 8}},
-	.Hulk      = {"hulk", "hulk", 10, {0, 0.9}},
-	.Matriarch = {"matriarch", "the matriarch", 50, {0, 1.2}},
+	.Shambler  = {"voxiverse:shambler", "shambler", 3, {0, 0.7}},
+	.Skitter   = {"voxiverse:skitter", "skitter", 1, {0, 0.5}},
+	.Spitter   = {"voxiverse:spitter", "spitter", 4, {5, 8}},
+	.Hulk      = {"voxiverse:hulk", "hulk", 10, {0, 0.9}},
+	.Matriarch = {"voxiverse:matriarch", "the matriarch", 50, {0, 1.2}},
 }
 
 SPIT_RANGE :: 12.0 // blocks: a spitter (or the matriarch) spits at a survivor this near

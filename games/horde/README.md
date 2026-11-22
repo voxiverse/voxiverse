@@ -14,8 +14,9 @@ over; the best wave held is kept with the universe, and a new run begins in a ne
 | Break | The shop is open (15 s, the settings may give more); those down stand again with the starting kit |
 | Over | Everyone was down at once: the waves held and the best, big; a new run in 8 s |
 
-The creatures (the game's pack, `pack/data/entities`: walkers the game steers, each a shape
-of boxes whose legs and arms swing):
+The creatures (the base pack's hostile ones, `assets/packs/voxiverse/data/entities/hostile.json`,
+which any game may use: walkers the game steers, each a shape of boxes whose legs and arms
+swing):
 
 | Creature | Health | Speed | Attack | Bounty | From wave |
 |---|---|---|---|---|---|

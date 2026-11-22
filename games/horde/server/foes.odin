@@ -7,10 +7,10 @@ import "games:horde"
 import "server:core"
 import "server:play"
 
-// The horde: walkers of the pack's kinds, each with a slot here (its kind and whom it
-// hunts). A creature goes for the nearest survivor standing, looking again every
-// RETARGET ticks or when its prey goes down or leaves, keeps its band of distances from
-// it (the engine's steering) and strikes or spits when its attack is ready.
+// The horde: walkers of the base pack's hostile kinds, each with a slot here (its kind
+// and whom it hunts). A creature goes for the nearest survivor standing, looking again
+// every RETARGET ticks or when its prey goes down or leaves, keeps its band of distances
+// from it (the engine's steering) and strikes or spits when its attack is ready.
 
 MAX_FOES :: 160 // creatures alive at once (a wave's later ones wait their turn)
 RETARGET :: game.TICK_RATE / 2

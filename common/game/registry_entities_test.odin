@@ -11,7 +11,8 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	testing.expect_value(t, errors_text(errs0), "")
 	if reg == nil {return}
 	defer registry_destroy(reg)
-	testing.expect_value(t, len(reg.kinds), 4)
+	// (the engine's four, then the hostile creatures and their spit: hostile.json)
+	testing.expect_value(t, len(reg.kinds), 10)
 
 	dummy_id, ok := registry_kind(reg, "dummy")
 	testing.expect(t, ok)
@@ -23,7 +24,7 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	_, missing := registry_kind(reg, "cow")
 	testing.expect(t, !missing, "the base pack has a cow")
 	testing.expect(t, kind_info(reg, 0) == nil)
-	testing.expect(t, kind_info(reg, 5) == nil)
+	testing.expect(t, kind_info(reg, 11) == nil)
 
 	d := kind_info(reg, dummy_id)
 	testing.expect_value(t, d.box, [2]f32{0.8, 0.9})
@@ -104,10 +105,10 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	with, errs := build_with(pack)
 	testing.expect_value(t, errors_text(errs), "")
 	if with == nil {return}
-	testing.expect_value(t, len(with.kinds), 5)
+	testing.expect_value(t, len(with.kinds), len(reg.kinds) + 1)
 	cube_id, found := registry_kind(with, "testpack:cube")
 	testing.expect(t, found)
-	testing.expect_value(t, cube_id, Kind_Id(5))
+	testing.expect_value(t, cube_id, Kind_Id(len(reg.kinds) + 1))
 	c := kind_info(with, cube_id)
 	testing.expect_value(t, c.model, Entity_Model.Box)
 	testing.expect_value(t, c.color, [3]u8{200, 40, 40})

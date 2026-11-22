@@ -3,6 +3,6 @@
 	"namespace": "voxiverse",
 	"version": "1.0.0",
 	"title": "Voxiverse",
-	"description": "The base game: its blocks, items, textures and sounds.",
+	"description": "The base game: its blocks, items, textures and sounds, and the creatures any game may use.",
 	"requires": []
 }
