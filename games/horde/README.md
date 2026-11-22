@@ -28,8 +28,9 @@ swing):
 
 Each wave's creatures are an eighth tougher than the last's.
 
-Every survivor starts a run with a pistol, 36 rounds and 10 coins. The guns (the base pack's
-models and sounds, numbers of Horde's own) load rounds: a reload takes them from the
+Every survivor starts a run with a pistol, 36 rounds and 10 coins. The guns are the base
+pack's, with Horde's numbers (its pack overrides their `weapon`, `pack/data/items`, only while
+Horde is played) and they load rounds: a reload takes them from the
 pockets, and with none the gun stays empty. The shop, at the counter, between waves (the
 game's actions):
 

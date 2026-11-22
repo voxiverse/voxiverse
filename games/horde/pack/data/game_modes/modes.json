@@ -4,7 +4,7 @@
 	"survivor": {
 		"abilities": ["health"],
 		"kit": [
-			{"item": "horde:pistol", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:pistol", "count": 1, "slot": "hotbar"},
 			{"item": "horde:round", "count": 36, "slot": "pockets"}
 		],
 		"rules": {}

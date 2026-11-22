@@ -3,10 +3,14 @@
 	"namespace": "horde",
 	"version": "1.0.0",
 	"title": "Horde",
-	"description": "Horde's guns and the rounds they load, the shop's and the lairs' blocks, and the survivor's and the watcher's modes.",
+	"description": "Horde's tuning of the base pack's guns and the rounds they load, the shop's and the lairs' blocks, and the survivor's and the watcher's modes.",
 	"requires": ["voxiverse"],
-	// The creatures it gave the base pack, so whatever names them by their old ids finds them.
+	// The creatures it gave the base pack and the guns it now tunes (data/items), so whatever
+	// names them by their old ids finds them.
 	"renamed": {
+		"pistol": "voxiverse:pistol",
+		"rifle": "voxiverse:rifle",
+		"shotgun": "voxiverse:shotgun",
 		"shambler": "voxiverse:shambler",
 		"skitter": "voxiverse:skitter",
 		"spitter": "voxiverse:spitter",

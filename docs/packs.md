@@ -54,7 +54,7 @@ id that misses (`registry_block`, `registry_item`, `registry_kind`: what a regio
 a character file, a dropped stack, a chest, `entities.cfg` and a command read) asks the packs'
 renames, so a save that names the old id loads the new. The registry refuses a rename of
 another pack's id, of an id still defined, or to an id no pack defines. Horde's pack keeps the
-names of the creatures it gave the base pack (`games/horde/pack/pack.json`).
+names of the creatures it gave the base pack and of the guns it now tunes (`games/horde/pack/pack.json`).
 
 ## Materials
 

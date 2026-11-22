@@ -2,8 +2,8 @@ package horde
 
 import "common:game"
 
-// The game's pack (games/horde/pack, docs/games.md): its guns (the base pack's models,
-// loading its rounds), the shop's and the lairs' blocks, and the survivor's and the
+// The game's pack (games/horde/pack, docs/games.md): its tuning of the base pack's
+// guns (loading its rounds), the shop's and the lairs' blocks, and the survivor's and the
 // watcher's modes. Loaded only where Horde is played. Its creatures are the base pack's.
 PACK :: game.Pack_Source {
 	namespace = "horde",

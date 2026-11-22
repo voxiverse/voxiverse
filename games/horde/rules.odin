@@ -135,7 +135,7 @@ WARE_NAMES := [Ware]string {
 ACTIONS :: []string{"Buy rounds", "Buy a medkit", "Buy a gun"}
 
 // GUNS: what the shop's Gun sells, in order (a survivor has the pistol already).
-GUNS :: [2]string{"horde:rifle", "horde:shotgun"}
+GUNS :: [2]string{"voxiverse:rifle", "voxiverse:shotgun"}
 
 // The run's settings: what an admin may change (/horde <name> <value>), kept with the
 // universe.

@@ -164,7 +164,7 @@ enlist :: proc(s: ^core.Server, c: ^core.Client) {
 	core.game_mode(s, c, horde.SURVIVOR_MODE)
 	core.kit_give(s, c)
 	core.heal_player(c, 1000)
-	play.hold(s, c, "horde:pistol")
+	play.hold(s, c, "voxiverse:pistol")
 	at, look := stand_point(int(core.player_id(s, c)))
 	core.teleport(s, c, at, look)
 }
