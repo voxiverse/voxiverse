@@ -200,16 +200,36 @@ world_close :: proc(w: ^World) {
 // with nobody in it (Config.world_idle overrides: tests).
 WORLD_IDLE_SECONDS :: 10
 
+// World_Kind: what kind of world an address is, as a game claims one (Game.world_kind): its
+// generator, the generator's parameters (zero: worldgen.PARAMS_DEFAULTS) and its rules
+// (zero: the config's, as the home world's).
+World_Kind :: struct {
+	generator: worldgen.Kind,
+	params:    worldgen.Params,
+	rules:     game.Rules,
+}
+
 // world_kind: what kind of world an address is: its generator parameters
 // and rules, from the address alone (so it is the same kind of world in any
 // universe), each within its range; the terrain's seed mixes in the
-// universe's. The home world is Earth's, unchanged.
+// universe's. The game may claim an address (Game.world_kind: a flat
+// encounter world), else it is an Earth of its own. The home world is
+// Earth's, unchanged. A saved world keeps the kind it was made with.
 world_kind :: proc(w: ^World) {
 	s := w.server
 	a := w.address
 	if w == s.home {return}
 	h := starmap.address_hash(a)
 	w.seed = i64(u64(s.config.seed) ~ h * 0x9e37_79b9_7f4a_7c15)
+	if claim := s.config.game.world_kind; claim != nil {
+		if k, claimed := claim(s, a); claimed {
+			w.generator = k.generator
+			w.params = k.params if k.params != {} else worldgen.PARAMS_DEFAULTS
+			w.rules =
+				k.rules if k.rules != {} else s.config.rules if s.config.rules != {} else game.RULES_DEFAULTS
+			return
+		}
+	}
 	w.generator = .Earth
 	n := h
 	// pick draws from base.lcg64, not an Rng (docs/determinism.md, rule 3): a

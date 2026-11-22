@@ -45,6 +45,7 @@ a game the server runs (docs/games.md): its id, the types of its state, and the 
 | `harming` | `proc(s: ^Server, h: ^Harming)` | any harm about to be done, to a player or an entity: may change h.amount (0 or less: none) |
 | `save` | `proc(s: ^Server, out: ^strings.Builder)` | what it keeps with the universe, as text (game.cfg), at each save's tick |
 | `load` | `proc(s: ^Server, text: string) -> (ok: bool)` | its game.cfg, after start, before the first tick (a universe that has one); false: start fails |
+| `world_kind` | `proc(s: ^Server, a: starmap.Address) -> (kind: World_Kind, claimed: bool)` | what kind of world address a is, if the game claims it (from a and the config alone: asked each time a world other than home is made); false: the engine's own kind |
 | `world_opened` | `proc(s: ^Server, w: ^World)` | w is open (started, its entities loaded; the home world after start and load): the game makes what it keeps of it (world_state, its files read) |
 | `world_closed` | `proc(s: ^Server, w: ^World)` | w closes (unloaded, or the session stops), after its last save: the game frees what it made of it |
 | `world_save` | `proc(s: ^Server, w: ^World)` | a save captures w at this tick (with the universe, or w alone as it unloads): the game stages its files (world_file_write) |
@@ -86,6 +87,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 - `Server :: struct {...}`: a session of the universe: its config, worlds, clients and tick, what every hook of a game is given.
 - `Client :: struct {...}`: one connection to the server, and once it is playing, a player: its seat, its world, its player and inventory.
 - `World :: struct {...}`: one voxel space of the universe, loaded (docs/glossary.md): its address, rules, clock, chunks and entities.
+- `World_Kind :: struct {...}`: what kind of world an address is, as a game claims one (Game.world_kind): its generator, the generator's parameters (zero: worldgen.PARAMS_DEFAULTS) and its rules (zero: the config's, as the home world's).
 - `Harm :: struct {...}`: what hurt a player, as a game's hurt and died hooks are told it.
 - `Entity_Harm :: struct {...}`: what hurt an entity, as a game's entity_hurt and entity_died hooks are told it.
 - `Harming :: struct {...}`: a harm about to be done, as a game's harming hook is shown it before it is: the hook may change the amount (a player's stats, armour, a critical blow, a rolled weapon); 0 or less and nothing is done.

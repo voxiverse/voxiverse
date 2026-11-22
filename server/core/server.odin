@@ -19,6 +19,7 @@ import "common:base"
 import "common:game"
 import "common:netcode"
 import "common:protocol"
+import "common:starmap"
 import "common:telemetry"
 import "common:worldgen"
 import "server:collector"
@@ -148,6 +149,7 @@ Game :: struct {
 	harming:        proc(s: ^Server, h: ^Harming), // any harm about to be done, to a player or an entity: may change h.amount (0 or less: none)
 	save:           proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
 	load:           proc(s: ^Server, text: string) -> (ok: bool), // its game.cfg, after start, before the first tick (a universe that has one); false: start fails
+	world_kind:     proc(s: ^Server, a: starmap.Address) -> (kind: World_Kind, claimed: bool), // what kind of world address a is, if the game claims it (from a and the config alone: asked each time a world other than home is made); false: the engine's own kind
 	world_opened:   proc(s: ^Server, w: ^World), // w is open (started, its entities loaded; the home world after start and load): the game makes what it keeps of it (world_state, its files read)
 	world_closed:   proc(s: ^Server, w: ^World), // w closes (unloaded, or the session stops), after its last save: the game frees what it made of it
 	world_save:     proc(s: ^Server, w: ^World), // a save captures w at this tick (with the universe, or w alone as it unloads): the game stages its files (world_file_write)

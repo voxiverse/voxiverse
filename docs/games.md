@@ -222,6 +222,7 @@ world, its configure choosing the Earth generator); the engine's own tests play
 | `machines(s, w, kind, at)` | Every tick, the game's machines of world `w` whose time has come (`machine_wake`), one call per block type (`kind`), lowest position first ([machines](#machines)) | the server's |
 | `machine_use(s, c, at) -> string` | A player uses (right-clicks) one of the game's machines within its reach: the game opens its panel (an event to the player's client part) and says `""`, or refuses (the player is told the text) | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
+| `world_kind(s, a) -> (World_Kind, bool)` | A world other than home is being made at address `a` (a `starmap.Address`): the game may claim it, saying its generator (a flat or template-built encounter world: `.Flat` arrives at its spawn, `0.5 0 0.5`), the generator's parameters and its rules (zero: the defaults, the config's rules), or say false and it is the engine's own kind (an Earth picked from the address). It must answer from `a` and the config alone, so the world is the same each time; once saved, a world keeps the kind it was made with (`world.cfg`) | the server's |
 | `world_opened(s, w)` | A world is open: the home world right after `start` (and `load`), any other as it loads (a player travels there), its entities loaded. The game makes what it keeps of it: its `world_state`, its files read back (`world_file_read`) | the caller's for the home world, else the server's |
 | `world_save(s, w)` | A save captures world `w` at this tick (with the universe, or `w` alone as it unloads): the game stages its files (`world_file_write`), in the same transaction | as `save` |
 | `world_closed(s, w)` | A world closes (unloaded when nobody has been in it for a while, or the session stopping), after its last save: the game frees what it made of it | the server's, or the caller's at `stop` |
@@ -246,7 +247,7 @@ comment. Read it first; this file says how the names fit together.
 
 | Name | What it is for |
 |---|---|
-| `Game`, `Config`, `Server`, `Client`, `World`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change`, `Pickup`, `Request` | The game itself, the config `configure` changes, the session, a player, a world, and what its hooks are told |
+| `Game`, `Config`, `Server`, `Client`, `World`, `World_Kind`, `Harm`, `Entity_Harm`, `Harming`, `Dead_Entity`, `Block_Change`, `Pickup`, `Request` | The game itself, the config `configure` changes, the session, a player, a world, and what its hooks are told |
 | `game_state(s, T)`, `game_client_state(s, c, T)`, `world_state(w, T)`, `character_data(s, c, T)`, `entity_data(w, h, T)` | The game's state, for the session, for a seat and for a world; its record on a player's character and on an entity of its kinds ([below](#the-games-state)) |
 | `World_File`, `world_file_read(w, name)`, `world_file_write(w, name, data)`, `world_file_aside(w, name)` | The files it keeps with each world (`Game.world_files`): read one back as saved (false: none), stage one in the save being made (its `world_save` hook), move a damaged one aside ([below](#the-games-state)) |
 | `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |

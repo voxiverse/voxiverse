@@ -544,3 +544,91 @@ harness_landed :: proc(h: ^Harness) -> bool {
 		}, &h.srv, 600)
 	return ok
 }
+
+// A game claims one address as a flat world of its own (Game.world_kind): a player travels
+// there with no gate, lands at its spawn and comes back; unloaded and loaded again, it is
+// the same world. Every other address is the engine's kind, as it was.
+@(private = "file")
+CLAIMED_ADDRESS :: 4243
+
+@(private = "file")
+CLAIMS_GAME :: Game {
+	info = {id = "claims", name = "Claims", description = "Claims one world as flat."},
+	world_kind = proc(s: ^Server, a: starmap.Address) -> (World_Kind, bool) {
+		if a != starmap.address_derive(CLAIMED_ADDRESS) {return {}, false}
+		rules := game.RULES_DEFAULTS
+		rules.gravity = 20
+		return {generator = .Flat, rules = rules}, true
+	},
+}
+
+@(test)
+test_a_game_claims_a_world :: proc(t: ^testing.T) {
+	dir := scratch_dir("claimed_world")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.game = CLAIMS_GAME
+	config.generator = .Earth // (the home world: unclaimed, as ever)
+	config.spawn = nil
+	config.save_dir = dir
+	config.world_idle = 0.5
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	s := &sess.h.srv
+	if !testing.expect(t, harness_landed(&sess.h), "the player never landed") {return}
+	c := &s.clients[0]
+	home, claimed := s.home.address, starmap.address_derive(CLAIMED_ADDRESS)
+
+	// Another address is the engine's kind, the game's or not.
+	other := World {
+		server  = s,
+		address = starmap.address_derive(CLAIMED_ADDRESS + 1),
+	}
+	plain: Server
+	plain.config.seed = s.config.seed
+	plain_other := World {
+		server  = &plain,
+		address = other.address,
+	}
+	world_kind(&other)
+	world_kind(&plain_other)
+	testing.expect_value(t, other.generator, worldgen.Kind.Earth)
+	testing.expect(t, other.params == plain_other.params && other.rules == plain_other.rules)
+
+	// There and back, with no gate.
+	testing.expect_value(t, travel(s, c, claimed), "")
+	w := c.world
+	testing.expect_value(t, w.generator, worldgen.Kind.Flat)
+	testing.expect_value(t, w.rules.gravity, 20)
+	if !testing.expect(t, harness_landed(&sess.h), "never landed in the claimed world") {return}
+	feet := c.player.position
+	below := game.Block_Pos {
+		i32(math.floor(feet.x)),
+		i32(math.floor(feet.y)) - 1,
+		i32(math.floor(feet.z)),
+	}
+	b, loaded := chunks_block(&w.chunks, below)
+	testing.expect(t, loaded && b != .Air, "nothing to stand on at the spawn")
+	around := []game.Chunk_Pos{game.chunk_of(below), game.chunk_of(below) + {1, 0, 0}}
+	for p in around {testing.expect(t, chunks_get(&w.chunks, p) != nil, "a chunk by the spawn not loaded")}
+	hash := hash_chunks(w, around)
+	params, rules := w.params, w.rules
+	testing.expect_value(t, travel(s, c, home), "")
+
+	// Unloaded once nobody is in it, then loaded again: the same world.
+	_, gone := harness_step_until(&sess.h, proc(data: rawptr) -> bool {
+			return len((^Server)(data).worlds) == 1
+		}, s, 600)
+	if !testing.expect(t, gone, "the claimed world never unloaded") {return}
+	testing.expect_value(t, travel(s, c, claimed), "")
+	if !testing.expect(t, harness_landed(&sess.h), "never landed again") {return}
+	w = c.world
+	testing.expect_value(t, w.generator, worldgen.Kind.Flat)
+	testing.expect(t, w.params == params && w.rules == rules, "loaded again, another kind")
+	testing.expect_value(t, hash_chunks(w, around), hash)
+	testing.expect_value(t, travel(s, c, home), "")
+	clear(&sess.failures) // (the mirror does not follow every record of a world it left)
+}
