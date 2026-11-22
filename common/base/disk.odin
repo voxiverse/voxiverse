@@ -81,7 +81,7 @@ disk_die :: proc(d: ^Disk) -> Disk_Error {
 			if err != nil {continue}
 			size := i64(info.size)
 			if size <= u.synced {continue}
-			keep := u.synced + i64(rng_int_max(&f.rng, int(size - u.synced) + 1))
+			keep := rng_roll(&f.rng, u.synced, size)
 			if file, oerr := os.open(u.path, {.Write}); oerr == nil {
 				os.truncate(file, keep)
 				os.close(file)

@@ -217,7 +217,7 @@ rule_run :: proc(w: ^World, p: game.Block_Pos, rule: ^game.Rule, act: Act) -> Ru
 			for k in 0 ..< 3 {
 				lo, hi := i32(s.lo[k]), i32(s.hi[k])
 				if hi > lo {
-					d[k] = i32(base.rng_int_max(&w.tick_rng, int(hi - lo + 1))) + lo
+					d[k] = base.rng_roll(&w.tick_rng, lo, hi)
 					r.res.draws += 1
 				} else {
 					d[k] = lo

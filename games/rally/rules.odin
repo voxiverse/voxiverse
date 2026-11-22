@@ -79,9 +79,7 @@ Course :: struct {
 // platforms carry a hazard strip across their middle, to be jumped.
 course_plan :: proc(seed: u32) -> (c: Course) {
 	r := base.rng_make(u64(seed) ~ 0x7a11e)
-	roll :: proc(r: ^base.Rng, lo, hi: i32) -> i32 {
-		return lo + i32(base.rng_int_max(r, int(hi - lo + 1)))
-	}
+	roll :: proc(r: ^base.Rng, lo, hi: i32) -> i32 {return base.rng_roll(r, lo, hi)}
 	add :: proc(c: ^Course, lo, hi: [3]i32, kind: Platform_Kind) {
 		c.platforms[c.count] = {lo, hi, kind}
 		c.count += 1

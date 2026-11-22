@@ -41,9 +41,7 @@ yard_template :: proc(seed: u32, shop, lair: game.Block) -> game.Template {
 	t := game.template_make({S, horde.HEIGHT, S}, context.temp_allocator)
 	box :: game.template_fill
 	r := base.rng_make(u64(seed) ~ 0x40de)
-	roll :: proc(r: ^base.Rng, lo, hi: i32) -> i32 {
-		return lo + i32(base.rng_int_max(r, int(hi - lo + 1)))
-	}
+	roll :: proc(r: ^base.Rng, lo, hi: i32) -> i32 {return base.rng_roll(r, lo, hi)}
 	box(&t, {0, 0, 0}, {S - 1, 0, S - 1}, .Dirt)
 	for x in i32(0) ..< S {
 		for z in i32(0) ..< S {

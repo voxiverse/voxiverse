@@ -55,9 +55,7 @@ courtyard :: proc(seed: u32, spawns: ^[arena.SPAWNS][3]f64) -> game.Template {
 	t := game.template_make({S, arena.HEIGHT, S}, context.temp_allocator)
 	box :: game.template_fill
 	r := base.rng_make(u64(seed) ~ 0xa7e4a)
-	roll :: proc(r: ^base.Rng, lo, hi: i32) -> i32 {
-		return lo + i32(base.rng_int_max(r, int(hi - lo + 1)))
-	}
+	roll :: proc(r: ^base.Rng, lo, hi: i32) -> i32 {return base.rng_roll(r, lo, hi)}
 	themes := THEMES
 	th := themes[base.rng_int_max(&r, len(themes))]
 
