@@ -9,8 +9,8 @@ import "server:play"
 
 // The horde: walkers of the base pack's hostile kinds, each with a slot here (its kind
 // and whom it hunts). A creature goes for the nearest survivor standing, looking again
-// every RETARGET ticks or when its prey goes down or leaves, keeps its band of distances
-// from it (the engine's steering) and strikes or spits when its attack is ready.
+// every RETARGET ticks or when its prey goes down or leaves, and hunts it as every game's
+// creatures do (play.hunt: the band of distances its kind keeps, its blow or its spit).
 
 MAX_FOES :: 160 // creatures alive at once (a wave's later ones wait their turn)
 RETARGET :: game.TICK_RATE / 2
@@ -88,46 +88,13 @@ foes_tick :: proc(s: ^core.Server) {
 			}
 			f.prey = core.player_ref(s, c)
 		}
-		hunt(s, f, h, c)
-	}
-}
-
-// hunt: a creature keeps its band from its prey and attacks when it can.
-hunt :: proc(s: ^core.Server, f: ^Foe_Slot, h: game.Entity_Handle, c: ^core.Client) {
-	w := s.home
-	info := horde.FOES[f.foe]
-	feet := c.player.position
-	chest := feet + {0, 1.1, 0}
-	d := core.entity_pos(w, h) - feet
-	distance := math.sqrt(d.x * d.x + d.z * d.z)
-	core.entity_keep(w, h, feet, info.keep[0], info.keep[1])
-	switch f.foe {
-	case .Spitter:
-		if distance <= horde.SPIT_RANGE && core.entity_sees(w, h, chest) {
-			core.entity_shoot(w, h, chest)
-		}
-	case .Matriarch:
-		if distance > horde.MATRIARCH_SPIT_FROM && core.entity_sees(w, h, chest) {
-			core.entity_shoot(w, h, chest)
-		} else {
-			core.entity_strike(w, h, c)
-		}
-	case .Shambler, .Skitter, .Hulk:
-		core.entity_strike(w, h, c)
+		play.hunt(s, w, h, c)
 	}
 }
 
 // nearest_standing: the survivor standing nearest p (nil: none).
 nearest_standing :: proc(s: ^core.Server, p: [3]f64) -> ^core.Client {
-	best: ^core.Client
-	best_d := max(f64)
-	for &c in s.clients {
-		if !standing(s, &c) {continue}
-		d := c.player.position - p
-		dist := d.x * d.x + d.z * d.z
-		if dist < best_d {best, best_d = &c, dist}
-	}
-	return best
+	return play.prey_nearest(s, s.home, p, max(f64), standing)
 }
 
 // standing: c plays the run and is not down.

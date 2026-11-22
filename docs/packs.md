@@ -126,7 +126,11 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   for a shooter, `"shot"`: a projectile kind's id. The game says when and at whom
   (`entity_strike`, `entity_shoot`: [games.md](games.md#walkers)); a blow lands within `reach`
   of the target's box, a shot flies straight at its point and, with `explode` 0, hurts what it
-  hits by the damage instead of going off.
+  hits by the damage instead of going off. How it hunts (`server/play`'s `hunt`, the same in
+  every game), each optional: `keep` `[near, far]`, the blocks it keeps from its prey (`[0,
+  reach]`); a shooter's `shoot` `[from, to]`, the blocks between which it shoots when it sees
+  its prey (nearer, it strikes; `[0, 16]`); `notice`, the blocks within which it notices a
+  player in an open world (`hunt_tick`; 16).
 - `fields`: at most 8 saved numbers, `{"name": {"type": "u8"|"u16", "min": n, "max": n}}`.
 - `model`: `rocket`, `item`, `player`, `{"box": [r, g, b]}` (one box, the kind's size)
   or `{"parts": [...]}`, a shape of at most 16 boxes in the creature's own space (blocks from

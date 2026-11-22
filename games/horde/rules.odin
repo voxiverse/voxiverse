@@ -67,20 +67,17 @@ Foe_Info :: struct {
 	kind:   string, // its kind's id
 	label:  string,
 	bounty: int, // coins for its killer
-	keep:   [2]f32, // the distances it keeps from its prey (near, far)
 }
 
 @(rodata)
 FOES := [Foe]Foe_Info {
-	.Shambler  = {"voxiverse:shambler", "shambler", 3, {0, 0.7}},
-	.Skitter   = {"voxiverse:skitter", "skitter", 1, {0, 0.5}},
-	.Spitter   = {"voxiverse:spitter", "spitter", 4, {5, 8}},
-	.Hulk      = {"voxiverse:hulk", "hulk", 10, {0, 0.9}},
-	.Matriarch = {"voxiverse:matriarch", "the matriarch", 50, {0, 1.2}},
+	.Shambler  = {"voxiverse:shambler", "shambler", 3},
+	.Skitter   = {"voxiverse:skitter", "skitter", 1},
+	.Spitter   = {"voxiverse:spitter", "spitter", 4},
+	.Hulk      = {"voxiverse:hulk", "hulk", 10},
+	.Matriarch = {"voxiverse:matriarch", "the matriarch", 50},
 }
 
-SPIT_RANGE :: 12.0 // blocks: a spitter (or the matriarch) spits at a survivor this near
-MATRIARCH_SPIT_FROM :: 4.0 // blocks: further than this, the matriarch spits
 
 // Wave_Plan: how many creatures of each kind a wave sends, and how much tougher than its
 // kind each is.

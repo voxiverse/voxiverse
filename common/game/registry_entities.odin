@@ -198,6 +198,9 @@ Kind_Attack_Info :: struct {
 	cooldown:  f32, // seconds between blows or shots
 	shot:      Kind_Id, // the projectile kind it shoots (0: it only strikes)
 	shot_name: string, // ... as the pack names it ("": none)
+	keep:      [2]f32, // blocks (horizontally) it keeps from its prey, near and far; [0, reach] unless it says
+	shoot:     [2]f32, // a shooter's: blocks from its prey between which it shoots (nearer, it strikes); [0, 16] unless it says
+	notice:    f32, // blocks within which it notices a player (server/play: hunt_tick); 16 unless it says
 }
 
 Kind_Info :: struct {
@@ -288,6 +291,8 @@ PROJECTILE_KEYS := []string{"speed", "gravity", "life", "explode"}
 ITEM_KEYS := []string{"pickup_delay", "owner_delay", "range", "merge", "life", "throw"}
 @(private)
 ATTACK_KEYS := []string{"damage", "reach", "cooldown"}
+ATTACK_NOTICE :: 16 // blocks: how far a creature notices a player, unless its attack says
+ATTACK_SHOOT :: 16 // blocks: how far a shooter shoots, unless its attack says
 @(private)
 SPAWN_KEYS := []string {
 	"on",
@@ -710,7 +715,8 @@ read_kind_fields :: proc(b: ^Reg_Build, f: ^Def_Field) -> []Kind_Field {
 }
 
 // read_attack: {"damage": n, "reach": n, "cooldown": n} and, for a shooter, "shot":
-// the projectile kind's id (resolved once every kind is read: build_entity_kinds).
+// the projectile kind's id (resolved once every kind is read: build_entity_kinds); how it
+// hunts, each optional: "keep" [near, far], a shooter's "shoot" [from, to] and "notice".
 @(private)
 read_attack :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) -> (a: Kind_Attack_Info) {
 	v := f.value
@@ -727,22 +733,44 @@ read_attack :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Kind_Info) -> (a: Kind_
 		return
 	}
 	numbers := make([dynamic]Json_Member, context.temp_allocator)
+	keep, shoot: Maybe([2]f64)
+	a.notice = ATTACK_NOTICE
 	for m in v.members {
-		if m.key != "shot" {
+		switch m.key {
+		case "shot":
+			if m.value.kind != .String || m.value.s == "" {
+				fail_field(b, f, m.value, "attack shot is a projectile kind's id")
+				continue
+			}
+			a.shot_name = strings.clone(m.value.s)
+		case "keep":
+			if p, ok := read_pair(b, f, m.value, "attack keep", 0, 64, false); ok {keep = p}
+		case "shoot":
+			if p, ok := read_pair(b, f, m.value, "attack shoot", 0, 128, false); ok {shoot = p}
+		case "notice":
+			x, isnum := json_number(m.value)
+			if !isnum || x < 1 || x > 128 {
+				fail_field(b, f, m.value, "attack notice is a number of blocks 1..128")
+				continue
+			}
+			a.notice = f32(x)
+		case:
 			append(&numbers, m)
-			continue
 		}
-		if m.value.kind != .String || m.value.s == "" {
-			fail_field(b, f, m.value, "attack shot is a projectile kind's id")
-			continue
-		}
-		a.shot_name = strings.clone(m.value.s)
 	}
 	only := v
 	only.members = numbers[:]
 	o: [3]f64
 	read_numbers(b, f, only, "attack", ATTACK_KEYS, {0, 0, 0.05}, {1000, 64, 600}, &o)
 	a.damage, a.reach, a.cooldown = f32(o[0]), f32(o[1]), f32(o[2])
+	k := keep.? or_else {0, o[1]}
+	a.keep = {f32(k[0]), f32(k[1])}
+	if _, has := shoot.?; has && a.shot_name == "" {
+		fail_field(b, f, v, "attack shoot is a shooter's; add its \"shot\"")
+	} else if a.shot_name != "" {
+		sh := shoot.? or_else {0, ATTACK_SHOOT}
+		a.shoot = {f32(sh[0]), f32(sh[1])}
+	}
 	return
 }
 
@@ -1258,7 +1286,17 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 			)
 		}
 		if a, has := k.attack.?; has {
-			fmt.sbprintf(sb, " attack=%v %v %v %s", a.damage, a.reach, a.cooldown, a.shot_name)
+			fmt.sbprintf(
+				sb,
+				" attack=%v %v %v %s keep=%v shoot=%v notice=%v",
+				a.damage,
+				a.reach,
+				a.cooldown,
+				a.shot_name,
+				a.keep,
+				a.shoot,
+				a.notice,
+			)
 		}
 		if s, has := k.spawn.?; has {
 			fmt.sbprintf(

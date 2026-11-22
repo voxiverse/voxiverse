@@ -337,3 +337,42 @@ test_entity_kind_shape_and_attack :: proc(t: ^testing.T) {
 	testing.expect_value(t, a.shot, spit)
 	testing.expect_value(t, a.reach, 1.2)
 }
+
+// How a fighter hunts, as its attack says or by default: the band it keeps, where a
+// shooter shoots from, how far it notices a player; a "shoot" needs a shot.
+@(test)
+test_attack_hunting_data :: proc(t: ^testing.T) {
+	reg := registry_base(context.temp_allocator)
+	if !testing.expect(t, reg != nil) {return}
+	attack :: proc(reg: ^Registry, id: string) -> Kind_Attack_Info {
+		k, _ := registry_kind(reg, id)
+		return kind_info(reg, k).attack.? or_else {}
+	}
+	spitter := attack(reg, "spitter")
+	testing.expect_value(t, spitter.keep, [2]f32{5, 8})
+	testing.expect_value(t, spitter.shoot, [2]f32{0, 12})
+	testing.expect_value(t, spitter.notice, f32(ATTACK_NOTICE))
+	testing.expect_value(t, attack(reg, "matriarch").shoot, [2]f32{4, 64})
+	testing.expect_value(t, attack(reg, "shambler").shoot, [2]f32{})
+
+	json := `{"orc": {"box": [0.8, 1.8], "physics": "walker",
+		"walker": {"walk_speed": 2, "run_speed": 2, "jump": 1, "step": 0}, "brain": "steered",
+		"attack": {"damage": 3, "reach": 1.2, "cooldown": 0.8, "notice": 30}, "model": "item"}}`
+	with, errs := build_with(pack_of("testpack", []File{{"data/entities/k.json", json}}))
+	testing.expect_value(t, errors_text(errs), "")
+	if with == nil {return}
+	orc := attack(with, "testpack:orc")
+	testing.expect_value(t, orc.keep, [2]f32{0, 1.2}) // (by default: up to its reach)
+	testing.expect_value(t, orc.notice, f32(30))
+
+	shooting := `{"orc": {"box": [0.8, 1.8], "physics": "walker",
+		"walker": {"walk_speed": 2, "run_speed": 2, "jump": 1, "step": 0}, "brain": "steered",
+		"attack": {"damage": 3, "reach": 1.2, "cooldown": 0.8, "shoot": [0, 9]}, "model": "item"}}`
+	refused, errs2 := build_with(pack_of("testpack", []File{{"data/entities/k.json", shooting}}))
+	testing.expect(t, refused == nil)
+	testing.expect_value(
+		t,
+		errors_text(errs2),
+		`testpack/data/entities/k.json:3:13: attack shoot is a shooter's; add its "shot"`,
+	)
+}

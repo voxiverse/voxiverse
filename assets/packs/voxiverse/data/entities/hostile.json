@@ -1,14 +1,16 @@
 {
 	// Hostile creatures any game may set loose: walkers their game steers, each a shape of
-	// boxes. Their "attack" is their blow (the spitter's and the matriarch's spit too);
-	// whom they go for and when is the game's (Horde sends them in waves and makes later
-	// waves tougher; the sandbox lets them out at night).
+	// boxes. Their "attack" is their blow (the spitter's and the matriarch's spit too) and
+	// how they hunt (server/play: hunt): the band they keep from their prey, where a
+	// shooter shoots from (the spitter keeps its distance and only spits; the matriarch
+	// spits from afar and strikes close). Whom they go for and when is the game's (Horde
+	// sends them in waves and makes later waves tougher).
 	"shambler": {
 		"voice": "groan",
 		"box": [0.7, 1.8], "health": 10, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 2.7, "run_speed": 2.7, "jump": 1.2, "step": 0},
 		"brain": "steered",
-		"attack": {"damage": 2, "reach": 0.9, "cooldown": 1.0},
+		"attack": {"damage": 2, "reach": 0.9, "cooldown": 1.0, "keep": [0, 0.7]},
 		"looks": ["striking"],
 		"model": {"parts": [
 			{"box": [-0.24, 0, -0.1, -0.04, 0.8, 0.1], "color": [58, 70, 84], "skin": "legs", "swing": "walk"},
@@ -26,7 +28,7 @@
 		"box": [0.5, 0.5], "health": 3, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 5.0, "run_speed": 5.0, "jump": 1.2, "step": 0},
 		"brain": "steered",
-		"attack": {"damage": 1, "reach": 0.6, "cooldown": 0.5},
+		"attack": {"damage": 1, "reach": 0.6, "cooldown": 0.5, "keep": [0, 0.5]},
 		"looks": ["striking"],
 		"model": {"parts": [
 			{"box": [-0.2, 0.15, -0.25, 0.2, 0.42, 0.25], "color": [150, 60, 40]},
@@ -42,7 +44,7 @@
 		"box": [0.7, 1.4], "health": 7, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 2.4, "run_speed": 2.4, "jump": 1.2, "step": 0},
 		"brain": "steered",
-		"attack": {"damage": 2, "reach": 0.8, "cooldown": 1.8, "shot": "voxiverse:spit"},
+		"attack": {"damage": 2, "reach": 0.8, "cooldown": 1.8, "shot": "voxiverse:spit", "keep": [5, 8], "shoot": [0, 12]},
 		"looks": ["striking"],
 		"model": {"parts": [
 			{"box": [-0.24, 0, -0.1, -0.06, 0.5, 0.1], "color": [40, 60, 70], "skin": "legs", "swing": "walk"},
@@ -57,7 +59,7 @@
 		"box": [1.2, 2.3], "health": 32, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 1.7, "run_speed": 1.7, "jump": 1.2, "step": 0},
 		"brain": "steered",
-		"attack": {"damage": 6, "reach": 1.2, "cooldown": 1.7},
+		"attack": {"damage": 6, "reach": 1.2, "cooldown": 1.7, "keep": [0, 0.9]},
 		"looks": ["striking"],
 		"model": {"parts": [
 			{"box": [-0.45, 0, -0.18, -0.08, 0.95, 0.2], "color": [70, 56, 50], "skin": "legs", "swing": "walk"},
@@ -74,7 +76,7 @@
 		"box": [1.6, 2.8], "health": 120, "hittable": true, "physics": "walker",
 		"walker": {"walk_speed": 2.1, "run_speed": 2.1, "jump": 1.2, "step": 0},
 		"brain": "steered",
-		"attack": {"damage": 5, "reach": 1.6, "cooldown": 1.4, "shot": "voxiverse:spit"},
+		"attack": {"damage": 5, "reach": 1.6, "cooldown": 1.4, "shot": "voxiverse:spit", "keep": [0, 1.2], "shoot": [4, 64]},
 		"looks": ["striking"],
 		"model": {"parts": [
 			{"box": [-0.62, 0, -0.22, -0.14, 1.1, 0.26], "color": [50, 30, 54], "skin": "legs", "swing": "walk"},
