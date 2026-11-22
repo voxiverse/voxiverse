@@ -123,6 +123,7 @@ budget_save :: proc(dir: string, max_seconds: f64) -> (r: Budget_Save, ok: bool)
 	for st.job != nil || st.inflight != nil {
 		if time.duration_seconds(time.tick_since(began)) >= max_seconds {return r, true}
 		if st.job == nil {time.sleep(time.Millisecond)} 	// (the worker is writing: the ticks are only polling it)
+		st.last_save = s.tick // (the polling ticks outrun the clock: no autosave beside the scene's own save)
 		harness_step(h)
 		r.ticks += 1
 	}
