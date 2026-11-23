@@ -8,8 +8,8 @@ import "client:gpu"
 
 // Entities (for now: the other players) as boxes, rebuilt every frame on
 // the CPU: few boxes, so no meshes to keep. Each box turns around a pivot
-// (yaw, then pitch) and has a colour and a part (which the shader paints:
-// noise per texel, eyes on a face). Lit by the scene's sky light and
+// (roll, then pitch, then yaw) and has a colour and a part (which the shader
+// paints: noise per texel, eyes on a face). Lit by the scene's sky light and
 // fogged like the world.
 //
 //	render.entity_box(&ed, pivot, yaw, pitch, lo, hi, color, .Body)
@@ -30,6 +30,7 @@ Entity_Draw :: struct {
 Entity_Box :: struct {
 	pivot:      [3]f64, // world position it turns around
 	yaw, pitch: f32,
+	roll:       f32, // about its front's axis (z), before the pitch: a wing's beat
 	lo, hi:     [3]f32, // the box around the pivot, before turning (-z is its front)
 	color:      [4]u8, // sRGB
 	part:       Entity_Part, // Head: its front face is drawn as Face
@@ -71,8 +72,9 @@ entity_box :: proc(
 	lo, hi: [3]f32,
 	color: [4]u8,
 	part: Entity_Part,
+	roll: f32 = 0,
 ) {
-	append(&d.boxes, Entity_Box{pivot, yaw, pitch, lo, hi, color, part})
+	append(&d.boxes, Entity_Box{pivot, yaw, pitch, roll, lo, hi, color, part})
 }
 
 entity_init :: proc(p: ^Entity_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) -> bool {
@@ -146,7 +148,7 @@ entity_upload :: proc(p: ^Entity_Pass, g: ^gpu.Gpu, d: ^Entity_Draw, camera: Cam
 					b.lo.z if c.z == 0 else b.hi.z,
 				}
 				v[i] = {
-					pos   = at + turn(local, b.yaw, b.pitch),
+					pos   = at + turn(local, b.yaw, b.pitch, b.roll),
 					uv    = FACE_UV[i],
 					color = b.color,
 					part  = part,
@@ -186,12 +188,15 @@ entity_draw :: proc(
 	gpu.draw(g, cmd, p.counts[slot])
 }
 
-// turn rotates a point around the pivot: pitch (about x: up and down),
-// then yaw (about y: left from -z), as the camera turns.
+// turn rotates a point around the pivot: roll (about z: a side up, the
+// other down), pitch (about x: up and down), then yaw (about y: left from
+// -z), as the camera turns.
 @(private = "file")
-turn :: proc(p: [3]f32, yaw, pitch: f32) -> [3]f32 {
+turn :: proc(p: [3]f32, yaw, pitch, roll: f32) -> [3]f32 {
+	cr, sr := math.cos(roll), math.sin(roll)
+	r := [3]f32{p.x * cr - p.y * sr, p.x * sr + p.y * cr, p.z}
 	cp, sp := math.cos(pitch), math.sin(pitch)
-	q := [3]f32{p.x, p.y * cp - p.z * sp, p.y * sp + p.z * cp}
+	q := [3]f32{r.x, r.y * cp - r.z * sp, r.y * sp + r.z * cp}
 	cy, sy := math.cos(yaw), math.sin(yaw)
 	return {q.x * cy + q.z * sy, q.y, -q.x * sy + q.z * cy}
 }

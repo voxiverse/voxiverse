@@ -279,7 +279,7 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 		{
 			"a part that swings oddly",
 			`{"k": {"box": [1, 1], "model": {"parts": [{"box": [0, 0, 0, 0.5, 0.5, 0.5], "color": [1, 2, 3], "swing": "wave"}]}}}`,
-			`testpack/data/entities/k.json:1:106: swing is one of "none", "walk", "walk_back", "strike", "pitch"; got "wave"; did you mean "walk"?`,
+			`testpack/data/entities/k.json:1:106: swing is one of "none", "walk", "walk_back", "strike", "pitch", "flap"; got "wave"; did you mean "walk"?`,
 		},
 		{
 			"a part shown by a look the kind has not",
@@ -316,7 +316,8 @@ test_entity_kind_shape_and_attack :: proc(t: ^testing.T) {
 		        "model": {"parts": [
 		            {"box": [-0.3, 0.8, -0.2, 0.3, 1.5, 0.2], "color": [80, 120, 60]},
 		            {"box": [-0.3, 0, -0.1, -0.05, 0.8, 0.1], "color": [40, 40, 40], "skin": "legs", "swing": "walk"},
-		            {"box": [0.3, 0.7, -0.1, 0.5, 1.5, 0.1], "color": [80, 120, 60], "swing": "strike"}]}},
+		            {"box": [0.3, 0.7, -0.1, 0.5, 1.5, 0.1], "color": [80, 120, 60], "swing": "strike"},
+		            {"box": [-0.9, 1.3, -0.1, -0.3, 1.4, 0.3], "color": [90, 90, 90], "swing": "flap", "hinge": [-0.3, 1.4, 0.1]}]}},
 		"spit": {"box": [0.2, 0.2], "physics": "projectile",
 		         "projectile": {"speed": 20, "gravity": 0, "life": 2, "explode": 0}, "model": "rocket"}
 	}`
@@ -328,9 +329,11 @@ test_entity_kind_shape_and_attack :: proc(t: ^testing.T) {
 	spit, _ := registry_kind(reg, "testpack:spit")
 	info := kind_info(reg, orc)
 	testing.expect_value(t, info.model, Entity_Model.Parts)
-	if !testing.expect_value(t, len(info.parts), 3) {return}
+	if !testing.expect_value(t, len(info.parts), 4) {return}
 	testing.expect_value(t, info.parts[1].skin, Part_Skin.Legs)
 	testing.expect_value(t, info.parts[2].swing, Part_Swing.Strike)
+	testing.expect_value(t, info.parts[3].swing, Part_Swing.Flap)
+	testing.expect_value(t, info.parts[3].hinge, [3]f32{-0.3, 1.4, 0.1})
 	testing.expect_value(t, info.parts[0].hi, [3]f32{0.3, 1.5, 0.2})
 	a, fights := info.attack.?
 	testing.expect(t, fights)

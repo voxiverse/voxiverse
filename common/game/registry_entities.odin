@@ -110,8 +110,9 @@ Part_Swing :: enum u8 {
 	Walk_Back, // the same, the other way (the other leg, the arm opposite)
 	Strike, // forward while it strikes (its "striking" look), else as Walk
 	Pitch, // up and down as the creature looks (its pitch: a grazing head)
+	Flap, // up and down across the body with the stride, the left and right sides mirrored (a wing)
 }
-PART_SWING_LIST := [?]string{"none", "walk", "walk_back", "strike", "pitch"}
+PART_SWING_LIST := [?]string{"none", "walk", "walk_back", "strike", "pitch", "flap"}
 #assert(len(PART_SWING_LIST) == len(Part_Swing))
 
 // Model_Part: a box of a shaped model, in the creature's own space (blocks from the middle

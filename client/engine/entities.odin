@@ -128,8 +128,9 @@ STRIKE_RAISE :: 1.5
 // shaped: a kind's own boxes (its model's parts), turned with it, sized by its looks
 // about its feet; a part a look hides (or one not shown) is left out, and a look may
 // colour it. A part that swings turns about its hinge: to and fro with the stride, forward
-// while it strikes, up and down with its pitch. All of it in flash while it flashes (its
-// alpha not 0: entity_flash).
+// while it strikes, up and down with its pitch, or beating up and down across the body with
+// the stride (a wing: a part left of the middle rises as one right of it does). All of it
+// in flash while it flashes (its alpha not 0: entity_flash).
 @(private)
 shaped :: proc(
 	d: ^render.Entity_Draw,
@@ -144,7 +145,7 @@ shaped :: proc(
 	if info.scale.look != 0 && looks & info.scale.look != 0 {k = info.scale.factor}
 	for part in info.parts {
 		if looks & part.shown != part.shown || looks & part.hidden != 0 {continue}
-		angle: f32
+		angle, roll: f32
 		switch part.swing {
 		case .None:
 		case .Walk:
@@ -155,6 +156,8 @@ shaped :: proc(
 			angle = STRIKE_RAISE if looks & info.striking != 0 else walk
 		case .Pitch:
 			angle = v.pitch
+		case .Flap:
+			roll = -walk if part.lo.x + part.hi.x < 0 else walk
 		}
 		rgb := part.color
 		for c in part.recolor {
@@ -175,6 +178,7 @@ shaped :: proc(
 			(part.hi - part.hinge) * k,
 			flash if flash.a != 0 else color,
 			skin[part.skin],
+			roll,
 		)
 	}
 }

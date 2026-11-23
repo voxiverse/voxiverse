@@ -140,7 +140,9 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   [r, g, b]}` with an optional `skin` (`body`, `legs`, `head`: the entity pass's shading; a
   head has eyes), `swing` (`none`; `walk` and `walk_back`, to and fro with the stride, the
   other leg the other way; `strike`, forward while the kind shows `striking`, else as `walk`;
-  `pitch`, up and down as the server's pitch says: a grazing head), `hinge` (`[x, y, z]`, what
+  `pitch`, up and down as the server's pitch says: a grazing head; `flap`, up and down across
+  the body with the stride, a part left of the middle mirroring one right of it: a wing whose
+  hinge is at the shoulder), `hinge` (`[x, y, z]`, what
   it turns about; the middle of its top, a hip or a shoulder, by default), `shown` (looks
   that must all show for it to be drawn), `hidden` (looks any of which hides it) and `colors`
   (`{"<look>": [r, g, b]}`, at most 2: its colour while that look shows). Beside `parts`,
