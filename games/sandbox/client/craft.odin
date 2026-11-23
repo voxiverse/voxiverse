@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:strings"
 
 import "client:engine"
+import "client:menu"
 import "client:ui"
 import "common:game"
 import "games:sandbox"
@@ -13,13 +14,12 @@ import "games:sandbox"
 // a fabricator, with what it makes, what it takes against what the player carries and how
 // long; those it can make now first. A recipe picked and Make asks the server
 // (sandbox.Craft), which judges and makes it in its time. Beside them: whether a
-// fabricator is in reach, what is being made, and the world's outposts. Plain text and the
-// UI kit's list, so a shared slot or tooltip helper can take its rows' place.
+// fabricator is in reach, what is being made, and the world's outposts. It has the player
+// menu's look: client/menu's panes, slots and item tooltips.
 
-CRAFT_WIDTH :: 1060
 CRAFT_TITLE :: 60
-CRAFT_ROW :: 52 // a recipe's row: what it makes over what it takes
-CRAFT_SIDE :: 0.36 // of the width: the side with the status and the outposts
+CRAFT_ROW :: 52 // a recipe's row: its output's slot beside its name over what it takes
+CRAFT_LIST :: 0.58 // of the width: the recipes' pane
 
 // Craft_Screen: what the server last showed and what the screen has picked.
 Craft_Screen :: struct {
@@ -86,7 +86,11 @@ craft_open :: proc(s: ^engine.Session) {
 	engine.game_screen_open(s)
 }
 
-// craft_screen: the crafting screen (one of the game's screens).
+// craft_screen: the crafting screen (one of the game's screens), the inventory's style
+// (client/menu): the recipes in one pane, each its output's slot over what it takes, and in
+// the other the recipe picked (its output's slot, whose tooltip is the inventory's, and what
+// it takes against what is carried, in the theme's gain and loss colours), Make, what is
+// being made and the world's outposts.
 craft_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	v := &view(s).craft
 	if top && engine.game_action_pressed(s, sandbox.CRAFT_ACTION) { 	// (the key that opened it)
@@ -97,17 +101,25 @@ craft_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	box := ui.rect_center(ctx.screen, min(CRAFT_WIDTH, ctx.screen.w), ctx.screen.h - 4 * t.padding)
+	size := engine.GAME_SCREEN_SIZE
+	box := ui.rect_center(ctx.screen, min(size.x, ctx.screen.w), min(size.y, ctx.screen.h))
 	ui.panel(ctx, box)
 	area := ui.rect_shrink(box, 2 * t.padding)
 	ui.title(ctx, sandbox.tr(.Craft_Title), ui.cut_top(&area, CRAFT_TITLE))
-	side := ui.cut_right(&area, CRAFT_SIDE * area.w)
-	ui.cut_right(&area, 2 * t.spacing)
+	close := ui.cut_bottom(&area, t.row_height)
+	ui.cut_bottom(&area, t.spacing)
+	half := (area.w - t.spacing) * CRAFT_LIST
+	list := menu.pane(ctx, ui.cut_left(&area, half), sandbox.tr(.Craft_Recipes))
+	ui.cut_left(&area, t.spacing)
+	side := menu.pane(ctx, area, sandbox.tr(.Craft_Recipe))
+	icons := engine.session_item_icons(s)
+	hover: game.Stack
+	hover_at: Maybe(ui.Rect)
 
-	// The recipes.
+	// The recipes: its output's slot, its name and where and how long, what it takes.
 	recipes := craft_recipes(s)
 	if v.pick == 0 && len(recipes) > 0 {v.pick = recipes[0] + 1}
-	view_ := ui.list_begin(ctx, "recipes", area, len(recipes), CRAFT_ROW, &v.list)
+	view_ := ui.list_begin(ctx, "recipes", list, len(recipes), CRAFT_ROW, &v.list)
 	small := t.font_size * 0.8
 	for i in view_.first ..< view_.last {
 		at := recipes[i]
@@ -118,84 +130,108 @@ craft_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 		out := sandbox.tr(.Craft_Output, r.output.count, sandbox.item_label(s.reg, r.output.item))
 		row, it := ui.list_row(ctx, &view_, i, out)
 		if it.clicked {v.pick = at + 1}
-		if v.pick == at + 1 {ui.fill_rect(ctx, row, t.slot_fill)}
-		inner := ui.rect_shrink(row, 6)
-		top_line := ui.cut_top(&inner, t.font_size + 6)
+		inner := ui.rect_shrink(row, 4)
+		slot := ui.cut_left(&inner, inner.h)
+		ui.cut_left(&inner, t.spacing)
+		menu.stack_slot(ctx, s.reg, icons, slot, r.output, v.pick == at + 1)
+		if ui.rect_contains(slot, ctx.input.mouse) {hover, hover_at = r.output, nil}
+		ink := t.text if makes else t.text_muted
+		top_line := ui.cut_top(&inner, t.font_size + 4)
 		place := sandbox.tr(.Craft_Hand if station == .Hand else .Craft_Fabricator)
 		info := fmt.tprintf("%s   %s", place, sandbox.tr(.Craft_Seconds, r.time))
 		ui.draw_text(ctx, top_line, info, small, t.text_muted, .Right)
-		ui.draw_text(ctx, top_line, out, t.font_size, t.text if makes else t.text_muted, .Left)
-		ui.draw_text(
-			ctx,
-			inner,
-			craft_inputs(s, r),
-			small,
-			t.text if makes else t.text_muted,
-			.Left,
-		)
+		ui.draw_text(ctx, top_line, out, t.font_size, ink)
+		ui.draw_text(ctx, inner, craft_inputs(s, r), small, ink)
 	}
 	if ui.list_end(ctx, &view_) && v.list.selected >= 0 && v.list.selected < len(recipes) {
 		v.pick = recipes[v.list.selected] + 1
 	}
 
-	// The side: where, what is being made, Make, the outposts and Close.
-	close := ui.cut_bottom(&side, t.row_height)
-	ui.cut_bottom(&side, t.spacing)
+	// The recipe picked: its output, what it takes against what is carried, Make.
+	busy := v.shown.making != 0 && int(v.shown.making) <= len(s.reg.recipes)
+	can := false
+	if v.pick > 0 && v.pick <= len(s.reg.recipes) {
+		r := &s.reg.recipes[v.pick - 1]
+		station, _ := sandbox.recipe_station(r)
+		reach := station == .Hand || v.shown.near_fabricator
+		can = !busy && reach && sandbox.can_make(s.reg, r, &s.inventory)
+		head := ui.cut_top(&side, menu.INVENTORY_SLOT.y)
+		slot := ui.cut_left(&head, menu.INVENTORY_SLOT.x)
+		ui.cut_left(&head, t.spacing)
+		menu.stack_slot(ctx, s.reg, icons, slot, r.output, false)
+		if ui.rect_contains(slot, ctx.input.mouse) {hover, hover_at = r.output, slot}
+		rarity := menu.item_rarity(s.reg, r.output.item)
+		ui.draw_text(
+			ctx,
+			ui.cut_top(&head, t.row_height),
+			sandbox.tr(.Craft_Output, r.output.count, sandbox.item_label(s.reg, r.output.item)),
+			t.font_size,
+			menu.rarity_color(t, rarity),
+		)
+		place := sandbox.tr(.Craft_Hand if station == .Hand else .Craft_Fabricator)
+		ink := t.text_muted if reach else t.loss
+		ui.draw_text(
+			ctx,
+			head,
+			fmt.tprintf("%s   %s", place, sandbox.tr(.Craft_Seconds, r.time)),
+			small,
+			ink,
+		)
+		ui.cut_top(&side, t.spacing)
+		needs, tags, n := game.recipe_needs(r)
+		for k in 0 ..< n {
+			line := ui.cut_top(&side, t.row_height)
+			have := sandbox.carried(s.reg, &s.inventory, needs[k].item, tags[k])
+			name :=
+				sandbox.item_label(s.reg, needs[k].item) if tags[k] == game.NO_TAG else s.reg.item_tags[tags[k]].id
+			ui.draw_text(ctx, line, name, t.font_size, t.text)
+			count := fmt.tprintf("%d / %d", have, needs[k].count)
+			ui.draw_text(
+				ctx,
+				line,
+				count,
+				t.font_size,
+				t.gain if have >= needs[k].count else t.loss,
+				.Right,
+			)
+		}
+		ui.cut_top(&side, t.spacing)
+	}
+	if ui.button(ctx, sandbox.tr(.Craft_Make), ui.cut_top(&side, t.row_height), disabled = !can) {
+		ask := sandbox.Craft{u16(v.pick - 1)}
+		engine.game_request(s, &ask)
+	}
+	ui.cut_top(&side, t.spacing)
 	near := sandbox.tr(.Craft_Near if v.shown.near_fabricator else .Craft_Far)
-	ui.label(
+	ui.draw_text(
 		ctx,
-		near,
 		ui.cut_top(&side, t.row_height),
-		.Left,
+		near,
+		small,
 		t.text if v.shown.near_fabricator else t.text_muted,
 	)
-	busy := v.shown.making != 0 && int(v.shown.making) <= len(s.reg.recipes)
 	status := sandbox.tr(.Craft_Idle)
 	if busy {
 		made := s.reg.recipes[v.shown.making - 1].output.item
 		status = sandbox.tr(.Craft_Making, sandbox.item_label(s.reg, made), v.shown.progress)
 	}
-	ui.label(ctx, status, ui.cut_top(&side, t.row_height), .Left, t.text_muted)
+	ui.draw_text(ctx, ui.cut_top(&side, t.row_height), status, small, t.text_muted)
+
+	// The world's outposts.
 	ui.cut_top(&side, t.spacing)
-	can := false
-	if v.pick > 0 && v.pick <= len(s.reg.recipes) {
-		r := &s.reg.recipes[v.pick - 1]
-		station, _ := sandbox.recipe_station(r)
-		can =
-			!busy &&
-			(station == .Hand || v.shown.near_fabricator) &&
-			sandbox.can_make(s.reg, r, &s.inventory)
-		label := sandbox.tr(
-			.Craft_Output,
-			r.output.count,
-			sandbox.item_label(s.reg, r.output.item),
-		)
-		ui.label(ctx, label, ui.cut_top(&side, t.row_height), .Left)
-		info, _ := game.item_info(s.reg, r.output.item)
-		if info.description != "" {
-			ui.draw_text(
-				ctx,
-				ui.cut_top(&side, t.row_height),
-				info.description,
-				small,
-				t.text_muted,
-				.Left,
-			)
-		}
-	}
-	make_at := ui.cut_top(&side, t.row_height)
-	if ui.button(ctx, sandbox.tr(.Craft_Make), make_at, disabled = !can) {
-		ask := sandbox.Craft{u16(v.pick - 1)}
-		engine.game_request(s, &ask)
-	}
-	ui.cut_top(&side, 2 * t.spacing)
-	ui.label(ctx, sandbox.tr(.Craft_Outposts), ui.cut_top(&side, t.row_height), .Left)
+	ui.draw_text(
+		ctx,
+		ui.cut_top(&side, t.row_height),
+		sandbox.tr(.Craft_Outposts),
+		t.font_size,
+		t.text_muted,
+	)
 	if v.shown.count == 0 {
-		ui.label(
+		ui.draw_text(
 			ctx,
-			sandbox.tr(.Craft_No_Outposts),
 			ui.cut_top(&side, t.row_height),
-			.Left,
+			sandbox.tr(.Craft_No_Outposts),
+			small,
 			t.text_muted,
 		)
 	}
@@ -205,16 +241,18 @@ craft_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 		marks := make([dynamic]string, context.temp_allocator)
 		if o.mine {append(&marks, sandbox.tr(.Craft_Outpost_Mine))}
 		if o.home {append(&marks, sandbox.tr(.Craft_Outpost_Home))}
-		ui.label(ctx, sandbox.tr(.Craft_Outpost, o.at.x, o.at.y, o.at.z), line, .Left)
-		ui.label(
+		ui.draw_text(ctx, line, sandbox.tr(.Craft_Outpost, o.at.x, o.at.y, o.at.z), small, t.text)
+		ui.draw_text(
 			ctx,
-			strings.join(marks[:], ", ", context.temp_allocator),
 			line,
-			.Right,
+			strings.join(marks[:], ", ", context.temp_allocator),
+			small,
 			t.text_muted,
+			.Right,
 		)
 	}
 	if ui.button(ctx, sandbox.tr(.Craft_Close), close) {engine.game_screen_close(s)}
+	menu.item_tooltip(ctx, s.reg, hover, beside = hover_at)
 }
 
 // craft_made: a recipe made (sandbox.Made): the engine's chime and "+2 Cord" floating up.

@@ -37,6 +37,8 @@ Text :: enum u8 {
 	Ruin_Wave, // {0}: the wave, {1}: the fight's waves, {2}: creatures still to kill
 	Ruin_Break, // {0}: the wave held, {1}: the fight's waves, {2}: seconds to the next
 	Craft_Title,
+	Craft_Recipes,
+	Craft_Recipe,
 	Craft_Output, // {0}: how many, {1}: the item
 	Craft_Hand,
 	Craft_Fabricator,
@@ -88,6 +90,8 @@ TEXT_EN := [Text]string {
 	.Ruin_Wave                   = "RUIN   wave {0} of {1}   {2} creatures left",
 	.Ruin_Break                  = "RUIN   wave {0} of {1} held   the next in {2} s",
 	.Craft_Title                 = "Fabrication",
+	.Craft_Recipes               = "Recipes",
+	.Craft_Recipe                = "Recipe",
 	.Craft_Output                = "{0} x {1}",
 	.Craft_Hand                  = "by hand",
 	.Craft_Fabricator            = "fabricator",
