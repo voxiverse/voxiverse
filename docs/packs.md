@@ -161,7 +161,11 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   above to: a night, across midnight), `every` ticks, `chance`, `cap` of the kind within `within`
   blocks of a player, `distance` from it, `group`), all required, and optional `sky` (only under
   the open sky), `despawn` (blocks from every player of its world at which a natural one goes;
-  80) and `safe` (blocks round its world's spawn point where none appears; 0). The engine's spawner (`spawn_natural`) is the same for every
+  80), `safe` (blocks round its world's spawn point where none appears; 0) and `place`, where
+  in its column it is looked for (`surface`, the default: on the column's top, out of water;
+  `water`: in water over the column's bed, which is `on`, two blocks deep at least, the
+  water's surface being the column's top; `cave`: on the floor of the first hollow going down
+  from 4 to 48 blocks under the column's top, the floor being `on`). The engine's spawner (`spawn_natural`) is the same for every
   kind; its game's `spawned` hook makes each one what it is or refuses it
   ([games.md](games.md)).
 

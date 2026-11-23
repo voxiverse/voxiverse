@@ -866,8 +866,10 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 // within `within` blocks, on a draw of `chance`, a group of `group` at a place `distance`
 // blocks away whose ground is `on` (under the open sky, for a rule that says `sky`), no
 // player is nearer than its least distance and that is not within `safe` blocks of the
-// world's spawn point. Each is natural (it goes when nobody is near: system_age) and is told to
-// the game's `spawned` hook, which may make it what it is or refuse it (it goes again).
+// world's spawn point; in its column, where its `place` says (spawn_spot: on the surface,
+// in water, in a cave). Each is natural (it goes when nobody is near: system_age) and is
+// told to the game's `spawned` hook, which may make it what it is or refuse it (it goes
+// again).
 spawn_natural :: proc(w: ^World) {
 	s := w.server
 	if s.config.no_natural_spawns {return}
@@ -895,12 +897,8 @@ spawn_natural :: proc(w: ^World) {
 			distance := base.rng_f64_range(r, f64(rule.distance[0]), f64(rule.distance[1]))
 			x := i32(math.floor(c.player.position.x + base.cos(angle) * distance))
 			z := i32(math.floor(c.player.position.z + base.sin(angle) * distance))
-			top := column_top(w, x, z)
-			ground, loaded := chunks_block(&w.chunks, {x, top, z})
-			at := game.Block_Pos{x, top + 1, z}
-			if !loaded ||
-			   !game.rule_matcher_has(&rule.on, ground) ||
-			   !path.standable(query, at) {continue}
+			at, found := spawn_spot(w, &rule, x, z, query)
+			if !found {continue}
 			center := [3]f64{f64(x) + 0.5, f64(at.y), f64(z) + 0.5}
 			if anyone_within(w, center, f64(rule.distance[0])) {continue}
 			if rule.safe > 0 {
@@ -916,7 +914,7 @@ spawn_natural :: proc(w: ^World) {
 				}
 				p := center + jitter
 				b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
-				if !path.standable(query, b) || (rule.sky && !under_sky(w, b)) {continue}
+				if !spawn_holds(w, &rule, b, query) || (rule.sky && !under_sky(w, b)) {continue}
 				h := entity_spawn(w, kind, p, true)
 				if h == 0 {continue}
 				if s.config.game.spawned != nil && !s.config.game.spawned(s, w, h) {
@@ -925,6 +923,73 @@ spawn_natural :: proc(w: ^World) {
 			}
 		}
 	}
+}
+
+CAVE_COVER :: 4 // blocks under its column's top a cave's spawn is looked for from
+CAVE_DEPTH :: 48 // ... down to this many under it
+WATER_DEPTH :: 32 // blocks of water a water's spawn looks down through for the bed
+
+// spawn_spot: where in column (x, z) a creature of the rule appears, by its place: on the
+// column's top block, if that is the rule's `on`, out of water; in the water over the
+// column's bed (the water's surface is the column's top: water shades the sky), if the bed
+// is `on`, two blocks deep at least; or on the floor of the first hollow going down from
+// CAVE_COVER to CAVE_DEPTH blocks under the top, if the floor is `on`. False when there is
+// none (or its blocks are not loaded).
+@(private = "file")
+spawn_spot :: proc(
+	w: ^World,
+	rule: ^game.Kind_Spawn_Rule,
+	x, z: i32,
+	query: game.Block_Query,
+) -> (
+	at: game.Block_Pos,
+	found: bool,
+) {
+	top := column_top(w, x, z)
+	switch rule.place {
+	case .Surface:
+		ground, loaded := chunks_block(&w.chunks, {x, top, z})
+		at = {x, top + 1, z}
+		return at,
+			loaded && game.rule_matcher_has(&rule.on, ground) && spawn_holds(w, rule, at, query)
+	case .Water:
+		for y := top; y > top - WATER_DEPTH && y > game.WORLD_MIN_Y; y -= 1 {
+			bed, loaded := chunks_block(&w.chunks, {x, y, z})
+			if _, water := game.water_level(bed); water && loaded {continue}
+			at = {x, y + 1, z}
+			return at,
+				loaded && game.rule_matcher_has(&rule.on, bed) && spawn_holds(w, rule, at, query)
+		}
+	case .Cave:
+		for y := top - CAVE_COVER; y > top - CAVE_DEPTH && y > game.WORLD_MIN_Y; y -= 1 {
+			at = {x, y, z}
+			floor, loaded := chunks_block(&w.chunks, at - {0, 1, 0})
+			if !loaded {return}
+			if game.rule_matcher_has(&rule.on, floor) && spawn_holds(w, rule, at, query) {
+				return at, true
+			}
+		}
+	}
+	return
+}
+
+// spawn_holds: a creature of the rule may appear in block b, by its place: one that
+// stands (on the surface, in a cave) stands there out of water; one of the water has
+// water there and above.
+@(private = "file")
+spawn_holds :: proc(
+	w: ^World,
+	rule: ^game.Kind_Spawn_Rule,
+	b: game.Block_Pos,
+	query: game.Block_Query,
+) -> bool {
+	wet :: proc(w: ^World, p: game.Block_Pos) -> bool {
+		block, loaded := chunks_block(&w.chunks, p)
+		_, water := game.water_level(block)
+		return loaded && water
+	}
+	if rule.place == .Water {return wet(w, b) && wet(w, b + {0, 1, 0})}
+	return path.standable(query, b) && !wet(w, b)
 }
 
 // spawn_hours: day (a fraction from midnight) is within a spawn rule's hours, from..to

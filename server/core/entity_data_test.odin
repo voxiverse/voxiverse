@@ -1,5 +1,6 @@
 package core
 
+import "core:math"
 import "core:os"
 import "core:testing"
 
@@ -442,4 +443,74 @@ test_a_creature_leaves_its_drops :: proc(t: ^testing.T) {
 	testing.expect_value(t, lying(w, wheat), 2)
 	testing.expect_value(t, lying(w, seeds), 0)
 	testing.expect_value(t, s.ledger.entries[wheat][.Drop_Mob], 2)
+}
+
+// A spawn rule's place: a kind of the water comes in water over its bed (two blocks deep
+// at least), one of the caves on the floor of the hollow under the ground, and neither on
+// the surface; one of the surface never comes in water.
+@(test)
+test_natural_spawns_keep_to_their_place :: proc(t: ^testing.T) {
+	config := harness_world()
+	config.no_natural_spawns = false
+	config.listen = true
+	config.view_radius, config.view_height = 3, 2
+	config.game = harness_creatures()
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	c := new(Net_Client)
+	defer free(c)
+	net_connect(c, 0, "swimmer", h = h)
+	defer net_close(c)
+	if !testing.expect(
+		t,
+		net_wait(t, {c}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])}),
+		"never landed",
+	) {return}
+	s := &h.srv
+	w := s.home
+	act := game_act(s, w, .Command)
+	// A pool over sand all round, and a hollow under it whose floor is stone.
+	bulk_edit(w, {shape = Box{{-14, -4, -14}, {14, -4, 14}}, op = .Set, block = .Sand}, act)
+	bulk_edit(w, {shape = Box{{-14, -3, -14}, {14, -1, 14}}, op = .Set, block = .Water}, act)
+	bulk_edit(w, {shape = Box{{-14, -9, -14}, {14, -7, 14}}, op = .Set, block = .Air}, act)
+	bulk_edit(w, {shape = Box{{-1, -4, -1}, {1, -1, 1}}, op = .Set, block = .Stone}, act)
+	fish, _ := game.registry_kind(s.registry, "creatures:fish")
+	mole, _ := game.registry_kind(s.registry, "creatures:mole")
+	wild, _ := game.registry_kind(s.registry, "creatures:wild")
+	fishes, moles := 0, 0
+	for _ in 0 ..< 20 * game.TICK_RATE {
+		net_pump(t, c)
+		harness_step(h)
+		it := entities_each(w)
+		for e in entities_next(&it) {
+			p := entity_pos(w, e)
+			b := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
+			at, _ := block_at(w, b)
+			under, _ := block_at(w, b - {0, 1, 0})
+			switch entity_kind(w, e) {
+			case fish:
+				_, wet := game.water_level(at)
+				testing.expectf(
+					t,
+					wet && under == .Sand,
+					"a fish at %v, in %v over %v",
+					p,
+					at,
+					under,
+				)
+				fishes += 1
+			case mole:
+				testing.expectf(t, b.y == -9 && under == .Stone, "a mole at %v, over %v", p, under)
+				moles += 1
+			case wild:
+				_, wet := game.water_level(at)
+				testing.expectf(t, !wet, "a wild one in the water at %v", p)
+			}
+		}
+		if fishes > 0 && moles > 0 {break}
+	}
+	testing.expect(t, fishes > 0, "no fish came")
+	testing.expect(t, moles > 0, "no mole came")
 }

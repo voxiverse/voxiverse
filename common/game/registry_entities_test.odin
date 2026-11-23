@@ -70,6 +70,7 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	testing.expect_value(t, rule.group, [2]int{1, 3})
 	testing.expect(t, rule.sky)
 	testing.expect_value(t, rule.despawn, SPAWN_DESPAWN)
+	testing.expect_value(t, rule.place, Spawn_Place.Surface) // (a rule that names none)
 
 	rocket_id, _ := registry_kind(reg, "rocket")
 	r := kind_info(reg, rocket_id)
@@ -285,6 +286,11 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 			"a part shown by a look the kind has not",
 			`{"k": {"box": [1, 1], "looks": ["shorn"], "model": {"parts": [{"box": [0, 0, 0, 1, 1, 1], "color": [1, 2, 3], "shown": ["lamb"]}]}}}`,
 			`testpack/data/entities/k.json:1:121: not one of the kind's looks (its "looks")`,
+		},
+		{
+			"a spawn in an unknown place",
+			`{"k": {"box": [1, 1], "model": "item", "spawn": {"on": "voxiverse:grass", "day": [0, 1], "every": 60, "chance": 1, "cap": 1, "within": 8, "distance": [4, 8], "group": [1, 1], "place": "sky"}}}`,
+			`testpack/data/entities/k.json:1:185: place is one of "surface", "water", "cave"; got "sky"`,
 		},
 		{
 			"a drop of an item no pack has",

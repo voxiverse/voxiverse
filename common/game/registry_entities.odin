@@ -188,6 +188,15 @@ Kind_Item_Info :: struct {
 	throw:        f32, // blocks/s: a stack a player drops flies ahead
 }
 
+// Spawn_Place: where in a column a natural spawn is looked for (its rule's "place").
+Spawn_Place :: enum u8 {
+	Surface, // on the column's top, out of water
+	Water, // in water over the column's bed (`on` is the bed), two blocks deep at least
+	Cave, // on the floor of the first hollow under the surface, going down (`on` is the floor)
+}
+SPAWN_PLACE_LIST := [?]string{"surface", "water", "cave"}
+#assert(len(SPAWN_PLACE_LIST) == len(Spawn_Place))
+
 // Kind_Spawn_Rule: natural spawning (server/core: spawn_natural), as data. The game's
 // `spawned` hook may refuse each one or make it what it is (its record, its looks).
 Kind_Spawn_Rule :: struct {
@@ -203,6 +212,7 @@ Kind_Spawn_Rule :: struct {
 	sky:      bool, // only under the open sky (nothing above its feet); optional
 	despawn:  int, // blocks: a natural one this far from every player of its world goes; optional (80)
 	safe:     int, // blocks (horizontally) around its world's spawn point where none appears; optional (0)
+	place:    Spawn_Place, // where in a column; optional (the surface)
 }
 
 // SPAWN_DESPAWN: a spawn rule's despawn distance when it names none.
@@ -336,9 +346,10 @@ SPAWN_KEYS := []string {
 	"sky",
 	"despawn",
 	"safe",
+	"place",
 }
 @(private)
-SPAWN_OPTIONAL := []string{"sky", "despawn", "safe"}
+SPAWN_OPTIONAL := []string{"sky", "despawn", "safe", "place"}
 
 @(private)
 json_number :: proc(v: Json_Value) -> (f64, bool) {
@@ -1194,7 +1205,7 @@ read_spawn_rule :: proc(
 		return
 	}
 	ok = true
-	seen: [11]bool
+	seen: [12]bool
 	rule.despawn = SPAWN_DESPAWN
 	for m in v.members {
 		at := -1
@@ -1270,6 +1281,8 @@ read_spawn_rule :: proc(
 				fail_field(b, f, m.value, "sky is true or false")
 				good = false
 			} else {rule.sky = m.value.b}
+		case "place":
+			rule.place = Spawn_Place(choice_of(b, f, m.value, "place", SPAWN_PLACE_LIST[:], 0))
 		case "every", "cap", "within", "despawn", "safe":
 			lo, hi := 1, 256
 			if m.key == "safe" {lo = 0}
@@ -1419,7 +1432,7 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 		if s, has := k.spawn.?; has {
 			fmt.sbprintf(
 				sb,
-				" spawn=%s %v %d %v %d %d %v %v safe=%d",
+				" spawn=%s %v %d %v %d %d %v %v safe=%d place=%v",
 				s.on_text,
 				s.day,
 				s.every,
@@ -1429,6 +1442,7 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 				s.distance,
 				s.group,
 				s.safe,
+				s.place,
 			)
 		}
 		strings.write_byte(sb, '\n')
