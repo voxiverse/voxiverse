@@ -99,6 +99,13 @@ where its input says at the world's fly speed through anything, with no gravity
 pickup, a projectile or a walker's push finds nothing), is shown to no one, is in the way of
 no block placed, is struck by no blow, shot or creature, and takes no harm (`core.bodiless`).
 
+A mode may also tune weapons for the players in it: its `weapons` names items that are
+weapons, each with a whole `weapon` object (every number, as an item's) that is the weapon for
+a player in the mode in place of the item's own (`game.weapon_of`: firing, reloading, the
+magazine of a stack given or of a kit, and the client's prediction all ask it). So a game that
+puts the players of an encounter in a mode of its own tunes the base pack's guns for them
+without retuning them for anyone else in the session, as a pack's `"override"` would.
+
 ### Grants
 
 A grant is a node, `x.*` (x and everything under it), `*` (everything), or `-x` (not x).

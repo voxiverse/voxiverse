@@ -21,12 +21,12 @@ ARC_SECONDS :: 0.8 // the damage direction on the screen edge
 AMMO_HOLD_SECONDS :: 0.5 // a predicted magazine stands this long over the server's word
 TRACER_SECONDS :: 0.12
 
-// weapon_in_hand: the weapon in the selected slot, if it is one.
+// weapon_in_hand: the weapon in the selected slot, if it is one, as the player's mode
+// tunes it (game.weapon_of: the server fires it so).
 weapon_in_hand :: proc(s: ^Session) -> (stack: game.Stack, w: game.Weapon_Info, ok: bool) {
 	stack = held(s)
 	if game.stack_empty(stack) {return}
-	info, _ := game.item_info(s.reg, stack.item)
-	w, ok = info.weapon.?
+	w, ok = game.weapon_of(s.reg, s.mode, stack.item)
 	return
 }
 

@@ -35,10 +35,10 @@ with_count :: proc(st: Stack, count: int) -> Stack {
 	return r
 }
 
-// new_ammo: the magazine a new stack of item has: a weapon's full one.
-new_ammo :: proc(reg: ^Registry, item: Item) -> u8 {
-	info, _ := registry_item_info(reg, item)
-	if w, ok := info.weapon.?; ok {return u8(w.magazine)}
+// new_ammo: the magazine a new stack of item has: a weapon's full one (as mode tunes it,
+// for a player in a mode: weapon_of).
+new_ammo :: proc(reg: ^Registry, item: Item, mode := NO_MODE) -> u8 {
+	if w, ok := weapon_of(reg, mode, item); ok {return u8(w.magazine)}
 	return 0
 }
 

@@ -44,7 +44,8 @@ shooter_latency_ms :: proc(s: ^Server, c: ^Client) -> f32 {
 	return rtt + 1000 * f32(game.INTERPOLATION_TICKS) / f32(game.TICK_RATE)
 }
 
-// held_weapon: the weapon in c's hand: its stack, what it does, its item's name.
+// held_weapon: the weapon in c's hand: its stack, what it does (as c's mode tunes it:
+// game.weapon_of), its item's name.
 held_weapon :: proc(
 	s: ^Server,
 	c: ^Client,
@@ -56,8 +57,7 @@ held_weapon :: proc(
 ) {
 	stack = &c.inventory.slots[clamp(c.inventory.selected, 0, game.HOTBAR_SLOTS - 1)]
 	if game.stack_empty(stack^) {return}
-	item, _ := game.item_info(s.registry, stack.item)
-	info, ok = item.weapon.?
+	info, ok = game.weapon_of(s.registry, c.mode, stack.item)
 	name = game.item_name(s.registry, stack.item)
 	return
 }
@@ -309,18 +309,18 @@ weapons_tick :: proc(s: ^Server, c: ^Client) {
 	}
 }
 
-// refill_weapons: every weapon c carries has a full magazine again (the kit's).
+// refill_weapons: every weapon c carries has a full magazine again (the kit's), as c's
+// mode tunes it.
 refill_weapons :: proc(s: ^Server, c: ^Client) {
-	fill :: proc(s: ^Server, st: ^game.Stack) -> bool {
+	fill :: proc(s: ^Server, c: ^Client, st: ^game.Stack) -> bool {
 		if game.stack_empty(st^) {return false}
-		item, _ := game.item_info(s.registry, st.item)
-		w, is_weapon := item.weapon.?
+		w, is_weapon := game.weapon_of(s.registry, c.mode, st.item)
 		if !is_weapon || int(st.ammo) == w.magazine {return false}
 		st.ammo = u8(w.magazine)
 		return true
 	}
-	for &st in c.inventory.slots {if fill(s, &st) {c.inv_changed = true}}
-	for &st in c.inventory.equipment {if fill(s, &st) {c.inv_changed = true}}
-	if fill(s, &c.inventory.cursor) {c.inv_changed = true}
+	for &st in c.inventory.slots {if fill(s, c, &st) {c.inv_changed = true}}
+	for &st in c.inventory.equipment {if fill(s, c, &st) {c.inv_changed = true}}
+	if fill(s, c, &c.inventory.cursor) {c.inv_changed = true}
 	c.reload_until = 0
 }

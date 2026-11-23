@@ -965,7 +965,11 @@ registry_text_of :: proc(
 			r.output,
 		)
 	}
-	for m in reg.game_modes {fmt.sbprintf(&b, "game_mode %s %v kit=%v\n", m.id, m.abilities, m.kit)}
+	for m in reg.game_modes {
+		fmt.sbprintf(&b, "game_mode %s %v kit=%v", m.id, m.abilities, m.kit)
+		if len(m.weapons) > 0 {fmt.sbprintf(&b, " weapons=%v", m.weapons)}
+		strings.write_byte(&b, '\n')
+	}
 	for m in reg.models {
 		fmt.sbprintf(
 			&b,

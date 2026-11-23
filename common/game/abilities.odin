@@ -69,6 +69,13 @@ Mode_Def :: struct {
 	id:        string, // "base:survival"
 	abilities: Abilities,
 	kit:       []Kit_Entry,
+	weapons:   []Mode_Weapon, // its tuning of weapons (weapon_of)
+}
+
+// Mode_Weapon: a mode's tuning of a weapon: what the item does for a player in the mode.
+Mode_Weapon :: struct {
+	item:   Item,
+	weapon: Weapon_Info,
 }
 
 NO_MODE :: -1
@@ -94,6 +101,18 @@ mode_label :: proc(reg: ^Registry, mode: int) -> string {
 mode_abilities :: proc(reg: ^Registry, mode: int) -> Abilities {
 	if mode < 0 || mode >= len(reg.game_modes) {return {}}
 	return reg.game_modes[mode].abilities
+}
+
+// weapon_of: what item does as a weapon for a player in mode: the mode's tuning of it if
+// it has one, else the item's own `weapon`; false: it is no weapon. Every reader of a
+// weapon a player holds (firing, reloading, a kit's magazines, the client's prediction)
+// asks this, so a mode's tuning is the whole weapon for the players in it and nobody else.
+weapon_of :: proc(reg: ^Registry, mode: int, item: Item) -> (Weapon_Info, bool) {
+	if mode >= 0 && mode < len(reg.game_modes) {
+		for t in reg.game_modes[mode].weapons {if t.item == item {return t.weapon, true}}
+	}
+	info, _ := item_info(reg, item)
+	return info.weapon.?
 }
 
 // derive_abilities: what a character in mode wearing inv can do: the mode's

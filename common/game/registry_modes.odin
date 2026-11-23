@@ -7,12 +7,40 @@ import "core:slice"
 //
 //	{"abilities": ["fly", "invulnerable"], "kit": [{"item": "base:pickaxe", "count": 1}], "rules": {}}
 //
-// `rules` is reserved: only an empty object is accepted for now.
+// `rules` is reserved: only an empty object is accepted for now. `weapons` (optional)
+// tunes weapons for the players in the mode: `{"voxiverse:pistol": {<a weapon object>}}`,
+// each a whole weapon (as an item's `weapon`) in place of that item's own while a player
+// is in the mode (weapon_of); the item must be a weapon.
 
 @(private)
-read_game_mode :: proc(b: ^Reg_Build, m: ^Merged_Def, item_numbers: []Item) -> Mode_Def {
+read_game_mode :: proc(
+	b: ^Reg_Build,
+	reg: ^Registry,
+	m: ^Merged_Def,
+	item_numbers: []Item,
+) -> Mode_Def {
 	def := Mode_Def {
 		id = m.id,
+	}
+	if f := field_of(m, "weapons"); f != nil {
+		if f.value.kind != .Object {
+			fail_field(b, f, f.value, "weapons is {\"<item id>\": {<a weapon object>}, ...}")
+		} else {
+			weapons := make([dynamic]Mode_Weapon)
+			for e in f.value.members {
+				at, known := ref_index(b, .Item, e.key, f, e.value)
+				if !known {continue}
+				item := item_numbers[at]
+				if info, _ := item_info(reg, item); info.weapon == nil {
+					fail_field(b, f, e.value, fmt.aprintf("%s is not a weapon", e.key))
+					continue
+				}
+				if w, ok := read_weapon(b, f, e.value, item_numbers); ok {
+					append(&weapons, Mode_Weapon{item, w})
+				}
+			}
+			def.weapons = weapons[:]
+		}
 	}
 	if f := field_of(m, "abilities"); f != nil {
 		if f.value.kind != .Array {

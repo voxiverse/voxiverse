@@ -173,7 +173,7 @@ SOUND_FIELDS := []string{"generator", "break", "place", "step", "override"}
 @(private)
 TAG_FIELDS := []string{"values", "replace", "override"}
 @(private)
-MODE_FIELDS := []string{"abilities", "kit", "rules", "override"}
+MODE_FIELDS := []string{"abilities", "kit", "rules", "weapons", "override"}
 @(private)
 MODEL_FIELDS := []string{"size", "palette", "slices", "grip", "override"}
 @(private)

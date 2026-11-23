@@ -509,7 +509,9 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 
 	// --- Game modes. ---
 	reg.game_modes = make([]Mode_Def, len(b.defs[.Game_Mode]))
-	for &m, i in b.defs[.Game_Mode] {reg.game_modes[i] = read_game_mode(b, &m, item_numbers)}
+	for &m, i in b.defs[.Game_Mode] {
+		reg.game_modes[i] = read_game_mode(b, reg, &m, item_numbers)
+	}
 
 	// --- Channels. ---
 	read_channels(b, reg)
@@ -952,18 +954,26 @@ WEAPON_NUMBERS := []string {
 	"spread",
 }
 
-// read_weapon: an item's `weapon` object: every number is required (a missing
-// one is a load error), so a weapon is never half-defined.
+// read_weapon: a `weapon` object v (an item's, or a mode's tuning of one: f is the field
+// it is in): every number is required (a missing one is a load error), so a weapon is
+// never half-defined.
 @(private)
-read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info, item_numbers: []Item) {
-	if f.value.kind != .Object {
-		fail_field(b, f, f.value, "weapon is an object: damage, magazine, fire_rate, ...")
+read_weapon :: proc(
+	b: ^Reg_Build,
+	f: ^Def_Field,
+	v: Json_Value,
+	item_numbers: []Item,
+) -> (
+	w: Weapon_Info,
+	ok: bool,
+) {
+	if v.kind != .Object {
+		fail_field(b, f, v, "weapon is an object: damage, magazine, fire_rate, ...")
 		return
 	}
-	w: Weapon_Info
 	seen: [8]bool
-	ok := true
-	for mm in f.value.members {
+	ok = true
+	for mm in v.members {
 		at := -1
 		for name, i in WEAPON_NUMBERS {if name == mm.key {at = i}}
 		switch {
@@ -1039,7 +1049,7 @@ read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info, item_numbers
 	}
 	for name, i in WEAPON_NUMBERS {
 		if !seen[i] {
-			fail_field(b, f, f.value, fmt.aprintf("a weapon needs \"%s\"", name))
+			fail_field(b, f, v, fmt.aprintf("a weapon needs \"%s\"", name))
 			ok = false
 		}
 	}
@@ -1064,10 +1074,10 @@ read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info, item_numbers
 		bad = "spread is radians, 0..0.5"
 	}
 	if bad != "" {
-		fail_field(b, f, f.value, bad)
-		return
+		fail_field(b, f, v, bad)
+		return w, false
 	}
-	info.weapon = w
+	return w, true
 }
 
 @(private)
@@ -1175,7 +1185,7 @@ read_item :: proc(
 		}
 	}
 	if f := field_of(m, "weapon"); f != nil {
-		read_weapon(b, f, &info, item_numbers)
+		if w, ok := read_weapon(b, f, f.value, item_numbers); ok {info.weapon = w}
 	}
 	if f := field_of(m, "grapple"); f != nil {
 		read_grapple(b, f, &info)

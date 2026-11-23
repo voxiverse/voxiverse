@@ -456,7 +456,10 @@ reload: without it a reload is free), and a melee weapon's
 `melee`, `{"damage": n, "reach": blocks, "arc": degrees, "cooldown": seconds}`: the attack
 button swings it, striking every hittable entity and player within reach and inside the
 arc, each for the damage (players as the `pvp` rule allows). The base pack's rifle, rocket
-launcher and grappling hook are any game's. Every harm passes the game's `harming` hook.
+launcher and grappling hook are any game's. A game mode of a game's pack may tune them for
+the players in it alone (its `weapons`, [server.md](server.md)), where an `"override"` of the
+item would retune them for every player of the session. Every harm passes the game's
+`harming` hook.
 
 ## The client's side: `engine.Game`
 

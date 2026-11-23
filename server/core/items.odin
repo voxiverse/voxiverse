@@ -283,7 +283,7 @@ item_give :: proc(s: ^Server, c: ^Client, item: game.Item, count: int) -> (given
 		rest := game.inventory_add(
 			s.registry,
 			&c.inventory,
-			{item, want, game.new_ammo(s.registry, item), 0},
+			{item, want, game.new_ammo(s.registry, item, c.mode), 0},
 		)
 		given += want - rest.count
 		if rest.count > 0 {break}

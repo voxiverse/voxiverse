@@ -971,3 +971,67 @@ test_weapon_data :: proc(t: ^testing.T) {
 	w, _ = info.weapon.?
 	testing.expect_value(t, w.damage, f32(9))
 }
+
+// A mode tunes weapons for the players in it (weapon_of): the pistol of a player in the
+// mode is the mode's, everyone else's the item's own; a tuning of an item that is no
+// weapon, or with a number missing, is a load error.
+@(test)
+test_mode_weapons :: proc(t: ^testing.T) {
+	mode := `{"wave": {"abilities": ["health"], "kit": [], "rules": {}, "weapons": {
+		"voxiverse:pistol": {"damage": 4, "magazine": 10, "fire_rate": 4, "range": 80,
+		"headshot": 2, "zoom": 0, "reload_time": 1.2, "spread": 0, "ammo": "testpack:round"}}}}`
+	round := `{"round": {"stack": 250}}`
+	reg, errs := build_with(
+		pack_of(
+			"testpack",
+			[]File{{"data/game_modes/wave.json", mode}, {"data/items/round.json", round}},
+		),
+	)
+	testing.expect_value(t, errors_text(errs), "")
+	if reg == nil {return}
+	defer registry_destroy(reg)
+	pistol, _ := registry_item(reg, "pistol")
+	ammo, _ := registry_item(reg, "testpack:round")
+	wave, _ := mode_find(reg, "testpack:wave")
+	survival, _ := mode_find(reg, "survival")
+	w, ok := weapon_of(reg, wave, pistol)
+	testing.expect(t, ok, "the pistol is no weapon in the mode")
+	testing.expect_value(t, w.damage, f32(4))
+	testing.expect_value(t, w.ammo, ammo)
+	testing.expect_value(t, new_ammo(reg, pistol, wave), u8(10))
+	for other in ([]int{survival, NO_MODE}) {
+		w, ok = weapon_of(reg, other, pistol)
+		testing.expect(
+			t,
+			ok && w.damage == 5 && w.ammo == NO_ITEM,
+			"another mode's pistol is tuned",
+		)
+		testing.expect_value(t, new_ammo(reg, pistol, other), u8(12))
+	}
+	_, ok = weapon_of(reg, wave, ammo)
+	testing.expect(t, !ok, "a round is a weapon")
+
+	for c in ([][2]string{{`"voxiverse:hoe": {"damage": 4, "magazine": 10, "fire_rate": 4, "range": 80, "headshot": 2, "zoom": 0, "reload_time": 1, "spread": 0}`, "voxiverse:hoe is not a weapon"}, {`"voxiverse:pistol": {"damage": 4, "magazine": 10}`, "a weapon needs \"fire_rate\""}}) {
+		_, bad := build_with(
+			pack_of(
+				"testpack",
+				[]File {
+					{
+						"data/game_modes/wave.json",
+						strings.concatenate(
+							{`{"wave": {"kit": [], "rules": {}, "weapons": {`, c[0], `}}}`},
+							context.temp_allocator,
+						),
+					},
+				},
+			),
+		)
+		testing.expectf(
+			t,
+			strings.contains(errors_text(bad), c[1]),
+			"%q: %s",
+			c[1],
+			errors_text(bad),
+		)
+	}
+}

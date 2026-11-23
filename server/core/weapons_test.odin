@@ -488,3 +488,64 @@ test_a_weapon_loads_its_ammo :: proc(t: ^testing.T) {
 	testing.expect_value(t, c.inventory.slots[0].ammo, 5)
 	testing.expect_value(t, item_count(c, round), 5)
 }
+
+@(private = "file")
+TUNED_MODES :: `{
+	"tuned": {"abilities": ["health"], "kit": [], "rules": {}, "weapons": {
+		"voxiverse:pistol": {"damage": 4, "magazine": 8, "fire_rate": 4, "range": 80, "headshot": 2,
+		"zoom": 0, "reload_time": 0.5, "spread": 0, "ammo": "ammo:round"}}}
+}`
+
+// A mode tunes the base pistol for its players alone (game.weapon_of): in it the pistol
+// loads the mode's rounds and holds the mode's magazine; in survival it is the base
+// pack's again, its reload free and its magazine twelve.
+@(test)
+test_a_mode_tunes_its_players_weapons :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	files := [3]game.Pack_File {
+		{"pack.json", transmute([]u8)string(AMMO_PACK)},
+		{"data/items/guns.json", transmute([]u8)string(AMMO_ITEMS)},
+		{"data/game_modes/tuned.json", transmute([]u8)string(TUNED_MODES)},
+	}
+	config := harness_world()
+	config.mode = "survival"
+	config.game = {
+		info = {id = "ammo", name = "Ammo"},
+		pack = {"ammo", files[:]},
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, joined := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, joined) {return}
+	s := &sess.h.srv
+	c := &s.clients[0]
+	pistol, _ := game.registry_item(s.registry, "pistol")
+	round, _ := game.registry_item(s.registry, "ammo:round")
+	reload_ticks := int(1.4 * game.TICK_RATE) + 2
+
+	testing.expect_value(t, game_mode(s, c, "ammo:tuned"), Mode_Result.Ok)
+	c.inventory = {}
+	testing.expect_value(t, item_give(s, c, pistol, 1), 1)
+	slot := 0 // (the first of the hotbar: the inventory was empty)
+	testing.expect_value(t, c.inventory.slots[slot].item, pistol)
+	c.inventory.selected = slot
+	testing.expect_value(t, c.inventory.slots[slot].ammo, 8) // (the mode's magazine)
+	c.inventory.slots[slot].ammo = 0
+	testing.expect(t, !weapon_reload(s, c), "the tuned pistol reloaded with no rounds")
+	item_give(s, c, round, 20)
+	testing.expect(t, weapon_reload(s, c))
+	harness_step(&sess.h, reload_ticks)
+	testing.expect_value(t, c.inventory.slots[slot].ammo, 8)
+	testing.expect_value(t, item_count(c, round), 12)
+
+	// Out of the mode, the base pack's pistol: a free reload to twelve.
+	testing.expect_value(t, game_mode(s, c, "survival"), Mode_Result.Ok)
+	c.inventory.selected = slot
+	c.inventory.slots[slot].ammo = 0
+	testing.expect(t, weapon_reload(s, c))
+	harness_step(&sess.h, reload_ticks)
+	testing.expect_value(t, c.inventory.slots[slot].ammo, 12)
+	testing.expect_value(t, item_count(c, round), 12)
+}
