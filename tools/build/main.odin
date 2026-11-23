@@ -477,7 +477,7 @@ usage :: proc() {
 		"  check     type-check every package (-vet -strict-style), run the lints, verify formatting, skipping a job or file whose inputs passed before; --all: every one again; --cross: also build objects for the other Tier 1 targets",
 	)
 	fmt.println(
-		"  test      run the unit tests, the packages in parallel (VX_JOBS=n at once, else one per core), then the image baselines (Linux); `test <package>...`: only those packages",
+		"  test      run the unit tests, the packages in parallel (VX_JOBS=n at once, else one per core), the image baselines (Linux) beside them; `test <package>...`: only those packages",
 	)
 	fmt.println(
 		"            (output is kept in build/test/<package>.log, printed only when it fails)",
@@ -1390,16 +1390,31 @@ test :: proc(args: []string) -> bool {
 	}
 	slice.sort_by(timed, proc(a, b: Timed) -> bool {return a.seconds > b.seconds})
 	for t, i in timed {packages[i] = t.pkg}
-	ok := test_packages(packages, {}, jobs_width(), opts)
-	if !test_renders_images(named, opts) {return ok}
 	// The whole suite is the gate, and the visual baselines are part of it: run
 	// alone they were forgotten, and two rotted unseen (walk_third, swing_third).
-	if ODIN_OS != .Linux {
+	beside: []limited.Job
+	if test_renders_images(named, opts) && ODIN_OS != .Linux {
 		fmt.println("test: the image baselines render on Linux only (build images); not here")
-		return ok
+	} else if test_renders_images(named, opts) {
+		// Their build reads the shaders the packages load (client/engine): made here first,
+		// so the build beside the packages finds them up to date and writes none.
+		shaders() or_return
+		beside = {test_images_job()}
+		fmt.println("test: the image baselines (build images) beside the packages")
 	}
-	fmt.println("test: the image baselines (build images)")
-	return images({}) && ok
+	return test_packages(packages, {}, jobs_width(), opts, beside)
+}
+
+// test_images_job: `build images` as a job of test's, a run of the driver under this one's
+// lock (GATE_ENV names this run as its parent). It starts with the packages, the first job:
+// on a machine of few cores the packages' last minutes are a few tests waiting on the disk
+// (server/core's crash points sync every write), and the images' rendering fills them.
+test_images_job :: proc() -> limited.Job {
+	os.set_env(GATE_ENV, fmt.tprint(os.get_pid()))
+	return limited.Job {
+		cmd = slice.clone([]string{os.args[0], "images"}),
+		log = path_join({IMAGES_OUT, "test.log"}),
+	}
 }
 
 // test_renders_images: a run of `test` also renders the image baselines: the whole
@@ -1668,17 +1683,19 @@ append_report :: proc(file, text: string) {
 
 // test_packages runs packages' tests, width at a time, each under its time limit; a run
 // that outlasts it is killed with its children and reported as a failure naming the
-// package. A package whose inputs are unchanged since its binary was built runs that
-// binary again instead of compiling it.
+// package. Each package is compiled afresh. beside: jobs run among them, started first,
+// each printed whole when it ends (the image baselines: test_images_job).
 test_packages :: proc(
 	packages: []string,
 	extra: []string,
 	width: int,
 	opts: Test_Options,
+	beside: []limited.Job = nil,
 ) -> bool {
 	suffix := test_suffix(opts)
 	State :: struct {
 		packages: []string,
+		beside:   []string, // the commands of the jobs before the packages' (beside)
 		limits:   []time.Duration,
 		statuses: []int, // each job's exit status (limited.Job.status)
 		watches:  []^Test_Watch, // each job's log watcher: the tests' times
@@ -1687,13 +1704,16 @@ test_packages :: proc(
 	}
 	state := State {
 		packages = packages,
+		beside   = make([]string, len(beside)),
 		suffix   = suffix,
 		limits   = make([]time.Duration, len(packages)),
 		statuses = make([]int, len(packages)),
 		watches  = make([]^Test_Watch, len(packages)),
 		ok       = true,
 	}
-	jobs := make([]limited.Job, len(packages))
+	jobs := make([]limited.Job, len(beside) + len(packages))
+	copy(jobs, beside)
+	for job, i in beside {state.beside[i] = strings.join(job.cmd[1:], " ")}
 	for pkg, i in packages {
 		out := test_binary(pkg, suffix)
 		log := test_log(pkg, suffix)
@@ -1713,7 +1733,7 @@ test_packages :: proc(
 		state.limits[i] = test_timeout(strings.concatenate({out, ".seconds"}))
 		state.watches[i] = new(Test_Watch)
 		state.watches[i].log = log
-		jobs[i] = limited.Job {
+		jobs[len(beside) + i] = limited.Job {
 			poll      = test_watch_poll,
 			poll_data = state.watches[i],
 			cmd       = cmd,
@@ -1723,8 +1743,16 @@ test_packages :: proc(
 			status    = &state.statuses[i],
 		}
 	}
-	done :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
+	done :: proc(data: rawptr, job: int, result: limited.Run_Result, seconds: f64) {
 		state := (^State)(data)
+		if job < len(state.beside) {
+			if result != .Ok {
+				fmt.eprintfln("test   %s FAILED (its output is above)", state.beside[job])
+				state.ok = false
+			}
+			return
+		}
+		index := job - len(state.beside)
 		pkg := state.packages[index]
 		out := test_binary(pkg, state.suffix)
 		write_test_reports(pkg, state.watches[index])

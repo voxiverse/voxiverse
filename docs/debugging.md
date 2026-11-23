@@ -259,7 +259,7 @@ light and mesh (the client's), as the average and the slowest 1%.
 ## Overlays
 
 Every in-game panel is an overlay on a single stack (`client/engine/overlay.odin`): the game
-menu, Options, tuning, chat, the player menu, console, quit dialog, gate address, audio
+menu, Options, tuning, chat, the player menu, console, quit dialog, gate dial, audio
 inspector, consent question, Open to LAN and death. Each overlay declares whether it takes the
 keyboard, frees the mouse, or pauses the world. The top overlay receives the keys, the focus
 and Escape.
@@ -350,10 +350,13 @@ finds lavapipe's manifest in the system's ICD directories and points `VK_DRIVER_
 the older `VK_ICD_FILENAMES`) at it, whatever GPU the machine has.
 
 They are part of the gate: `./build.sh test` with no package named (and no `-o:`,
-`-sanitize:` or `-test-name:`) renders them after the unit tests and fails if any scene
-does, as `./build.sh images` would. On this 8-core machine the 32 scenes take about ten
-minutes (four at once; lavapipe draws on the CPU). A narrowed run (`test <package>`) does not
-render them, and on Windows and macOS `test` says they were not run.
+`-sanitize:` or `-test-name:`) renders them beside the unit tests, `./build.sh images` as
+one of its jobs from the start, and fails if any scene does. On a machine of few cores the
+unit tests' last minutes are a few tests waiting on the disk (server/core's crash points
+sync every write), and the rendering fills them. On this 8-core machine the 32 scenes take
+about ten minutes (four at once; lavapipe draws on the CPU). A narrowed run
+(`test <package>`) does not render them, and on Windows and macOS `test` says they were not
+run.
 
 The scenes are listed in `assets/baselines/images/scenes.txt`, one a line, as
 `name: [@WxH] script`; the script is console commands separated by `;`, as `--exec` takes them.

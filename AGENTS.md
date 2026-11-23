@@ -30,13 +30,13 @@ The code is written by agents and read by a person, so it has to read well.
 ```
 
 `./build.sh gate` is the whole gate in one command: `check --cross --all`, every test package
-then the image baselines on lavapipe (about ten minutes on 8 cores), `bench budgets -check`
-and `fuzz --smoke`. It blocks until done, goes on past a failed stage, and ends with a
-table and one line, `gate PASSED` or `gate FAILED: <stages>`, with each failed stage's log
-(`build/gate/`) and its first error lines above it. Run it in the foreground with a long
-timeout (30 minutes) and read its last line. Never write a loop that polls for a build
-(`pgrep`, `sleep`): every `./build.sh` command blocks until it is done, a second one waits
-for the first, and a gate refuses to start beside another gate or test.
+and beside them the image baselines on lavapipe (about ten minutes on 8 cores),
+`bench budgets -check` and `fuzz --smoke`. It blocks until done, goes on past a failed
+stage, and ends with a table and one line, `gate PASSED` or `gate FAILED: <stages>`, with
+each failed stage's log (`build/gate/`) and its first error lines above it. Run it in the
+foreground with a long timeout (30 minutes) and read its last line. Never write a loop that
+polls for a build (`pgrep`, `sleep`): every `./build.sh` command blocks until it is done, a
+second one waits for the first, and a gate refuses to start beside another gate or test.
 
 A change to `client/` or `assets/shaders` that changes a picture re-accepts its baseline in
 the same commit (`./build.sh images --accept <scene>`), saying why.
