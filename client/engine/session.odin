@@ -120,6 +120,7 @@ Session :: struct {
 	reg_owned:        bool, // reg is the universe's own (freed with the session)
 	reg_fresh:        ^game.Registry, // the registry the server's reload made, waiting for the mesh jobs to end (hot reload; the App swaps it in)
 	reg_swapped:      bool, // reg was replaced by the packs of the server joined (the App makes the new items' icons, then clears it)
+	item_icons:       ^Item_Icons, // the App's, for the game's screen (session_item_icons)
 	fetch:            ^protocol.Pack_Fetch, // the server's packs, while joining (pack_fetch.odin)
 	fetching:         bool, // a Packs message came
 	fetched:          bool, // ... and its registry is built

@@ -528,6 +528,7 @@ number and no cast.
 |---|---|
 | `Session`, `game_state(s, T)`, `game_value(s, r, T)` | The session its hooks are given; its state, as its type; a record or event its `received` hook was given, as the type of its kind |
 | `game_screen_open(s)`, `game_screen_close(s)`, `game_screen_shown(s)` | Its screen over the world (the `screen` hook): open it, close it, whether it is open |
+| `session_item_icons(s)` | Every item's icon, for the game's screen to draw its slots with the player menu's helpers (`client/menu`: `stack_slot`, `item_tooltip`) |
 | `game_action_key(s, i)`, `game_action_pressed(s, i)`, `game_key_pressed(s, i)`, `game_key_down(s, i)`, `game_key_label(s, i)` | Its actions and its own keys: the key bound to an action (for the HUD to say), an action or a key pressed this frame, a key held, the key bound to a key |
 | `Game_Key`, `MAX_GAME_KEYS`, `Command_Spec` | What its `keys` and `commands` fields hold |
 | `Look`, `Grade` | What its `look` field holds: its atmosphere ([below](#a-games-look)) |

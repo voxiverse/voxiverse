@@ -315,8 +315,13 @@ game_screen_draw :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	if s == nil || s.game.screen == nil || !s.game_screen {return}
 	ui.push_id(ctx, "game_screen")
 	defer ui.pop_id(ctx)
+	s.item_icons = &app.item_icons
 	s.game.screen(s, ctx, top)
 }
+
+// session_item_icons: every item's icon (the App's), for a game's screen to draw its slots
+// as the player menu does (client/menu: stack_slot); nil outside the game's screen.
+session_item_icons :: proc(s: ^Session) -> ^Item_Icons {return s.item_icons}
 
 // game_actions: the game's own actions pressed this frame go to its server part (a
 // Game_Action, after the last input sent).
