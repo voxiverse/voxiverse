@@ -7,6 +7,7 @@ import "client:engine"
 import "client:ui"
 import "common:game"
 import "common:protocol"
+import "common:wave"
 import "games:horde"
 
 // Horde's client part (the game: games/horde): it keeps the run and every survivor's
@@ -84,7 +85,7 @@ mine :: proc(s: ^engine.Session) -> ^horde.Survivor {return engine.seat_mine(
 started :: proc(s: ^engine.Session) {
 	v := view(s)
 	for &kind, f in v.kinds {
-		kind, _ = game.registry_kind(s.reg, horde.FOES[f].kind)
+		kind, _ = game.registry_kind(s.reg, wave.KINDS[f])
 	}
 	v.round, _ = game.registry_item(s.reg, horde.ROUND_ITEM)
 }

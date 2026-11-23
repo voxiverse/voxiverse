@@ -41,26 +41,19 @@ GAME :: core.Game {
 
 // Horde: the run.
 Horde :: struct {
-	settings:   horde.Settings,
-	phase:      play.Phase(horde.Phase),
-	run:        u16,
-	wave:       int, // on now, or the last (0: none yet)
-	best:       int, // the best wave any run reached (kept with the universe)
-	seed:       u32, // the yard's
-	rng:        base.Rng, // the yards' seeds (from the universe's seed)
-	built:      bool, // the run's yard is there
-	// The wave on its way out of the lairs.
-	coming:     [horde.Foe]int, // still to come, of each kind
-	toughness:  f32, // its creatures' health, times their kind's
-	next_spawn: u64, // the tick the next one comes out
-	next_lair:  int, // the lair the next one comes out of
-	foes:       [MAX_FOES]Foe_Slot,
-	foe_count:  int,
+	settings:    horde.Settings,
+	phase:       play.Phase(horde.Phase),
+	run:         u16,
+	wave:        int, // on now, or the last (0: none yet)
+	best:        int, // the best wave any run reached (kept with the universe)
+	seed:        u32, // the yard's
+	rng:         base.Rng, // the yards' seeds (from the universe's seed)
+	built:       bool, // the run's yard is there
+	using crowd: play.Crowd, // the wave on its way out of the lairs, and the creatures out (foes.odin)
 	// What the pack's names are in this session's registry.
-	kinds:      [horde.Foe]game.Kind_Id,
-	round:      game.Item,
-	guns:       [len(horde.GUNS)]game.Item,
-	shop, lair: game.Block,
+	round:       game.Item,
+	guns:        [len(horde.GUNS)]game.Item,
+	shop, lair:  game.Block,
 }
 
 // Survivor: a player's part in a run.
@@ -102,11 +95,7 @@ start :: proc(s: ^core.Server) -> bool {
 	core.game_rule(s, w, "respawn_auto", "true")
 	core.game_rule(s, w, "respawn_delay", "1")
 	reg := s.registry
-	ok := true
-	for &k, f in d.kinds {
-		k, ok = game.registry_kind(reg, horde.FOES[f].kind)
-		if !ok {return false}
-	}
+	play.crowd_start(s, &d.crowd) or_return
 	d.round = game.registry_item(reg, horde.ROUND_ITEM) or_return
 	guns := horde.GUNS
 	for &gun, i in d.guns {gun = game.registry_item(reg, guns[i]) or_return}
@@ -142,7 +131,7 @@ new_run :: proc(s: ^core.Server) {
 	foes_clear(s)
 	d.run += 1
 	d.seed = base.rng_u32(&d.rng)
-	d.wave, d.built, d.coming = 0, false, {}
+	d.wave, d.built = 0, false
 	set_phase(s, .Countdown)
 	log.infof("horde run=%d seed=%d", d.run, d.seed)
 }
@@ -220,10 +209,7 @@ tick :: proc(s: ^core.Server) {
 	put_records(s)
 }
 
-waiting :: proc(d: ^Horde) -> (n: int) {
-	for c in d.coming {n += c}
-	return
-}
+waiting :: proc(d: ^Horde) -> int {return play.crowd_waiting(&d.crowd)}
 
 // standing_count: the survivors of the run not down.
 standing_count :: proc(s: ^core.Server) -> (n: int) {
@@ -235,14 +221,12 @@ standing_count :: proc(s: ^core.Server) -> (n: int) {
 wave_begin :: proc(s: ^core.Server) {
 	d := state(s)
 	d.wave += 1
-	plan := horde.wave_plan(d.wave)
-	d.coming, d.toughness = plan.count, plan.health
-	d.next_spawn = s.tick
+	play.crowd_send(s, &d.crowd, d.wave)
 	set_phase(s, .Wave)
 	news := horde.Wave_News {
 		u16(d.wave),
 		u16(horde.wave_size(d.wave)),
-		plan.count[.Matriarch] > 0,
+		horde.wave_plan(d.wave).count[.Matriarch] > 0,
 		false,
 	}
 	for &c in s.clients {if play.here(s, &c) {core.game_event(s, &c, &news)}}
@@ -269,7 +253,6 @@ run_over :: proc(s: ^core.Server) {
 	reached := d.wave - 1 // (the waves held)
 	record := reached > d.best
 	d.best = max(d.best, reached)
-	d.coming = {}
 	foes_clear(s)
 	set_phase(s, .Over)
 	if record {
@@ -283,21 +266,12 @@ run_over :: proc(s: ^core.Server) {
 	log.infof("horde run=%d over waves=%d best=%d", d.run, reached, d.best)
 }
 
-// spawn_due: the next creature of the wave comes out of the next lair when due: the
-// matriarch first, then of the kind with the most still to come, so a wave mixes them.
+// spawn_due: the next creature of the wave comes out of the next lair when due (the
+// matriarch first, then of the kind with the most still to come: play.crowd_spawn_due).
 spawn_due :: proc(s: ^core.Server) {
-	d := state(s)
-	if waiting(d) == 0 || s.tick < d.next_spawn {return}
-	d.next_spawn = s.tick + u64(horde.SPAWN_EVERY * game.TICK_RATE)
-	pick := horde.Foe.Matriarch
-	if d.coming[.Matriarch] == 0 {
-		pick = .Shambler
-		for k in horde.Foe {if d.coming[k] > d.coming[pick] {pick = k}}
-	}
-	lairs := horde.LAIRS
-	l := lairs[d.next_lair % len(lairs)]
-	d.next_lair += 1
-	if foe_spawn(s, pick, {f64(l.x) + 0.5, 1, f64(l.y) + 0.5}) != 0 {d.coming[pick] -= 1}
+	lairs: [len(horde.LAIRS)][3]f64
+	for l, i in horde.LAIRS {lairs[i] = {f64(l.x) + 0.5, 1, f64(l.y) + 0.5}}
+	play.crowd_spawn_due(s, &state(s).crowd, s.home, lairs[:], horde.SPAWN_EVERY)
 }
 
 // died: a survivor who dies in a wave is down for the rest of it (the engine brings it

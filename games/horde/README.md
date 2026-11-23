@@ -62,10 +62,12 @@ next wave now), `/horde restart`, `/horde shop` (stand at the counter), `/horde 
 
 ## The code
 
-`rules.odin` (the yard's numbers, the creatures, the waves' plans, the shop's wares, the
-settings), `records.odin` (the run, the survivors, a wave's news), `pack.odin`; `server/`
-builds the yard (`yard.odin`), runs the creatures (`foes.odin`), the waves, the downs and
-the shop (`game.odin`); `client/` draws it. What the engine gives it: `server:play`'s phase,
-walled arena, watchers and settings; creatures that fight (`core.entity_keep`,
+`rules.odin` (the yard's numbers, the creatures' bounties, the shop's wares, the settings),
+`records.odin` (the run, the survivors, a wave's news), `pack.odin`; `server/` builds the
+yard (`yard.odin`), runs the creatures (`foes.odin`), the waves, the downs and the shop
+(`game.odin`); `client/` draws it. What the engine gives it: the creatures and the waves'
+plans (`common:wave`, which the sandbox's ruined site plays too) and the crowd that brings
+them out and hunts (`server:play`'s `Crowd`); `server:play`'s phase, walled arena, watchers
+and settings; creatures that fight (`core.entity_keep`,
 `core.entity_strike`, `core.entity_shoot`); a weapon's ammo as item data (`"ammo"`); the
 game's actions; the HUD's bar, banners and flash.
