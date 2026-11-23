@@ -3,6 +3,7 @@ package sandbox_client
 import "core:fmt"
 
 import "client:engine"
+import "client:menu"
 import "client:ui"
 import "common:protocol"
 import "games:sandbox"
@@ -13,7 +14,8 @@ import "games:sandbox"
 // there, as the server's answer (sandbox.Market_Open), and pressed again closes it. Each good has its price, the stock
 // and what the player carries, and how old the news behind the price is; the player picks a
 // good and a quantity and buys or sells (a sandbox.Trade request). Walking out of the town
-// closes it.
+// closes it. The screen is the inventory's style (client/menu: panes, the theme's gain and
+// loss colours).
 
 MARKET_WIDTH :: 760
 MARKET_TITLE :: 60 // the title's height
@@ -111,7 +113,13 @@ news_line :: proc(age: f32) -> string {
 	return sandbox.tr(.Market_News, int(age))
 }
 
-// market_screen: the game's screen (engine.Game.screen), the market of the town.
+// market_screen: the game's screen (engine.Game.screen), the market of the town in two
+// panes as every trader's window is: on the left what the market sells (each good's price,
+// the price red where the chosen quantity costs more silver than the player has, its stock,
+// the age of its news), on the right what the player carries (the cargo of each, what it
+// would sell for here); under them the chosen good with the quantity, what it comes to,
+// and Buy (only what the player can afford and the market holds), Sell (only what they
+// carry) and Close.
 market_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	m := &view(s).market
 	if top && engine.game_action_pressed(s, MARKET_ACTION) { 	// (the key that opened it)
@@ -122,16 +130,12 @@ market_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	// As tall as what it holds (the title, silver, the heads, a row a good with half a gap
-	// between, the quantity, the refusal's line and the buttons), so it fits 720 high.
+	// As tall as what it holds (the title, silver, the panes' heads and a row a good, the
+	// chosen good, the quantity, the refusal's line and the buttons), so it fits 720 high.
 	rows := f32(len(sandbox.Good))
 	gap := t.spacing / 2
-	height :=
-		4 * t.padding +
-		MARKET_TITLE +
-		5 * t.row_height +
-		4 * t.spacing +
-		rows * (t.row_height + gap)
+	panes := menu.pane_size(t, 0, t.row_height + rows * (t.row_height + gap)).y
+	height := 4 * t.padding + MARKET_TITLE + 4 * t.row_height + 4 * t.spacing + panes
 	box := ui.rect_center(ctx.screen, MARKET_WIDTH, min(height, ctx.screen.h))
 	ui.panel(ctx, box)
 	area := ui.rect_shrink(box, 2 * t.padding)
@@ -139,41 +143,92 @@ market_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	ui.label(ctx, sandbox.tr(.Market_Cash, number(m.cash, 2)), ui.cut_top(&area, t.row_height))
 	ui.cut_top(&area, t.spacing)
 
-	// The goods: name (a button: it selects), price, stock, cargo, the news's age.
-	col := [5]f32{0.2, 0.15, 0.17, 0.15, 0.33}
-	head := ui.cut_top(&area, t.row_height)
-	heads := [4]sandbox.Text{.Market_Good, .Market_Price, .Market_Stock, .Market_Cargo}
-	for h, i in heads {
-		cell := ui.cut_left(&head, col[i] * area.w)
-		ui.label(ctx, sandbox.tr(h), cell, .Left if i == 0 else .Right, t.text_muted)
+	row_of :: proc(area: ^ui.Rect, t: ^ui.Theme, gap: f32) -> ui.Rect {
+		row := ui.cut_top(area, t.row_height)
+		ui.cut_top(area, gap)
+		return row
 	}
+	cells :: proc(
+		ctx: ^ui.Context,
+		row: ui.Rect,
+		widths: []f32,
+		texts: []string,
+		inks: []ui.Color,
+	) {
+		r := row
+		for w, i in widths {
+			cell := ui.cut_left(&r, w * row.w)
+			ui.label(ctx, texts[i], cell, .Left if i == 0 else .Right, inks[i])
+		}
+	}
+	both := ui.cut_top(&area, panes)
+	ui.cut_top(&area, t.spacing)
+	half := (both.w - t.spacing) / 2
+	market := menu.pane(ctx, ui.cut_left(&both, half), sandbox.tr(.Market_Market))
+	ui.cut_left(&both, t.spacing)
+	carried := menu.pane(ctx, both, sandbox.tr(.Market_Carried))
+
+	// The market: name (a button: it selects), price, stock, the news's age.
+	left := [4]f32{0.3, 0.2, 0.2, 0.3}
+	right := [3]f32{0.4, 0.3, 0.3}
+	muted := t.text_muted
+	cells(
+		ctx,
+		row_of(&market, t, gap),
+		left[:],
+		{sandbox.tr(.Market_Good), sandbox.tr(.Market_Price), sandbox.tr(.Market_Stock), ""},
+		{muted, muted, muted, muted},
+	)
+	cells(
+		ctx,
+		row_of(&carried, t, gap),
+		right[:],
+		{sandbox.tr(.Market_Good), sandbox.tr(.Market_Cargo), sandbox.tr(.Market_Value)},
+		{muted, muted, muted},
+	)
 	for good in sandbox.Good {
 		g := m.goods[good]
-		row := ui.cut_top(&area, t.row_height)
-		ui.cut_top(&area, gap)
-		name := ui.cut_left(&row, col[0] * area.w)
-		ui.push_id_int(ctx, int(good))
+		row := row_of(&market, t, gap)
+		mine := row_of(&carried, t, gap)
 		if good == m.good {
-			ui.default_focus(ctx)
-			ui.fill_rect(ctx, row, t.slot_fill)
+			ui.fill_rect(ctx, row, t.row_selected)
+			ui.fill_rect(ctx, mine, t.row_selected)
 		}
+		name := ui.cut_left(&row, left[0] * row.w)
+		ui.push_id_int(ctx, int(good))
+		if good == m.good {ui.default_focus(ctx)}
 		if ui.button(ctx, fmt.tprint(good), name) {m.good = good}
 		ui.pop_id(ctx)
 		if !g.deals {
-			ui.label(ctx, sandbox.tr(.Market_Not_Traded), row, .Left, t.text_muted)
-			continue
+			ui.label(ctx, sandbox.tr(.Market_Not_Traded), row, .Right, muted)
+		} else {
+			price_ink := t.text if f64(g.price * m.quantity) <= m.cash else t.loss
+			rest := [3]f32 {
+				left[1] / (1 - left[0]),
+				left[2] / (1 - left[0]),
+				left[3] / (1 - left[0]),
+			}
+			cells(
+				ctx,
+				row,
+				rest[:],
+				{number(g.price, 2), number(g.stock, 1), news_line(g.age)},
+				{price_ink, t.text, muted},
+			)
 		}
-		cell := ui.cut_left(&row, col[1] * area.w)
-		ui.label(ctx, number(g.price, 2), cell, .Right)
-		cell = ui.cut_left(&row, col[2] * area.w)
-		ui.label(ctx, number(g.stock, 1), cell, .Right)
-		cell = ui.cut_left(&row, col[3] * area.w)
-		ui.label(ctx, number(g.cargo, 1), cell, .Right)
-		ui.label(ctx, news_line(g.age), ui.rect_shrink(row, t.padding), .Right, t.text_muted)
+		value := number(g.price * g.cargo, 2) if g.deals else "-"
+		cells(
+			ctx,
+			mine,
+			right[:],
+			{fmt.tprint(good), number(g.cargo, 1), value},
+			{t.text if g.cargo > 0 else muted, t.text if g.cargo > 0 else muted, muted},
+		)
 	}
-	ui.cut_top(&area, t.spacing)
 
-	// The quantity and the deal.
+	// The chosen good: the quantity, what it comes to, and the deal.
+	g := m.goods[m.good]
+	cost := f64(g.price * m.quantity)
 	line := ui.cut_top(&area, t.row_height)
 	ui.cut_top(&area, t.spacing)
 	less := ui.cut_left(&line, t.row_height)
@@ -187,15 +242,27 @@ market_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 		m.quantity = min(m.quantity + QUANTITY_STEP, QUANTITY_MAX)
 	}
 	ui.label(ctx, sandbox.tr(.Market_Quantity, number(m.quantity, 1)), line)
-	ui.label(ctx, refusal_line(m.refusal), ui.cut_top(&area, t.row_height), .Left, t.text_muted)
+	if g.deals {
+		ink := t.text if cost <= m.cash else t.loss
+		ui.label(
+			ctx,
+			sandbox.tr(.Market_Total, fmt.tprint(m.good), number(cost, 2)),
+			line,
+			.Right,
+			ink,
+		)
+	}
+	ui.label(ctx, refusal_line(m.refusal), ui.cut_top(&area, t.row_height), .Left, muted)
 	buttons := ui.cut_bottom(&area, t.row_height)
-	deals := m.goods[m.good].deals && !m.ask
+	deals := g.deals && !m.ask
 	third := (buttons.w - 2 * t.spacing) / 3
 	b := ui.cut_left(&buttons, third)
 	ui.cut_left(&buttons, t.spacing)
-	if ui.button(ctx, sandbox.tr(.Market_Buy), b, disabled = !deals) {market_trade(s, m, false)}
+	can_buy := deals && cost <= m.cash && g.stock >= m.quantity
+	if ui.button(ctx, sandbox.tr(.Market_Buy), b, disabled = !can_buy) {market_trade(s, m, false)}
 	b = ui.cut_left(&buttons, third)
 	ui.cut_left(&buttons, t.spacing)
-	if ui.button(ctx, sandbox.tr(.Market_Sell), b, disabled = !deals) {market_trade(s, m, true)}
+	can_sell := deals && g.cargo >= m.quantity
+	if ui.button(ctx, sandbox.tr(.Market_Sell), b, disabled = !can_sell) {market_trade(s, m, true)}
 	if ui.button(ctx, sandbox.tr(.Market_Close), buttons) {engine.game_screen_close(s)}
 }

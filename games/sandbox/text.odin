@@ -29,6 +29,10 @@ Text :: enum u8 {
 	Market_Refused_No_Cargo,
 	Market_Refused_No_Stock,
 	Market_Refused_Away,
+	Market_Market,
+	Market_Carried,
+	Market_Value,
+	Market_Total, // {0}: the good, {1}: silver
 	Ruin_Countdown, // {0}: seconds to the first wave
 	Ruin_Wave, // {0}: the wave, {1}: the fight's waves, {2}: creatures still to kill
 	Ruin_Break, // {0}: the wave held, {1}: the fight's waves, {2}: seconds to the next
@@ -76,6 +80,10 @@ TEXT_EN := [Text]string {
 	.Market_Refused_No_Cargo     = "You do not carry that much.",
 	.Market_Refused_No_Stock     = "The market has too little.",
 	.Market_Refused_Away         = "You are not in a town.",
+	.Market_Market               = "The market sells",
+	.Market_Carried              = "You carry",
+	.Market_Value                = "Worth",
+	.Market_Total                = "{0}: {1} silver",
 	.Ruin_Countdown              = "THE RUIN WAKES   the first wave in {0} s",
 	.Ruin_Wave                   = "RUIN   wave {0} of {1}   {2} creatures left",
 	.Ruin_Break                  = "RUIN   wave {0} of {1} held   the next in {2} s",
