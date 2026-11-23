@@ -13,7 +13,8 @@ import "server:core"
 // over the site's footprint whose cells are void (what stands there stays: the land, the
 // trees growing through) until drawn, which knows the land's top at each of its columns; most
 // of what is drawn stands on that, sunk a block into it, so a site follows the land as if it
-// had settled there. Then it is pasted in one bulk edit, and its chests are stocked.
+// had settled there. Then it is pasted in one bulk edit, its chests are stocked, and the
+// machine it keeps (remain_post) is set down at its post (remains_machines.odin).
 
 // The court: its floor reaches COURT_SIDE blocks beyond the gate's box on either side,
 // COURT_BACK behind it (north) and COURT_FRONT in front (south, toward the spawn, which is 8
@@ -105,7 +106,8 @@ cell :: proc(p: [2]f64) -> [2]i32 {return {i32(math.floor(p.x)), i32(math.floor(
 @(private = "file")
 centre :: proc(c: [2]i32) -> [2]f64 {return {f64(c.x) + 0.5, f64(c.y) + 0.5}}
 
-// remains_build: one site of the remains, drawn and pasted, its chests stocked.
+// remains_build: one site of the remains, drawn and pasted, its chests stocked and its
+// machine kept.
 remains_build :: proc(s: ^core.Server, w: ^core.World, site: Remain) {
 	k := &state(s).remains_kit
 	land := land_of(w)
@@ -136,7 +138,38 @@ remains_build :: proc(s: ^core.Server, w: ^core.World, site: Remain) {
 	box := core.Box{d.origin, d.origin + d.t.size - 1}
 	core.bulk_edit(w, {shape = box, op = .Paste, template = &d.t, partial = true}, act)
 	for p in d.chests {remains_stock(s, w, p, base.rng_roll(&rng, stacks[0], stacks[1]), &rng)}
+	if which, at, keeps := remain_post(&d, site); keeps {remains_keep(s, w, which, at)}
 	log.infof("remains built kind=%v middle=%v chests=%d", site.kind, site.middle, len(d.chests))
+}
+
+// remain_post: the machine a site keeps and its post (its feet), drawn: a sentry folded in
+// the cut before a vault's door, and in the middle of a tower that holds a chest; a mender
+// beside the plinth of a ring of stones, by a fallen pylon's stump, and on the court's floor
+// at the middle of its back row, between the broken pylons' pieces, the court's one machine
+// (it never flies into the gate: play's fliers keep out of a gate's surface); none at a wall
+// or on the road. The bulwark is the ruin's alone.
+remain_post :: proc(d: ^Draft, site: Remain) -> (which: Wild, at: game.Block_Pos, keeps: bool) {
+	switch site.kind {
+	case .Road, .Wall:
+		return
+	case .Court:
+		return .Tender, court_tender(site), true
+	case .Vault:
+		p := site.middle + {i32(site.along.x), i32(site.along.y)} * 4
+		return .Sentry, {p.x, site.floor + 1, p.y}, true
+	case .Tower:
+		g, _ := draft_ground(d, site.middle.x, site.middle.y)
+		return .Sentry, {site.middle.x, g + 1, site.middle.y}, len(d.chests) > 0
+	case .Stones:
+		g, _ := draft_ground(d, site.middle.x + 1, site.middle.y)
+		return .Tender, {site.middle.x + 1, g + 1, site.middle.y}, true
+	case .Pylon:
+		foot := centre(site.middle) - site.along * f64(site.size) / 2
+		p := cell(foot - site.along * 3)
+		g, _ := draft_ground(d, p.x, p.y)
+		return .Tender, {p.x, g + 1, p.y}, true
+	}
+	return
 }
 
 // ---- the court ----
@@ -164,6 +197,11 @@ court_gate :: proc(site: Remain) -> Footprint {
 court_floor :: proc(site: Remain) -> Footprint {
 	g := court_gate(site)
 	return {g.lo - {COURT_SIDE, COURT_BACK}, g.hi + {COURT_SIDE, COURT_FRONT}}
+}
+
+// court_tender: the post of the court's mender (remain_post), on its floor.
+court_tender :: proc(site: Remain) -> game.Block_Pos {
+	return {site.middle.x, site.floor + 1, court_floor(site).lo.y + 1}
 }
 
 // court_level: the court's floor levelled round the gate's box (which is left as it is).

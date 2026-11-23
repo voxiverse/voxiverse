@@ -35,6 +35,10 @@ import "server:core"
 // arrives); from then on it is the world's like any block (players may dig it and take what
 // the chests hold), and the world's file (REMAINS_FILE) remembers which are built. A world
 // saved before there were remains gets none: nothing is built over what its players made.
+// Each built site but the road's is marked for the watchers, and as it is built it sets down
+// the machine it keeps, if any (remains_machines.odin: sentries asleep at the vaults and the
+// towers with a chest, menders at the rings of stones, the pylons and behind the gate, no
+// sentry near the spawn).
 
 MAX_REMAINS :: 32 // sites a world plans, the court and the road's stretches too
 REMAINS_NEAR :: 60 // blocks from the gate's middle to a scattered site's middle, at the least
@@ -187,6 +191,7 @@ remains_tick :: proc(s: ^core.Server) {
 				site.middle,
 				site.floor,
 			)
+			if remains_built(rm, site) {remains_site(s, site)}
 		}
 	}
 	if s.tick % REMAINS_EVERY != 0 {return}
@@ -200,6 +205,7 @@ remains_tick :: proc(s: ^core.Server) {
 		}
 		if !near || !core.world_ready(w, remain_area(site)) {continue}
 		remains_build(s, w, site)
+		remains_site(s, site)
 		rm.built[rm.built_count] = site.middle
 		rm.built_count += 1
 		rm.dirty = true

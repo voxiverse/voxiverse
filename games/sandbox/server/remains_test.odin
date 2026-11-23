@@ -13,12 +13,13 @@ import "server:playtest"
 
 // The remains on a running sandbox (remains.odin): the court built round the dead gate as the
 // player arrives, the spawn clear and the gate reached from it on foot; a vault built when a
-// player comes near, its chest stocked; what is built remembered when the universe opens
-// again; and a universe saved before there were remains given none.
+// player comes near, its chest stocked; the machines the sites keep; what is built remembered
+// when the universe opens again; and a universe saved before there were remains given none.
 
 // remains_session: a universe of the sandbox (g: GAME, named by the caller, whose frame holds
 // what its slices point at) of seed, its home world Earth itself or one made from the seed,
-// the local player joined at its spawn; false (the test told) when it never was.
+// the local player joined at its spawn; its creatures coming by themselves if natural; false
+// (the test told) when it never was.
 @(private = "file")
 remains_session :: proc(
 	t: ^testing.T,
@@ -27,6 +28,7 @@ remains_session :: proc(
 	seed: i64,
 	earth: bool,
 	dir := "",
+	natural := false,
 ) -> bool {
 	config := core.Config {
 		game              = g,
@@ -37,7 +39,7 @@ remains_session :: proc(
 		max_players       = 1,
 		rules             = game.rules_still(),
 		save_dir          = dir,
-		no_natural_spawns = true,
+		no_natural_spawns = !natural,
 	}
 	if !testing.expect(t, core.session_start(sess, {}, false, with = config), "no server") {
 		return false
@@ -176,6 +178,17 @@ test_remains_court_at_spawn :: proc(t: ^testing.T) {
 			to,
 			from,
 		)
+		machines := 0
+		for which in ([]Wild{.Sentry, .Tender, .Bulwark}) {
+			machines += len(core.entities_of(w, state(s).wild[which], spawn, 64))
+		}
+		testing.expectf(
+			t,
+			machines == 0,
+			"seed %d: %d machines in a still world",
+			run.seed,
+			machines,
+		)
 		log.infof(
 			"remains court seed=%d earth=%v floor=%d land %d..%d spawn=%v",
 			run.seed,
@@ -227,6 +240,71 @@ test_remains_vault_stocked :: proc(t: ^testing.T) {
 		if d.x * d.x + d.y * d.y > 400 * 400 && remains_built(rm, o) {far += 1}
 	}
 	testing.expect_value(t, far, 0)
+}
+
+// machines_near: the roster's machines of kind which within radius blocks of p.
+@(private = "file")
+machines_near :: proc(s: ^core.Server, which: Wild, p: [3]f64, radius: f64) -> int {
+	return len(core.entities_of(s.home, state(s).wild[which], p, radius))
+}
+
+// In a world whose creatures come by themselves, the court keeps one mender on its floor
+// behind the gate and is marked for the watchers; no hostile machine keeps a post within the predators' safe
+// distance of the spawn; a vault built far enough from it keeps a sentry asleep in the cut
+// before its door.
+@(test)
+test_remains_keep_their_machines :: proc(t: ^testing.T) {
+	sess := new(core.Session)
+	defer free(sess)
+	if !remains_session(t, sess, GAME, 7919, false, natural = true) {return}
+	defer core.session_stop(sess)
+	s := &sess.h.srv
+	w := s.home
+	rm := &world_of(w).remains
+	wait := Built_Wait{s, 0}
+	_, built := core.harness_step_until(&sess.h, site_built, &wait, 600)
+	if !testing.expect(t, built, "the court was never built") {return}
+	court := rm.sites[0]
+	testing.expect_value(
+		t,
+		machines_near(s, .Tender, play.place_point(court_tender(court)), REMAINS_AT_POST),
+		1,
+	)
+	middle := [3]f64{f64(court.middle.x) + 0.5, f64(court.floor) + 1, f64(court.middle.y) + 0.5}
+	testing.expect(t, remains_near(s, w, middle, 1), "the court is not marked")
+	safe := remains_safe(s)
+	testing.expect(t, safe >= 64, "the predators' safe distance is not the widest")
+	spawn := w.spawn.position
+	for which in ([]Wild{.Sentry, .Bulwark}) {
+		testing.expect_value(t, machines_near(s, which, spawn, safe), 0)
+	}
+	vault := -1
+	for site, i in rm.sites[:rm.count] {if site.kind == .Vault {vault = i}}
+	if !testing.expect(t, vault >= 0, "seed 7919 has no vault") {return}
+	site := rm.sites[vault]
+	u := [2]i32{i32(site.along.x), i32(site.along.y)}
+	door := site.middle + u * 4
+	sentry := [3]f64{f64(door.x) + 0.5, f64(site.floor) + 1, f64(door.y) + 0.5}
+	d := sentry.xz - spawn.xz
+	if !testing.expectf(
+		t,
+		d.x * d.x + d.y * d.y >= safe * safe,
+		"seed 7919's vault is within %v of the spawn",
+		safe,
+	) {
+		return
+	}
+	c := &s.clients[0]
+	core.game_mode(s, c, "creative")
+	above := [3]f64{f64(site.middle.x) + 0.5, f64(site.floor + 20), f64(site.middle.y) + 0.5}
+	core.teleport(s, c, above, {0, -1.5}, flying = true)
+	wait = Built_Wait{s, vault}
+	_, built = core.harness_step_until(&sess.h, site_built, &wait, 900)
+	if !testing.expect(t, built, "the vault was never built") {return}
+	core.harness_step(&sess.h, 2)
+	near := core.entities_of(w, state(s).wild[.Sentry], sentry, REMAINS_AT_POST)
+	if !testing.expect_value(t, len(near), 1) {return}
+	testing.expect_value(t, creature(s, w, near[0]).mind.state, play.Mind_State.Dormant)
 }
 
 // What is built is remembered with the world: opened again, the court is not built a second

@@ -10,14 +10,20 @@ import "server:play"
 // its north gate, each a machine kept with the world, put back if it is not at its post
 // the next time the ruin is built in a session. Watchers come by themselves (their spawn
 // rule), but only within REMAINS_WATCHED blocks of remains the sandbox knows: the ruin's
-// middle (once it is placed) and any marked (remains_mark). Nothing here touches a gate: no machine wakes,
-// opens or walks into one, and their shots carve nothing.
+// middle (once it is placed) and any marked (remains_mark). Nothing here touches a gate: no
+// machine wakes, opens or walks into one, and their shots carve nothing.
 //
-// Other remains (the gate's, near the spawn) take machines the same way: remains_mark
-// their middle, so watchers come near them, and remains_post each machine where it keeps
-// its post (a block: its feet), once the ground there is built.
+// The remains round the home gate (remains.odin) take machines the same way: each site but
+// the road's stretches is marked once it is built (remains_site), so watchers come near it,
+// and keeps the one machine its drawing posts (remain_post: a sentry at a vault and at a
+// tower with a chest, a tender at a ring of stones, a fallen pylon and behind the gate),
+// set down once as its ground is built (remains_keep). No sentry keeps a post within
+// remains_safe of the world's spawn, and a world whose creatures do not come by themselves
+// (scenes, benchmarks, checks) gets none of them: a mender's flight would differ from one
+// picture to the next.
 
-MAX_MARKED :: 8 // remains marked in the home world (the ruin is known without)
+MAX_MARKED :: MAX_REMAINS // remains marked in the home world: the sites round the gate at most (the
+// ruin is known without)
 REMAINS_WATCHED :: 96 // blocks from remains within which a watcher comes
 REMAINS_AT_POST :: 3 // blocks from its post within which a machine is at it
 
@@ -96,4 +102,45 @@ ruin_posts :: proc(s: ^core.Server, w: ^core.World) {
 			{site.origin.x + p.at.x, site.floor + 1, site.origin.z + p.at.y},
 		)
 	}
+}
+
+// remains_site: a site round the gate built (remains_build), or found built as the plan is
+// made: marked, unless a stretch of the road.
+remains_site :: proc(s: ^core.Server, site: Remain) {
+	if site.kind == .Road {return}
+	remains_mark(s, {f64(site.middle.x) + 0.5, f64(site.floor) + 1, f64(site.middle.y) + 0.5})
+}
+
+// remains_keep: the machine a site round the gate keeps, set down at its post as the site is
+// built: none in a world whose creatures do not come by themselves, and no sentry within
+// remains_safe blocks (across) of the world's spawn (0: none was set down).
+remains_keep :: proc(
+	s: ^core.Server,
+	w: ^core.World,
+	which: Wild,
+	at: game.Block_Pos,
+) -> game.Entity_Handle {
+	if s.config.no_natural_spawns {return 0}
+	if which == .Sentry || which == .Bulwark {
+		d := play.place_point(at) - w.spawn.position
+		if d.x * d.x + d.z * d.z < remains_safe(s) * remains_safe(s) {return 0}
+	}
+	return remains_post(s, w, which, at)
+}
+
+// remains_safe: blocks from the world's spawn (across) kept free of the remains' hostile
+// machines: the most that a predator's spawn rule keeps free of predators (its `safe`).
+remains_safe :: proc(s: ^core.Server) -> f64 {
+	g := state(s)
+	groups := WILD_GROUPS
+	widest := 0
+	for group in groups {
+		if group.name != "predators" {continue}
+		for which in group.kinds {
+			if rule, has := game.kind_info(s.registry, g.wild[which]).spawn.?; has {
+				widest = max(widest, rule.safe)
+			}
+		}
+	}
+	return f64(widest)
 }

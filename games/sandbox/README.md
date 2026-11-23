@@ -86,9 +86,10 @@ The machines are the remains' own (`server/remains_machines.odin`) and never tou
 ruined site is built in a session it posts its own, each kept with the world and set down
 again if it is not at its post: a sentry at each corner of its apron, two tenders by its
 walls and the bulwark before its north gate (the south gate is where the ruin puts players
-out). Other remains take machines the same way: `remains_mark` their middle (watchers come
-near it) and `remains_post` a machine at a block. Hurt while asleep, a machine lets half the
-harm through.
+out). The remains round the home gate (below) take theirs the same way: each site but the
+road is marked once built (`remains_mark`: watchers come near it) and sets down the machine it
+keeps as it is built (`remains_post`). Hurt while asleep, a machine lets half the harm
+through.
 
 `/creatures wildlife|guards|predators|machines|giant|all [still]` sets a group down in a row
 in front of you (the summoning permission), `still` standing for a picture.
@@ -198,6 +199,14 @@ loaded (the court as the first player arrives), and is then the world's like any
 it, take what the chests hold. The world's `sandbox.remains.txt` remembers which are built; a
 world saved before there were remains gets none, so nothing is built over what its players
 made.
+
+The remains keep their machines (above), each set down once as its site is built and kept
+with the world: a sentry asleep in the cut before each vault's door and in each tower that
+holds a chest, a tender over each ring of stones and by each fallen pylon's stump, and one
+tender on the court's floor behind the gate, which no machine ever touches. No sentry keeps a
+post within 64 blocks of the spawn (the most any predator's spawn rule keeps clear), the
+bulwark is the ruin's alone, and a world whose creatures do not come by themselves (the image
+scenes, benchmarks) gets no machines from the remains.
 
 ## Its peoples and markets
 
