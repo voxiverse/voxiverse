@@ -43,14 +43,17 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 		m.cash, m.goods = v.cash, v.goods
 		m.refusal, m.ask = .None, false
 		if m.quantity < QUANTITY_MIN {m.quantity = 1}
-		if m.town_len == 0 {engine.game_screen_close(s)} 	// (left the town)
+		if m.town_len == 0 && view(s).screen == .Market {engine.game_screen_close(s)} 	// (left the town)
 	}
 	if v, ok := engine.game_value(s, r, sandbox.Trade_Refused); ok && v != nil {
 		m.refusal, m.ask = v.reason, false
 	}
 	if v, ok := engine.game_value(s, r, sandbox.Market_Open); ok && v != nil {
+		view(s).screen = .Market
 		engine.game_screen_open(s)
 	}
+	if v, ok := engine.game_value(s, r, sandbox.Survival);
+	   ok && v != nil {view(s).craft.shown = v^}
 	if v, ok := engine.game_value(s, r, sandbox.Ruin_Fight); ok && v != nil {ruin_received(s, v)}
 }
 
@@ -58,6 +61,7 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 // key that opens it, near the top, while in a town and the screen is closed.
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	ruin_hud(s, ctx)
+	craft_hud(s, ctx)
 	m := &view(s).market
 	if m.town_len == 0 || engine.game_screen_shown(s) {return}
 	t := &ctx.theme

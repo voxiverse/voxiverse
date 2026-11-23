@@ -29,6 +29,7 @@ GAME :: core.Game {
 		{name = ECONOMY_FILE, check = economy_check},
 		{name = INTERVENTIONS_FILE, check = interventions_check},
 		{name = REMAINS_FILE, check = remains_check},
+		{name = OUTPOSTS_FILE, check = outposts_check},
 	},
 	stats          = {
 		{name = "sheep.sheared", kind = .Count, xp = 5},
@@ -37,13 +38,14 @@ GAME :: core.Game {
 	},
 	configure      = configure,
 	start          = start,
+	stop           = stop,
 	tick           = tick,
 	think          = think,
 	spawned        = spawned,
 	joined         = joined,
 	left           = ruin_left,
 	died           = ruin_died,
-	respawned      = ruin_respawned,
+	respawned      = respawned,
 	action         = action,
 	request        = request,
 	entity_use     = entity_use,
@@ -51,9 +53,10 @@ GAME :: core.Game {
 	entity_died    = entity_died,
 	harming        = wild_harming,
 	editing        = editing,
+	block_changed  = block_changed,
 	picking        = ruin_picking,
 	dropping       = ruin_dropping,
-	machine_use    = ruin_use,
+	machine_use    = machine_use,
 	command        = command,
 	world_opened   = world_opened,
 	world_closed   = world_closed,
@@ -75,6 +78,7 @@ Sandbox :: struct {
 	placed:           int, // sheep the command has set down (each a little further along)
 	ruin:             Ruin, // (ruin.odin)
 	remains_kit:      Remains_Kit, // (remains.odin)
+	survival:         Survival_State, // crafting, the Use action, the remains' loot (survival.odin)
 }
 
 state :: proc(s: ^core.Server) -> ^Sandbox {return core.game_state(s, Sandbox)}
@@ -92,16 +96,43 @@ start :: proc(s: ^core.Server) -> bool {
 	g.wool = game.item_of_block(reg, game.registry_block(reg, "wool") or_return)
 	g.black_wool = game.item_of_block(reg, game.registry_block(reg, "black_wool") or_return)
 	wild_start(s) or_return
+	survival_start(s) or_return
 	return ruin_start(s) && remains_start(s)
 }
 
+// stop: what the survival loop allocated (survival.odin).
+stop :: proc(s: ^core.Server) {survival_stop(s)}
+
 // tick: the economy (economy.odin), the night's creatures (danger.odin), the ruined site
-// (ruin.odin) and the remains (remains.odin: planned once the ruin is placed).
+// (ruin.odin), the remains (remains.odin: planned once the ruin is placed) and the players'
+// crafting (survival.odin).
 tick :: proc(s: ^core.Server) {
 	economy_tick(s)
 	danger_tick(s)
 	ruin_tick(s)
 	remains_tick(s)
+	survival_tick(s)
+}
+
+// respawned: one who fell in the ruin has its things back (ruin.odin); one with an outpost
+// stands there (outposts.odin).
+respawned :: proc(s: ^core.Server, c: ^core.Client) {
+	ruin_respawned(s, c)
+	outpost_respawned(s, c)
+}
+
+// machine_use: an outpost's beacon makes the user's respawn there (outposts.odin); the
+// ruin's altar wakes it (ruin.odin).
+machine_use :: proc(s: ^core.Server, c: ^core.Client, at: game.Block_Pos) -> string {
+	if b, ok := core.block_at(c.world, at); ok && b == survival_of(s).beacon {
+		return outpost_use(s, c, at)
+	}
+	return ruin_use(s, c, at)
+}
+
+// block_changed: beacons placed and taken down, remains broken open (outposts.odin).
+block_changed :: proc(s: ^core.Server, w: ^core.World, change: core.Block_Change) {
+	outposts_changed(s, w, change)
 }
 
 // joined: a new trader's purse (trader.odin); one who left a fight at the ruin gets its
@@ -111,14 +142,16 @@ joined :: proc(s: ^core.Server, c: ^core.Client) {
 	ruin_joined(s, c)
 }
 
-// editing: the ruin's blocks are not the players' (ruin.odin).
+// editing: the ruin's blocks are not the players' (ruin.odin); a beacon is its placer's
+// to take down (outposts.odin).
 editing :: proc(
 	s: ^core.Server,
 	c: ^core.Client,
 	at: game.Block_Pos,
 	old, new: game.Block,
 ) -> string {
-	return ruin_editing(s, c, at)
+	if why := ruin_editing(s, c, at); why != "" {return why}
+	return outpost_editing(s, c, at, old, new)
 }
 
 // entity_died: a creature of the ruin's fight leaves its crowd (ruin.odin).
@@ -132,8 +165,8 @@ entity_died :: proc(
 }
 
 // KIT: what a player new to a sandbox universe is given: the rocket launcher alone, in
-// hotbar slot 1 (blocks come from creative's catalog; how survival gathers is the
-// world's to decide). A universe keeps the kit it was made with (universe.cfg).
+// hotbar slot 1 (blocks come from creative's catalog, or in survival from what is gathered and
+// made: survival.odin). A universe keeps the kit it was made with (universe.cfg).
 KIT :: "rocket_launcher 1"
 
 // configure: a new world is made by the Earth generator (continents, biomes, rivers,
@@ -158,11 +191,13 @@ terrain_seed :: proc(w: ^core.World) -> i64 {
 
 #assert(worldgen.Kind.Earth == {}, "the Earth generator is the zero kind (an unset Config's)")
 
-// world_opened: a world's interventions log, economy file and remains file are read back.
+// world_opened: a world's interventions log, economy file, remains file and outposts are
+// read back.
 world_opened :: proc(s: ^core.Server, w: ^core.World) {
 	interventions_load(w)
 	economy_load(w)
 	remains_load(s, w)
+	outposts_load(w)
 }
 
 // world_closed: what the sandbox made of a world is freed (its economy's build waited for).
@@ -177,16 +212,24 @@ world_save :: proc(s: ^core.Server, w: ^core.World) {
 	interventions_write(w)
 	economy_write(w)
 	remains_write(s, w)
+	outposts_write(w)
 }
 
-// action: the game's one action (its client part's MARKET_ACTION) asks for the market.
+// action: the market's asks for it (trader.odin); Use uses what is in the hand
+// (survival.odin). The crafting screen's is the client part's alone.
 action :: proc(s: ^core.Server, c: ^core.Client, index: int) {
-	if index == sandbox.MARKET_ACTION {market_ask(s, c)}
+	switch index {
+	case sandbox.MARKET_ACTION:
+		market_ask(s, c)
+	case sandbox.USE_ACTION:
+		use_held(s, c)
+	}
 }
 
-// request: a trade in the town the player stands in.
+// request: a trade in the town the player stands in; a recipe to make (survival.odin).
 request :: proc(s: ^core.Server, c: ^core.Client, r: core.Request) {
 	if t, ok := core.request_value(s, r, sandbox.Trade); ok {market_trade(s, c, t^)}
+	if v, ok := core.request_value(s, r, sandbox.Craft); ok {craft_ask(s, c, v^)}
 }
 
 // command: `/sheep [lamb] [shorn] [black] [spotted]` sets a sheep of those looks down in
@@ -199,6 +242,7 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 	if name == "showroom" {return showroom_command(s, c, args)}
 	if name == "creatures" {return creatures_command(s, c, args)}
 	if name == "town" && len(args) == 0 {return town_command(s, c)}
+	if name == "outposts" && len(args) == 0 {return outposts_command(s, c)}
 	if name != "sheep" {return false}
 	if !core.allowed(s, c, "world.summon") {
 		core.notice(s, c, "You may not summon here")

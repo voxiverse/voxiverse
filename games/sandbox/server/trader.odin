@@ -47,6 +47,8 @@ Trader_Record :: struct {
 	// with its things however the fight ended (ruin.odin). It is here because a game keeps
 	// one record on a character.
 	ruin_mode: [32]u8,
+	// Not a trader's either: where the character stands again after a death (outposts.odin).
+	home:      Outpost_Home,
 }
 
 Trade_Side :: enum {

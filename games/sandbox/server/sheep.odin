@@ -303,6 +303,7 @@ entity_use :: proc(
 // spawned: a sheep that came by itself has wild genes; a creature of the roster begins, or
 // is refused (wild_spawned) (Game.spawned).
 spawned :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> bool {
+	if !outpost_spawned(s, w, h) {return false} 	// (outposts.odin)
 	if d := sheep(s, w, h); d != nil {
 		d.genes = sandbox.genes_wild(&state(s).rng)
 		show(w, h, d)

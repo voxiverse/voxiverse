@@ -32,6 +32,24 @@ Text :: enum u8 {
 	Ruin_Countdown, // {0}: seconds to the first wave
 	Ruin_Wave, // {0}: the wave, {1}: the fight's waves, {2}: creatures still to kill
 	Ruin_Break, // {0}: the wave held, {1}: the fight's waves, {2}: seconds to the next
+	Craft_Title,
+	Craft_Output, // {0}: how many, {1}: the item
+	Craft_Hand,
+	Craft_Fabricator,
+	Craft_Seconds, // {0}: seconds
+	Craft_Input, // {0}: the item, {1}: carried, {2}: needed
+	Craft_Near,
+	Craft_Far,
+	Craft_Making, // {0}: the item, {1}: percent
+	Craft_Idle,
+	Craft_Make,
+	Craft_Close,
+	Craft_Outposts,
+	Craft_No_Outposts,
+	Craft_Outpost, // {0} {1} {2}: where
+	Craft_Outpost_Mine,
+	Craft_Outpost_Home,
+	Craft_Hud, // {0}: the item, {1}: percent
 }
 
 TEXT_EN := [Text]string {
@@ -60,6 +78,24 @@ TEXT_EN := [Text]string {
 	.Ruin_Countdown              = "THE RUIN WAKES   the first wave in {0} s",
 	.Ruin_Wave                   = "RUIN   wave {0} of {1}   {2} creatures left",
 	.Ruin_Break                  = "RUIN   wave {0} of {1} held   the next in {2} s",
+	.Craft_Title                 = "Fabrication",
+	.Craft_Output                = "{0} x {1}",
+	.Craft_Hand                  = "by hand",
+	.Craft_Fabricator            = "fabricator",
+	.Craft_Seconds               = "{0} s",
+	.Craft_Input                 = "{0} {1}/{2}",
+	.Craft_Near                  = "A fabricator is near.",
+	.Craft_Far                   = "No fabricator near: by hand only.",
+	.Craft_Making                = "Making {0}: {1}%",
+	.Craft_Idle                  = "Nothing being made.",
+	.Craft_Make                  = "Make",
+	.Craft_Close                 = "Close",
+	.Craft_Outposts              = "Outposts in this world",
+	.Craft_No_Outposts           = "None yet: make a beacon and place it.",
+	.Craft_Outpost               = "{0} {1} {2}",
+	.Craft_Outpost_Mine          = "yours",
+	.Craft_Outpost_Home          = "respawn",
+	.Craft_Hud                   = "Making {0}  {1}%",
 }
 
 tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}

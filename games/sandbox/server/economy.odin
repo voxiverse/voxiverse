@@ -47,6 +47,7 @@ Sandbox_World :: struct {
 	interventions:       Intervention_Log, // what players did that the world's history carries forward (heap)
 	interventions_dirty: bool, // changed since its file was staged
 	remains:             Remains, // (remains.odin)
+	outposts:            Outposts, // its beacons (outposts.odin)
 }
 
 world_of :: proc(w: ^core.World) -> ^Sandbox_World {return core.world_state(w, Sandbox_World)}

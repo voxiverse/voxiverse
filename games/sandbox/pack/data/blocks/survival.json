@@ -1,0 +1,24 @@
+{
+	// The fabricator, the outpost beacon and building plates; the remains' blocks (found,
+	// never placed: the spawn area's code puts them); and what the base pack's stone and ores
+	// ask of a tool and leave where the sandbox is played ("override").
+	"fabricator": {"material": "screen", "light": 4},
+	"outpost_beacon": {"material": "crystal", "light": 14, "entity": {"kind": "machine", "slots": 0}},
+	"hull_plate": {"material": "riveted_iron"},
+	"alloy_panel": {"material": "dark_steel"},
+	"grating": {"material": "iron_grating"},
+	"salvage_heap": {"material": "rusted_iron", "placeable": false, "tier": 1, "drop": "sandbox:salvage"},
+	"alloy_relic": {"material": "verdigris_copper", "placeable": false, "tier": 2, "drop": "sandbox:ancient_alloy"},
+	"relic_vault": {"material": "rune_stone", "light": 5, "placeable": false, "tier": 3, "drop": "sandbox:data_shard"},
+	"remains_cache": {"material": "pipes", "placeable": false, "tier": 1, "drop": "none"},
+	"voxiverse:stone": {"override": true, "tier": 1},
+	"voxiverse:cobblestone": {"override": true, "tier": 1},
+	"voxiverse:sandstone": {"override": true, "tier": 1},
+	"voxiverse:stone_bricks": {"override": true, "tier": 1},
+	"voxiverse:coal_ore": {"override": true, "tier": 1, "drop": "sandbox:coal"},
+	"voxiverse:copper_ore": {"override": true, "tier": 1, "drop": "sandbox:raw_copper"},
+	"voxiverse:iron_ore": {"override": true, "tier": 2, "drop": "sandbox:raw_iron"},
+	"voxiverse:leaves": {"override": true, "drop": "sandbox:fibre"},
+	"voxiverse:spruce_leaves": {"override": true, "drop": "sandbox:fibre"},
+	"voxiverse:gravel": {"override": true, "drop": "sandbox:flint"}
+}

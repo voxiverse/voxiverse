@@ -114,16 +114,16 @@ Remains :: struct {
 	dirty:       bool, // changed since its file was staged
 }
 
-// Loot: what a chest of the remains may hold: an item by name, how many (lo..hi), how often
+// Remains_Loot: what a chest of the remains may hold: an item by name, how many (lo..hi), how often
 // against the others.
-Loot :: struct {
+Remains_Loot :: struct {
 	name:   string,
 	lo, hi: int,
 	weight: int,
 }
 
 @(rodata)
-REMAINS_LOOT := [?]Loot {
+REMAINS_LOOT := [?]Remains_Loot {
 	{"seeds", 4, 12, 4},
 	{"wheat", 2, 8, 4},
 	{"lamp", 1, 4, 3},

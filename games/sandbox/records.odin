@@ -77,20 +77,50 @@ Ruin_Fight :: struct {
 	left:    u16, // seconds left of the countdown or the break
 }
 
+// Outpost_Line: an outpost as a player is shown it: where its beacon stands, whether the
+// player placed it and whether it stands there again after a death there (its respawn).
+Outpost_Line :: struct {
+	at:   [3]i32,
+	mine: bool,
+	home: bool,
+}
+
+// Survival: what a player is shown of its crafting and its world's outposts (one per
+// player): whether a fabricator is within reach, what it is making and how far along, and
+// the outposts of the world it is in. Put when it changes (looked at four times a second).
+Survival :: struct {
+	near_fabricator: bool,
+	making:          u16, // the recipe being made: its index in the registry's recipes + 1 (0: none)
+	progress:        u8, // percent
+	count:           u8, // outposts
+	outposts:        [MAX_OUTPOSTS]Outpost_Line,
+}
+
+// Craft (a request): make the recipe of this index in the registry's recipes, one of the
+// sandbox's; the server judges where the player stands and what it carries.
+Craft :: struct {
+	recipe: u16,
+}
+
 KINDS :: protocol.Game_Kinds {
 	states   = {
 		{name = "sandbox.market", value = Town_Market},
 		{name = "sandbox.ruin", value = Ruin_Fight},
+		{name = "sandbox.survival", value = Survival},
 	},
 	events   = {
 		{name = "sandbox.trade_refused", value = Trade_Refused},
 		{name = "sandbox.market_open", value = Market_Open},
 	},
-	requests = {{name = "sandbox.trade", value = Trade}},
+	requests = {{name = "sandbox.trade", value = Trade}, {name = "sandbox.craft", value = Craft}},
 }
 
 // MAX_TRADE_QUANTITY: the most units one trade may move.
 MAX_TRADE_QUANTITY :: 1e6
 
-// MARKET_ACTION: the game's action that opens the market (its client part's actions).
+// The game's actions (its client part's `actions`, in this order): the market's, the
+// crafting screen's (the client part opens it) and the Use action, which uses up what is
+// in the hand or works the gadget there.
 MARKET_ACTION :: 0
+CRAFT_ACTION :: 1
+USE_ACTION :: 2

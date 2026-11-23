@@ -20,6 +20,96 @@ The title's Singleplayer opens the saved universes; a new one made there (its pl
 mode) plays the sandbox. The other games are met inside it as encounters (Horde's waves at
 the ruined site, below) and run on their own only as dedicated servers.
 
+## Gathering, crafting and outposts
+
+The open world on one world: what a survivor gathers, what it makes of it, and the outposts
+it sets down to come back to. The items, blocks and recipes are the pack's
+(`pack/data/items/survival.json`, `blocks/survival.json`, `recipes/survival.json`,
+`models/survival.json`); the rules are `survival.odin` and `server/survival.odin`,
+`server/outposts.odin`, the screen `client/craft.odin`.
+
+**Gathering.** Every block names the tier of tool that breaks it (the engine's block `tier`
+and item `gather`, docs/packs.md). Hands break soil, sand, gravel, wood, leaves and plants;
+stone, sandstone, coal and copper ore ask for tier 1 (a flint pick); iron ore and the
+ancient alloy relics tier 2 (a copper pick); the sealed relic vaults tier 3 (the alloy
+drill, which also gets one more of every ore and stone it breaks). A player in creative
+breaks everything. Breaking with too little a tool keeps the block and says what tier it
+needs. Where the sandbox is played, leaves leave fibre, gravel flint, coal ore coal, and
+copper and iron ore their raw ore (the pack's overrides of the base pack's blocks).
+
+The remains (salvage heaps, ancient alloy relics, remains caches, sealed relic vaults:
+`sandbox:salvage_heap`, `alloy_relic`, `remains_cache`, `relic_vault`) are never placed by a
+player: the spawn area's ancient remains hold them. A heap leaves salvage, a relic ancient
+alloy, a vault a data shard; a cache (tier 1) and a vault spill a draw of finds when broken
+open (`server/survival.odin`: `CACHE_LOOT`, `VAULT_LOOT`; `remains_spill` for remains opened
+another way).
+
+**Crafting.** The game's second action (`Craft`, X by default) opens the crafting screen
+anywhere and closes it again: every recipe, what it makes, what it takes against what you
+carry and how long it takes, those you can make where you stand first. Pick one and Make:
+the server takes what it needs then and gives what it makes when its time is up (one at a
+time; a line under the top says what is being made while the screen is closed). A recipe is
+the pack's, a process made by hand (`sandbox:hand`) or within 5 blocks of a fabricator
+(`sandbox:fabricator`, a block made by hand). Leaving with something being made loses it.
+
+**Using.** The third action (`Use`, B) works what is in the hand: a consumable is used up (a
+field dressing heals 4, a ration heals over time, a stim patch turns a quarter of harm
+aside: the engine's item `consume`), the survey scanner names the nearest ore, salvage or
+relic within 24 blocks and which way it lies (then charges for 2 seconds), and a recall
+unit, used up, takes you to your outpost.
+
+**Outposts.** An outpost beacon (`sandbox:outpost_beacon`, made at a fabricator from iron, a
+charge cell and an optic) placed anywhere makes an outpost. Whoever places it stands there
+again after a death (kept with the character); any player may make it theirs too by using
+it (the right button), so in co-op an outpost serves everyone on the server. No hostile
+creature comes by itself within 48 blocks of a beacon (the spawned hook refuses it, as a
+spawn rule's `safe` does round the world's spawn), so a lamp-lit camp by a beacon is a safe
+night. Only its placer may take a beacon down; a world keeps 32 at most. The crafting screen
+lists the world's outposts (yours, and which is your respawn), and `/outposts` says them in
+the chat. A death with no outpost (or one whose beacon is gone) stands you at the world's
+spawn as before.
+
+**The pressure.** The night's creatures (below) and a death that drops what you carry, far
+from where you were: an outpost is where you stand again and where nothing comes for you.
+There is no hunger or thirst, no experience or levels from the loop.
+
+**The first hour.** Break leaves for fibre and gravel for flint, logs for wood; by hand make
+planks, cord, a flint knife and a flint pick (and padded armour). With the pick, stone and
+coal and copper ore; by hand, a fabricator. At the fabricator: copper ingots, a copper pick,
+wire, charge cells, glass and optics, lamps and a chest. With the copper pick, iron ore:
+iron ingots, then an outpost beacon set down by your camp, and iron tools, weapons and plate.
+Salvage and ancient alloy from the remains lead on to circuit boards, the scanner, alloy
+plate, the drill and the exo armour.
+
+The items, by kind (every one an ingredient or a use; `test_survival_every_item_is_obtainable`
+walks what yields what):
+
+- **Raw**: fibre, flint, coal, raw copper, raw iron; from the remains salvage (uncommon),
+  ancient alloy and data shards (rare).
+- **Refined**: cord, padding, copper and iron ingots, wire, charge cells, optics, circuit
+  boards, alloy plate; and the base pack's planks, glass, stone bricks, lamps, chest and hoe.
+- **Tools**: flint pick (tier 1), copper pick (tier 2), alloy drill (tier 3, one more of each).
+- **Melee**: flint knife (quick, short), machete (a wide sweep), survey maul (slow, heavy,
+  long), shock baton (fast, hard), relic blade (the remains': epic).
+- **Ranged**, each loading its own: rivet driver (eight heavy shots, rivets), flechette
+  caster (six darts close in, flechettes), arc repeater (automatic, forty light bolts, spark
+  cartridges), coil rifle (three scoped long shots, coil charges; epic).
+- **Armour** by slot, each set more `defence` (the engine's modifier: a fraction of harm
+  turned aside, 0.8 at most): padded (common; its boots take a quarter off a fall), plate
+  (uncommon; the cuirass slows), exo (rare; the harness quickens, the legs jump, the striders
+  take four fifths off a fall); climbing spikes (jump higher, land softer).
+- **Trinkets** (the offhand): stride coil (faster), gyro stabiliser (half a fall's harm),
+  heart regulator (more health), ward emitter (the remains': defence) and the phase lattice
+  (a vault's: faster, one more jump in the air; legendary).
+- **Consumables**: field dressing, trail ration, med gel, stim patch, regen ampoule, and the
+  remains' restorer.
+- **Gadgets**: survey scanner, tether hook (short and quick) and long hook (the engine's
+  grapple), recall unit.
+- **Building**: fabricator, outpost beacon, hull plate, alloy panel, grating.
+
+What it tells its players: `sandbox.survival` (whether a fabricator is in reach, what is
+being made and how far, the world's outposts); what they ask: `sandbox.craft`.
+
 ## Its sheep
 
 The sandbox's animals are its own: the sheep (`sandbox:sheep`, its pack's creature, whose mind
@@ -105,7 +195,8 @@ overriding only the creatures' `spawn`) and the engine's spawner runs them, so t
 each world's seed and tick like everything else, within its entity budget; a natural one goes
 when nobody is near. Each goes for the nearest player within 16 blocks who can be hurt and
 strikes it (`play.hunt_tick`, `server/danger.odin`); one in creative mode, or watching, is left
-alone. They drop nothing (their kinds have no drops). The spitters, hulks and the matriarch
+alone, and none comes within 48 blocks of an outpost's beacon (above). They drop nothing
+(their kinds have no drops). The spitters, hulks and the matriarch
 come only in Horde's waves, which are fought at the ruined site (below) too.
 
 ## Its ruined site
@@ -293,6 +384,16 @@ price was true) and `.good`, `count` (at most 192 prices, the oldest forgotten f
 character was in before it fought at the ruin, zero-padded: given back with its things; none
 when it fights nothing). Universes from before (save format 8) had these as the
 engine's files and the character's `trader`: the save migration made them the sandbox's.
+
+- `sandbox.outposts.vxo`: the world's outposts, in the order placed: `"VXOP"`, `u32 version`
+  (1), `u32 count` (at most 32), then per outpost its beacon's place (3 x `i32`) and its
+  placer's name (`u8` length, bytes), and last the CRC-32 of everything before it (all
+  little-endian). A file that is cut, longer, has a bad CRC or more outposts than a world
+  keeps is moved aside (`.bad`) and the world keeps none (its beacons stand, dark, until
+  placed again).
+
+A character's respawn at an outpost is its record's `home` (`home.set`, `home.world` (the
+world's address), `home.at`): absent in older files, so read as none.
 
 ## The code
 
