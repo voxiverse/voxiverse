@@ -275,10 +275,10 @@ test_seen_hook :: proc(t: ^testing.T) {
 		h := h
 		apply_health(s, {kind = int(protocol.State_Kind.Health), op = .Change, value = &h})
 	}
-	health(s, {10, 20, false}) // (the first word: no heal)
-	health(s, {14, 20, false})
-	health(s, {0, 20, true})
-	health(s, {20, 20, false}) // (a respawn: no heal)
+	health(s, {10, 20, false, game.NO_ITEM, 0}) // (the first word: no heal)
+	health(s, {14, 20, false, game.NO_ITEM, 0})
+	health(s, {0, 20, true, game.NO_ITEM, 0})
+	health(s, {20, 20, false, game.NO_ITEM, 0}) // (a respawn: no heal)
 	for len(s.puffs) < MAX_PUFFS {append(&s.puffs, Puff{life = 10})} 	// (no room for debris: no world to break)
 	blast := protocol.Explosion{{0, 64, 0}, 4}
 	event(s, .Explosion, &blast)

@@ -62,6 +62,8 @@ local SCHEMA = {
     { name = "health", t = "f32" },
     { name = "max", t = "f32" },
     { name = "dead", t = "bool" },
+    { name = "effect", t = "u16" },
+    { name = "effect_left", t = "u16" },
   } },
   { id = 2, name = "mode", key = "none", lane = "reliable", fields = {
     { name = "mode", t = "string", max = 64 },

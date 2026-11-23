@@ -126,7 +126,7 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	state := Inventory_State{5, inv}
 	round_trip(t, &l, .Inventory, {}, &state)
 	// Health
-	health := Health{13.5, 24, false}
+	health := Health{13.5, 24, false, game.NO_ITEM, 0}
 	round_trip(t, &l, .Health, {}, &health)
 	// Grants, Variables, Selection
 	grants := Grants{"1 chat.*\n0 -chat.format\n", "spawn mute"}
@@ -211,7 +211,7 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 	refuse(t, &s, .Player, key_player(1), &bad_name, "a name with a space")
 	not_item := Player_Record{"ok", {game.Item(0x7fff), 0, 0, 0}, game.NO_ITEM, 0, 0}
 	refuse(t, &s, .Player, key_player(1), &not_item, "an item that does not exist")
-	health := Health{30, 24, false}
+	health := Health{30, 24, false, game.NO_ITEM, 0}
 	refuse(t, &s, .Health, {}, &health, "health above the maximum")
 	bad := Inventory_State{5, {}}
 	bad.inventory.slots[0] = {game.item_of_block(game.test_reg(), .Stone), 65, 0, 0} // more than a stack

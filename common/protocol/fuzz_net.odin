@@ -456,7 +456,7 @@ fuzz_net_fix :: proc(k: ^Schema_Kind, v: rawptr) {
 	case game.Rules:
 		(^game.Rules)(v)^ = game.RULES_DEFAULTS
 	case Health:
-		(^Health)(v)^ = {20, 20, false}
+		(^Health)(v)^ = {20, 20, false, game.NO_ITEM, 0}
 	case Player_Record:
 		(^Player_Record)(v).name = "Steve_1"
 		(^Player_Record)(v).held = game.NO_ITEM

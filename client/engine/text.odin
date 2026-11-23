@@ -254,6 +254,7 @@ Text :: enum u16 {
 	Character_Percent, // {0}: a number
 	Hud_Health, // {0}: health, {1}: the most
 	Hud_Pickup, // {0}: how many, {1}: the item
+	Hud_Effect_Seconds, // {0}: a running effect's seconds left
 	Compass_N,
 	Compass_NE,
 	Compass_E,
@@ -523,6 +524,7 @@ TEXT_EN := [Text]string {
 	.Character_Percent                      = "{0}%",
 	.Hud_Health                             = "{0} / {1}",
 	.Hud_Pickup                             = "+{0} {1}",
+	.Hud_Effect_Seconds                     = "{0} s",
 	.Compass_N                              = "N",
 	.Compass_NE                             = "NE",
 	.Compass_E                              = "E",

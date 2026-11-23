@@ -208,6 +208,8 @@ Session :: struct {
 	hurt:             protocol.Damage_Hit, // the last hit (the damage direction on the screen)
 	hurts:            int, // Damage_Hits seen
 	dead:             bool, // at the death screen (Health.dead)
+	effect:           game.Item, // the consumable whose effect is running (Health; NO_ITEM: none)
+	effect_left:      u16, // ... its seconds left
 	death_line:       [96]u8, // how it happened, as the death screen says it
 	death_len:        int,
 	death_age:        f32, // seconds since the last Player_Died (the death screen's countdown)

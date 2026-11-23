@@ -93,16 +93,19 @@ health_bar :: proc(ctx: ^ui.Context, s: ^engine.Session) {
 
 EFFECT_SIZE :: 30
 
-// effects_row: what is on the character now, over the health bar's left end: an icon for
-// each piece of equipment that changes them (its modifiers: the feather charm's air jump,
-// the boots' speed), with its first change beside it. Nothing when nothing does. (A timed
-// effect, a poison or a potion, would join this row; there are none yet.)
+// effects_row: what is on the character now, over the health bar's left end: first a
+// consumable's effect still running (its icon and its seconds left, as the server says),
+// then an icon for each piece of equipment that changes them (its modifiers: the feather
+// charm's air jump, the boots' speed), with its first change beside it. Nothing when
+// nothing does.
 effects_row :: proc(ctx: ^ui.Context, s: ^engine.Session, icons: ^engine.Item_Icons) {
-	t := &ctx.theme
 	row := hotbar_row(ctx)
 	x := row.x
 	y := row.y - 8 - HEALTH_BAR_HEIGHT - 6 - EFFECT_SIZE
-	small := t.font_size * 0.7
+	if s.effect != game.NO_ITEM && s.effect_left > 0 {
+		running := game.Stack{s.effect, 1, 0, 0}
+		effect_cell(ctx, s, icons, &x, y, running, engine.tr(.Hud_Effect_Seconds, s.effect_left))
+	}
 	for st in s.inventory.equipment {
 		if game.stack_empty(st) {continue}
 		stats := menu.item_stats(s.reg, st.item)
@@ -115,25 +118,32 @@ effects_row :: proc(ctx: ^ui.Context, s: ^engine.Session, icons: ^engine.Item_Ic
 			}
 		}
 		if effect == "" {continue}
-		cell := ui.Rect{x, y, EFFECT_SIZE, EFFECT_SIZE}
-		ui.fill_rect(ctx, cell, t.hud_fill)
-		ui.stroke_rect(
-			ctx,
-			cell,
-			1,
-			ui.with_alpha(menu.rarity_color(t, menu.item_rarity(s.reg, st.item)), 200),
-		)
-		if icon, ok := icons[st.item]; ok {ui.draw_icon(ctx, ui.rect_shrink(cell, 3), icon)}
-		w := ui.measure_text(ctx, effect, small)
-		label := ui.Rect{x + EFFECT_SIZE + 3, y, w, EFFECT_SIZE}
-		ui.draw_text(
-			ctx,
-			{label.x + 1, label.y + 1, label.w, label.h},
-			effect,
-			small,
-			t.text_shadow,
-		)
-		ui.draw_text(ctx, label, effect, small, t.text)
-		x += EFFECT_SIZE + 3 + w + t.spacing
+		effect_cell(ctx, s, icons, &x, y, st, effect)
 	}
+}
+
+// effect_cell: one of the effects row's: the stack's icon framed in its rarity's colour at
+// x, and the text beside it; x moves on past them.
+@(private = "file")
+effect_cell :: proc(
+	ctx: ^ui.Context,
+	s: ^engine.Session,
+	icons: ^engine.Item_Icons,
+	x: ^f32,
+	y: f32,
+	st: game.Stack,
+	effect: string,
+) {
+	t := &ctx.theme
+	small := t.font_size * 0.7
+	cell := ui.Rect{x^, y, EFFECT_SIZE, EFFECT_SIZE}
+	ui.fill_rect(ctx, cell, t.hud_fill)
+	frame := menu.rarity_color(t, menu.item_rarity(s.reg, st.item))
+	ui.stroke_rect(ctx, cell, 1, ui.with_alpha(frame, 200))
+	if icon, ok := icons[st.item]; ok {ui.draw_icon(ctx, ui.rect_shrink(cell, 3), icon)}
+	w := ui.measure_text(ctx, effect, small)
+	label := ui.Rect{x^ + EFFECT_SIZE + 3, y, w, EFFECT_SIZE}
+	ui.draw_text(ctx, {label.x + 1, label.y + 1, label.w, label.h}, effect, small, t.text_shadow)
+	ui.draw_text(ctx, label, effect, small, t.text)
+	x^ += EFFECT_SIZE + 3 + w + t.spacing
 }

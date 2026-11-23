@@ -89,6 +89,7 @@ apply_health :: proc(s: ^Session, g: protocol.Received) {
 		game_seen(s, Seen_Heal{h.health - s.health}) // (not a respawn, nor the first word)
 	}
 	s.health, s.max_health, s.dead = h.health, h.max, h.dead
+	s.effect, s.effect_left = h.effect, h.effect_left
 }
 
 @(private)

@@ -100,3 +100,26 @@ test_sandbox_item_tooltips :: proc(t: ^testing.T) {
 		testing.expectf(t, has(lines, w.line), "%s: %v, not %q", w.item, lines, w.line)
 	}
 }
+
+// A consumable used up shows in the HUD's effects row with its seconds left, as its player's
+// server counts them, until they are up.
+@(test)
+test_sandbox_effect_shown :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	c := playtest.client(rig)
+	stim, _ := game.registry_item(s.registry, "sandbox:stim_patch")
+	core.item_give(s, c, stim, 1)
+	for st, i in c.inventory.slots {if st.item == stim {core.hotbar_select(s, c, i)}}
+	testing.expect_value(t, core.item_consume(s, c), "")
+	playtest.step(rig, 10)
+	testing.expect_value(t, rig.s.effect, stim)
+	testing.expect_value(t, rig.s.effect_left, 30)
+	testing.expect(t, playtest.drawn(rig, "30 s"), "no effect in the HUD")
+	playtest.step(rig, 31 * game.TICK_RATE)
+	testing.expect_value(t, rig.s.effect_left, 0)
+	testing.expect(t, !playtest.drawn(rig, "1 s"), "an effect past its time")
+}

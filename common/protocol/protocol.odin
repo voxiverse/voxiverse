@@ -153,10 +153,14 @@ MAX_BATCH_TEXT :: 32 * 1024
 // Health: the player's health points and the most they can have (worn items
 // change it), sent when either changes.
 Health :: struct {
-	health: f32,
-	max:    f32,
-	dead:   bool, // waiting at the death screen for the Respawn button
+	health:      f32,
+	max:         f32,
+	dead:        bool, // waiting at the death screen for the Respawn button
+	effect:      game.Item, // the consumable whose effect is running (NO_ITEM: none)
+	effect_left: u16, // ... its seconds left, rounded up
 }
+
+MAX_EFFECT_SECONDS :: 600 // (the most a consumable's `consume` may last)
 
 // Telemetry_Ack: a batch was taken: its day and the offset after it (a report:
 // "" and its text's length).

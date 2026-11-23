@@ -375,7 +375,14 @@ check_own_player :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 @(private = "file")
 check_health :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	h := (^Health)(v)
-	return h.max >= 1 && h.max <= 1000 && h.health >= 0 && h.health <= h.max
+	if h.effect != game.NO_ITEM && !game.item_valid(reg, h.effect) {return false}
+	return(
+		h.max >= 1 &&
+		h.max <= 1000 &&
+		h.health >= 0 &&
+		h.health <= h.max &&
+		h.effect_left <= MAX_EFFECT_SECONDS \
+	)
 }
 
 @(private = "file")

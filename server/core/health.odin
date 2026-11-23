@@ -32,7 +32,7 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 	if c.dead && c.world.rules.respawn_auto && s.tick >= respawn_due(c) {respawn(s, c)}
 	if c.dead {
 		c.airborne = false
-		health := protocol.Health{c.health, c.max_health, true}
+		health := protocol.Health{c.health, c.max_health, true, game.NO_ITEM, 0}
 		state_put(s, c, .Health, &health)
 		return
 	}
@@ -60,8 +60,13 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 	} else {
 		c.fall_peak = max(c.fall_peak, p.position.y)
 	}
-	health := protocol.Health{c.health, c.max_health, false}
-	state_put(s, c, .Health, &health) // (nothing is sent while it is unchanged)
+	health := protocol.Health{c.health, c.max_health, false, game.NO_ITEM, 0}
+	if c.effect != {} && s.tick < c.effect.until {
+		left := (c.effect.until - s.tick + game.TICK_RATE - 1) / game.TICK_RATE
+		health.effect, health.effect_left =
+			c.effect.item, u16(min(left, protocol.MAX_EFFECT_SECONDS))
+	}
+	state_put(s, c, .Health, &health) // (nothing is sent while it is unchanged: the effect's time once a second)
 }
 
 // head_in_water: c's eyes are in water (where a game drowns a player: the engine
@@ -79,11 +84,12 @@ heal_player :: proc(c: ^Client, amount: f32) {
 }
 
 // Effect: what a consumable a player used up still does (item_consume): health a second
-// and a fraction of harm taken off, until a tick. Not saved: it ends with its time, a
-// death or the session.
+// and a fraction of harm taken off, until a tick; the item, which its player is shown with
+// its seconds left (Health). Not saved: it ends with its time, a death or the session.
 Effect :: struct {
 	regen, defence: f32,
 	until:          u64,
+	item:           game.Item,
 }
 
 // item_consume: c uses up one of the stack in its hand if it is a consumable (its item's
@@ -99,7 +105,7 @@ item_consume :: proc(s: ^Server, c: ^Client) -> string {
 	heal_player(c, use.heal)
 	c.effect = {}
 	if use.seconds > 0 {
-		c.effect = {use.regen, use.defence, s.tick + seconds_ticks(use.seconds)}
+		c.effect = {use.regen, use.defence, s.tick + seconds_ticks(use.seconds), held.item}
 	}
 	record(s, c, .Item_Used, game.item_name(s.registry, held.item))
 	return ""
