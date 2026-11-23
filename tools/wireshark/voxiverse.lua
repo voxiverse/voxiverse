@@ -69,7 +69,7 @@ local SCHEMA = {
   { id = 3, name = "inventory", key = "none", lane = "reliable", fields = {
     { name = "acked", t = "u32" },
     { name = "inventory.slots", t = "array", scalar = false, count = 30, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, { name = "ammo", t = "u8" }, { name = "data", t = "u32" }, } } },
-    { name = "inventory.equipment", t = "array", scalar = false, count = 5, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, { name = "ammo", t = "u8" }, { name = "data", t = "u32" }, } } },
+    { name = "inventory.equipment", t = "array", scalar = false, count = 7, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, { name = "ammo", t = "u8" }, { name = "data", t = "u32" }, } } },
     { name = "inventory.cursor.item", t = "u16" },
     { name = "inventory.cursor.count", t = "i64" },
     { name = "inventory.cursor.ammo", t = "u8" },

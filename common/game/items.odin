@@ -22,9 +22,24 @@ Equip_Slot :: enum u8 {
 	Legs,
 	Feet,
 	Offhand, // holds anything
+	Trinket_1, // a trinket (an item whose `equip` is "trinket" fits either)
+	Trinket_2,
 }
 EQUIP_SLOTS :: len(Equip_Slot)
 WORN_SLOTS :: 4 // the ones an avatar shows: Head to Feet
+
+// equip_trinket: e is one of the two trinket slots.
+equip_trinket :: proc(e: Equip_Slot) -> bool {return e == .Trinket_1 || e == .Trinket_2}
+
+// Rarity: how rare an item is (its pack's `rarity`; common when it names none): what
+// colours its name. It changes nothing else.
+Rarity :: enum u8 {
+	Common,
+	Uncommon,
+	Rare,
+	Epic,
+	Legendary,
+}
 
 // Armor: what shows on the avatar (no stats yet).
 Armor :: enum u8 {
@@ -81,23 +96,14 @@ Item_Info :: struct {
 	armor:       Maybe(Armor),
 	description: string, // a short line for the tooltip (the pack's; "": none)
 	modifiers:   [2]Modifier, // what wearing or holding it changes (mods.odin); amount 0: none
-	equip:       Maybe(Equip_Slot), // where it can be worn (armor)
+	equip:       Maybe(Equip_Slot), // where it can be worn (armor; Trinket_1: either trinket slot)
+	rarity:      Rarity, // its pack's `rarity` (common when it names none)
 	weapon:      Maybe(Weapon_Info), // a hitscan weapon (data: items/weapons.json)
 	grapple:     Maybe(Grapple_Info), // a grappling hook (data: items/tools.json)
 	melee:       Maybe(Melee_Info), // a weapon swung by hand (its `melee`)
 	model:       Maybe(u16), // the voxel model it is held as (an index into Registry.models)
-	rarity:      Rarity, // how rare it is (its `rarity`; common unless it says)
 	gather:      Gather_Info, // what it gathers in the hand (its `gather`; zero: what hands do)
 	consume:     Maybe(Consume_Info), // what it does used up (its `consume`: item_consume)
-}
-
-// Rarity: how rare an item is, a tooltip's colour (the item's `rarity`).
-Rarity :: enum u8 {
-	Common,
-	Uncommon,
-	Rare,
-	Epic,
-	Legendary,
 }
 
 // MAX_TIER: the highest tier a block asks of the tool that breaks it (a block's `tier`).
@@ -314,5 +320,6 @@ item_fits :: proc(reg: ^Registry, stack: Stack, e: Equip_Slot) -> bool {
 	if e == .Offhand {return true}
 	info, _ := registry_item_info(reg, stack.item)
 	slot, has := info.equip.?
+	if has && equip_trinket(slot) {return equip_trinket(e)}
 	return has && slot == e
 }

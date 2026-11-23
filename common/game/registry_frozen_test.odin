@@ -321,7 +321,13 @@ FROZEN_TOOL_INFO := [Tool]Item_Info {
 FROZEN_MATERIAL_INFO := [Material]Item_Info {
 	.Seeds = {name = "seeds", stack = 64, block = .Wheat_0}, // (placed with the right button, like a block)
 	.Wheat = {name = "wheat", stack = 64},
-	.Feather_Charm = {name = "feather_charm", stack = 1, modifiers = {{.Air_Jumps, 1}, {}}},
+	.Feather_Charm = {
+		name = "feather_charm",
+		stack = 1,
+		equip = .Trinket_1,
+		rarity = .Uncommon,
+		modifiers = {{.Air_Jumps, 1}, {}},
+	},
 }
 
 

@@ -110,15 +110,15 @@ ref_index :: proc(
 @(private)
 MODIFIER_STATS := []string{"speed", "jump", "air_jumps", "max_health", "defence", "fall_guard"}
 @(private)
-RARITY_NAMES := []string{"common", "uncommon", "rare", "epic", "legendary"}
-@(private)
 TOOL_KIND_LIST := []string{"any", "pick", "blade"} // (Tool_Kind, in order)
 @(private)
 GATHER_KEYS := []string{"tier", "yield", "speed", "kind"}
 @(private)
 CONSUME_KEYS := []string{"heal", "regen", "defence", "seconds"}
 @(private)
-EQUIP_NAMES := []string{"head", "chest", "legs", "feet", "offhand"}
+EQUIP_NAMES := []string{"head", "chest", "legs", "feet", "offhand", "trinket"} // (by Equip_Slot: "trinket" is Trinket_1, which stands for both)
+@(private)
+RARITY_NAMES := []string{"common", "uncommon", "rare", "epic", "legendary"} // (by Rarity)
 @(private)
 TOOL_NAMES := []string{"launcher", "hoe"}
 @(private)
@@ -1192,6 +1192,9 @@ read_item :: proc(
 	if f := field_of(m, "equip"); f != nil {
 		info.equip = Equip_Slot(choice_of(b, f, f.value, "equip", EQUIP_NAMES, 0))
 	}
+	if f := field_of(m, "rarity"); f != nil {
+		info.rarity = Rarity(choice_of(b, f, f.value, "rarity", RARITY_NAMES, 0))
+	}
 	if f := field_of(m, "description"); f != nil {
 		if f.value.kind != .String || len(f.value.s) > ITEM_DESCRIPTION_MAX {
 			fail_field(
@@ -1214,9 +1217,6 @@ read_item :: proc(
 		o: [4]f64
 		read_numbers(b, f, f.value, "melee", MELEE_KEYS, {0, 0.5, 1, 0.05}, {1000, 8, 360, 60}, &o)
 		info.melee = Melee_Info{f32(o[0]), f32(o[1]), f32(o[2]), f32(o[3])}
-	}
-	if f := field_of(m, "rarity"); f != nil {
-		info.rarity = Rarity(choice_of(b, f, f.value, "rarity", RARITY_NAMES, 0))
 	}
 	if f := field_of(m, "gather"); f != nil {read_gather(b, f, &info)}
 	if f := field_of(m, "consume"); f != nil {

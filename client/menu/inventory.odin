@@ -812,11 +812,13 @@ matching_items :: proc(reg: ^game.Registry, query: string) -> []game.Item {
 
 @(private = "file", rodata)
 EQUIP_LABELS := [game.Equip_Slot]string {
-	.Head    = "Head",
-	.Chest   = "Chest",
-	.Legs    = "Legs",
-	.Feet    = "Feet",
-	.Offhand = "Offhand",
+	.Head      = "Head",
+	.Chest     = "Chest",
+	.Legs      = "Legs",
+	.Feet      = "Feet",
+	.Offhand   = "Offhand",
+	.Trinket_1 = "Trinket",
+	.Trinket_2 = "Trinket",
 }
 
 // player_preview shows the player (drawn to a texture by the renderer,

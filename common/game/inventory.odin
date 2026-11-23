@@ -166,9 +166,10 @@ inventory_apply :: proc(
 			slot^ = left
 			break
 		}
-		// Armor goes on, if its slot is free.
+		// Armor goes on, if its slot is free (a trinket: the first free trinket slot).
 		if info, _ := item_info(reg, slot.item); info.equip != nil {
 			e := info.equip.?
+			if equip_trinket(e) && !stack_empty(inv.equipment[e]) {e = .Trinket_2}
 			if stack_empty(inv.equipment[e]) {
 				inv.equipment[e], slot^ = slot^, {}
 				break

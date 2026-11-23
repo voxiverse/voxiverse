@@ -475,6 +475,13 @@ the players in it alone (its `weapons`, [server.md](server.md)), where an `"over
 item would retune them for every player of the session. Every harm passes the game's
 `harming` hook.
 
+Where an item is worn is its `equip`: `"head"`, `"chest"`, `"legs"`, `"feet"`, `"offhand"`
+(which takes anything) or `"trinket"` (either of the two trinket slots: the feather charm);
+what wearing it changes is its `modifiers`. How rare it is is its `rarity`, one of
+`"common"` (the default when it names none), `"uncommon"`, `"rare"`, `"epic"` and
+`"legendary"` (`game.Rarity`), which changes nothing in play. A stack's own `data` (a rolled
+grade, `core.item_drop`) is the game's and is not this.
+
 ## The client's side: `engine.Game`
 
 A game's client part exports one constant `engine.Game` value (`client/engine/game.odin`):

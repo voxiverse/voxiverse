@@ -133,3 +133,20 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "bob was not told what alice wears")
 	for _, v in bob.worn {testing.expect_value(t, v, want)}
 }
+
+// The trinket slots are kept in a player file as every equipment slot is (by number:
+// EQUIPMENT_FILE_SLOT and the slot's), so a file written before them reads the same.
+@(test)
+test_trinkets_saved :: proc(t: ^testing.T) {
+	charm := game.Stack{game.item_of_material(.Feather_Charm), 1, 0, 0}
+	r: Player_Record
+	defer counters_free(&r.stats)
+	r.inventory.equipment[.Trinket_2] = charm
+	r.inventory.equipment[.Offhand] = charm
+	back, ok := player_parse(test_reg(), player_json(test_reg(), &r, nil), nil)
+	defer counters_free(&back.stats)
+	testing.expect(t, ok)
+	testing.expect_value(t, back.inventory.equipment[.Trinket_2], charm)
+	testing.expect_value(t, back.inventory.equipment[.Offhand], charm)
+	testing.expect(t, game.stack_empty(back.inventory.equipment[.Trinket_1]))
+}

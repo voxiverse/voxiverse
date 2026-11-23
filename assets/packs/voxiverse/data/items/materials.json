@@ -7,8 +7,10 @@
 		"description": "A crop, grown from seeds."
 	},
 	"feather_charm": {
-		"description": "Carry it to jump once more in the air.",
+		"description": "Worn as a trinket: one more jump in the air.",
 		"stack": 1,
+		"equip": "trinket",
+		"rarity": "uncommon",
 		"modifiers": [
 			{
 				"stat": "air_jumps",

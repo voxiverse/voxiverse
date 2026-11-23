@@ -1,6 +1,6 @@
 bandwidth 1
-scenario session ticks=6500 root=fda76259b8bbe877
-server_to_client 439402
+scenario session ticks=6500 root=8e22b5b4cadedde3
+server_to_client 439410
 client_to_server 120757
 inputs 6505
 kind c:hello 1 58
@@ -17,10 +17,10 @@ kind s:edit_result 90 1890
 kind s:column 72 19080
 kind s:bulk 3 9
 kind s:challenge 1 33
-kind s:state 98 3965
+kind s:state 98 3973
 kind s:snapshot 6506 265955
-scenario crowd ticks=905 root=1ea168b200ce4f2c
-server_to_client 1723830
+scenario crowd ticks=905 root=fd526776a9d73460
+server_to_client 1723838
 client_to_server 16462
 inputs 910
 kind c:hello 1 58
@@ -31,5 +31,5 @@ kind s:welcome 1 192
 kind s:chunk 245 79609
 kind s:column 49 12985
 kind s:challenge 1 33
-kind s:state 23 3032
+kind s:state 23 3040
 kind s:snapshot 1952 1627979

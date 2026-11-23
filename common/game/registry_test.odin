@@ -887,6 +887,49 @@ test_item_description :: proc(t: ^testing.T) {
 	testing.expect(t, len(bad) == 1, "a description that is not a text is refused")
 }
 
+// An item's rarity is a name (common when it names none, anything else refused), and an
+// item whose `equip` is "trinket" fits either trinket slot and nowhere else but the offhand.
+@(test)
+test_item_rarity_and_trinkets :: proc(t: ^testing.T) {
+	reg, errs := build_with(
+		pack_of(
+			"testpack",
+			[]File {
+				{
+					"data/items/a.json",
+					`{"a": {"stack": 1, "rarity": "epic", "equip": "trinket"}, "b": {"equip": "head"}, "c": {}}`,
+				},
+			},
+		),
+	)
+	testing.expect_value(t, errors_text(errs), "")
+	if reg == nil {return}
+	defer registry_destroy(reg)
+	a, _ := registry_item(reg, "testpack:a")
+	b, _ := registry_item(reg, "testpack:b")
+	c, _ := registry_item(reg, "testpack:c")
+	info, _ := registry_item_info(reg, a)
+	testing.expect_value(t, info.rarity, Rarity.Epic)
+	info, _ = registry_item_info(reg, c)
+	testing.expect_value(t, info.rarity, Rarity.Common)
+	charm := Stack{a, 1, 0, 0}
+	testing.expect(t, item_fits(reg, charm, .Trinket_1) && item_fits(reg, charm, .Trinket_2))
+	testing.expect(t, item_fits(reg, charm, .Offhand) && !item_fits(reg, charm, .Head))
+	testing.expect(t, !item_fits(reg, {b, 1, 0, 0}, .Trinket_1))
+	// Shift-click puts trinkets on, the first free slot first.
+	inv: Inventory
+	inv.slots[0], inv.slots[1] = charm, charm
+	for slot in 0 ..< 2 {
+		_, ok := inventory_apply(reg, &inv, {.Quick_Move, slot, 0}, false)
+		testing.expect(t, ok)
+	}
+	testing.expect(t, inv.equipment[.Trinket_1] == charm && inv.equipment[.Trinket_2] == charm)
+	_, bad := build_with(
+		pack_of("testpack", []File{{"data/items/a.json", `{"a": {"rarity": "mythic"}}`}}),
+	)
+	testing.expect(t, len(bad) == 1, "a rarity that is not one of the five is refused")
+}
+
 // A weapon is data: every number is required, the values are checked, and a
 // pack that overrides the base's pistol changes what it does.
 @(test)

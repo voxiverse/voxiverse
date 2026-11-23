@@ -125,7 +125,7 @@ items of their own (`rocket_launcher`).
 ### Inventories
 
 An inventory has 30 slots (the first five are the hotbar, followed by a 5x5 grid), the
-equipment slots (head, chest, legs, feet, offhand), the stack on the cursor and, while a
+equipment slots (head, chest, legs, feet, offhand and two trinkets), the stack on the cursor and, while a
 chest is open, the chest's 25 slots. The server owns the inventory and applies requests with
 the same code the client predicts with (`common/game/inventory.odin`). It answers each
 request with the inventory (the `inventory` record, whose `acked` field states how far it
