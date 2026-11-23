@@ -98,12 +98,13 @@ fill_rect :: proc(ctx: ^Context, r: Rect, color: Color) {
 	push_quad(ctx, pixel_rect(ctx, r), {u, u}, color)
 }
 
-// stroke_rect draws a rectangle outline `thickness` units wide, inside r.
+// stroke_rect draws a rectangle outline `thickness` units wide, inside r, and never
+// thinner than a pixel (at a scale under 1 a unit is less: the line would vanish).
 // The thickness is kept to at most half the rect, so thin rects get a solid
 // fill rather than bars painted over each other.
 stroke_rect :: proc(ctx: ^Context, r: Rect, thickness: f32, color: Color) {
 	if r.w <= 0 || r.h <= 0 || color.a == 0 {return}
-	t := min(thickness, min(r.w, r.h) / 2)
+	t := min(max(thickness, 1 / ctx.scale), min(r.w, r.h) / 2)
 	fill_rect(ctx, {r.x, r.y, r.w, t}, color)
 	fill_rect(ctx, {r.x, r.y + r.h - t, r.w, t}, color)
 	fill_rect(ctx, {r.x, r.y + t, t, r.h - 2 * t}, color)

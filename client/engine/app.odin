@@ -459,12 +459,28 @@ view_size :: proc(app: ^App) -> (radius, height: i32) {
 	return r, clamp(r / 2, 2, 16)
 }
 
-// ui_scale: the user's setting, or one derived from the window height
-// (1.0 at 720 px, in quarter steps) so the UI keeps its proportions.
+// MENU_SIZE: what the player menu's panel takes (UI units), and GAME_SCREEN_SIZE what a
+// game's screen may (the market); while one is open the UI is made small enough for it to
+// fit the window (ui_scale).
+MENU_SIZE :: [2]f32{760, 520}
+GAME_SCREEN_SIZE :: [2]f32{760, 640}
+MENU_MARGIN :: 8 // UI units round it
+
+// ui_scale: the user's setting, or one derived from the frame's height (1.0 at 720 px, in
+// quarter steps) so the UI keeps its proportions; while the player menu or a game's screen
+// is open, no more than lets it fit the window, so a small window (640x360) shows all of
+// it, smaller.
 ui_scale :: proc(app: ^App) -> f32 {
-	if app.settings.gui_scale > 0 {return f32(app.settings.gui_scale)}
-	h := f32(max(app.window.height, 1))
-	return clamp(math.round(h / 720 * 4) / 4, 1, 3)
+	width, height := render_size(app) // (a picture's offscreen size, else the window's)
+	w, h := f32(max(width, 1)), f32(max(height, 1))
+	scale := f32(app.settings.gui_scale)
+	if scale <= 0 {scale = clamp(math.round(h / 720 * 4) / 4, 1, 3)}
+	fit :: proc(scale, w, h: f32, size: [2]f32) -> f32 {
+		return min(scale, w / (size.x + 2 * MENU_MARGIN), h / (size.y + 2 * MENU_MARGIN))
+	}
+	if overlay_is_open(&app.overlays, .Player_Menu) {scale = fit(scale, w, h, MENU_SIZE)}
+	if overlay_is_open(&app.overlays, .Game_Screen) {scale = fit(scale, w, h, GAME_SCREEN_SIZE)}
+	return scale
 }
 
 // validation_options reads VX_VALIDATION: unset = on in development builds only,

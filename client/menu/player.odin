@@ -147,7 +147,7 @@ player_menu_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 }
 
 SECTION_TAB_WIDTH :: 140
-PLAYER_MENU_SIZE :: ui.Vec2{760, 520} // every section's panel (UI units: it fits 1280x720 at scale 1)
+PLAYER_MENU_SIZE :: engine.MENU_SIZE // every section's panel (UI units: the UI is scaled down for it to fit a small window, engine.ui_scale)
 
 // player_menu_panel: the panel every section of the player menu is drawn in, and its
 // title row (the tabs); what is left under them.

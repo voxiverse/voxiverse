@@ -646,3 +646,44 @@ test_chest_take_all_and_compare :: proc(t: ^testing.T) {
 	tip := f.app.ui.output.layers[.Tooltip].vertices
 	testing.expect(t, len(tip) >= 4 && tip[0].color.a == 255, "the tooltip is opaque, on top")
 }
+
+// A small window (640x360): while the player menu is open the UI is scaled down for its
+// panel to fit, so every slot, button and tab is on the screen and reachable; closed, the
+// HUD keeps its scale.
+@(test)
+test_player_menu_fits_a_small_window :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, true)
+	defer overlay_fixture_destroy(&f)
+	app := f.app
+	app.window.width, app.window.height = 640, 360
+	scale := engine.ui_scale(app)
+	testing.expect(t, scale < 1, "scaled down for the menu")
+	inside :: proc(outer, r: ui.Rect) -> bool {
+		return(
+			r.x >= outer.x &&
+			r.y >= outer.y &&
+			r.x + r.w <= outer.x + outer.w &&
+			r.y + r.h <= outer.y + outer.h \
+		)
+	}
+	for tab in engine.Inventory_Tab {
+		ui.begin_frame(&app.ui, {}, {640, 360}, scale)
+		l := menu.inventory_layout(&app.ui, tab)
+		screen := app.ui.screen
+		ui.end_frame(&app.ui)
+		testing.expectf(t, inside(screen, l.panel), "%v: the panel fits", tab)
+		for r in l.slots {if r.w > 0 {testing.expectf(t, inside(screen, r), "%v: a slot off the screen", tab)}}
+		for r in ([]ui.Rect{l.sort, l.search, l.take_all, l.catalog, l.title}) {
+			if r.w > 0 {testing.expectf(t, inside(screen, r), "%v: a control off the screen", tab)}
+		}
+	}
+	// The section tabs and a click on one, at that scale.
+	ui.begin_frame(&app.ui, {}, {640, 360}, scale)
+	overlay.draw_overlays(app, &app.ui)
+	ui.end_frame(&app.ui)
+	journal, found := ui.find_widget(&app.ui, "Journal (J)")
+	testing.expect(t, found && inside(app.ui.screen, journal), "the Journal tab is on the screen")
+	menu.player_menu_close(app)
+	testing.expect_value(t, engine.ui_scale(app), 1)
+}
