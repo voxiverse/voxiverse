@@ -3,12 +3,10 @@ package sandbox_server
 import "core:fmt"
 import "core:log"
 import "core:math"
-import "core:slice"
 
 import "common:base"
 import "common:game"
 import "common:wave"
-import "common:worldgen"
 import "games:sandbox"
 import "server:core"
 import "server:play"
@@ -86,17 +84,6 @@ Ruin :: struct {
 	floor, wall: game.Block,
 	moss, tile:  game.Block,
 	dark, rune:  game.Block,
-}
-
-// Site: where the ruin stands: the template's lowest corner and the floor's layer (its
-// fighters stand on it, at floor + 1), the lowest and the highest the land stands under it
-// and its apron (as the generator makes it), and whether the ground was found dry and level
-// (else the ruin levels it: ruin_build).
-Site :: struct {
-	origin: game.Block_Pos,
-	floor:  i32,
-	lo, hi: i32,
-	level:  bool,
 }
 
 // Ruin_Seat: a player's part in the ruin's fight (the game's client_state).
@@ -504,7 +491,7 @@ ruin_inside :: proc(site: Site, p: [3]f64) -> bool {
 	)
 }
 
-// ruin_site: where the home world's ruin stands, from its seed alone: on RUIN_RINGS rings
+// ruin_site: where the home world's ruin stands (site.odin), from its seed alone: on RUIN_RINGS rings
 // round its spawn, from RUIN_DISTANCE out, RUIN_PER_RING candidates each starting in a
 // direction of the seed's, the first whose ground is dry and level; when none is, the dry one
 // whose ground is the least uneven (any one, when none is dry), which the ruin levels as it is
@@ -513,6 +500,7 @@ ruin_site :: proc(w: ^core.World) -> Site {
 	rng := base.rng_make(u64(w.seed) ~ 0x7e1c_0de5)
 	angle := base.rng_f64(&rng) * math.TAU
 	spawn := w.spawn.position
+	land := land_of(w)
 	best: Site
 	best_score := max(i32)
 	for ring in 0 ..< RUIN_RINGS {
@@ -521,7 +509,7 @@ ruin_site :: proc(w: ^core.World) -> Site {
 			a := angle + (f64(k) + 0.5 * f64(ring % 2)) * math.TAU / RUIN_PER_RING
 			cx := i32(math.floor(spawn.x + base.cos(a) * d))
 			cz := i32(math.floor(spawn.z + base.sin(a) * d))
-			floor, lo, hi, dry := ruin_ground(w, cx, cz)
+			floor, lo, hi, dry := site_ground(&land, cx, cz, RUIN_MID + RUIN_APRON)
 			site := Site{{cx - RUIN_MID, floor - RUIN_DEPTH, cz - RUIN_MID}, floor, lo, hi, false}
 			if dry && hi - lo <= RUIN_LEVEL {
 				site.level = true
@@ -534,81 +522,15 @@ ruin_site :: proc(w: ^core.World) -> Site {
 	return best
 }
 
-// ruin_ground: for a site whose middle is column (x, z), sampled on a grid of 5 by 5 over
-// it and its apron as the world's generator makes the land: the floor's layer (the middle
-// height of the samples, and never under the sea's top), the lowest and the highest the land
-// stands, and whether all of it is dry ground (no sea, beach, river, lake, mountain, ice or
-// overhang).
-ruin_ground :: proc(w: ^core.World, x, z: i32) -> (floor, lo, hi: i32, dry: bool) {
-	EDGE :: RUIN_MID + RUIN_APRON
-	STEPS :: [5]i32{-EDGE, -EDGE / 2, 0, EDGE / 2, EDGE}
-	heights: [25]i32
-	dry = true
-	#partial switch w.generator {
-	case .Flat:
-		return worldgen.FLAT_TOP, worldgen.FLAT_TOP, worldgen.FLAT_TOP, true
-	case .Classic:
-		for dz, j in STEPS {
-			for dx, i in STEPS {
-				heights[i + j * 5] = worldgen.classic_height(w.seed, x + dx, z + dz)
-			}
-		}
-	case:
-		params := w.params
-		seed := terrain_seed(w)
-		for dz, j in STEPS {
-			for dx, i in STEPS {
-				c := worldgen.column_at(&params, seed, x + dx, z + dz)
-				heights[i + j * 5] = i32(math.floor(c.height))
-				#partial switch c.biome {
-				case .Ocean, .Frozen_Ocean, .River, .Beach, .Mountains, .Ice_Sheet:
-					dry = false
-				}
-				if c.rough > 0 || c.river > 0.3 || c.height < f32(params.sea_level) + 2 {
-					dry = false
-				}
-				if params.planet != 0 {
-					lake, _ := worldgen.planet_lake_at(x + dx, z + dz)
-					if lake >= 0.5 {dry = false}
-				}
-			}
-		}
-	}
-	slice.sort(heights[:])
-	lo, hi = heights[0], heights[24]
-	floor = heights[12]
-	if w.generator == .Earth {floor = max(floor, w.params.sea_level + 1)}
-	return
-}
-
 // ruin_build: the ruin, whole, over whatever stood there, its altar's machine made with it.
 ruin_build :: proc(s: ^core.Server, w: ^core.World) {
 	r := ruin_of(s)
 	site := r.site
 	t := ruin_template(r, w.seed)
 	act := core.game_act(s, w, .Structure)
-	// The ground levelled: everything over the floor cleared, the hollows and the water under
-	// it and its apron filled, the floor's layer grass, so the ruin is neither buried nor
-	// perched and every gate opens on ground (a level site's ground is nearly so already).
-	a := ruin_area(site)
-	set :: proc(w: ^core.World, b: core.Box, from, to: game.Block, act: core.Act) {
-		core.bulk_edit(w, {shape = b, op = .Replace, from = from, block = to, partial = true}, act)
-	}
-	core.bulk_edit(
-		w,
-		{
-			shape = core.Box{{a.lo.x, site.floor + 1, a.lo.z}, a.hi},
-			op = .Set,
-			block = .Air,
-			partial = true,
-		},
-		act,
-	)
-	under := core.Box{a.lo, {a.hi.x, site.floor - 1, a.hi.z}}
-	set(w, under, .Air, .Stone, act)
-	set(w, under, .Water, .Stone, act)
-	top := core.Box{{a.lo.x, site.floor, a.lo.z}, {a.hi.x, site.floor, a.hi.z}}
-	core.bulk_edit(w, {shape = top, op = .Set, block = .Grass, partial = true}, act)
+	// The ground levelled, its apron too, so the ruin is neither buried nor perched and every
+	// gate opens on ground (a level site's ground is nearly so already).
+	site_level(w, ruin_area(site), site.floor, act)
 	template_box := core.Box{site.origin, site.origin + {RUIN_SIDE, RUIN_HEIGHT, RUIN_SIDE} - 1}
 	core.bulk_edit(w, {shape = template_box, op = .Paste, template = &t, partial = true}, act)
 	r.built = true
