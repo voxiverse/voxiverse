@@ -39,17 +39,17 @@ test_roll_keeps_name_and_mode :: proc(t: ^testing.T) {
 	app := creation_app(t)
 	defer creation_free(app)
 	c := &app.creation
-	testing.expect_value(t, c.mode, "creative") // the default
+	testing.expect_value(t, c.mode, "survival") // the default
 	clear(&c.name)
 	append(&c.name, "Mine")
-	c.mode = "survival"
+	c.mode = "creative"
 	before := c.seed
 	stars_before := c.stars[1]
 	screen.creation_roll(c, 12345)
 	testing.expect(t, c.seed != before, "a new seed")
 	testing.expect(t, c.stars[1] != stars_before, "the galaxy redrawn")
 	testing.expect_value(t, string(c.name[:]), "Mine")
-	testing.expect_value(t, c.mode, "survival")
+	testing.expect_value(t, c.mode, "creative")
 	testing.expect_value(t, c.settle, 0) // the stars re-settle ...
 	free_all(context.temp_allocator)
 	// ... over 0.4 s (and at once with Reduce motion).
@@ -185,18 +185,18 @@ test_creation_mode_toggle :: proc(t: ^testing.T) {
 		creation_frame(app, {mouse = at, mouse_down = {.Left}, mouse_pressed = {.Left}})
 		creation_frame(app, {mouse = at, mouse_released = {.Left}})
 	}
+	testing.expect_value(t, c.mode, "survival") // (the default: survival is the game)
+	click(app, at)
 	testing.expect_value(t, c.mode, "creative")
 	click(app, at)
 	testing.expect_value(t, c.mode, "survival")
-	click(app, at)
-	testing.expect_value(t, c.mode, "creative")
-	click(app, at) // (focused now)
+	click(app, at) // (focused now: creative)
 	creation_frame(app, {mouse = at, nav = {.Left}})
-	testing.expect_value(t, c.mode, "creative")
-	creation_frame(app, {mouse = at, nav = {.Right}})
 	testing.expect_value(t, c.mode, "survival")
+	creation_frame(app, {mouse = at, nav = {.Right}})
+	testing.expect_value(t, c.mode, "creative")
 	plan := screen.universe_plan("Mode", 1, c.mode)
-	testing.expect_value(t, plan.mode, "survival")
+	testing.expect_value(t, plan.mode, "creative")
 	free_all(context.temp_allocator)
 }
 

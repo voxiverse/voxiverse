@@ -306,6 +306,11 @@ SCRATCH_SPAWN :: [3]f64{24.5, 11, 8.5}
 // SCRATCH_SEED: the seed of the scratch world (singleplayer, exit checks).
 SCRATCH_SEED :: 0x5eed
 
+// SCRATCH_KIT: what the scenes', benchmarks' and exit checks' player holds (a kit as
+// world.cfg says it): the rocket launcher they fire and draw in hand, whatever kit the
+// game gives its players.
+SCRATCH_KIT :: "rocket_launcher 1"
+
 // enter_world starts a session in the world saved at save_dir (created if
 // new, with seed), or with save_dir "" a scratch world nothing is saved of
 // (scripts and tests). The world runs here; others can join once it is
@@ -320,6 +325,7 @@ enter_world :: proc(
 	earth := false, // a new universe's home world is Earth
 	game_id := "", // the game it plays ("": App.game, the command line's)
 	open_lan := false, // open it to the LAN as soon as it plays (Multiplayer's Host)
+	kit := "", // what new players are given ("": the game's)
 ) {
 	view_radius, view_height := view_size(app)
 	start_session(
@@ -331,6 +337,7 @@ enter_world :: proc(
 			key = app.account,
 			seed = seed,
 			mode = mode,
+			kit = kit,
 			earth = earth,
 			save_dir = save_dir,
 			spawn = spawn,

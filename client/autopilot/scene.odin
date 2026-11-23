@@ -145,9 +145,23 @@ scene_begin :: proc(app: ^engine.App, name: string) -> bool {
 		return true
 	}
 	if scene_is_earth(script) {
-		engine.enter_world(app, "", engine.SCRATCH_SEED, benchmark = true, earth = true)
+		engine.enter_world(
+			app,
+			"",
+			engine.SCRATCH_SEED,
+			benchmark = true,
+			earth = true,
+			kit = engine.SCRATCH_KIT,
+		)
 	} else {
-		engine.enter_world(app, "", engine.SCRATCH_SEED, engine.SCRATCH_SPAWN, benchmark = true)
+		engine.enter_world(
+			app,
+			"",
+			engine.SCRATCH_SEED,
+			engine.SCRATCH_SPAWN,
+			benchmark = true,
+			kit = engine.SCRATCH_KIT,
+		)
 	}
 	if name == "devchat" {scene_devchat(app)}
 	return true

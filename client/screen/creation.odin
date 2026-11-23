@@ -36,7 +36,7 @@ creation_open :: proc(app: ^engine.App) {
 	text := engine.tr(.Creation_Default_Name, len(page_saves(&app.universes)) + 1)
 	append(&c.name, text)
 	clear(&c.seed_text)
-	c.mode = MODE_CREATIVE
+	c.mode = MODE_SURVIVAL // (survival is the game; creative stays a choice)
 	creation_set_seed(c, u64(time.now()._nsec) ~ 0x5eed_5eed, false)
 	c.typed = false
 	c.alien = false

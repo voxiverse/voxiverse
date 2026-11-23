@@ -19,7 +19,14 @@ import "server:core"
 exit_check_start :: proc(app: ^engine.App, c: ^engine.Exit_Check, name: string) -> bool {
 	if app.session == nil {
 		// A still world (no creatures of their own, nothing growing or spreading): the checks measure what they do.
-		engine.enter_world(app, "", engine.SCRATCH_SEED, engine.SCRATCH_SPAWN, benchmark = true)
+		engine.enter_world(
+			app,
+			"",
+			engine.SCRATCH_SEED,
+			engine.SCRATCH_SPAWN,
+			benchmark = true,
+			kit = engine.SCRATCH_KIT,
+		)
 	}
 	if app.session == nil || !engine.session_hosting(app.session) {
 		log.errorf("%s runs in a world of our own", name)

@@ -226,7 +226,14 @@ bench_begin :: proc(
 @(private = "file")
 bench_join :: proc(app: ^engine.App) {
 	b := &app.bench
-	engine.enter_world(app, "", engine.SCRATCH_SEED, engine.SCRATCH_SPAWN, benchmark = true)
+	engine.enter_world(
+		app,
+		"",
+		engine.SCRATCH_SEED,
+		engine.SCRATCH_SPAWN,
+		benchmark = true,
+		kit = engine.SCRATCH_KIT,
+	)
 	b.phase, b.frames, b.started = .Joining, 0, time.tick_now()
 	if b.scenario.kind == .Load {base.metrics_start()}
 }
