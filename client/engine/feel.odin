@@ -444,10 +444,15 @@ float_text :: proc(s: ^Session, at: [3]f64, text: string, color: [4]u8, scale: f
 MADE_COLOR :: [4]u8{250, 214, 110, 255}
 
 // made: the player made something (a game's crafting done): a soft chime, and `text` ("+2
-// Cord") floating up a little in front of its eyes, as a pickup reads.
+// Cord") floating up a little under the middle of its view, as a pickup reads.
 made :: proc(s: ^Session, text: string) {
 	c := &s.camera
-	ahead := [3]f64{-math.sin(f64(c.yaw)) * 1.6, -0.35, -math.cos(f64(c.yaw)) * 1.6}
+	pitch := f64(c.pitch) - 0.12 // (just under where it looks: it rises as it fades)
+	ahead := [3]f64 {
+		-math.sin(f64(c.yaw)) * math.cos(pitch) * 2,
+		math.sin(pitch) * 2,
+		-math.cos(f64(c.yaw)) * math.cos(pitch) * 2,
+	}
 	append(&s.sounds, Sound_Event{.Made, .Air, c.position, 0.8, {}})
 	float_text(s, c.position + ahead, text, MADE_COLOR, 1.2)
 }

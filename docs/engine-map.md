@@ -424,7 +424,7 @@ The types these name:
 - `kick :: proc(s: ^Session, degrees: f32)`: the view jolts up by `degrees` (down below 0) and settles, in a few tenths of a second: a gun's recoil, a landing, a collision.
 - `blast_shake :: proc(at, eyes: [3]f64, radius: f32) -> f32`: how hard a blast at `at` of `radius` shakes a view at `eyes` (0 ..= 1): a whole shake within its reach, dying away to nothing at four times it.
 - `float_text :: proc(s: ^Session, at: [3]f64, text: string, color: [4]u8, scale: f32 = 1)`: text over `at` in the world, in color, scale times the HUD's text: it pops, rises a block and fades in under a second (FLOAT_SECONDS).
-- `made :: proc(s: ^Session, text: string)`: the player made something (a game's crafting done): a soft chime, and `text` ("+2 Cord") floating up a little in front of its eyes, as a pickup reads.
+- `made :: proc(s: ^Session, text: string)`: the player made something (a game's crafting done): a soft chime, and `text` ("+2 Cord") floating up a little under the middle of its view, as a pickup reads.
 - `pulse :: proc(s: ^Session, color: [4]u8)`: the screen's edges glow in color for a moment (PULSE_SECONDS) and fade, strongest at the edge: red for harm taken, green for a heal.
 - `Tween :: struct {...}`: a HUD element's moment of easing in (a score that changed, a banner): started when its news comes, read each frame as the fraction done.
 - `tween_start :: proc(t: ^Tween, s: ^Session)`: the tween begins now (again, if it was under way).
