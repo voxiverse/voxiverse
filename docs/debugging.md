@@ -351,7 +351,7 @@ the older `VK_ICD_FILENAMES`) at it, whatever GPU the machine has.
 
 They are part of the gate: `./build.sh test` with no package named (and no `-o:`,
 `-sanitize:` or `-test-name:`) renders them after the unit tests and fails if any scene
-does, as `./build.sh images` would. On this 8-core machine the 31 scenes take about ten
+does, as `./build.sh images` would. On this 8-core machine the 32 scenes take about ten
 minutes (four at once; lavapipe draws on the CPU). A narrowed run (`test <package>`) does not
 render them, and on Windows and macOS `test` says they were not run.
 

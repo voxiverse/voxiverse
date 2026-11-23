@@ -94,7 +94,9 @@ translucent pass (`water.frag`'s `portal`, marked by the mesher: `client/mesh`'s
 rather than from its texture: a dark void with depth, four sheets of small motes at growing
 depths behind the plane (so they slide against each other as the eye moves), each drifting
 and turning slowly at its own rate, a faint shimmer, and a thin flickering rim where it
-meets the frame. When a client sees the void appear (a block change, not a chunk arriving
+meets the frame. Of the opening's one-block slab only the face toward the eye is drawn, and
+it hides what is behind it (the far face, seen through the near one at an angle, drew its
+rim as a seam; the `gate_angle` baseline looks for it). When a client sees the void appear (a block change, not a chunk arriving
 with the gate already open: `client/engine/gates.odin`), it gathers: over one second
 it swells from the opening's middle behind a bright front, the opening still clear beyond
 it, and the rim brightens as it comes (the scene's `gate`: the nearest gathering gate), and

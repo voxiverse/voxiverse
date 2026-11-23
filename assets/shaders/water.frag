@@ -83,22 +83,27 @@ vec4 portal(Scene s, vec3 pos, vec3 n, uint sides) {
 	float wobble = 0.05 * sin(t * 2.3 + (p.x + p.y) * 5.0);
 	vec3 rim = (1.0 - smoothstep(0.0, 0.16 + wobble, edge)) * (0.35 + 0.65 * flicker) * vec3(0.2, 0.26, 0.5);
 	float d = length(pos - s.gate.xyz);
-	if (s.gate.w < 0.0 || s.gate.w >= GATE_GATHER || d >= GATE_GATHER_REACH) return vec4(color + rim, 0.95);
+	if (s.gate.w < 0.0 || s.gate.w >= GATE_GATHER || d >= GATE_GATHER_REACH) return vec4(color + rim, 1.0);
 	// Opening: what is drawn over the world behind is the void inside the
-	// front at 0.95, the front's glow and the rim added on top.
+	// front, the front's glow and the rim added on top.
 	float k = s.gate.w / GATE_GATHER;
 	float front = GATE_GATHER_REACH * (1.0 - (1.0 - k) * (1.0 - k)); // fast, then easing
 	float inside = 1.0 - smoothstep(front - 0.6, front, d);
 	float glow = exp(-4.0 * abs(d - front)) * (1.0 - k * k);
 	float bright = smoothstep(0.0, 0.4, k) * (1.0 + 1.2 * (1.0 - k));
-	vec3 over = color * 0.95 * inside + rim * bright + glow * vec3(0.35, 0.45, 0.9);
-	float alpha = max(0.95 * inside, min(1.0, 1.5 * max(over.r, max(over.g, over.b))));
+	vec3 over = color * inside + rim * bright + glow * vec3(0.35, 0.45, 0.9);
+	float alpha = max(inside, min(1.0, 1.5 * max(over.r, max(over.g, over.b))));
 	return vec4(over / max(alpha, 1e-3), alpha);
 }
 
 void main() {
 	vec3 n = normalize(cross(dFdx(in_pos), dFdy(in_pos))); // (outside the branch: derivatives)
 	if ((in_portal & 1u) != 0u) {
+		// One face of the opening's slab only, the one facing the eye, and it
+		// hides what is behind: the far face, seen through the near one at an
+		// angle, drew its rim as a seam across the void (the translucent pass
+		// culls nothing).
+		if (!gl_FrontFacing) discard;
 		vec4 surface = portal(push.scene, in_pos, n, in_portal >> 1);
 		vec3 color = fog_mix(push.scene, surface.rgb, in_pos - push.scene.camera.xyz);
 		out_color = vec4(graded(push.scene, color, gl_FragCoord.xy), surface.a);

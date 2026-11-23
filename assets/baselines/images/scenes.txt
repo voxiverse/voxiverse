@@ -16,6 +16,12 @@ water: /tp 69 6 -4 0 -35
 held_first: look 135 -20
 held_third: look 135 -10; camera behind 30
 devchat: sleep 1
+# An open gate's void seen at an angle: the dead home gate before the
+# spawn woken, its address written with Enter (one shows the focus on the
+# next free symbol, the next takes it; a last one sends the whole address)
+# and its void gathered: one face drawn, no seam where the far face's rim
+# showed through the near one.
+gate_angle: @1280x720 /gate wake; /locate gate; sleep 1; wait_world; ticks 60; wait_world; look 50 0; wait 3; key mouse_right down; wait 3; key mouse_right up; wait 3; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; sleep 2; /tp 52 8 35.5 -60 0
 # Earth scenes (`earth` first): the scratch world is Earth's planet world,
 # with the same fixed conditions; `/goto <place>` stands on the surface there.
 earth_everest: earth /goto everest; look 0 -10
