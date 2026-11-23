@@ -131,7 +131,7 @@ walks what yields what):
   turned aside, 0.8 at most): padded (common; its boots take a quarter off a fall), plate
   (uncommon; the cuirass slows), exo (rare; the harness quickens, the legs jump, the striders
   take four fifths off a fall); climbing spikes (jump higher, land softer).
-- **Trinkets** (the offhand): stride coil (faster), gyro stabiliser (half a fall's harm),
+- **Trinkets** (the two trinket slots; the offhand takes one too): stride coil (faster), gyro stabiliser (half a fall's harm),
   heart regulator (more health), ward emitter (the remains': defence) and the phase lattice
   (a vault's: faster, one more jump in the air; legendary).
 - **Consumables**: field dressing, trail ration, med gel, stim patch, regen ampoule, and the
