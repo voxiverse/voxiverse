@@ -51,8 +51,24 @@ Entity_Voice :: enum u8 {
 	Groan, // low and drawn out: the walking dead
 	Croak, // rasps in the throat: a spitter
 	Grunt, // a person's
+	Chirp, // quick, high and bright: a bird
+	Chitter, // dry clicks in a run: a thing with a shell
+	Whir, // a motor's rising hum: a machine
+	Bellow, // deep and long: something large
 }
-ENTITY_VOICE_LIST := [?]string{"bleat", "none", "growl", "squeak", "groan", "croak", "grunt"}
+ENTITY_VOICE_LIST := [?]string {
+	"bleat",
+	"none",
+	"growl",
+	"squeak",
+	"groan",
+	"croak",
+	"grunt",
+	"chirp",
+	"chitter",
+	"whir",
+	"bellow",
+}
 #assert(len(ENTITY_VOICE_LIST) == len(Entity_Voice))
 
 // A kind's looks are names (at most MAX_KIND_LOOKS, its pack's "looks"): bit i of a

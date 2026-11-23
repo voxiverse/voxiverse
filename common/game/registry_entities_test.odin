@@ -140,7 +140,7 @@ test_entity_kind_refusals :: proc(t: ^testing.T) {
 		{
 			"unknown voice",
 			`{"k": {"box": [1, 1], "voice": "moo", "model": "item"}}`,
-			`testpack/data/entities/k.json:1:32: voice is one of "bleat", "none", "growl", "squeak", "groan", "croak", "grunt"; got "moo"`,
+			`testpack/data/entities/k.json:1:32: voice is one of "bleat", "none", "growl", "squeak", "groan", "croak", "grunt", "chirp", "chitter", "whir", "bellow"; got "moo"`,
 		},
 		{
 			"unknown model",

@@ -266,7 +266,8 @@ player_sound :: proc(p: Player_Sound, variant: int, allocator := context.allocat
 // voice through the formants (bleat: a sliding pitch with vibrato whose harmonics the
 // formants shape) at its own pitch and length, with noise for the throat: the sheep's
 // bleat, a beast's low growl, a small thing's squeak, the dead's slow groan, a spitter's
-// rasps, a person's grunt.
+// rasps, a person's grunt, a bird's chirps, a shell's clicks, a machine's whir (bands of
+// noise sliding up, no voice) and a large thing's long bellow.
 creature_sound :: proc(
 	voice: game.Entity_Voice,
 	c: Creature_Sound,
@@ -328,6 +329,49 @@ creature_sound :: proc(
 	case .Grunt:
 		bleat(&s, 0.45 if die else 0.16, 240 * r, (130 if die else 190) * r, 1)
 		burst(&s, {start = 0, tau = 0.02, filter = .Low, freq = 700, gain = 0.3})
+	case .Chirp:
+		chirps := 3 if die else 2
+		for k in 0 ..< chirps {
+			from := (2600 - 300 * f32(k)) * r
+			bleat(&s, 0.07, from, from * (0.6 if die else 1.3), 0.8 - 0.15 * f32(k))
+			burst(
+				&s,
+				{
+					start = f32(k) * 0.09,
+					tau = 0.012,
+					filter = .Band,
+					freq = 3200 * r,
+					q = 4,
+					gain = 0.3,
+				},
+			)
+		}
+	case .Chitter:
+		clicks := 9 if die else 5
+		for k in 0 ..< clicks {
+			burst(
+				&s,
+				{
+					start = f32(k) * 0.045,
+					tau = 0.006,
+					filter = .Band,
+					freq = (1800 + 260 * f32(k % 3)) * r,
+					q = 5,
+					gain = 1 - 0.07 * f32(k),
+				},
+			)
+		}
+	case .Whir:
+		steps := 8 if die else 5
+		for k in 0 ..< steps {
+			u := f32(k) / f32(steps)
+			hz := (420 + 900 * (1 - u if die else u)) * r
+			burst(&s, {start = u * 0.35, tau = 0.03, filter = .Band, freq = hz, q = 8, gain = 0.7})
+		}
+		burst(&s, {start = 0, tau = 0.08, filter = .Low, freq = 160 * r, gain = 0.4})
+	case .Bellow:
+		bleat(&s, 0.9 if die else 0.6, 95 * r, (55 if die else 80) * r, 1)
+		burst(&s, {start = 0, tau = 0.15, filter = .Low, freq = 220 * r, gain = 0.4})
 	}
 	return finish(&s, 0.7, allocator)
 }

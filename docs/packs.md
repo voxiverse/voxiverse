@@ -116,7 +116,8 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   stands or goes where its game sends it ([games.md](games.md#walkers)); `game`, its game's
   mind, the game's `think` hook each tick, then steered as `steered` is. The engine has no
   creature's mind of its own.
-- `voice` (`bleat`, `none`, `growl`, `squeak`, `groan`, `croak`, `grunt`; default `bleat`): how
+- `voice` (`bleat`, `none`, `growl`, `squeak`, `groan`, `croak`, `grunt`, `chirp`, `chitter`,
+  `whir`, `bellow`; default `bleat`): how
   one cries when it is hurt and when it dies, made by the client's synthesis (`client/sfx`:
   `creature_sound`); `none` is silent (a chest, a shot).
 - `looks` (at most 16 names of `a-z`, `0-9` (not first) and `_`: bit i of what a client is
