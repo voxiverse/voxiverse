@@ -54,6 +54,7 @@ World :: struct {
 	saved:             map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
 	regions:           map[game.Region_Pos]bool, // read from disk; true = changed since written
 	started:           bool, // world_start ran (its chunks and the rest exist)
+	made:              bool, // made this session, not read from a save (world_made)
 	idle_since:        u64, // the last tick someone was in it
 	touched:           [dynamic]game.Chunk_Pos, // chunks changed this tick (a stepped server's hash; heap)
 	kept:              [dynamic]Box, // boxes of chunks (not blocks) kept loaded whoever is near (world_keep; heap)
@@ -148,7 +149,10 @@ world_start :: proc(w: ^World) -> bool {
 	journal_init(w, arena)
 	protections_load(w)
 	w.started = true
-	if !w.spawn.known {gates_begin(w)} 	// (a new world: no spawn chosen yet)
+	if !w.spawn.known { 	// (a new world: no spawn chosen yet)
+		w.made = true
+		gates_begin(w)
+	}
 	spawn_choose(w)
 	load_entities(w)
 	load_stats(w)
@@ -522,6 +526,11 @@ world_state :: proc(w: ^World, $T: typeid) -> ^T {
 	assert(w.server.config.game.world_state == T, "not the game's world_state")
 	return (^T)(raw_data(w.game_state))
 }
+
+// world_made: w was made in this session rather than read from a save: what a game builds
+// into a new world only (once, keeping in its own files that it did) it does not build into
+// one saved before it built such things.
+world_made :: proc(w: ^World) -> bool {return w.made}
 
 // world_file_path: where the game's file `name` of w is (it must be one of Game.world_files).
 @(private)

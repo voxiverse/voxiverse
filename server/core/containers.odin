@@ -55,6 +55,24 @@ use_block :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos) {
 	record(s, c, .Item_Used, "chest", at = pos)
 }
 
+// chest_slots: the slots of the chest at p (nil: no chest there, or not loaded), its record
+// made if it had none (a chest worldgen or a bulk edit put there): a game stocks a chest it
+// built as it would a machine's slots, booking what it puts there (items_made). Marks the
+// chunk changed.
+chest_slots :: proc(w: ^World, p: game.Block_Pos) -> []game.Stack {
+	block, loaded := chunks_block(&w.chunks, p)
+	if !loaded ||
+	   game.block_entity_kind(&w.server.registry.blocks, block) != .Container {return nil}
+	e := block_entity_at(w, p)
+	if e == nil {
+		entity_lifecycle(w, p, .Air, block, {})
+		e = block_entity_at(w, p)
+		if e == nil {return nil}
+	}
+	block_entity_touch(w, p)
+	return e.slots[:]
+}
+
 // chest_close: c looks into nothing now.
 @(private)
 chest_close :: proc(c: ^Client) {
