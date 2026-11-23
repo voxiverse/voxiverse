@@ -42,6 +42,8 @@ gate_keys :: proc(app: ^engine.App) {
 
 gate_entry_open :: proc(app: ^engine.App, gate: game.Block_Pos) {
 	engine.overlay_open(&app.overlays, .Gate)
+	if s := app.session;
+	   s != nil {engine.journal_place(s, .Gate, {f64(gate.x), f64(gate.y), f64(gate.z)})}
 	app.gate_entry = {
 		gate = gate,
 	}

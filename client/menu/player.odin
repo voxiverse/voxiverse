@@ -5,8 +5,8 @@ import "core:fmt"
 import "client:engine"
 import "client:ui"
 
-// The player menu: one overlay with a section open (the Inventory with the character, the
-// Statistics; later the Map, Journal and Atlas). A section is a row of
+// The player menu: one overlay with a section open (the Map, the Journal, the Inventory
+// with the character, the Statistics; later the Atlas). A section is a row of
 // SECTIONS (its key, whether it is shown, its draw proc) and a draw proc
 // that calls section_tabs for the strip. A hidden section's key does
 // nothing: its row is there for the day it is built.
@@ -15,7 +15,8 @@ import "client:ui"
 // when its section is the open one, else switches to it; Tab opens the
 // section shown last (Inventory the first time) and closes the menu when
 // open; Escape closes it (overlay.odin); the pad's View is Tab, LB and RB
-// step the shown sections, round. The world runs on behind it.
+// step the shown sections, round. The Character key (C) is the Inventory's too: it is the
+// character's screen. The world runs on behind it.
 
 Section :: struct {
 	label:   string,
@@ -26,8 +27,8 @@ Section :: struct {
 
 @(rodata)
 SECTIONS := [engine.Section_Id]Section {
-	.Map        = {"Map", .World_Map, false, nil},
-	.Journal    = {"Journal", .Journal, false, nil},
+	.Map        = {"Map", .World_Map, true, map_ui},
+	.Journal    = {"Journal", .Journal, true, journal_ui},
 	.Inventory  = {"Inventory", .Inventory, true, inventory_ui},
 	.Character  = {"Character", .Character, false, nil},
 	.Atlas      = {"Atlas", .Atlas, false, nil},
@@ -111,6 +112,11 @@ player_menu_keys :: proc(app: ^engine.App) {
 			if id == m.section {player_menu_close(app)} else {player_menu_show(app, id)}
 			return
 		}
+		if engine.key_action_pressed(a, .Character) {
+			if m.section ==
+			   .Inventory {player_menu_close(app)} else {player_menu_show(app, .Inventory)}
+			return
+		}
 		if engine.action_pressed(
 			a,
 			.Section_Prev,
@@ -132,6 +138,7 @@ player_menu_keys :: proc(app: ^engine.App) {
 			return
 		}
 	}
+	if engine.action_pressed(a, .Character) {player_menu_show(app, .Inventory)}
 }
 
 // player_menu_ui: the overlay: the open section draws itself.

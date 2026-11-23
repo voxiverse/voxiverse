@@ -30,9 +30,9 @@ Action :: enum u8 {
 	Inventory,
 	Stats, // also closes it
 	Player_Menu, // Tab, the pad's View: the last section
-	World_Map, // M (the Map section's key; its name is not `Map`: a field cannot be called map): hidden until its section exists
+	World_Map, // M (the Map section's key; its name is not `Map`: a field cannot be called map)
 	Journal, // J
-	Character, // C
+	Character, // C: the Inventory section (the character is on it)
 	Atlas, // L
 	Toggle_HUD, // F1
 	Camera, // F5

@@ -532,6 +532,7 @@ number and no cast.
 | `Look`, `Grade` | What its `look` field holds: its atmosphere ([below](#a-games-look)) |
 | `Game_Camera`, `Game_Camera_Kind`, `pointer_tool(s)`, `Pointer_Tool`, `Pointer_Press` | The camera its `camera` hook asks for; under a top-down or free camera, what the pointer is over and what each button did |
 | `Scoreboard`, `SCOREBOARD_COLUMNS`, `scoreboard_columns(board, ...)`, `scoreboard_row(board, name, ...)` | Filling the player list (the `scoreboard` hook) |
+| `journal_place(s, kind, at, name)`, `Place_Kind` | A place of the game's in the player's journal (its ruin, an outpost, a beacon): the journal's screen (J) lists it, the compass along the top marks it and the map (M) shows it; the engine notes gates and the creatures met itself |
 
 ### Items and panes: `client:menu`
 

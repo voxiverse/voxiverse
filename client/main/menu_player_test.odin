@@ -38,25 +38,27 @@ test_section_table :: proc(t: ^testing.T) {
 	}
 	for sec, id in menu.SECTIONS {
 		testing.expect_value(t, sec.action, keys[id])
-		shown := id == .Inventory || id == .Statistics
+		shown := id != .Character && id != .Atlas // (Character's key opens the Inventory)
 		testing.expectf(t, sec.visible == shown, "%v: visible is %v", id, sec.visible)
 		testing.expectf(t, (sec.draw != nil) == shown, "%v: a draw proc iff shown", id)
 	}
-	// The defaults: Tab, E, K, N, J, C, L.
+	// The defaults: Tab, E, K, M, J, C, L.
 	b := engine.DEFAULT_BINDINGS
 	testing.expect_value(t, b.player_menu, platform.Key.Tab)
 	testing.expect_value(t, b.inventory, platform.Key.E)
 	testing.expect_value(t, b.stats, platform.Key.K)
-	testing.expect_value(t, b.world_map, platform.Key.N)
+	testing.expect_value(t, b.world_map, platform.Key.M)
 	testing.expect_value(t, b.journal, platform.Key.J)
 	testing.expect_value(t, b.character, platform.Key.C)
 	testing.expect_value(t, b.atlas, platform.Key.L)
 	testing.expect_value(t, b.toggle_hud, platform.Key.F1)
 	// Stepping skips the hidden ones and wraps.
 	testing.expect_value(t, menu.section_step(.Inventory, 1), engine.Section_Id.Statistics)
-	testing.expect_value(t, menu.section_step(.Statistics, 1), engine.Section_Id.Inventory)
-	testing.expect_value(t, menu.section_step(.Inventory, -1), engine.Section_Id.Statistics)
-	testing.expect_value(t, menu.section_step(.Statistics, -1), engine.Section_Id.Inventory)
+	testing.expect_value(t, menu.section_step(.Statistics, 1), engine.Section_Id.Map)
+	testing.expect_value(t, menu.section_step(.Map, 1), engine.Section_Id.Journal)
+	testing.expect_value(t, menu.section_step(.Journal, 1), engine.Section_Id.Inventory)
+	testing.expect_value(t, menu.section_step(.Inventory, -1), engine.Section_Id.Journal)
+	testing.expect_value(t, menu.section_step(.Map, -1), engine.Section_Id.Statistics)
 }
 
 @(test)
@@ -87,21 +89,31 @@ test_player_menu_keys :: proc(t: ^testing.T) {
 	tap(&f, .Tab)
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Player_Menu), "Tab closes")
 
-	// The hidden sections' keys do nothing, in the world and in the menu.
-	for k in ([]platform.Key{.M, .J, .C, .L}) {
-		tap(&f, k)
+	// M opens the map, J the journal, C the inventory (the character's screen); each
+	// closes its own; the Atlas is not built: L does nothing, in the world or the menu.
+	opens := [?]struct {
+		key: platform.Key,
+		id:  engine.Section_Id,
+	}{{.M, .Map}, {.J, .Journal}, {.C, .Inventory}}
+	for o in opens {
+		tap(&f, o.key)
+		testing.expectf(t, menu.section_open(app, o.id), "%v opens %v", o.key, o.id)
+		tap(&f, o.key)
 		testing.expectf(
 			t,
 			!engine.overlay_is_open(&app.overlays, .Player_Menu),
-			"%v does nothing",
-			k,
+			"%v closes it",
+			o.key,
 		)
 	}
+	tap(&f, .L)
+	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Player_Menu), "L does nothing")
 	tap(&f, .E)
-	for k in ([]platform.Key{.M, .J, .C, .L}) {
-		tap(&f, k)
-		testing.expectf(t, menu.section_open(app, .Inventory), "%v does nothing in the menu", k)
-	}
+	tap(&f, .L)
+	testing.expect(t, menu.section_open(app, .Inventory), "L does nothing in the menu")
+	tap(&f, .J)
+	testing.expect(t, menu.section_open(app, .Journal), "J switches to the journal")
+	tap(&f, .E)
 
 	// No Q or E stepping off the slots: Q does nothing here.
 	tap(&f, .Q)

@@ -1,5 +1,6 @@
 package engine
 
+import "core:mem"
 import "core:slice"
 
 import "client:render"
@@ -310,4 +311,137 @@ flash_draw :: proc(ctx: ^ui.Context, f: ^Flash, s: ^Session, at: f32 = -160, sca
 	pop := FLASH_POP_FROM + (1 - FLASH_POP_FROM) * ui.ease(.Out_Back, age / FLASH_POP)
 	color.a = u8(f32(color.a) * clamp((f.seconds - age) / FLASH_FADE, 0, 1))
 	banner(ctx, at, text, scale * pop, color)
+}
+
+// The journal: the places the player has found in this world and the creatures met, as
+// this client has learnt them (kept with the session: a new session starts it empty). The
+// journal's screen lists them, the compass marks the places and the map shows them. The
+// engine notes the gates the player used or saw open and every creature that came into
+// view; a game's client part notes its own places (journal_place: its ruin, a town, an
+// outpost the player built).
+
+MAX_PLACES :: 64
+MAX_MET :: 64 // creature kinds the journal remembers
+PLACE_NAME_MAX :: 32
+PLACE_SAME :: 24 // blocks: a place of a kind this near one already noted is that one
+
+// Place_Kind: what kind of place a journal's place is (its name when it has none of its own).
+Place_Kind :: enum u8 {
+	Gate,
+	Ruin,
+	Town,
+	Outpost,
+	Beacon,
+}
+
+// Place: a place in the journal (name_len 0: the kind's own name).
+Place :: struct {
+	kind:     Place_Kind,
+	at:       [3]f64,
+	name:     [PLACE_NAME_MAX]u8,
+	name_len: u8,
+}
+
+// Journal: the session's places and the creature kinds met, in the order found.
+Journal :: struct {
+	places:      [MAX_PLACES]Place,
+	place_count: int,
+	met:         [MAX_MET]game.Kind_Id,
+	met_count:   int,
+}
+
+// place_name: the place's own name ("" when it has none).
+place_name :: proc(p: ^Place) -> string {return string(p.name[:p.name_len])}
+
+// journal_place notes a place in the journal (a game's client part calls it for its own
+// places): a place of the same kind within PLACE_SAME blocks of one noted is that one, its
+// name changed; past MAX_PLACES the oldest is forgotten. name: "" for the kind's own name.
+journal_place :: proc(s: ^Session, kind: Place_Kind, at: [3]f64, name := "") {
+	j := &s.journal
+	p: ^Place
+	for &q in j.places[:j.place_count] {
+		d := q.at - at
+		if q.kind == kind && d.x * d.x + d.z * d.z <= PLACE_SAME * PLACE_SAME {p = &q}
+	}
+	if p == nil {
+		if j.place_count == MAX_PLACES {
+			copy(j.places[:], j.places[1:])
+			j.place_count -= 1
+		}
+		p = &j.places[j.place_count]
+		j.place_count += 1
+		p^ = {
+			kind = kind,
+			at   = at,
+		}
+	}
+	if name != "" || p.name_len == 0 {p.name_len = u8(copy(p.name[:], name))}
+}
+
+// journal_meet notes a creature kind as met (once; past MAX_MET no more are noted).
+journal_meet :: proc(s: ^Session, kind: game.Kind_Id) {
+	j := &s.journal
+	for k in j.met[:j.met_count] {if k == kind {return}}
+	if j.met_count == MAX_MET {return}
+	j.met[j.met_count] = kind
+	j.met_count += 1
+}
+
+// The minimap's ground (client/overview draws it; the player menu's map too): a map seen
+// from above, each cell the colour of its top block, read a few rows a frame.
+
+MINIMAP_ROWS_A_FRAME :: 4 // rows of cells whose colour is read again each frame
+
+// Minimap: a game's map from above in a corner of the HUD, its ground read from the world a
+// few rows a frame (minimap_init, minimap_ground, minimap_draw).
+Minimap :: struct {
+	lo, hi:   [2]i32, // the map's blocks (x, z), inclusive
+	y_lo:     i32, // the heights its ground lies between
+	y_hi:     i32,
+	cell:     i32, // blocks a side of a cell
+	size:     [2]int, // cells
+	colors:   [][4]u8, // each cell's ground (alpha 0: not read yet)
+	next_row: int,
+}
+
+// minimap_init: a minimap of the map lo..hi (x, z), its ground between y_lo and y_hi, in
+// cells of `cell` blocks (the session's arena, with the game's state).
+minimap_init :: proc(
+	m: ^Minimap,
+	lo, hi: [2]i32,
+	y_lo, y_hi: i32,
+	cell: i32 = 2,
+	allocator := context.allocator,
+	loc := #caller_location,
+) -> bool {
+	m.lo, m.hi, m.y_lo, m.y_hi, m.cell = lo, hi, y_lo, y_hi, max(cell, 1)
+	m.size = {int((hi.x - lo.x) / m.cell) + 1, int((hi.y - lo.y) / m.cell) + 1}
+	err: mem.Allocator_Error
+	m.colors, err = make([][4]u8, m.size.x * m.size.y, allocator, loc)
+	return err == nil
+}
+
+// minimap_move: the minimap's map moved to begin at lo, as big as it was, its ground to be
+// read again.
+minimap_move :: proc(m: ^Minimap, lo: [2]i32) {
+	m.hi += lo - m.lo
+	m.lo = lo
+	for &c in m.colors {c = {}}
+	m.next_row = 0
+}
+
+// minimap_ground: a few rows of the ground's colours read from the world again.
+minimap_ground :: proc(m: ^Minimap, s: ^Session) {
+	if len(m.colors) == 0 {return}
+	for _ in 0 ..< MINIMAP_ROWS_A_FRAME {
+		cz := m.next_row
+		m.next_row = (m.next_row + 1) % m.size.y
+		for cx in 0 ..< m.size.x {
+			x := m.lo.x + i32(cx) * m.cell + m.cell / 2
+			z := m.lo.y + i32(cz) * m.cell + m.cell / 2
+			if b, _, ok := ground_top(s, x, z, m.y_lo, m.y_hi); ok {
+				m.colors[cz * m.size.x + cx] = block_colour(s, b)
+			}
+		}
+	}
 }

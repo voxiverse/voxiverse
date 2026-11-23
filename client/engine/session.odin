@@ -102,6 +102,8 @@ Session :: struct {
 	pointer_over_ui:  bool, // the pointer is over the UI (ui.pointer_over): the world does not take its clicks
 	puffs:            [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
 	feel:             Feel, // the feedback under way and its clock (feel.odin)
+	journal:          Journal, // the places found and the creatures met (marks.odin)
+	world_map:        Minimap, // the player menu's map (marks.odin; its cells in the arena, made when first shown)
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen:     bool,
 	grants:           [dynamic]access.Grant, // what the server lets this player do (heap)
@@ -648,6 +650,9 @@ session_teleport :: proc(s: ^Session, t: protocol.Teleport) {
 session_set_rule :: proc(s: ^Session, name, value: string) {
 	send_message(s, protocol.Set_Rule{name, value})
 }
+
+// session_allocator: the session's arena: what is made with it is freed with the session.
+session_allocator :: proc(s: ^Session) -> mem.Allocator {return virtual.arena_allocator(&s.arena)}
 
 // session_others_now: the server time (ticks) to show the other players
 // and entities at, and whether the connection is live: snapshots stopped

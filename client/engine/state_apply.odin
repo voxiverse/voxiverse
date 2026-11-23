@@ -205,6 +205,8 @@ apply_entity :: proc(s: ^Session, g: protocol.Received) {
 		e.team, e.vision = v.team, v.vision
 		return
 	}
+	if info := game.kind_info(s.reg, v.kind);
+	   info != nil && info.hittable {journal_meet(s, v.kind)}
 	s.entities[id] = {
 		kind       = v.kind,
 		stack      = v.stack,
@@ -244,7 +246,10 @@ apply_block :: proc(s: ^Session, g: protocol.Received) {
 	block := game.Block(v.block)
 	changed := world_set_block(&s.world, p, block) && old != block
 	// A gate opening: its void gathers (gates.odin).
-	if changed && block == .Gate_Horizon {gate_void_appeared(s, p)}
+	if changed && block == .Gate_Horizon {
+		gate_void_appeared(s, p)
+		journal_place(s, .Gate, {f64(p.x), f64(p.y), f64(p.z)})
+	}
 	// The world's own changes (flowing water) are quiet; someone else's edit
 	// is heard where it happened.
 	if changed && v.heard {edit_sound(s, p, old, block)}

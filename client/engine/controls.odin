@@ -28,8 +28,8 @@ Bindings :: struct {
 	inventory:       platform.Key,
 	stats:           platform.Key, // open the statistics
 	player_menu:     platform.Key, // the last section; closes the menu
-	world_map:       platform.Key, // (the Map section: hidden for now)
-	journal:         platform.Key, // (hidden)
+	world_map:       platform.Key,
+	journal:         platform.Key,
 	character:       platform.Key, // (hidden)
 	atlas:           platform.Key, // (hidden)
 	toggle_hud:      platform.Key, // hide the HUD
@@ -68,7 +68,7 @@ DEFAULT_BINDINGS :: Bindings {
 	inventory    = .E,
 	stats        = .K,
 	player_menu  = .Tab,
-	world_map    = .N,
+	world_map    = .M,
 	journal      = .J,
 	character    = .C,
 	atlas        = .L,
@@ -125,9 +125,16 @@ BINDING_VARS := [?]base.Var {
 		label = "Player menu",
 		help = "Open the player menu at the section you had open last; the same key closes it.",
 	},
-	{field = "world_map", label = "Map", help = "Open the map (not there yet)."},
-	{field = "journal", help = "Open the journal (not there yet)."},
-	{field = "character", help = "Open your character (not there yet)."},
+	{
+		field = "world_map",
+		label = "Map",
+		help = "Open the player menu at the map of what is round you.",
+	},
+	{
+		field = "journal",
+		help = "Open the player menu at your journal: the places found, the creatures met.",
+	},
+	{field = "character", help = "Open the player menu at your inventory and character."},
 	{field = "atlas", help = "Open the atlas (not there yet)."},
 	{
 		field = "toggle_hud",

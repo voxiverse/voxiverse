@@ -1,7 +1,5 @@
 package overview
 
-import "core:mem"
-
 import "client:engine"
 import "client:ui"
 
@@ -13,58 +11,23 @@ import "client:ui"
 // where on the map the player pointed: the game moves its camera there (minimap_jump), or
 // sends its units.
 
-MINIMAP_ROWS_A_FRAME :: 4 // rows of cells whose colour is read again each frame
+// The minimap's ground is read and kept by the engine (engine.Minimap), so the player menu's
+// map (client/menu) and a game's minimap are the same thing.
 
-// Minimap: a game's map from above in a corner of the HUD, its ground read from the world a
-// few rows a frame (minimap_init, minimap_ground, minimap_draw).
-Minimap :: struct {
-	lo, hi:   [2]i32, // the map's blocks (x, z), inclusive
-	y_lo:     i32, // the heights its ground lies between
-	y_hi:     i32,
-	cell:     i32, // blocks a side of a cell
-	size:     [2]int, // cells
-	colors:   [][4]u8, // each cell's ground (alpha 0: not read yet)
-	next_row: int,
-}
+// Minimap: a game's map from above in a corner of the HUD (engine.Minimap).
+Minimap :: engine.Minimap
+
+// minimap_init: a minimap of the map lo..hi (x, z), its ground between y_lo and y_hi, in cells of `cell` blocks (engine.minimap_init).
+minimap_init :: engine.minimap_init
+
+// minimap_ground: a few rows of the ground's colours read from the world again (engine.minimap_ground).
+minimap_ground :: engine.minimap_ground
 
 // Mark: a dot of the game's on the minimap.
 Mark :: struct {
 	at:    [2]f64, // x, z
 	color: [4]u8,
 	size:  f32, // UI units (0: 3)
-}
-
-// minimap_init: a minimap of the map lo..hi (x, z), its ground between y_lo and y_hi, in
-// cells of `cell` blocks (the session's arena, with the game's state).
-minimap_init :: proc(
-	m: ^Minimap,
-	lo, hi: [2]i32,
-	y_lo, y_hi: i32,
-	cell: i32 = 2,
-	allocator := context.allocator,
-	loc := #caller_location,
-) -> bool {
-	m.lo, m.hi, m.y_lo, m.y_hi, m.cell = lo, hi, y_lo, y_hi, max(cell, 1)
-	m.size = {int((hi.x - lo.x) / m.cell) + 1, int((hi.y - lo.y) / m.cell) + 1}
-	err: mem.Allocator_Error
-	m.colors, err = make([][4]u8, m.size.x * m.size.y, allocator, loc)
-	return err == nil
-}
-
-// minimap_ground: a few rows of the ground's colours read from the world again.
-minimap_ground :: proc(m: ^Minimap, s: ^engine.Session) {
-	if len(m.colors) == 0 {return}
-	for _ in 0 ..< MINIMAP_ROWS_A_FRAME {
-		cz := m.next_row
-		m.next_row = (m.next_row + 1) % m.size.y
-		for cx in 0 ..< m.size.x {
-			x := m.lo.x + i32(cx) * m.cell + m.cell / 2
-			z := m.lo.y + i32(cz) * m.cell + m.cell / 2
-			if b, _, ok := engine.ground_top(s, x, z, m.y_lo, m.y_hi); ok {
-				m.colors[cz * m.size.x + cx] = engine.block_colour(s, b)
-			}
-		}
-	}
 }
 
 // minimap_point: where a point of the map is on the minimap drawn in r.

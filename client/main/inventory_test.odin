@@ -435,14 +435,22 @@ test_stats_with_a_pad :: proc(t: ^testing.T) {
 	)
 	s.player_stats.pages = 2
 
-	// View opens the menu (the inventory first), RB steps to the statistics,
-	// with the list focused; A opens a group.
+	// View opens the menu (the inventory first), RB steps to the statistics, then round
+	// through the map and the journal; LB steps back; the statistics' list is focused; A
+	// opens a group.
 	pad_tap(app, .Back)
 	testing.expect(t, menu.section_open(app, .Inventory))
 	pad_tap(app, .Right_Bumper)
 	testing.expect(t, menu.section_open(app, .Statistics))
 	pad_tap(app, .Right_Bumper) // (round)
+	testing.expect(t, menu.section_open(app, .Map))
+	pad_tap(app, .Right_Bumper)
+	testing.expect(t, menu.section_open(app, .Journal))
+	pad_tap(app, .Right_Bumper)
 	testing.expect(t, menu.section_open(app, .Inventory))
+	pad_tap(app, .Left_Bumper)
+	testing.expect(t, menu.section_open(app, .Journal))
+	pad_tap(app, .Left_Bumper)
 	pad_tap(app, .Left_Bumper)
 	testing.expect(t, menu.section_open(app, .Statistics))
 	pad_frame(app)

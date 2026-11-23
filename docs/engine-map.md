@@ -386,6 +386,8 @@ The types these name:
 - `SCOREBOARD_COLUMNS :: 4`: the most columns a game's scoreboard has besides the name.
 - `scoreboard_columns :: proc(board: ^Scoreboard, headings: ..string)`: the board's headings after the name's (at most SCOREBOARD_COLUMNS).
 - `scoreboard_row :: proc(board: ^Scoreboard, name: string, cells: ..string, you := false)`: a row, after those there are: a name and its cells, in the columns' order; you: the player's own.
+- `journal_place :: proc(s: ^Session, kind: Place_Kind, at: [3]f64, name := "")`: journal_place notes a place in the journal (a game's client part calls it for its own places): a place of the same kind within PLACE_SAME blocks of one noted is that one, its name changed; past MAX_PLACES the oldest is forgotten.
+- `Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon}`: what kind of place a journal's place is (its name when it has none of its own).
 
 The types these name:
 
@@ -498,10 +500,10 @@ The types these name:
 - `fog_draw :: proc(f: ^Fog, s: ^engine.Session, unseen, unexplored: [4]u8)`: the ground the side does not see darkened (`unseen`), and the ground it never saw more so (`unexplored`): a quad a cell, on its ground.
 - `fog_sees :: proc(f: ^Fog, x, z: f64) -> bool`: the side sees the point now (on the map).
 - `fog_explored :: proc(f: ^Fog, x, z: f64) -> bool`: the side has seen the point (on the map).
-- `Minimap :: struct {...}`: a game's map from above in a corner of the HUD, its ground read from the world a few rows a frame (minimap_init, minimap_ground, minimap_draw).
+- `Minimap :: engine.Minimap`: a game's map from above in a corner of the HUD (engine.Minimap).
 - `Mark :: struct {...}`: a dot of the game's on the minimap.
-- `minimap_init :: proc(m: ^Minimap, lo, hi: [2]i32, y_lo, y_hi: i32, cell: i32 = 2, allocator := context.allocator, loc := #caller_location) -> bool`: a minimap of the map lo..hi (x, z), its ground between y_lo and y_hi, in cells of `cell` blocks (the session's arena, with the game's state).
-- `minimap_ground :: proc(m: ^Minimap, s: ^engine.Session)`: a few rows of the ground's colours read from the world again.
+- `minimap_init :: engine.minimap_init`: a minimap of the map lo..hi (x, z), its ground between y_lo and y_hi, in cells of `cell` blocks (engine.minimap_init).
+- `minimap_ground :: engine.minimap_ground`: a few rows of the ground's colours read from the world again (engine.minimap_ground).
 - `minimap_draw :: proc(m: ^Minimap, s: ^engine.Session, ctx: ^ui.Context, r: ui.Rect, fog: ^Fog, marks: []Mark, unseen, unexplored: [4]u8) -> (at: [2]f64, pointed: bool)`: the minimap in r: its ground, the fog of the side (nil: none), the game's marks, and the camera's focus framed.
 - `minimap_jump :: proc(s: ^engine.Session, at: [2]f64, height: f64)`: the camera's focus moved to a point of the map (the player's own place, asked of the server as any move is; height: the y to stand it at).
 
