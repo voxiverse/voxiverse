@@ -30,6 +30,7 @@ Sound_Kind :: enum u8 {
 	Hit_Head,
 	Reload,
 	Gate_Open, // a gate's void gathering (gates.odin)
+	Made, // the player made something (feel.odin's made)
 }
 
 Sound_Event :: struct {
@@ -354,6 +355,17 @@ sounds_play :: proc(
 					gain = gain,
 					pitch = pitch,
 					bus = .World,
+					cutoff = cutoff,
+				},
+			)
+		case .Made:
+			audio.play(
+				m,
+				{
+					sound = b.player[.Made][variant],
+					gain = gain,
+					pitch = 1,
+					bus = .Player,
 					cutoff = cutoff,
 				},
 			)

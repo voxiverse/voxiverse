@@ -39,6 +39,7 @@ Action :: enum u8 {
 
 Player_Sound :: enum u8 {
 	Land,
+	Made, // something made (a game's crafting done): a soft latch, then two bright rising chimes
 }
 
 Blast_Sound :: enum u8 {
@@ -258,6 +259,11 @@ player_sound :: proc(p: Player_Sound, variant: int, allocator := context.allocat
 		burst(&s, {start = 0, tau = 0.030, filter = .Low, freq = 420 * r, gain = 0.6})
 		scatter(&s, 3, 0.005, 0.05, {tau = 0.01, filter = .Band, q = 1.5}, 300, 800, 0.2, 0.3)
 		return finish(&s, 0.85, allocator)
+	case .Made:
+		burst(&s, {start = 0, tau = 0.012, filter = .Low, freq = 600 * r, gain = 0.5})
+		burst(&s, {start = 0.04, tau = 0.045, filter = .Band, freq = 1180 * r, q = 9, gain = 0.9})
+		burst(&s, {start = 0.11, tau = 0.070, filter = .Band, freq = 1770 * r, q = 9, gain = 1})
+		return finish(&s, 0.6, allocator)
 	}
 	return nil
 }

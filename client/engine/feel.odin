@@ -440,6 +440,18 @@ float_text :: proc(s: ^Session, at: [3]f64, text: string, color: [4]u8, scale: f
 	x.at, x.color, x.scale, x.born = at, color, scale, feel_now(s)
 }
 
+// MADE_COLOR: the colour of what made() says (a warm gold, as a reward reads).
+MADE_COLOR :: [4]u8{250, 214, 110, 255}
+
+// made: the player made something (a game's crafting done): a soft chime, and `text` ("+2
+// Cord") floating up a little in front of its eyes, as a pickup reads.
+made :: proc(s: ^Session, text: string) {
+	c := &s.camera
+	ahead := [3]f64{-math.sin(f64(c.yaw)) * 1.6, -0.35, -math.cos(f64(c.yaw)) * 1.6}
+	append(&s.sounds, Sound_Event{.Made, .Air, c.position, 0.8, {}})
+	float_text(s, c.position + ahead, text, MADE_COLOR, 1.2)
+}
+
 PULSE_SECONDS :: 0.45
 PULSE_BANDS :: 8 // the edge's glow, in bands fading inward
 PULSE_DEPTH :: 0.09 // ... as deep as this of the screen's height
