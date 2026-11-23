@@ -70,6 +70,10 @@ run_due_actions :: proc(s: ^Server, c: ^Client) {
 		}
 		switch v in a {
 		case protocol.Edit:
+			if v.face == game.EDIT_FACE_BREAK_BEGIN {
+				c.breaking = {v.pos, v.after, true} // (asks nothing: no answer)
+				continue
+			}
 			swing_near(s, c)
 			send_message(s, c, apply_edit(s, c, v))
 		case protocol.Attack:
@@ -187,6 +191,7 @@ apply_edit_cells :: proc(
 			notice(s, c, tier_text(game.block_tier(s.registry, current)))
 			return
 		}
+		if ok && !break_held_long_enough(s, c, e, current, held) {return}
 		// (a half whose other half is not there breaks alone)
 		there, _ := chunks_block(&w.chunks, cell)
 		if two && there == cell_to {moves_other, other_to = true, .Air}
@@ -442,4 +447,32 @@ farmland_wet :: proc(w: ^World, p: game.Block_Pos) -> bool {
 @(private = "file")
 tier_text :: proc(tier: u8) -> string {
 	return fmt.tprintf("That needs a tier %d tool", tier)
+}
+
+// Break_Begin: where a player began to break a block (an Edit of face
+// EDIT_FACE_BREAK_BEGIN), after which of its inputs.
+Break_Begin :: struct {
+	pos:   game.Block_Pos,
+	after: u32,
+	set:   bool,
+}
+
+// break_held_long_enough: where breaking takes time (game.break_ticks), c began to break
+// this block and held on for at least its ticks: counted in its inputs, one a tick and
+// never more (INPUT_BUDGET_MAX), so a client cannot break faster than its tool allows.
+// The begin is spent either way.
+@(private = "file")
+break_held_long_enough :: proc(
+	s: ^Server,
+	c: ^Client,
+	e: protocol.Edit,
+	current: game.Block,
+	held: game.Stack,
+) -> bool {
+	abilities := game.derive_abilities(s.registry, c.mode, &c.inventory)
+	need := game.break_ticks(s.registry, &c.world.rules, current, held, abilities)
+	begin := c.breaking
+	c.breaking = {}
+	if need == 0 {return true}
+	return begin.set && begin.pos == e.pos && int(e.after - begin.after) >= need
 }

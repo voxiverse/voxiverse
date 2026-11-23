@@ -378,6 +378,8 @@ Block_Def :: struct {
 	back:      i32, // a block tag index: what a facing block's back is against, or NO_TAG
 	back_full: bool, // its back must be against a full face
 	tier:      u8, // the tier of tool that breaks it (its `tier`, 0..MAX_TIER; 0: hands do)
+	hardness:  f32, // seconds bare hands take to break it where breaking takes time (its `hardness`; a material's default)
+	breaker:   Tool_Kind, // the kind of tool quick on it (its `tool`; a material's default)
 	tags:      []u16, // the block tags it is in, ascending
 }
 

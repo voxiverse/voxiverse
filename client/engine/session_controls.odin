@@ -100,6 +100,13 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, a: ^Actions, dt: f32) {
 		if w.zoom > 0 {placing = false}
 	}
 	if _, hook := grapple_in_hand(s); hook {placing = false} 	// (the use button is the hook's)
+	if break_hold(s, breaking && !placing && breaks_blocks(s)) {
+		if s.edit_timer <= 0 {
+			s.edit_timer = EDIT_REPEAT_SECONDS
+			vm_event(&s.vm, .Swing)
+		}
+		return
+	}
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
 	item_use(s, held(s), breaking, placing)
@@ -303,4 +310,71 @@ edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
 	} else {
 		append(&s.sounds, Sound_Event{.Place, new, centre, 1, {}})
 	}
+}
+
+// Break_Hold: where breaking takes time (game.break_ticks), the block the attack is held
+// on, the input the hold began after and the ticks it needs. The client counts its own
+// inputs (one a tick) to it and then sends the break; the server was told the begin
+// (EDIT_FACE_BREAK_BEGIN) and counts the same inputs, so it refuses a break sent sooner.
+Break_Hold :: struct {
+	pos:   game.Block_Pos,
+	begin: u32,
+	need:  int,
+	on:    bool,
+}
+
+// breaks_blocks: the attack button breaks the aimed block with what is in the hand: not a
+// gun or the launcher (theirs is the trigger), not a blade or club that only swings (a
+// melee item without `gather`).
+breaks_blocks :: proc(s: ^Session) -> bool {
+	info, _ := game.item_info(s.reg, held(s).item)
+	if _, tool := info.tool.?; tool && info.tool.? == .Launcher {return false}
+	if _, melee := info.melee.?; melee && info.gather == {} {return false}
+	return s.aim_entity == nil
+}
+
+// break_hold: the attack held (down) on the aimed block where breaking it takes time: the
+// hold begins (the server told), counts on, and once it has lasted the block's ticks the
+// break is predicted and sent. True while it takes over the button; false where breaking
+// is at once (the old click), or nothing is held on a block (the hold forgotten).
+break_hold :: proc(s: ^Session, down: bool) -> bool {
+	hit, aimed := s.aim.?
+	if !down || !aimed {
+		s.breaking = {}
+		return false
+	}
+	b, _ := world_block(&s.world, hit.block)
+	abilities := game.derive_abilities(s.reg, s.mode, &s.inventory)
+	need := game.break_ticks(s.reg, &s.rules, b, held(s), abilities)
+	if need == 0 {
+		s.breaking = {}
+		return false
+	}
+	now := s.prediction.next_sequence - 1
+	if !s.breaking.on || s.breaking.pos != hit.block {
+		s.breaking = {hit.block, now, need, true}
+		send_message(
+			s,
+			protocol.Edit {
+				after = now,
+				pos = hit.block,
+				block = .Air,
+				face = game.EDIT_FACE_BREAK_BEGIN,
+			},
+		)
+		return true
+	}
+	s.breaking.need = need // (the tool in hand may have changed)
+	if int(now - s.breaking.begin) >= need {
+		session_edit(s, false, .Air)
+		s.breaking = {}
+	}
+	return true
+}
+
+// break_progress: how far the hold on the aimed block has gone, 0..1 (0: none).
+break_progress :: proc(s: ^Session) -> f32 {
+	if !s.breaking.on || s.breaking.need <= 0 {return 0}
+	done := int(s.prediction.next_sequence - 1 - s.breaking.begin)
+	return clamp(f32(done) / f32(s.breaking.need), 0, 1)
 }

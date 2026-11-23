@@ -66,7 +66,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	placed := Edit{6, 10, {1, 2, 3}, game.Block(60), {1, 1, 3}, 2, {8, 16, 0}}
 	edit, ok = decode_client_t(encode_c(placed)[:])
 	testing.expect(t, ok && edit.(Edit) == placed)
-	for bad in ([]Edit{{face = 8}, {hit = {17, 0, 0}}}) {
+	for bad in ([]Edit{{face = game.EDIT_FACE_BREAK_BEGIN + 1}, {hit = {17, 0, 0}}}) {
 		_, ok = decode_client_t(encode_c(bad)[:])
 		testing.expect(t, !ok)
 	}

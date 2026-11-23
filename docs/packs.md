@@ -112,15 +112,36 @@ a block players may place has its item made for it. Every field is optional:
   together, and a consumable's, take off at most `MAX_DEFENCE`, 0.8) and `fall_guard` (a
   fraction of a fall's harm taken off after that; 1: none).
 - `weapon`, `melee`, `grapple` (a gun, a blade, a hook: [games.md](games.md#walkers)).
-- `gather`: `{"tier": 1..3, "yield": 0..4}`: held in the hand, it breaks the blocks of its
-  tier and below (a block's `tier`, 0..3; 0, every block that names none, hands break),
-  and each block of tier 1 or above it breaks leaves `yield` more of its drop. A player
-  whose mode has `instant_break` breaks every tier; one that does not is told what tier a
-  block needs and keeps it (`can_gather`, asked by the server).
+- `gather`: `{"tier": 0..3, "yield": 0..4, "speed": 1..20, "kind": "pick"|"blade"|"any"}`
+  (`tier` required): held in the hand, it breaks the blocks of its tier and below (a
+  block's `tier`, 0..3; 0, every block that names none, hands break), each block of tier 1
+  or above it breaks leaves `yield` more of its drop, and where breaking takes time (below)
+  it breaks `speed` times as fast as hands a block its `kind` is quick on (half that, at
+  least hands', on a block of `any`; hands' on the rest). A player whose mode has
+  `instant_break` breaks every tier; one that does not is told what tier a block needs and
+  keeps it (`can_gather`, asked by the server).
 - `consume`: `{"heal": n, "regen": n, "defence": f, "seconds": s}`: what one does used up
   (its game calls `core.item_consume` when its player uses the stack in its hand): `heal`
   health at once, then for `seconds` `regen` health a second and `defence` taken off every
   harm, in place of what one used before still did; a death ends it, and it is not saved.
+
+### Breaking time
+
+A block's `hardness` (0..60) is the seconds bare hands take to break it and its `tool`
+(`pick`, `blade`, `any`) the kind of tool quick on it; a block that names neither takes its
+material's: stone and masonry 2.5 s for a pick, wood 2 s for a blade, metal 4 s, built and
+industrial 2 s and fantasy 3 s for a pick, soft and domestic 0.8 s for a blade, natural 0.6 s
+for any (leaves 0.3 s for a blade); a block of no material, a crossed plant at once, any
+other half a second. What a world's breaking takes is its rule `break_time` times that over
+the tool's speed (`game.break_ticks`, rounded up to whole ticks); the rule is 0, at once, unless a
+game sets it (the sandbox: 1), and a mode with `instant_break` (creative) breaks at once
+anyway. Holding the attack button on a block, the client tells the server it began (an
+`Edit` of id 0 and face `EDIT_FACE_BREAK_BEGIN`, after its last input), counts its own
+inputs to the block's ticks while drawing the crack spreading on its faces
+(`client/engine/camera.odin`, `break_cracks`), and sends the break; the server counts the
+same inputs between the begin and the break and refuses one sent sooner (inputs are one a
+tick and capped, so a client cannot count faster than the server ticks). Let go, or aim at
+another block, and it starts again.
 
 ## Entity kinds
 

@@ -342,7 +342,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 					},
 				},
 			),
-			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "material", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "connect", "use", "entity", "tier", "override"`,
+			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "material", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "connect", "use", "entity", "tier", "hardness", "tool", "override"`,
 		},
 		{
 			"light out of range",
@@ -1061,7 +1061,7 @@ test_gear_and_tiers :: proc(t: ^testing.T) {
 	testing.expect_value(t, block_tier(reg, .Stone), 0)
 	info, _ := item_info(reg, pick)
 	testing.expect_value(t, info.rarity, Rarity.Rare)
-	testing.expect_value(t, info.gather, Gather_Info{2, 1})
+	testing.expect_value(t, info.gather, Gather_Info{tier = 2, yield = 1})
 	info, _ = item_info(reg, salve)
 	testing.expect_value(t, info.consume.?, Consume_Info{4, 1, 0.2, 10})
 	stone_info, _ := item_info(reg, item_of_block(reg, .Stone))
@@ -1091,9 +1091,10 @@ test_gear_and_tiers :: proc(t: ^testing.T) {
 		{
 			"data/items/x.json",
 			`{"a": {"gather": {"tier": 4, "yield": 0}}}`,
-			"gather tier is a number 1..3",
+			"gather tier is a number 0..3",
 		},
-		{"data/items/x.json", `{"a": {"gather": {"tier": 1}}}`, "gather needs \"yield\""},
+		{"data/items/x.json", `{"a": {"gather": {"yield": 1}}}`, "gather needs \"tier\""},
+		{"data/items/x.json", `{"a": {"gather": {"tier": 1, "kind": "axe"}}}`, "kind"},
 		{
 			"data/items/x.json",
 			`{"a": {"consume": {"heal": 1, "regen": 0, "defence": 1, "seconds": 0}}}`,

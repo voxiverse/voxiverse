@@ -97,7 +97,9 @@ handshake and checked by the client.
   ticks.
 - Block edits and attacks are requests: predicted locally, confirmed or rolled back by the
   server. Each names the input it follows, and the server applies it right after that input, so
-  reach is judged from the same position however late it arrives.
+  reach is judged from the same position however late it arrives. Where breaking takes time
+  the client tells the server when its hold on a block began, and the server counts the inputs
+  between that and the break ([packs.md](packs.md#breaking-time)).
 - The transport is an interface with two implementations. In process, the server runs on its own
   thread and talks to the client through queues (`game.Pipe`); singleplayer keeps a separate
   client replica on purpose, so authority stays honest. Over the network, `common/netcode` is

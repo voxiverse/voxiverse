@@ -112,7 +112,9 @@ MODIFIER_STATS := []string{"speed", "jump", "air_jumps", "max_health", "defence"
 @(private)
 RARITY_NAMES := []string{"common", "uncommon", "rare", "epic", "legendary"}
 @(private)
-GATHER_KEYS := []string{"tier", "yield"}
+TOOL_KIND_LIST := []string{"any", "pick", "blade"} // (Tool_Kind, in order)
+@(private)
+GATHER_KEYS := []string{"tier", "yield", "speed", "kind"}
 @(private)
 CONSUME_KEYS := []string{"heal", "regen", "defence", "seconds"}
 @(private)
@@ -839,6 +841,17 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 	t.light[n] = u8(rd_int(b, m, "light", int(made_of.light), 0, 15))
 	d := &t.defs[n]
 	d.tier = u8(rd_int(b, m, "tier", 0, 0, MAX_TIER))
+	d.hardness, d.breaker = material_hardness(material, render)
+	if f := field_of(m, "hardness"); f != nil {
+		if x, ok := json_number(f.value); ok && x >= 0 && x <= 60 {
+			d.hardness = f32(x)
+		} else {
+			fail_field(b, f, f.value, "hardness is seconds, 0..60")
+		}
+	}
+	if f := field_of(m, "tool"); f != nil {
+		d.breaker = Tool_Kind(choice_of(b, f, f.value, "tool", TOOL_KIND_LIST, 0))
+	}
 	d.id = m.id
 	d.render = render
 	d.layer = layer
@@ -1205,11 +1218,7 @@ read_item :: proc(
 	if f := field_of(m, "rarity"); f != nil {
 		info.rarity = Rarity(choice_of(b, f, f.value, "rarity", RARITY_NAMES, 0))
 	}
-	if f := field_of(m, "gather"); f != nil {
-		o: [2]f64
-		read_numbers(b, f, f.value, "gather", GATHER_KEYS, {1, 0}, {MAX_TIER, 4}, &o)
-		info.gather = {u8(o[0]), u8(o[1])}
-	}
+	if f := field_of(m, "gather"); f != nil {read_gather(b, f, &info)}
 	if f := field_of(m, "consume"); f != nil {
 		o: [4]f64
 		read_numbers(b, f, f.value, "consume", CONSUME_KEYS, {0, 0, 0, 0}, {100, 10, 0.9, 600}, &o)
@@ -1612,4 +1621,94 @@ read_recipe :: proc(b: ^Reg_Build, m: ^Merged_Def, item_numbers: []Item) -> Reci
 generator_index :: proc(name: string, names: []string) -> int {
 	for n, i in names {if n == name {return i}}
 	return 0
+}
+
+// read_gather: an item's `gather`: `tier` (0..MAX_TIER) required; `yield` (0..4), `speed`
+// (1..20 times hands') and `kind` ("pick", "blade", "any") optional.
+@(private)
+read_gather :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info) {
+	if f.value.kind != .Object {
+		fail_field(
+			b,
+			f,
+			f.value,
+			"gather is an object with \"tier\" and maybe \"yield\", \"speed\", \"kind\"",
+		)
+		return
+	}
+	g := Gather_Info{}
+	tier := false
+	for m in f.value.members {
+		switch m.key {
+		case "kind":
+			g.kind = Tool_Kind(choice_of(b, f, m.value, "kind", TOOL_KIND_LIST, 0))
+			continue
+		case "tier", "yield", "speed":
+		case:
+			fail(
+				b,
+				f.pack,
+				f.file,
+				m.key_line,
+				m.key_column,
+				fmt.aprintf("gather has no \"%s\"%s", m.key, suggestion(m.key, GATHER_KEYS)),
+			)
+			continue
+		}
+		x, ok := json_number(m.value)
+		lo, hi: f64 = 0, MAX_TIER
+		switch m.key {
+		case "yield":
+			hi = 4
+		case "speed":
+			lo, hi = 1, 20
+		}
+		if !ok || x < lo || x > hi {
+			fail_field(b, f, m.value, fmt.aprintf("gather %s is a number %v..%v", m.key, lo, hi))
+			continue
+		}
+		switch m.key {
+		case "tier":
+			g.tier, tier = u8(x), true
+		case "yield":
+			g.yield = u8(x)
+		case "speed":
+			g.speed = f32(x)
+		}
+	}
+	if !tier {
+		fail_field(b, f, f.value, "gather needs \"tier\"; add it")
+		return
+	}
+	info.gather = g
+}
+
+// material_hardness: the seconds bare hands take to break a block of a material, and the
+// kind of tool quick on it, unless the block says (its `hardness`, `tool`): by family, leaves
+// quick to a blade. A block of no material: plants (crossed) at once, the rest half a second.
+@(private)
+material_hardness :: proc(material: i16, render: Render_Kind) -> (f32, Tool_Kind) {
+	if material == NO_MATERIAL {
+		if render == .Cross {return 0, .Blade}
+		return 0.5, .Any
+	}
+	m := MATERIALS[material]
+	if strings.has_suffix(m.name, "leaves") {return 0.3, .Blade}
+	switch m.family {
+	case .Stone:
+		return 2.5, .Pick
+	case .Wood:
+		return 2, .Blade
+	case .Metal:
+		return 4, .Pick
+	case .Built:
+		return 2, .Pick
+	case .Domestic:
+		return 0.8, .Blade
+	case .Natural:
+		return 0.6, .Any
+	case .Fantasy:
+		return 3, .Pick
+	}
+	return 0.5, .Any
 }

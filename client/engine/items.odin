@@ -77,8 +77,10 @@ item_use :: proc(s: ^Session, stack: game.Stack, breaking, placing: bool) {
 			}
 		}
 	}
-	if _, melee := info.melee.?; melee && breaking && !placing {
-		// A melee weapon swings: the server strikes what is in its arc (no block breaks).
+	if _, melee := info.melee.?;
+	   melee && breaking && !placing && (info.gather == {} || s.aim_entity != nil) {
+		// A melee weapon swings: the server strikes what is in its arc (no block breaks); a
+		// tool that also strikes (a pick) swings only at a creature, and breaks blocks.
 		vm_event(&s.vm, .Swing)
 		session_swing(s)
 		return

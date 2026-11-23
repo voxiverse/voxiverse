@@ -1,5 +1,6 @@
 package game
 
+import "core:math"
 import "core:strings"
 
 // Items: what players carry. Every block players may place has its item;
@@ -103,11 +104,63 @@ Rarity :: enum u8 {
 MAX_TIER :: 3
 
 // Gather_Info: what a tool held in the hand gathers (the item's `gather`): the blocks of
-// its `tier` and below (hands are tier 0, as is every block that names none), and `yield`
-// more of what a block of tier 1 or above leaves (an ore, a stone).
+// its `tier` and below (hands are tier 0, as is every block that names none), `yield`
+// more of what a block of tier 1 or above leaves (an ore, a stone), and how fast: `speed`
+// times bare hands on a block its `kind` is quick on (half that, at least hands', on a
+// block any tool helps with; hands' on the rest).
 Gather_Info :: struct {
 	tier:  u8,
 	yield: u8,
+	speed: f32, // (0: hands')
+	kind:  Tool_Kind,
+}
+
+// Tool_Kind: which blocks a tool is quick on, and which kind a block is quick to (its
+// `tool`): a pick on stone, ore and metal, a blade on wood, plants and leaves; `any`: soil,
+// sand, snow, which any tool helps with a little.
+Tool_Kind :: enum u8 {
+	Any,
+	Pick,
+	Blade,
+}
+
+@(rodata)
+TOOL_KIND_NAMES := [Tool_Kind]string {
+	.Any   = "any",
+	.Pick  = "pick",
+	.Blade = "blade",
+}
+
+// break_ticks: the ticks a player holding `held` takes to break b, its button held on
+// it (0: at once). At once where the rules say breaking takes no time (break_time 0) or
+// the mode breaks at once (instant_break); else its hardness times break_time over the
+// held tool's speed on it (gather_speed), rounded up. The client counts its inputs to it
+// and the server judges the same count (server/core/actions.odin).
+break_ticks :: proc(
+	reg: ^Registry,
+	rules: ^Rules,
+	b: Block,
+	held: Stack,
+	abilities: Abilities,
+) -> int {
+	if !(rules.break_time > 0) || .Instant_Break in abilities {return 0}
+	if !block_valid(&reg.blocks, u16(b)) {return 0}
+	seconds := reg.blocks.defs[b].hardness * rules.break_time / gather_speed(reg, b, held)
+	if !(seconds > 0) {return 0}
+	return int(math.ceil(f64(seconds) * TICK_RATE - 1e-6))
+}
+
+// gather_speed: how many times bare hands' speed `held` breaks b (1: hands').
+gather_speed :: proc(reg: ^Registry, b: Block, held: Stack) -> f32 {
+	g := gather_of(reg, held)
+	if !(g.speed > 1) {return 1}
+	switch reg.blocks.defs[b].breaker {
+	case .Any:
+		return max(g.speed / 2, 1)
+	case .Pick, .Blade:
+		if g.kind == reg.blocks.defs[b].breaker {return g.speed}
+	}
+	return 1
 }
 
 // Consume_Info: what a consumable does when its player uses one up (the item's `consume`;

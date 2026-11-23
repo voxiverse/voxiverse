@@ -118,6 +118,7 @@ world_debug_lines :: proc(app: ^App) {
 		p := [3]f64{f64(b.x), f64(b.y), f64(b.z)}
 		render.debug_box(dd, p - 0.01, p + 1.01, {255, 150, 40, 255})
 	}
+	break_cracks(app.session, dd)
 	world_boxes_draw(app.session, dd)
 	if app.debug.chunk_borders {
 		c := game.chunk_origin(camera_chunk(&app.session.camera))
@@ -134,6 +135,51 @@ world_debug_lines :: proc(app: ^App) {
 					render.BLUE,
 				)
 			}
+		}
+	}
+}
+
+// CRACKS: the crack drawn on each face of a block being broken, as segments in the face's
+// own square (0..1 each way), in the order they show: from a point off its middle, three
+// branches that fork as the hold goes on.
+@(rodata)
+CRACKS := [?][2][2]f32 {
+	{{0.46, 0.54}, {0.30, 0.34}},
+	{{0.46, 0.54}, {0.72, 0.44}},
+	{{0.46, 0.54}, {0.52, 0.80}},
+	{{0.30, 0.34}, {0.14, 0.26}},
+	{{0.72, 0.44}, {0.88, 0.22}},
+	{{0.52, 0.80}, {0.38, 0.95}},
+	{{0.30, 0.34}, {0.34, 0.08}},
+	{{0.72, 0.44}, {0.96, 0.58}},
+	{{0.52, 0.80}, {0.78, 0.90}},
+	{{0.14, 0.26}, {0.04, 0.42}},
+	{{0.88, 0.22}, {0.80, 0.04}},
+	{{0.38, 0.95}, {0.12, 0.84}},
+}
+
+// break_cracks: the block being broken (Break_Hold) cracks on every face, a few more
+// segments of CRACKS the further the hold has gone, just outside its faces.
+break_cracks :: proc(s: ^Session, dd: ^render.Debug_Draw) {
+	f := break_progress(s)
+	if f <= 0 {return}
+	shown := clamp(int(f * f32(len(CRACKS))) + 1, 1, len(CRACKS))
+	b := [3]f64{f64(s.breaking.pos.x), f64(s.breaking.pos.y), f64(s.breaking.pos.z)}
+	OUT :: 0.006
+	// Each face: its corner, then the two edges its square runs along.
+	faces := [6][3][3]f64 {
+		{{1 + OUT, 0, 0}, {0, 0, 1}, {0, 1, 0}},
+		{{-OUT, 0, 0}, {0, 0, 1}, {0, 1, 0}},
+		{{0, 1 + OUT, 0}, {1, 0, 0}, {0, 0, 1}},
+		{{0, -OUT, 0}, {1, 0, 0}, {0, 0, 1}},
+		{{0, 0, 1 + OUT}, {1, 0, 0}, {0, 1, 0}},
+		{{0, 0, -OUT}, {1, 0, 0}, {0, 1, 0}},
+	}
+	for face in faces {
+		for seg in CRACKS[:shown] {
+			a := b + face[0] + face[1] * f64(seg[0].x) + face[2] * f64(seg[0].y)
+			c := b + face[0] + face[1] * f64(seg[1].x) + face[2] * f64(seg[1].y)
+			render.debug_line(dd, a, c, {12, 10, 8, 235})
 		}
 	}
 }

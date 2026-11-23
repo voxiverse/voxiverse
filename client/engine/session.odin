@@ -176,6 +176,7 @@ Session :: struct {
 	edits:            [dynamic]protocol.Edit, // predicted, waiting for Edit_Result
 	next_edit:        u32,
 	edit_timer:       f32, // seconds until a held button edits again
+	breaking:         Break_Hold, // the block the attack is held on, where breaking takes time (session_controls.odin)
 	input_yaw:        f32, // the yaw of the last input predicted (the one an edit follows)
 	sounds:           [dynamic]Sound_Event, // this frame's; the App plays and clears them
 	gate_gathers:     [4]Gate_Gather, // gates opening in sight (gates.odin)

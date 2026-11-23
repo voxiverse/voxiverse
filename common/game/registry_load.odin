@@ -150,6 +150,8 @@ BLOCK_FIELDS := []string {
 	"use",
 	"entity",
 	"tier",
+	"hardness",
+	"tool",
 	"override",
 }
 @(private)

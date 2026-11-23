@@ -38,6 +38,7 @@ Rules :: struct {
 	respawn_delay:        f32, // seconds from a death before the player may come back
 	respawn_auto:         bool, // a dead player comes back by itself once the delay is over (off: at the Respawn button)
 	spawn_protection:     f32, // seconds a player who came back cannot be hurt
+	break_time:           f32, // how long breaking takes, times each block's hardness (0: at once, as for a mode with instant_break; edit.odin's break_ticks)
 }
 
 @(rodata)
@@ -179,6 +180,13 @@ RULES_VARS := [?]base.Var {
 		min = 0,
 		max = 60,
 		step = 0.5,
+	},
+	{
+		field = "break_time",
+		help = "how long breaking takes, times a block's hardness (0: at once)",
+		min = 0,
+		max = 10,
+		step = 0.25,
 	},
 }
 

@@ -111,6 +111,7 @@ local SCHEMA = {
     { name = "respawn_delay", t = "f32" },
     { name = "respawn_auto", t = "bool" },
     { name = "spawn_protection", t = "f32" },
+    { name = "break_time", t = "f32" },
   } },
   { id = 5, name = "clock", key = "none", lane = "reliable", fields = {
     { name = "time", t = "f64" },

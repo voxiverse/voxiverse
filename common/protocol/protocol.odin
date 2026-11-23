@@ -19,7 +19,7 @@ import sc "common:steam"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 51
+PROTOCOL_VERSION :: 52
 MAX_MESSAGE_SIZE :: 64 * 1024
 
 // Client -> server.
@@ -1176,7 +1176,7 @@ decode_client :: proc(data: []u8, reg: ^game.Registry = nil) -> (m: Client_Messa
 		e.target = read_block_pos(&r)
 		e.face = game.read_u8(&r)
 		for &h in e.hit {h = game.read_u8(&r)}
-		if e.face > game.EDIT_FACE_PLAIN {game.reader_fail(&r)}
+		if e.face > game.EDIT_FACE_BREAK_BEGIN {game.reader_fail(&r)}
 		for h in e.hit {if h > 16 {game.reader_fail(&r)}}
 		m = e
 	case u8(Client_Kind.Command):

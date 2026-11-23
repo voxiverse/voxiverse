@@ -19,6 +19,7 @@ Place_Context :: struct {
 // block put at a cell: only a type with the default rule, in its default state).
 EDIT_FACE_BREAK :: 6
 EDIT_FACE_PLAIN :: 7
+EDIT_FACE_BREAK_BEGIN :: 8 // (an Edit of id 0 that asks nothing: its player began to break pos, after input `after`)
 
 face_of_normal :: proc(n: [3]i32) -> (face: Face, ok: bool) {
 	for axes, f in FACE_AXES {
