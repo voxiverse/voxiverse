@@ -292,8 +292,10 @@ The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config
 a dedicated server); `Client`'s `state`, `world`, `player` (its position, velocity, flying),
 `dead`, `mode`, `inventory` and `aside` (its inventory set aside, if any); `World`'s `rules`, `clock`, `address` (which world it is, a
 `starmap.Address`: Earth's is the same in every universe), `seed` (its terrain's, from the
-universe's) and `params` (its generator's parameters: `params.planet` is 1 for a world built on
-the planet model). What a game knows of the planet beyond them is `common:`'s, called
+universe's; Earth's terrain is its address's, `starmap.address_hash`, the same in every
+universe), `generator` (its `worldgen.Kind`), `params` (its generator's parameters:
+`params.planet` is 1 for a world built on the planet model) and `spawn` (where arrivals land:
+`spawn.position`). What a game knows of the planet beyond them is `common:`'s, called
 directly: where a block is on it (`worldgen.planet_lat_lon(x, z)`), the model with its
 relief and climate (`worldgen.planet_model()`, sampled by `planet.planet_climate_at`; the
 Köppen class of a column, `worldgen.planet_climate(x, z)`). What it writes of the engine's
