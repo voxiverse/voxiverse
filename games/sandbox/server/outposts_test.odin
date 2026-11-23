@@ -83,7 +83,8 @@ test_outpost_belongs_to_its_placer :: proc(t: ^testing.T) {
 	testing.expect(t, has)
 }
 
-// Nothing hostile comes by itself within OUTPOST_RADIUS of a beacon; outside it, and a
+// Nothing hostile comes by itself within OUTPOST_RADIUS of a beacon, the home world's
+// predators and guards (wild.odin) as much as the night's shamblers; outside it, and a
 // creature that does not fight (a sheep), comes as ever.
 @(test)
 test_outpost_keeps_creatures_off :: proc(t: ^testing.T) {
@@ -102,6 +103,15 @@ test_outpost_keeps_creatures_off :: proc(t: ^testing.T) {
 	testing.expect(t, !spawned(s, w, near), "a shambler came by itself beside a beacon")
 	testing.expect(t, spawned(s, w, far), "a shambler was kept off far from any beacon")
 	testing.expect(t, spawned(s, w, lamb), "a sheep was kept off")
+	groups := WILD_GROUPS
+	for group in groups {
+		if group.name != "predators" && group.name != "guards" {continue}
+		for which in group.kinds {
+			h := core.entity_spawn(w, state(s).wild[which], {-12.5, 0, 8.5}, true)
+			if !testing.expectf(t, h != 0, "no %v set down", which) {continue}
+			testing.expectf(t, !spawned(s, w, h), "a %v came by itself beside a beacon", which)
+		}
+	}
 }
 
 // The outposts file: written and read back the same; a cut file or a bad CRC is refused.
