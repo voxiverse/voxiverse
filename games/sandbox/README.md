@@ -93,7 +93,8 @@ again after a death (kept with the character); any player may make it theirs too
 it (the right button), so in co-op an outpost serves everyone on the server. No hostile
 creature comes by itself within 48 blocks of a beacon (the spawned hook refuses it, as a
 spawn rule's `safe` does round the world's spawn), so a lamp-lit camp by a beacon is a safe
-night. Only its placer may take a beacon down; a world keeps 32 at most. The crafting screen
+night. An outpost goes into the logbook of whoever places or claims it (the journal, the compass
+and the map show it). Only its placer may take a beacon down; a world keeps 32 at most. The crafting screen
 lists the world's outposts (yours, and which is your respawn), and `/outposts` says them in
 the chat. A death with no outpost (or one whose beacon is gone) stands you at the world's
 spawn as before.
@@ -329,7 +330,9 @@ A site is built in one paste when a player comes within 192 blocks of it and its
 loaded (the court as the first player arrives), and is then the world's like any block: dig
 it, break its finds open. The world's `sandbox.remains.txt` remembers which are built; a
 world saved before there were remains gets none, so nothing is built over what its players
-made.
+made. A player who comes within 32 blocks of a built site has it in its logbook (the court as
+"Gate court", the others as a fallen pylon, a buried wall, a fallen tower, a sealed vault or
+standing stones), so the journal lists it, the compass marks it and the map shows it.
 
 The remains keep their machines (above), each set down once as its site is built and kept
 with the world: a sentry asleep in the cut before each vault's door and in each tower that

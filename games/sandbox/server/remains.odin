@@ -39,7 +39,8 @@ import "server:core"
 // Each built site but the road's is marked for the watchers, and as it is built it sets down
 // the machine it keeps, if any (remains_machines.odin: sentries asleep at the vaults and the
 // towers with a cache, menders at the rings of stones, the pylons and behind the gate, no
-// sentry near the spawn).
+// sentry near the spawn). A player who comes near a built site has it in its logbook
+// (remains_noted), so the journal, the compass and the map show it.
 
 MAX_REMAINS :: 32 // sites a world plans, the court and the road's stretches too
 REMAINS_NEAR :: 60 // blocks from the gate's middle to a scattered site's middle, at the least
@@ -51,6 +52,7 @@ REMAINS_APART :: 40 // blocks between two scattered sites' footprints, at the le
 REMAINS_CLEAR :: 12 // blocks between a site and the court, the ruin's apron or a structure
 REMAINS_REACH :: 192 // a player this near a site's middle has it built once its ground is loaded
 REMAINS_EVERY :: 15 // ticks between two looks at what is to be built
+REMAINS_NOTED :: 32 // a player this near a built site's middle has it in its logbook
 ROAD_GAP :: [2]i32{12, 36} // blocks between two stretches of the road, at the least and the most
 ROAD_SHORTEST :: 8 // a stretch's length, at the least
 ROAD_LONGEST :: 16 // ... and the most
@@ -183,7 +185,10 @@ remains_tick :: proc(s: ^core.Server) {
 	}
 	if s.tick % REMAINS_EVERY != 0 {return}
 	for &site in rm.sites[:rm.count] {
-		if remains_built(rm, site) {continue}
+		if remains_built(rm, site) {
+			remains_noted(s, w, site)
+			continue
+		}
 		near := false
 		for &c in s.clients {
 			if c.state != .Playing || c.world != w {continue}
@@ -196,6 +201,31 @@ remains_tick :: proc(s: ^core.Server) {
 		rm.built[rm.built_count] = site.middle
 		rm.built_count += 1
 		rm.dirty = true
+	}
+}
+
+// REMAIN_NAMES: what a site is called in a player's logbook (its journal, compass and map).
+@(rodata)
+REMAIN_NAMES := [Remain_Kind]string {
+	.Court  = "Gate court",
+	.Road   = "",
+	.Pylon  = "Fallen pylon",
+	.Wall   = "Buried wall",
+	.Tower  = "Fallen tower",
+	.Vault  = "Sealed vault",
+	.Stones = "Standing stones",
+}
+
+// remains_noted: a built site, but the road's, in the logbook of each player in w within
+// REMAINS_NOTED blocks of its middle (across).
+remains_noted :: proc(s: ^core.Server, w: ^core.World, site: Remain) {
+	if site.kind == .Road {return}
+	at := [3]i32{site.middle.x, site.floor + 1, site.middle.y}
+	for &c in s.clients {
+		if c.state != .Playing || c.world != w {continue}
+		d := c.player.position.xz - {f64(site.middle.x) + 0.5, f64(site.middle.y) + 0.5}
+		if d.x * d.x + d.y * d.y > REMAINS_NOTED * REMAINS_NOTED {continue}
+		core.logbook_place(s, &c, .Remains, at, REMAIN_NAMES[site.kind])
 	}
 }
 

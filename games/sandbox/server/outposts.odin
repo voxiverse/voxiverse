@@ -11,7 +11,8 @@ import "server:core"
 
 // Outposts (README.md, "Gathering, crafting and outposts"): a beacon (sandbox:outpost_beacon)
 // placed anywhere makes one. Its placer stands there again after a death (its respawn,
-// kept with its character); any player may make it theirs by using the beacon. No hostile
+// kept with its character, and in its logbook); any player may make it theirs by using the
+// beacon. No hostile
 // creature comes by itself within OUTPOST_RADIUS of one (the spawned hook refuses it, as a
 // spawn rule's `safe` does round the world's spawn), whoever is near. Only its placer may
 // take it down. Each world keeps its outposts (OUTPOSTS_FILE).
@@ -140,6 +141,7 @@ outposts_changed :: proc(s: ^core.Server, w: ^core.World, change: core.Block_Cha
 		owner := core.client_name(change.by) if change.by != nil else ""
 		if !outpost_add(o, at, owner) || change.by == nil {return}
 		outpost_make_home(s, change.by, w, at)
+		core.logbook_place(s, change.by, .Outpost, {at.x, at.y, at.z})
 		core.notice(s, change.by, "Outpost made: you will stand here again after a death")
 	case change.old == g.beacon:
 		outpost_remove(o, at)
@@ -158,6 +160,7 @@ outpost_make_home :: proc(s: ^core.Server, c: ^core.Client, w: ^core.World, at: 
 outpost_use :: proc(s: ^core.Server, c: ^core.Client, at: game.Block_Pos) -> string {
 	if outpost_find(outposts_of(c.world), at) < 0 {return "This beacon is dark"}
 	outpost_make_home(s, c, c.world, at)
+	core.logbook_place(s, c, .Outpost, {at.x, at.y, at.z})
 	core.notice(s, c, "You will stand at this outpost again after a death")
 	return ""
 }

@@ -38,6 +38,12 @@ test_outpost_respawn_and_removal :: proc(t: ^testing.T) {
 	o := outposts_of(s.home)
 	testing.expect_value(t, o.count, 1)
 	testing.expect(t, playtest.told(rig, "Outpost made: you will stand here again after a death"))
+	lb := &h.logbook
+	testing.expect(
+		t,
+		lb.place_count == 1 && lb.places[0].kind == .Outpost && lb.places[0].at == {9, 0, 9},
+		"the outpost is not in its placer's logbook",
+	)
 	playtest.step(rig, SURVIVAL_EVERY + 1)
 	shown := playtest.host_record(rig, sandbox.Survival)
 	if testing.expect(t, shown != nil && shown.count == 1) {

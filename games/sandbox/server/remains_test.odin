@@ -202,7 +202,8 @@ test_remains_court_at_spawn :: proc(t: ^testing.T) {
 }
 
 // A vault is built when a player comes near it, the survival loop's relic vault in its
-// chamber; the other scattered sites, out of reach, are not.
+// chamber, and goes into the player's logbook; the other scattered sites, out of reach, are
+// not built.
 @(test)
 test_remains_vault_sealed :: proc(t: ^testing.T) {
 	sess := new(core.Session)
@@ -228,6 +229,12 @@ test_remains_vault_sealed :: proc(t: ^testing.T) {
 	at := site.middle - u
 	b, _ := core.block_at(w, {at.x, site.floor + 1, at.y})
 	testing.expect_value(t, b, state(s).remains_kit.relic_vault)
+	core.harness_step(&sess.h, REMAINS_EVERY)
+	noted := false
+	for &p in c.logbook.places[:c.logbook.place_count] {
+		noted ||= p.kind == .Remains && game.place_name(&p) == "Sealed vault"
+	}
+	testing.expect(t, noted, "the vault is not in the player's logbook")
 	door, _ := core.block_at(w, {site.middle.x + 2 * u.x, site.floor + 2, site.middle.y + 2 * u.y})
 	testing.expect_value(t, door, state(s).remains_kit.steel)
 	far := 0
