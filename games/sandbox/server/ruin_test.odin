@@ -121,7 +121,7 @@ test_ruin_stands_from_the_seed :: proc(t: ^testing.T) {
 	far := d.x * d.x + d.z * d.z
 	testing.expectf(
 		t,
-		far >= 230 * 230 && far <= 300 * 300,
+		far >= 230 * 230 && far <= 470 * 470,
 		"the ruin stands %v from the spawn",
 		d,
 	)

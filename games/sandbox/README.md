@@ -56,10 +56,16 @@ come only in Horde's waves, which are fought at the ruined site (below) too.
 
 ## Its ruined site
 
-Every home world has a ruin, a few minutes' walk from the spawn (240 to 288 blocks, in a
-direction of the world's seed, on the first spot of the seed's candidates that is dry and
-level: no sea, river, lake or mountain, its corners within 4 blocks of each other; the first
-candidate when none is). It is a square of broken walls 27 blocks wide with a gate in the
+Every home world has a ruin, a few minutes' walk from the spawn: on ten rings round it from
+240 to 456 blocks out, sixteen spots on each starting in a direction of the world's seed, the
+first whose ground is dry and level (no sea, beach, river, lake, mountain, ice or overhang
+under it or its apron, the land within 5 blocks of even); when none is, the dry spot whose
+land is the least uneven. Its floor is the middle height of the land there (never under the
+sea's top), and the ground is levelled as it is built: everything over the floor cleared over
+the ruin and a 4-block apron round it, the hollows and the water under them filled with
+stone, the apron's top grass, so it is never buried or perched and every gate opens on ground
+(over 60 seeds, 35 sites were level, one touched water, and the land under the walls was at
+most 11 blocks uneven before levelling). It is a square of broken walls 27 blocks wide with a gate in the
 middle of each side, a tower in one corner whose lamps show it from afar, four stumps of
 pillars, cracked ground in the other corners and a dais in the middle with the altar
 (`sandbox:ruin_altar`) on it. It is built when a player first comes within 160 blocks of it in

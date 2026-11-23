@@ -3,6 +3,7 @@ package sandbox_server
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:slice"
 
 import "common:base"
 import "common:game"
@@ -15,9 +16,10 @@ import "server:play"
 
 // The ruined site: Horde's waves as an encounter in the sandbox's open world. Every home
 // world has one ruin, placed from its seed a few minutes' walk from the spawn on dry, level
-// ground, with a tower whose lamps show it from afar (ruin_site, ruin_template). It is
-// built when a player first comes near it in a session (so a blast's scars and a ward left
-// standing by a crash are gone), and its blocks are not the players' to change.
+// ground where there is some (ruin_site), with a tower whose lamps show it from afar
+// (ruin_template). It is built when a player first comes near it in a session (so a blast's
+// scars and a ward left standing by a crash are gone), on ground it levels first, so it is
+// never buried or perched, and its blocks and its apron are not the players' to change.
 //
 // Using the altar in its middle wakes it: every player inside its walls who can be hurt is
 // locked in to fight. Each has its own things set aside (core.inventory_set_aside: untouched
@@ -43,6 +45,12 @@ RUIN_DEPTH :: 3 // layers of foundation under the floor
 RUIN_HEIGHT :: 36 // the template's height: the foundation, the floor and the air to the tower's top
 RUIN_WARD :: 6 // blocks the ward stands over the floor
 RUIN_DISTANCE :: 240 // blocks from the spawn to the site's middle, at the least
+RUIN_RINGS :: 10 // rings of candidate sites, RUIN_RING_STEP blocks apart from RUIN_DISTANCE out
+RUIN_RING_STEP :: 24
+RUIN_PER_RING :: 16 // candidates on a ring
+RUIN_LEVEL :: 5 // blocks between the land's highest and lowest under a site that is level
+RUIN_APRON :: 4 // blocks of levelled ground round the walls, so every gate opens on ground
+RUIN_CLEAR :: 12 // blocks cleared over the land's highest under a levelled site (its trees)
 RUIN_NEAR :: 160 // a player this near the site's middle has it built (and its ground kept loaded)
 RUIN_COUNTDOWN :: 3.0 // seconds from the ruin woken to the first wave
 RUIN_BREAK :: 10.0 // seconds between waves
@@ -82,10 +90,14 @@ Ruin :: struct {
 }
 
 // Site: where the ruin stands: the template's lowest corner and the floor's layer (its
-// fighters stand on it, at floor + 1).
+// fighters stand on it, at floor + 1), the lowest and the highest the land stands under it
+// and its apron (as the generator makes it), and whether the ground was found dry and level
+// (else the ruin levels it: ruin_build).
 Site :: struct {
 	origin: game.Block_Pos,
 	floor:  i32,
+	lo, hi: i32,
+	level:  bool,
 }
 
 // Ruin_Seat: a player's part in the ruin's fight (the game's client_state).
@@ -459,9 +471,17 @@ ruin_altar :: proc(site: Site) -> game.Block_Pos {
 	return {site.origin.x + RUIN_MID, site.floor + 1, site.origin.z + RUIN_MID}
 }
 
-// ruin_area: the site's whole box, its foundation to its tower's top.
+// ruin_area: the site's whole box: its apron and walls, from under the lowest land (or its
+// foundation) to over the highest (or its tower's top): what it builds in, keeps loaded and
+// keeps the players from changing.
 ruin_area :: proc(site: Site) -> core.Box {
-	return {site.origin, site.origin + {RUIN_SIDE, RUIN_HEIGHT, RUIN_SIDE} - 1}
+	o := site.origin
+	lo_y := min(o.y, site.lo) - 2
+	hi_y := max(o.y + RUIN_HEIGHT - 1, site.hi + RUIN_CLEAR)
+	return {
+		{o.x - RUIN_APRON, lo_y, o.z - RUIN_APRON},
+		{o.x + RUIN_SIDE - 1 + RUIN_APRON, hi_y, o.z + RUIN_SIDE - 1 + RUIN_APRON},
+	}
 }
 
 // ruin_inside: p (feet) is within the site's walls, from its floor to the ward's top.
@@ -478,79 +498,120 @@ ruin_inside :: proc(site: Site, p: [3]f64) -> bool {
 	)
 }
 
-// ruin_site: where the home world's ruin stands, from its seed alone: RUIN_DISTANCE to
-// RUIN_DISTANCE + 48 blocks from its spawn, in a direction of the seed's, on the first of
-// the candidates found dry and level enough (the first of all when none is).
+// ruin_site: where the home world's ruin stands, from its seed alone: on RUIN_RINGS rings
+// round its spawn, from RUIN_DISTANCE out, RUIN_PER_RING candidates each starting in a
+// direction of the seed's, the first whose ground is dry and level; when none is, the dry one
+// whose ground is the least uneven (any one, when none is dry), which the ruin levels as it is
+// built (ruin_build).
 ruin_site :: proc(w: ^core.World) -> Site {
 	rng := base.rng_make(u64(w.seed) ~ 0x7e1c_0de5)
 	angle := base.rng_f64(&rng) * math.TAU
 	spawn := w.spawn.position
-	first: Site
-	for k in 0 ..< 48 {
-		a := angle + f64(k) * 2.399963 // (the golden angle: the candidates spread round)
-		d := f64(RUIN_DISTANCE + (k % 4) * 16)
-		cx := i32(math.floor(spawn.x + base.cos(a) * d))
-		cz := i32(math.floor(spawn.z + base.sin(a) * d))
-		floor, level := ruin_ground(w, cx, cz)
-		site := Site{{cx - RUIN_MID, floor - RUIN_DEPTH, cz - RUIN_MID}, floor}
-		if k == 0 {first = site}
-		if level {return site}
+	best: Site
+	best_score := max(i32)
+	for ring in 0 ..< RUIN_RINGS {
+		d := f64(RUIN_DISTANCE + ring * RUIN_RING_STEP)
+		for k in 0 ..< RUIN_PER_RING {
+			a := angle + (f64(k) + 0.5 * f64(ring % 2)) * math.TAU / RUIN_PER_RING
+			cx := i32(math.floor(spawn.x + base.cos(a) * d))
+			cz := i32(math.floor(spawn.z + base.sin(a) * d))
+			floor, lo, hi, dry := ruin_ground(w, cx, cz)
+			site := Site{{cx - RUIN_MID, floor - RUIN_DEPTH, cz - RUIN_MID}, floor, lo, hi, false}
+			if dry && hi - lo <= RUIN_LEVEL {
+				site.level = true
+				return site
+			}
+			score := (hi - lo) + (0 if dry else 1000)
+			if score < best_score {best, best_score = site, score}
+		}
 	}
-	return first
+	return best
 }
 
-// ruin_ground: the floor's layer for a site whose middle is column (x, z), as the world's
-// generator makes the ground there (the top of its land), and whether the ground is dry
-// and level enough for it (no sea, river, lake or mountain under it; at most 4 blocks
-// between the highest and the lowest of its corners and middle).
-ruin_ground :: proc(w: ^core.World, x, z: i32) -> (floor: i32, level: bool) {
-	SAMPLES :: [5][2]i32 {
-		{0, 0},
-		{-RUIN_MID, -RUIN_MID},
-		{RUIN_MID, -RUIN_MID},
-		{-RUIN_MID, RUIN_MID},
-		{RUIN_MID, RUIN_MID},
-	}
+// ruin_terrain_seed: the seed w's land is made from (Earth's: its address's, the same in
+// every universe).
+ruin_terrain_seed :: proc(w: ^core.World) -> i64 {
+	if w.address == starmap.earth_address() {return i64(starmap.address_hash(w.address))}
+	return w.seed
+}
+
+// ruin_ground: for a site whose middle is column (x, z), sampled on a grid of 5 by 5 over
+// it and its apron as the world's generator makes the land: the floor's layer (the middle
+// height of the samples, and never under the sea's top), the lowest and the highest the land
+// stands, and whether all of it is dry ground (no sea, beach, river, lake, mountain, ice or
+// overhang).
+ruin_ground :: proc(w: ^core.World, x, z: i32) -> (floor, lo, hi: i32, dry: bool) {
+	EDGE :: RUIN_MID + RUIN_APRON
+	STEPS :: [5]i32{-EDGE, -EDGE / 2, 0, EDGE / 2, EDGE}
+	heights: [25]i32
+	dry = true
 	#partial switch w.generator {
 	case .Flat:
-		return worldgen.FLAT_TOP, true
+		return worldgen.FLAT_TOP, worldgen.FLAT_TOP, worldgen.FLAT_TOP, true
 	case .Classic:
-		lo, hi := max(i32), min(i32)
-		for d in SAMPLES {
-			h := worldgen.classic_height(w.seed, x + d.x, z + d.y)
-			lo, hi = min(lo, h), max(hi, h)
+		for dz, j in STEPS {
+			for dx, i in STEPS {
+				heights[i + j * 5] = worldgen.classic_height(w.seed, x + dx, z + dz)
+			}
 		}
-		return worldgen.classic_height(w.seed, x, z), hi - lo <= 4
+	case:
+		params := w.params
+		seed := ruin_terrain_seed(w)
+		for dz, j in STEPS {
+			for dx, i in STEPS {
+				c := worldgen.column_at(&params, seed, x + dx, z + dz)
+				heights[i + j * 5] = i32(math.floor(c.height))
+				#partial switch c.biome {
+				case .Ocean, .Frozen_Ocean, .River, .Beach, .Mountains, .Ice_Sheet:
+					dry = false
+				}
+				if c.rough > 0 || c.river > 0.3 || c.height < f32(params.sea_level) + 2 {
+					dry = false
+				}
+				if params.planet != 0 {
+					lake, _ := worldgen.planet_lake_at(x + dx, z + dz)
+					if lake >= 0.5 {dry = false}
+				}
+			}
+		}
 	}
-	params := w.params
-	seed := w.seed
-	// (Earth's terrain is the same in every universe: its seed is its address's.)
-	if w.address == starmap.earth_address() {seed = i64(starmap.address_hash(w.address))}
-	lo, hi := max(f32), min(f32)
-	level = true
-	for d in SAMPLES {
-		c := worldgen.column_at(&params, seed, x + d.x, z + d.y)
-		lo, hi = min(lo, c.height), max(hi, c.height)
-		#partial switch c.biome {
-		case .Ocean, .Frozen_Ocean, .River, .Beach, .Mountains, .Ice_Sheet:
-			level = false
-		}
-		if c.rough > 0 || c.river > 0.3 || c.height < f32(params.sea_level) + 2 {level = false}
-		if params.planet != 0 {
-			lake, _ := worldgen.planet_lake_at(x + d.x, z + d.y)
-			if lake >= 0.5 {level = false}
-		}
-	}
-	centre := worldgen.column_at(&params, seed, x, z)
-	return i32(math.floor(centre.height)), level && hi - lo <= 4
+	slice.sort(heights[:])
+	lo, hi = heights[0], heights[24]
+	floor = heights[12]
+	if w.generator == .Earth {floor = max(floor, w.params.sea_level + 1)}
+	return
 }
 
 // ruin_build: the ruin, whole, over whatever stood there, its altar's machine made with it.
 ruin_build :: proc(s: ^core.Server, w: ^core.World) {
 	r := ruin_of(s)
+	site := r.site
 	t := ruin_template(r, w.seed)
 	act := core.game_act(s, w, .Structure)
-	core.bulk_edit(w, {shape = ruin_area(r.site), op = .Paste, template = &t}, act)
+	// The ground levelled: everything over the floor cleared, the hollows and the water under
+	// it and its apron filled, the floor's layer grass, so the ruin is neither buried nor
+	// perched and every gate opens on ground (a level site's ground is nearly so already).
+	a := ruin_area(site)
+	set :: proc(w: ^core.World, b: core.Box, from, to: game.Block, act: core.Act) {
+		core.bulk_edit(w, {shape = b, op = .Replace, from = from, block = to, partial = true}, act)
+	}
+	core.bulk_edit(
+		w,
+		{
+			shape = core.Box{{a.lo.x, site.floor + 1, a.lo.z}, a.hi},
+			op = .Set,
+			block = .Air,
+			partial = true,
+		},
+		act,
+	)
+	under := core.Box{a.lo, {a.hi.x, site.floor - 1, a.hi.z}}
+	set(w, under, .Air, .Stone, act)
+	set(w, under, .Water, .Stone, act)
+	top := core.Box{{a.lo.x, site.floor, a.lo.z}, {a.hi.x, site.floor, a.hi.z}}
+	core.bulk_edit(w, {shape = top, op = .Set, block = .Grass, partial = true}, act)
+	template_box := core.Box{site.origin, site.origin + {RUIN_SIDE, RUIN_HEIGHT, RUIN_SIDE} - 1}
+	core.bulk_edit(w, {shape = template_box, op = .Paste, template = &t, partial = true}, act)
 	r.built = true
 	log.infof("ruin built at %v", r.site.origin)
 }
