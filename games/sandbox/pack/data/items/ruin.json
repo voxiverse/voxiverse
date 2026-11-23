@@ -1,0 +1,9 @@
+{
+	// What the guns load while the ruin is awake (the encounter's mode tunes them so:
+	// game_modes/encounter.json). The ruin gives them; they are of no use anywhere else.
+	"round": {
+		"model": "sandbox:round",
+		"description": "What the guns load while the ruin is awake.",
+		"stack": 250
+	}
+}

@@ -51,11 +51,13 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	if v, ok := engine.game_value(s, r, sandbox.Market_Open); ok && v != nil {
 		engine.game_screen_open(s)
 	}
+	if v, ok := engine.game_value(s, r, sandbox.Ruin_Fight); ok && v != nil {ruin_received(s, v)}
 }
 
-// hud: `Market of <town>` and the key that opens it, near the top, while in a town and the
-// screen is closed.
+// hud: the ruin's fight while the player is in one (ruin.odin); `Market of <town>` and the
+// key that opens it, near the top, while in a town and the screen is closed.
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
+	ruin_hud(s, ctx)
 	m := &view(s).market
 	if m.town_len == 0 || engine.game_screen_shown(s) {return}
 	t := &ctx.theme

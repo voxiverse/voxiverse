@@ -5,7 +5,8 @@ import "games:sandbox"
 
 // Sandbox's client part (the game: games/sandbox): the engine's HUD is the game's, and its
 // own is the market of a town on a planet world (market.odin): a line while the player
-// stands in a town and the market's screen, which its action (MARKET_ACTION) opens there.
+// stands in a town and the market's screen, which its action (MARKET_ACTION) opens there;
+// and the ruined site's fight while the player is locked in it (ruin.odin).
 
 GAME :: engine.Game {
 	info     = sandbox.INFO,
@@ -18,9 +19,10 @@ GAME :: engine.Game {
 }
 
 // View: what the client part keeps: the market the server last put and what its screen
-// has chosen.
+// has chosen, and the ruin's fight.
 View :: struct {
 	market: Market_Screen,
+	ruin:   sandbox.Ruin_Fight,
 }
 
 MARKET_ACTION :: 0 // the market's action: its index in GAME.actions

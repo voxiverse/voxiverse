@@ -29,6 +29,9 @@ Text :: enum u8 {
 	Market_Refused_No_Cargo,
 	Market_Refused_No_Stock,
 	Market_Refused_Away,
+	Ruin_Countdown, // {0}: seconds to the first wave
+	Ruin_Wave, // {0}: the wave, {1}: the fight's waves, {2}: creatures still to kill
+	Ruin_Break, // {0}: the wave held, {1}: the fight's waves, {2}: seconds to the next
 }
 
 TEXT_EN := [Text]string {
@@ -54,6 +57,9 @@ TEXT_EN := [Text]string {
 	.Market_Refused_No_Cargo     = "You do not carry that much.",
 	.Market_Refused_No_Stock     = "The market has too little.",
 	.Market_Refused_Away         = "You are not in a town.",
+	.Ruin_Countdown              = "THE RUIN WAKES   the first wave in {0} s",
+	.Ruin_Wave                   = "RUIN   wave {0} of {1}   {2} creatures left",
+	.Ruin_Break                  = "RUIN   wave {0} of {1} held   the next in {2} s",
 }
 
 tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}

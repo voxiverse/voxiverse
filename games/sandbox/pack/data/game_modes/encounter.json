@@ -1,0 +1,35 @@
+{
+	// Fighting the ruined site's waves (games/sandbox/server/ruin.odin): a body that can be
+	// hurt and drops nothing, and the base pack's guns as a wave needs them, for the players
+	// in this mode alone ("weapons": every other player's guns stay the base pack's). They load
+	// the ruin's rounds (a reload takes them from the pockets; with none, the gun stays empty);
+	// the numbers are Horde's (games/horde/pack/data/items/horde.json), so a wave plays the same
+	// in either.
+	"encounter": {
+		"abilities": ["health"],
+		"kit": [
+			{"item": "voxiverse:pistol", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:rifle", "count": 1, "slot": "hotbar"},
+			{"item": "voxiverse:shotgun", "count": 1, "slot": "hotbar"},
+			{"item": "sandbox:round", "count": 90, "slot": "pockets"}
+		],
+		"rules": {},
+		"weapons": {
+			"voxiverse:pistol": {
+				"damage": 4, "magazine": 12, "fire_rate": 4.0, "automatic": false, "range": 80,
+				"headshot": 2.0, "zoom": 0.0, "reload_time": 1.2, "spread": 0.0, "sound": "pistol",
+				"ammo": "sandbox:round"
+			},
+			"voxiverse:rifle": {
+				"damage": 3, "magazine": 30, "fire_rate": 9.0, "automatic": true, "range": 90,
+				"headshot": 2.0, "zoom": 0.0, "reload_time": 1.8, "spread": 0.012, "sound": "rifle",
+				"ammo": "sandbox:round"
+			},
+			"voxiverse:shotgun": {
+				"damage": 2, "magazine": 6, "fire_rate": 1.2, "automatic": false, "range": 40,
+				"headshot": 1.5, "zoom": 0.0, "reload_time": 2.2, "spread": 0.1, "pellets": 8,
+				"sound": "shotgun", "ammo": "sandbox:round"
+			}
+		}
+	}
+}

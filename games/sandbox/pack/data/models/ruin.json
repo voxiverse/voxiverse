@@ -1,0 +1,11 @@
+{
+	// A round: a grey tip, a bright neck and a dull case.
+	"round": {
+		"size": [1, 4, 1],
+		"palette": ["#6e5a2c", "#c8a656", "#8c8c94"],
+		"slices": [
+			["3", "2", "1", "1"]
+		],
+		"grip": [0, 1, 0]
+	}
+}

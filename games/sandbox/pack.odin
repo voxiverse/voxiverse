@@ -3,7 +3,9 @@ package sandbox
 import "common:game"
 
 // The game's pack (games/sandbox/pack, docs/games.md): its animals, the sheep, the hours
-// the base pack's hostile creatures come out, and a block of every material of the kit. Loaded only where the sandbox is played.
+// the base pack's hostile creatures come out, a block of every material of the kit, and the
+// ruined site's altar, ward, rounds and the mode its fighters are in. Loaded only where the
+// sandbox is played.
 PACK :: game.Pack_Source {
 	namespace = "sandbox",
 	files     = {
@@ -11,5 +13,14 @@ PACK :: game.Pack_Source {
 		{"data/entities/sheep.json", #load("pack/data/entities/sheep.json")},
 		{"data/entities/hostile.json", #load("pack/data/entities/hostile.json")},
 		{"data/blocks/kit.json", #load("pack/data/blocks/kit.json")},
+		{"data/blocks/ruin.json", #load("pack/data/blocks/ruin.json")},
+		{"data/items/ruin.json", #load("pack/data/items/ruin.json")},
+		{"data/models/ruin.json", #load("pack/data/models/ruin.json")},
+		{"data/game_modes/encounter.json", #load("pack/data/game_modes/encounter.json")},
 	},
 }
+
+ALTAR_BLOCK :: "sandbox:ruin_altar"
+WARD_BLOCK :: "sandbox:ruin_ward"
+ROUND_ITEM :: "sandbox:round"
+ENCOUNTER_MODE :: "sandbox:encounter"

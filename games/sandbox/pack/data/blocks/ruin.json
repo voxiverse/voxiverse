@@ -1,0 +1,17 @@
+{
+	// The ruined site's altar (games/sandbox/server/ruin.odin): using it wakes the ruin, and
+	// those inside fight its waves. A machine of no slots, so its use is the game's.
+	"ruin_altar": {
+		"material": "rune_stone",
+		"light": 9,
+		"breakable": false,
+		"entity": {"kind": "machine", "slots": 0}
+	},
+	// The ward that rises round the ruin while it is awake: nobody and nothing gets out. (The
+	// ruin's blocks are not the players' to break: its game refuses; an unbreakable block
+	// could not be taken down again.)
+	"ruin_ward": {
+		"material": "crystal",
+		"placeable": false
+	}
+}

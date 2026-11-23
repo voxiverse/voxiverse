@@ -3,6 +3,6 @@
 	"namespace": "sandbox",
 	"version": "1.0.0",
 	"title": "Sandbox",
-	"description": "The sandbox's animals, the sheep, the nights the hostile creatures come out, and a block of every material.",
+	"description": "The sandbox's animals, the sheep, the nights the hostile creatures come out, a block of every material, and the ruined site's altar, ward, rounds and fighters' mode.",
 	"requires": ["voxiverse"]
 }

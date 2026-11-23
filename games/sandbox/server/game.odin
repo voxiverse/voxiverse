@@ -10,14 +10,16 @@ import "server:core"
 // keeps its sheep (sheep.odin: their minds, shearing and feeding, their statistics) and the
 // economy of a world built on the planet (economy.odin: its towns' markets; trader.odin: the
 // player as a trader; interventions.odin: what players did that the world's history carries
-// forward) and lets the base pack's hostile creatures out at night (danger.odin). The rest of that world (worlds and gates, climate, farming) is the engine's,
-// chosen by the config.
+// forward), lets the base pack's hostile creatures out at night (danger.odin) and keeps the
+// home world's ruined site, where Horde's waves are fought (ruin.odin). The rest of that world
+// (worlds and gates, climate, farming) is the engine's, chosen by the config.
 
 GAME :: core.Game {
 	info           = sandbox.INFO,
 	kinds          = sandbox.KINDS,
 	pack           = sandbox.PACK,
 	server_state   = Sandbox,
+	client_state   = Ruin_Seat,
 	entity_data    = Sheep,
 	character_data = Trader_Record,
 	world_state    = Sandbox_World,
@@ -35,18 +37,26 @@ GAME :: core.Game {
 	tick           = tick,
 	think          = think,
 	spawned        = spawned,
-	joined         = trader_joined,
+	joined         = joined,
+	left           = ruin_left,
+	died           = ruin_died,
+	respawned      = ruin_respawned,
 	action         = action,
 	request        = request,
 	entity_use     = entity_use,
 	entity_hurt    = entity_hurt,
+	entity_died    = entity_died,
+	editing        = editing,
+	picking        = ruin_picking,
+	machine_use    = ruin_use,
 	command        = command,
 	world_opened   = world_opened,
 	world_closed   = world_closed,
 	world_save     = world_save,
 }
 
-// Sandbox: the session's state: the sheep's randomness and the registry's names they use.
+// Sandbox: the session's state: the sheep's randomness and the registry's names they use,
+// and the ruined site.
 Sandbox :: struct {
 	rng:              base.Rng,
 	sheep:            game.Kind_Id,
@@ -54,12 +64,13 @@ Sandbox :: struct {
 	wheat:            game.Item,
 	wool, black_wool: game.Item,
 	placed:           int, // sheep the command has set down (each a little further along)
+	ruin:             Ruin, // (ruin.odin)
 }
 
 state :: proc(s: ^core.Server) -> ^Sandbox {return core.game_state(s, Sandbox)}
 
-// start: the names the sheep use, from the session's registry; their randomness from
-// the universe's seed.
+// start: the names the sheep and the ruin use, from the session's registry; the sheep's
+// randomness from the universe's seed.
 start :: proc(s: ^core.Server) -> bool {
 	g := state(s)
 	reg := s.registry
@@ -70,13 +81,42 @@ start :: proc(s: ^core.Server) -> bool {
 	g.wheat = game.registry_item(reg, "wheat") or_return
 	g.wool = game.item_of_block(reg, game.registry_block(reg, "wool") or_return)
 	g.black_wool = game.item_of_block(reg, game.registry_block(reg, "black_wool") or_return)
-	return true
+	return ruin_start(s)
 }
 
-// tick: the economy (economy.odin) and the night's creatures (danger.odin).
+// tick: the economy (economy.odin), the night's creatures (danger.odin) and the ruined
+// site (ruin.odin).
 tick :: proc(s: ^core.Server) {
 	economy_tick(s)
 	danger_tick(s)
+	ruin_tick(s)
+}
+
+// joined: a new trader's purse (trader.odin); one who left a fight at the ruin gets its
+// things back (ruin.odin).
+joined :: proc(s: ^core.Server, c: ^core.Client) {
+	trader_joined(s, c)
+	ruin_joined(s, c)
+}
+
+// editing: the ruin's blocks are not the players' (ruin.odin).
+editing :: proc(
+	s: ^core.Server,
+	c: ^core.Client,
+	at: game.Block_Pos,
+	old, new: game.Block,
+) -> string {
+	return ruin_editing(s, c, at)
+}
+
+// entity_died: a creature of the ruin's fight leaves its crowd (ruin.odin).
+entity_died :: proc(
+	s: ^core.Server,
+	w: ^core.World,
+	dead: core.Dead_Entity,
+	harm: core.Entity_Harm,
+) {
+	ruin_entity_died(s, w, dead)
 }
 
 // KIT: what a player new to a sandbox universe is given: the rocket launcher alone, in

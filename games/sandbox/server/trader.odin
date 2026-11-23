@@ -37,11 +37,16 @@ Seen :: struct {
 
 // Trader_Record is what a character carries as a trader (core.Game.character_data).
 Trader_Record :: struct {
-	cash:  f64,
-	cargo: [len(sandbox.Good)]f32, // by sandbox.Good
-	seen:  [MAX_SEEN]Seen,
-	count: int,
-	given: bool, // the starting purse was given (a new character's record is zero)
+	cash:      f64,
+	cargo:     [len(sandbox.Good)]f32, // by sandbox.Good
+	seen:      [MAX_SEEN]Seen,
+	count:     int,
+	given:     bool, // the starting purse was given (a new character's record is zero)
+	// Not a trader's: the mode the character was in before it fought at the ruined site
+	// (its id without the base pack's namespace, zero-padded; all zero: none), given back
+	// with its things however the fight ended (ruin.odin). It is here because a game keeps
+	// one record on a character.
+	ruin_mode: [32]u8,
 }
 
 Trade_Side :: enum {

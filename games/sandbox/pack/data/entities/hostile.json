@@ -2,8 +2,8 @@
 // (their spawn rules are the sandbox's alone: "override"), and go for the players who can
 // be hurt (games/sandbox/server/danger.odin). From dusk to dawn, on open ground under the
 // sky, a few blocks off a player and never near a world's spawn point. Shamblers in ones
-// and twos, now and then a pack of skitters; the spitters, hulks and the matriarch stay
-// Horde's.
+// and twos, now and then a pack of skitters; the spitters, hulks and the matriarch come only
+// in Horde's waves (Horde, and the sandbox's ruined site: games/sandbox/server/ruin.odin).
 {
 	"voxiverse:shambler": {
 		"override": true,

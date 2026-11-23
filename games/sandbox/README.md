@@ -52,7 +52,54 @@ each world's seed and tick like everything else, within its entity budget; a nat
 when nobody is near. Each goes for the nearest player within 16 blocks who can be hurt and
 strikes it (`play.hunt_tick`, `server/danger.odin`); one in creative mode, or watching, is left
 alone. They drop nothing (a kind has no drops as data). The spitters, hulks and the matriarch
-stay Horde's.
+come only in Horde's waves, which are fought at the ruined site (below) too.
+
+## Its ruined site
+
+Every home world has a ruin, a few minutes' walk from the spawn (240 to 288 blocks, in a
+direction of the world's seed, on the first spot of the seed's candidates that is dry and
+level: no sea, river, lake or mountain, its corners within 4 blocks of each other; the first
+candidate when none is). It is a square of broken walls 27 blocks wide with a gate in the
+middle of each side, a tower in one corner whose lamps show it from afar, four stumps of
+pillars, cracked ground in the other corners and a dais in the middle with the altar
+(`sandbox:ruin_altar`) on it. It is built when a player first comes within 160 blocks of it in
+a session (its ground is kept loaded while one is near, or while it is awake), whole, over
+what stood there, so what a blast or a crash left is gone; its blocks are not the players' to
+change.
+
+Using the altar (the right button) wakes it, for everyone inside its walls who can be hurt
+(not in creative, not watching; one who has things set aside already cannot wake it). Each of
+them is locked in to fight: its own things are set aside (kept with its character, untouched
+by death, saved with it) and the mode it was in remembered; it is put in the encounter's mode
+(`sandbox:encounter`: health, nothing dropped at death, a pistol, a rifle, a shotgun and 90
+rounds), and a ward of crystal (`sandbox:ruin_ward`) rises round the walls. Five waves come out
+of the four lairs, Horde's waves (`common:wave`'s plan and `server:play`'s crowd: shamblers
+from the first, skitters from the second, spitters from the third, hulks from the fourth, the
+matriarch with the fifth, each wave an eighth tougher), three seconds after it wakes and ten
+seconds after each wave is held; between waves each fighter gets 30 rounds and 10 health. While
+it is awake nobody gets out and nobody gets in: a fighter outside the walls is put back by the
+altar, anyone else inside is put out by the south gate, and a creature that gets out is gone and
+comes out of a lair again. The night's creatures (danger, above) leave the fight's alone.
+
+The guns are tuned as Horde tunes them (loading the ruin's rounds, `sandbox:round`; a reload
+takes them from the pockets, and with none the gun stays empty), but only for the players in
+the encounter's mode: the tuning is the mode's `weapons` (`pack/data/game_modes/encounter.json`,
+the engine's `game.weapon_of`), not an `"override"` of the items, so every other player's guns
+stay the base pack's. The ruin's rounds vanish when anyone not fighting walks over one.
+
+The fight ends when the fifth wave is dead: every fighter standing has its own things back (in
+place of the encounter's) and its own mode, and the altar drops each a sniper, jump boots and
+a feather charm. A fighter who dies is out of it: it stands again at the world's spawn as any
+death in the sandbox does, with its own things and mode given back as it stands, so it loses
+nothing it brought. When no fighter is left the fight is lost. A fighter who leaves the server
+is out too; its things stay set aside with its character and come back when it next joins (also
+after a server that stopped during a fight), and it is put out of the ruin if it joins inside.
+Then the ward falls and the ruin sleeps until its altar is used again. A fight does not outlive
+the session.
+
+What it tells its fighters: `sandbox.ruin` (the fight's phase, wave, creatures left and
+seconds of a countdown or break; drawn as a bar across the top), and a notice as the ruin
+wakes, each wave sets out and is held, and a fighter falls.
 
 ## Its peoples and markets
 
@@ -130,7 +177,9 @@ staged in the same save transaction when it changed, and checked by `voxiverse-s
 A character's trader is the sandbox's record on it, in its file's `game` member: `cash`,
 `cargo.<i>` (by the order of `sandbox.Good`), `seen.<i>.cell`, `.price`, `.month` (the month the
 price was true) and `.good`, `count` (at most 192 prices, the oldest forgotten first) and
-`given` (the starting purse was given). Universes from before (save format 8) had these as the
+`given` (the starting purse was given), and `ruin_mode.<i>` (the bytes of the mode the
+character was in before it fought at the ruin, zero-padded: given back with its things; none
+when it fights nothing). Universes from before (save format 8) had these as the
 engine's files and the character's `trader`: the save migration made them the sandbox's.
 
 ## The code
@@ -145,7 +194,11 @@ and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their
 feeding, `entity_use`; their wild genes, `spawned`; their flight, `entity_hurt`), each sheep's
 record (`Sheep`) kept on its entity, and runs the markets (`economy.odin`, each world's
 economy, its `world_state` and file; `trader.odin`, the character's `Trader_Record` and the
-market on the wire; `interventions.odin`), and lets the night's creatures hunt
-(`danger.odin`); `client/` draws the market's line and screen
-(`market.odin`). Everything else the sandbox does (worlds and gates, climate, farming) is the
-engine's, chosen through the server's `Config`.
+market on the wire; `interventions.odin`), lets the night's creatures hunt
+(`danger.odin`) and keeps the ruined site and its fight (`ruin.odin`: the site from the seed,
+its template, the altar's use, the lock, the waves, the reward and the giving back); `client/`
+draws the market's line and screen (`market.odin`) and the fight's bar (`ruin.odin`). The pack's
+`pack/data/blocks/ruin.json`, `items/ruin.json`, `models/ruin.json` and
+`game_modes/encounter.json` are the ruin's altar and ward, its rounds and the fighters' mode.
+Everything else the sandbox does (worlds and gates, climate, farming) is the engine's, chosen
+through the server's `Config`.

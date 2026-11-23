@@ -58,8 +58,30 @@ Market_Open :: struct {
 	town: string `net:"max=32"`,
 }
 
+// Ruin_Phase: where the ruined site's fight is (games/sandbox/server/ruin.odin).
+Ruin_Phase :: enum u8 {
+	Asleep, // nobody fights: its altar wakes it
+	Countdown, // woken, the ward up, the first wave on its way
+	Wave, // the creatures come
+	Break, // between waves
+}
+
+// Ruin_Fight: the fight a player is locked in at the ruined site (one per player; phase
+// Asleep: it fights none).
+Ruin_Fight :: struct {
+	phase:   Ruin_Phase,
+	wave:    u8, // on now, or the last held
+	waves:   u8, // the fight's
+	alive:   u16, // creatures out
+	to_come: u16, // ... still to come out of the lairs
+	left:    u16, // seconds left of the countdown or the break
+}
+
 KINDS :: protocol.Game_Kinds {
-	states   = {{name = "sandbox.market", value = Town_Market}},
+	states   = {
+		{name = "sandbox.market", value = Town_Market},
+		{name = "sandbox.ruin", value = Ruin_Fight},
+	},
 	events   = {
 		{name = "sandbox.trade_refused", value = Trade_Refused},
 		{name = "sandbox.market_open", value = Market_Open},
