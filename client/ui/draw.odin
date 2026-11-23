@@ -5,7 +5,6 @@ import "core:mem"
 import "core:strings"
 import "core:unicode/utf8"
 
-import "client:font"
 
 // Draw output. Vertices are in pixels; colors are sRGB as authored (the
 // shader converts to linear); every command carries a scissor rect, so text
@@ -307,10 +306,7 @@ measure_text_styled :: proc(ctx: ^Context, text: string, size: f32, effects: Tex
 // measure_text is the width of text in UI units.
 measure_text :: proc(ctx: ^Context, text: string, size: f32) -> f32 {
 	width: f32
-	for r in text {
-		f, g := glyph_font(&ctx.glyphs, r)
-		width += font.advance(f, g) * size / f.units_per_em
-	}
+	for r in text {width += glyph_advance(&ctx.glyphs, r, size)}
 	return width
 }
 
@@ -331,8 +327,7 @@ text_elide :: proc(
 	width: f32 = 0
 	last_byte := 0
 	for r, byte_idx in text {
-		f, g := glyph_font(&ctx.glyphs, r)
-		adv := font.advance(f, g) * size / f.units_per_em
+		adv := glyph_advance(&ctx.glyphs, r, size)
 		if width + adv > limit {
 			break
 		}

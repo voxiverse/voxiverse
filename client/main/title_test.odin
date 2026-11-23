@@ -121,7 +121,7 @@ test_title_continue :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-// The splash is a stamp: dial glyphs resolving into the text from the left
+// The splash is a stamp: address symbols resolving into the text from the left
 // over SPLASH_REVEAL seconds; with reduce motion it is simply there.
 @(test)
 test_splash_resolves_from_glyphs :: proc(t: ^testing.T) {

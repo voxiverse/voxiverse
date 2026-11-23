@@ -8,13 +8,20 @@ the design of world data is in [design.md](design.md).
 ## Worlds
 
 A universe contains worlds, named by addresses. An address consists of a galaxy of eight
-Old Turkic symbols and a world of seven, each symbol distinct within its part
-(`common/game/address.odin`; 40 symbols). It is written in one of two forms:
+symbols and a world of seven, each symbol distinct within its part
+(`common/starmap/address.odin`; 40 symbols of our own). A symbol is one of five bodies (an
+arch, a cup, a diamond, a slab, two posts) with any of three marks (a dot inside, a bar
+beneath, a dot above): symbol = body * 8 + marks, drawn by code as strokes
+(`starmap.symbol_strokes`). In text a symbol is a rune of Unicode's Private Use Area
+(U+E000 on), which no font has: the UI draws them itself (`ui.Drawn_Glyphs`,
+`engine.symbol_glyph`), so an address in chat is still text, but outside the game it shows
+as nothing. It is written in one of three forms:
 
-- as symbols, `𐰀𐰁𐰄𐰅𐰇𐰉𐰊 𐰋𐰌𐰍𐰎𐰏𐰐𐰒𐰔` (world, then galaxy; seven symbols alone mean the
-  current galaxy);
+- as symbols, in the game (world, then galaxy; seven symbols alone mean the current galaxy);
 - as a directory name, `0001020304050607-08090a0b0c0d0e` (two hex digits per symbol, galaxy
-  first). This form can be typed on any keyboard.
+  first). This form can be typed on any keyboard;
+- as Latin letters, `abcdefg-hijklmno` (`a`-`z` for symbols 0-25, `A`-`N` for 26-39; world, a
+  `-`, then galaxy), in place codes shared outside the game.
 
 The address alone determines the world's kind (generator parameters, palette, gravity, day
 length), so it is the same kind of world in any universe; the universe seed determines its
@@ -22,12 +29,12 @@ terrain. The address also says what lives there (`worldgen.world_life`: life, ho
 how old their history; about 1 world in 8 with animals has peoples; the home world, Earth, has
 none): the dial shows it for the world a last symbol would reach, the creation screen for the
 home world. The home world is Earth, which has one fixed address in every universe
-(`EARTH_GALAXY`, the Milky Way's, and `EARTH_WORLD` in `common/game/address.odin`; a test pins
+(`EARTH_GALAXY`, the Milky Way's, and `EARTH_WORLD` in `common/starmap/address.odin`; a test pins
 them, they never change). Earth's terrain is seeded from its address alone (`terrain_seed` in
 `server/core/worlds.odin`), so the same block stands at the same place in every universe; a new
 universe takes Earth's address when `Config.earth` is set, else one made from its seed (the alien
-start). The creation screen starts on Earth (its fixed glyphs, the Milky Way); the seed field and
-Roll choose an alien home world instead (shown with its glyphs and a line saying it is the harder
+start). The creation screen starts on Earth (its fixed symbols, the Milky Way); the seed field and
+Roll choose an alien home world instead (shown with its symbols and a line saying it is the harder
 start), and Back to Earth returns; a saved universe keeps the home address it was made with. The generator parameter
 `worldgen.planet` (0 by default; `world_set_planet` in server/core/worlds.odin makes a newly made world at Earth's address one, with a spawn picked by the universe's seed) builds the height on `common/planet`: block x
 is longitude (`PLANET_CIRCUMFERENCE` 65 536 blocks round), z is latitude (north is -z), and a
@@ -96,8 +103,6 @@ starts dead; `core.gate_wake` (a game's, when what wakes it is done) or `/gate w
 (`world.gate`: the nearest gate within 256 blocks) brings it to life, after which it is any
 gate; `/gate kill` makes a gate at rest dead again. Dead gates are saved in `world.cfg`; a
 world saved before them has none.
-The client's chat and console draw the symbols from a fallback font
-(`assets/fonts/noto_sans_old_turkic_regular.ttf`).
 
 ## Items
 

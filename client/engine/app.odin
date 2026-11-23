@@ -31,9 +31,6 @@ import "server:core"
 // lifetime inside the App's.
 
 FONT_DATA :: #load("../../assets/fonts/jetbrains_mono_regular.ttf")
-// SYMBOL_FONT_DATA: the addresses' symbols (Old Turkic), which the UI font
-// lacks (common/game/address.odin).
-SYMBOL_FONT_DATA :: #load("../../assets/fonts/noto_sans_old_turkic_regular.ttf")
 
 Screen :: enum u8 {
 	Title,
@@ -57,7 +54,6 @@ App :: struct {
 	renderdoc:           gpu.Renderdoc,
 	renderdoc_requested: bool,
 	renderdoc_title:     string,
-	symbol_font:         font.Font, // (SYMBOL_FONT_DATA)
 	font:                font.Font,
 	ui:                  ui.Context,
 	ui_pass:             render.Ui_Pass,

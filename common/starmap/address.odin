@@ -1,16 +1,17 @@
 package starmap
 
 import "core:fmt"
+import "core:math"
 import "core:strconv"
 import "core:strings"
 
 import "common:base"
 
 // Addresses: a world's name in its universe: a galaxy (GALAXY_LENGTH different symbols, in order) and a
-// world in it (WORLD_LENGTH different symbols, in order), symbols being
-// SYMBOLS letters of Old Turkic. Written world first, then the galaxy. In
-// file names, two hex digits a symbol ("0a1b...-..."), galaxy first: file
-// systems need not know the script.
+// world in it (WORLD_LENGTH different symbols, in order), from SYMBOLS
+// symbols of our own (symbol_strokes draws them). Written world first, then
+// the galaxy. In file names, two hex digits a symbol ("0a1b...-..."),
+// galaxy first.
 
 SYMBOLS :: 40
 GALAXY_LENGTH :: 8
@@ -32,54 +33,89 @@ earth_address :: proc() -> Address {
 	return Address{galaxy = EARTH_GALAXY, world = EARTH_WORLD}
 }
 
-// SYMBOL_RUNES: what each symbol is in Unicode (Old Turkic, Orkhon).
-@(rodata)
-SYMBOL_RUNES := [SYMBOLS]rune {
-	0x10C00,
-	0x10C01,
-	0x10C04,
-	0x10C05,
-	0x10C07,
-	0x10C09,
-	0x10C0A,
-	0x10C0B,
-	0x10C0C,
-	0x10C0D,
-	0x10C0E,
-	0x10C0F,
-	0x10C10,
-	0x10C12,
-	0x10C14,
-	0x10C15,
-	0x10C18,
-	0x10C1C,
-	0x10C22,
-	0x10C24,
-	0x10C26,
-	0x10C27,
-	0x10C28,
-	0x10C2B,
-	0x10C2C,
-	0x10C2D,
-	0x10C31,
-	0x10C32,
-	0x10C36,
-	0x10C38,
-	0x10C39,
-	0x10C3A,
-	0x10C3C,
-	0x10C3D,
-	0x10C41,
-	0x10C42,
-	0x10C43,
-	0x10C44,
-	0x10C45,
-	0x10C47,
+// SYMBOL_RUNE_FIRST: symbol i is this rune plus i in text, a run of
+// Unicode's Private Use Area: no font has them, the UI draws them itself
+// (symbol_strokes), and an address in chat is still text. Outside the game
+// an address is shared in its Latin form (address_latin).
+SYMBOL_RUNE_FIRST :: rune(0xE000)
+
+// symbol_rune: what symbol is in text.
+symbol_rune :: proc(symbol: u8) -> rune {
+	return SYMBOL_RUNE_FIRST + rune(symbol)
 }
 
 symbol_of_rune :: proc(r: rune) -> (int, bool) {
-	for s, i in SYMBOL_RUNES {if s == r {return i, true}}
-	return 0, false
+	i := int(r - SYMBOL_RUNE_FIRST)
+	return i, i >= 0 && i < SYMBOLS
+}
+
+// The symbols' shapes: one of SYMBOL_BODIES bodies with any of three marks,
+// symbol = body * 8 + marks. The bodies are an arch, a cup, a diamond, a
+// slab and two posts; the marks a dot inside (1), a bar beneath (2) and a
+// dot above (4). Drawn as strokes of SYMBOL_WEIGHT, in em units with y up
+// from the baseline, SYMBOL_ADVANCE apart.
+SYMBOL_BODIES :: 5
+SYMBOL_WEIGHT :: 0.08
+SYMBOL_ADVANCE :: 0.9
+
+#assert(SYMBOL_BODIES * 8 == SYMBOLS)
+
+// symbol_strokes appends symbol's strokes (from, to; a dot is both the
+// same) to out.
+symbol_strokes :: proc(symbol: int, out: ^[dynamic][2][2]f32) {
+	LEFT, RIGHT, MID :: f32(0.2), f32(0.7), f32(0.45)
+	LOW, HIGH, CENTRE :: f32(0.2), f32(0.66), f32(0.43)
+	RADIUS :: (RIGHT - LEFT) / 2
+	ARC_STEPS :: 8
+	line :: proc(out: ^[dynamic][2][2]f32, a, b: [2]f32) {append(out, [2][2]f32{a, b})}
+	// arc: half a circle round centre, over the top (up) or under it.
+	arc :: proc(out: ^[dynamic][2][2]f32, centre: [2]f32, up: bool) {
+		side: f32 = 1 if up else -1
+		for k in 0 ..< ARC_STEPS {
+			a0 := math.PI * f32(k) / ARC_STEPS
+			a1 := math.PI * f32(k + 1) / ARC_STEPS
+			line(
+				out,
+				centre + RADIUS * [2]f32{math.cos(a0), side * math.sin(a0)},
+				centre + RADIUS * [2]f32{math.cos(a1), side * math.sin(a1)},
+			)
+		}
+	}
+	switch symbol / 8 {
+	case 0:
+		// An arch: two uprights under half a circle.
+		top := HIGH - RADIUS
+		line(out, {LEFT, LOW}, {LEFT, top})
+		line(out, {RIGHT, LOW}, {RIGHT, top})
+		arc(out, {MID, top}, up = true)
+	case 1:
+		// A cup: the arch upside down.
+		bottom := LOW + RADIUS
+		line(out, {LEFT, HIGH}, {LEFT, bottom})
+		line(out, {RIGHT, HIGH}, {RIGHT, bottom})
+		arc(out, {MID, bottom}, up = false)
+	case 2:
+		// A diamond.
+		corners := [4][2]f32 {
+			{MID, LOW},
+			{RIGHT + 0.02, CENTRE},
+			{MID, HIGH},
+			{LEFT - 0.02, CENTRE},
+		}
+		for c, k in corners {line(out, c, corners[(k + 1) % 4])}
+	case 3:
+		// A slab, standing.
+		corners := [4][2]f32{{LEFT, LOW}, {RIGHT, LOW}, {RIGHT, HIGH}, {LEFT, HIGH}}
+		for c, k in corners {line(out, c, corners[(k + 1) % 4])}
+	case:
+		// Two posts.
+		line(out, {LEFT, LOW}, {LEFT, HIGH})
+		line(out, {RIGHT, LOW}, {RIGHT, HIGH})
+	}
+	marks := symbol % 8
+	if marks & 1 != 0 {line(out, {MID, CENTRE}, {MID, CENTRE})}
+	if marks & 2 != 0 {line(out, {LEFT - 0.06, 0.04}, {RIGHT + 0.06, 0.04})}
+	if marks & 4 != 0 {line(out, {MID, 0.84}, {MID, 0.84})}
 }
 
 @(private = "file")
@@ -132,9 +168,9 @@ address_derive :: proc(n: u64) -> (a: Address) {
 address_text :: proc(a: Address, allocator := context.temp_allocator) -> string {
 	b := strings.builder_make(allocator)
 	g, w := a.galaxy, a.world
-	for s in w {strings.write_rune(&b, SYMBOL_RUNES[s])}
+	for s in w {strings.write_rune(&b, symbol_rune(s))}
 	strings.write_byte(&b, ' ')
-	for s in g {strings.write_rune(&b, SYMBOL_RUNES[s])}
+	for s in g {strings.write_rune(&b, symbol_rune(s))}
 	return strings.to_string(b)
 }
 
@@ -178,22 +214,22 @@ address_parse :: proc(text: string, here_galaxy: [GALAXY_LENGTH]u8) -> (a: Addre
 	return a, address_valid(a)
 }
 
-// Motifs: a world's address as a tune. The seven glyphs of its world part
+// Motifs: a world's address as a tune. The seven symbols of its world part
 // are seven notes (the hook of the world's theme). Pure and deterministic:
 // the same address gives the same notes on every machine.
 //
 // The rule (also in docs/audio.md):
-//   - pitch: the glyph mod 7 is a scale degree (0 is the home note) in the
+//   - pitch: the symbol mod 7 is a scale degree (0 is the home note) in the
 //     world's mode. The first note is in the octave of middle C (MIDI 60 is
 //     degree 1 of C); each later note is in the octave nearest the previous
 //     note (a tie goes up), so no step is wider than a tritone.
-//   - rhythm: the glyph div 7 (0..5) picks the length in eighths from
+//   - rhythm: the symbol div 7 (0..5) picks the length in eighths from
 //     MOTIF_LENGTHS; the last note is always MOTIF_LAST_LENGTH eighths, long
 //     enough to sing and let the phrase land.
 
 MOTIF_NOTES :: WORLD_LENGTH
 MOTIF_HOME :: 60 // MIDI note of degree 1 (C4); the tonic is C for every world.
-MOTIF_LENGTHS :: [6]u8{2, 1, 1, 2, 1, 2} // eighths, by glyph div 7
+MOTIF_LENGTHS :: [6]u8{2, 1, 1, 2, 1, 2} // eighths, by symbol div 7
 MOTIF_LAST_LENGTH :: 6 // eighths: a dotted half
 
 Mode :: enum u8 {
@@ -258,7 +294,7 @@ motif_eighths :: proc(m: Motif) -> int {
 //   @Earth 27.98N 86.92E
 //   @abcdefg-hijklmno 123 64 -876
 //
-// The address is its glyphs as Latin letters, case sensitive: 'a'..'z' for
+// The address is its symbols as Latin letters, case sensitive: 'a'..'z' for
 // symbols 0-25, 'A'..'N' for 26-39, world first, a '-', then the galaxy.
 
 LATIN_ALPHABET :: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN"

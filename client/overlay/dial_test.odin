@@ -22,9 +22,7 @@ test_dial_overlay :: proc(t: ^testing.T) {
 	ok: bool
 	app.font, ok = font.load(engine.FONT_DATA)
 	testing.expect(t, ok)
-	app.symbol_font, ok = font.load(engine.SYMBOL_FONT_DATA)
-	testing.expect(t, ok)
-	testing.expect(t, ui.init(&app.ui, &app.font, fallback = &app.symbol_font))
+	testing.expect(t, ui.init(&app.ui, &app.font, drawn = engine.symbol_glyph))
 	defer ui.destroy(&app.ui)
 	s := new(engine.Session)
 	defer free(s)

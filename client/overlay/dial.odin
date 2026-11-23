@@ -61,7 +61,7 @@ dial_add :: proc(app: ^engine.App, symbol: u8) -> bool {
 }
 
 symbol_text :: proc(symbol: u8) -> string {
-	bytes, n := utf8.encode_rune(starmap.SYMBOL_RUNES[symbol])
+	bytes, n := utf8.encode_rune(starmap.symbol_rune(symbol))
 	return strings.clone(string(bytes[:n]), context.temp_allocator)
 }
 
@@ -131,7 +131,7 @@ dial_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	here := s.welcome.address
 	galaxy := strings.builder_make(context.temp_allocator)
 	strings.write_string(&galaxy, "in galaxy ")
-	for g in here.galaxy {strings.write_rune(&galaxy, starmap.SYMBOL_RUNES[g])}
+	for g in here.galaxy {strings.write_rune(&galaxy, starmap.symbol_rune(g))}
 	ui.label(
 		ctx,
 		strings.to_string(galaxy),

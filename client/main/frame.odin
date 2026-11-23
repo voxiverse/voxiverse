@@ -91,11 +91,7 @@ app_init :: proc(app: ^engine.App) -> bool {
 		log.error("could not load the UI font")
 		return false
 	}
-	if app.symbol_font, ok = font.load(engine.SYMBOL_FONT_DATA); !ok {
-		log.error("could not load the symbol font")
-		return false
-	}
-	if !ui.init(&app.ui, &app.font, fallback = &app.symbol_font) {return false}
+	if !ui.init(&app.ui, &app.font, drawn = engine.symbol_glyph) {return false}
 	{
 		sizes := [?]int{16, 32, 48, 64, 128}
 		images: [len(sizes)]platform.Icon_Image

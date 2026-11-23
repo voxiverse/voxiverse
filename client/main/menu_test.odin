@@ -795,10 +795,7 @@ rig_make :: proc(t: ^testing.T) -> ^Rig {
 	r := new(Rig)
 	r.app = ui_app(t)
 	app := r.app
-	ok: bool
-	app.symbol_font, ok = font.load(engine.SYMBOL_FONT_DATA)
-	testing.expect(t, ok)
-	app.ui.glyphs.fallback = &app.symbol_font
+	app.ui.glyphs.drawn = engine.symbol_glyph
 	testing.expect(t, prompt.prompt_icons_init(&app.prompt_icons, &app.ui))
 	console.console_init(&app.console)
 	engine.line_editor_init(&app.chat)

@@ -221,7 +221,7 @@ init :: proc(
 	ctx: ^Context,
 	f: ^font.Font,
 	allocator := context.allocator,
-	fallback: ^font.Font = nil, // for what f lacks
+	drawn: Drawn_Glyphs = nil, // runes f lacks that the caller draws
 	loc := #caller_location,
 ) -> bool {
 	ctx^ = {}
@@ -229,7 +229,7 @@ init :: proc(
 	if virtual.arena_init_growing(&ctx.frame_arena) != nil {return false}
 	ctx.frame_alloc = virtual.arena_allocator(&ctx.frame_arena)
 	ok := glyph_cache_init(&ctx.glyphs, f, allocator, loc)
-	ctx.glyphs.fallback = fallback
+	ctx.glyphs.drawn = drawn
 	return ok
 }
 

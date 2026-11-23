@@ -169,7 +169,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/ui` | The UI toolkit | `*.odin` |
 | `client/update` | The updater (docs/platforms.md, "Updates"): reading GitHub's releases and SHA256SUMS, choosing the version to offer, downloading, checking and unpacking a package, swapping it in for the installed one and restarting | `*.odin` |
 | `common/access` | Who a player is and what it may do: accounts (key pairs, proofs of a nonce), the admins' list, permission nodes and grants | `*.odin` |
-| `common/starmap` | A world's gate address: its glyphs, its derivation from a seed, its character and motif; a universe's seed as the player sees it | `*.odin` |
+| `common/starmap` | A world's gate address: its symbols and their shapes, its derivation from a seed, its character and motif; a universe's seed as the player sees it | `*.odin` |
 | `common/base` | Logging, clocks, jobs, pools, numbers, chance (the keyed hash family and the random stream), crash bundles | `*.odin` |
 | `common/base/fuzz` | The fuzz harness | `*.odin` |
 | `common/game` | The shared game rules and formats: blocks, items, entities, physics, packs and the registry, chunks, saves' encodings | `*.odin` |

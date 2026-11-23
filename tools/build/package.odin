@@ -213,7 +213,6 @@ package_game :: proc(args: []string) -> bool {
 	copies := [][2]string {
 		{"LICENSE", "LICENSE"},
 		{"assets/fonts/JetBrainsMono-OFL.txt", "licenses/JetBrainsMono-OFL.txt"},
-		{"assets/fonts/NotoSansOldTurkic-OFL.txt", "licenses/NotoSansOldTurkic-OFL.txt"},
 		{"assets/music/CREDITS.txt", "licenses/CREDITS.txt"},
 	}
 	for c in copies {

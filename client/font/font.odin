@@ -436,6 +436,20 @@ rasterize :: proc(
 	outline.points.allocator = context.temp_allocator
 	outline.contours.allocator = context.temp_allocator
 	build_outline(f, g, scale, &outline) or_return
+	return fill(&outline, allocator, loc)
+}
+
+// fill covers an outline's inside (nonzero, contours of one winding adding
+// up to full cover where they overlap). Empty (0x0) without points.
+@(private)
+fill :: proc(
+	outline: ^Outline,
+	allocator := context.allocator,
+	loc := #caller_location,
+) -> (
+	bm: Bitmap,
+	ok: bool,
+) {
 	if len(outline.points) == 0 {return {}, true}
 
 	// Pixel bounds, plus a column of slack for the accumulation buffer.

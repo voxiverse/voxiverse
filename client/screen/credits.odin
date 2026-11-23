@@ -11,7 +11,7 @@ import "client:ui"
 // by the wheel.
 
 CREDITS_FILE :: #load("../../assets/music/CREDITS.txt", string)
-CREDITS_FONTS :: "\nFonts\n\nJetBrains Mono, OFL\nNoto Sans Old Turkic, OFL\n"
+CREDITS_FONTS :: "\nFonts\n\nJetBrains Mono, OFL\n"
 CREDITS_WIDTH :: 760
 
 // credits_lines: the screen's text, a row each.

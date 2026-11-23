@@ -15,7 +15,7 @@ import "common:starmap"
 // and # lines ignored).
 SPLASHES :: #load("../../assets/splashes.txt", string)
 
-SPLASH_REVEAL :: 0.75 // seconds for the dial glyphs to resolve into the text
+SPLASH_REVEAL :: 0.75 // seconds for the address symbols to resolve into the text
 SPLASH_TILT :: -0.18 // resting angle of the stamp, radians: it rises to the right
 SPLASH_WOBBLE :: 0.015 // how far the angle breathes around SPLASH_TILT
 SPLASH_PULSE :: 0.025 // how much its size swells and shrinks
@@ -42,7 +42,7 @@ splash_angle :: proc(seconds: f32) -> f32 {
 }
 
 // splash_reveal: the splash as it shows `seconds` after it arrived, a
-// stamp from elsewhere: every letter is first a glyph of the dial
+// stamp from elsewhere: every letter is first a gate address symbol
 // (picked by the letter) and the text resolves from the left over
 // SPLASH_REVEAL seconds; newest is the last letter resolved (-1: none yet).
 // With reduce_motion it is simply there.
@@ -63,7 +63,7 @@ splash_reveal :: proc(
 		if i < resolved || r == ' ' {
 			strings.write_rune(&b, r)
 		} else {
-			strings.write_rune(&b, starmap.SYMBOL_RUNES[int(r) % starmap.SYMBOLS])
+			strings.write_rune(&b, starmap.symbol_rune(u8(int(r) % starmap.SYMBOLS)))
 		}
 		i += 1
 	}
@@ -118,7 +118,7 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		app.splash_at = engine.app_tick(app)
 	}
 	if app.splash != "" {
-		// The stamp: it crackles in off the logo's right corner (dial glyphs
+		// The stamp: it crackles in off the logo's right corner (symbols
 		// resolving as it falls), overshoots, rings down, then breathes —
 		// size and angle together — never a held line of text.
 		seconds := f32(time.duration_seconds(engine.app_since(app, app.splash_at)))

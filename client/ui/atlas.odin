@@ -38,8 +38,13 @@ Icon_Image :: struct {
 	at:     [2]int, // where it is in the atlas now
 }
 
+// Drawn_Glyphs: the runes the caller draws itself, as strokes (the gate
+// addresses' symbols), asked for whatever the font lacks. The strokes may be
+// in the temp allocator. False: not one of them.
+Drawn_Glyphs :: #type proc(r: rune) -> (font.Drawn, bool)
+
 Glyph_Cache :: struct {
-	fallback:           ^font.Font, // for what font lacks (nil: none)
+	drawn:              Drawn_Glyphs, // (nil: none)
 	font:               ^font.Font,
 	pixels:             []u8, // RGBA8, size x size
 	size:               int,
@@ -147,12 +152,19 @@ glyph_cache_get :: proc(c: ^Glyph_Cache, r: rune, size: u16) -> (entry: Glyph_En
 	key := Glyph_Key{r, size}
 	if e, found := c.entries[key]; found {return e, true}
 
-	f, g := glyph_font(c, r)
-	if g == 0 && r != 0 {return {}, false} 	// let the caller substitute
-	scale := font.scale_for_size(f, f32(size))
-	bm, raster_ok := font.rasterize(f, g, scale, context.temp_allocator)
+	bm: font.Bitmap
+	raster_ok: bool
+	if g := font.glyph_index(c.font, r); g != 0 || r == 0 {
+		scale := font.scale_for_size(c.font, f32(size))
+		bm, raster_ok = font.rasterize(c.font, g, scale, context.temp_allocator)
+		entry.advance = font.advance(c.font, g) * scale
+	} else if drawn, is_drawn := glyph_drawn(c, r); is_drawn {
+		bm, raster_ok = font.rasterize_drawn(drawn, f32(size), context.temp_allocator)
+		entry.advance = drawn.advance * f32(size)
+	} else {
+		return {}, false // let the caller substitute
+	}
 	if !raster_ok {return {}, false}
-	entry.advance = font.advance(f, g) * scale
 	entry.offset = {f32(bm.x), f32(bm.y)}
 	entry.w, entry.h = u16(bm.width), u16(bm.height)
 	if bm.width > 0 && bm.height > 0 {
@@ -178,14 +190,20 @@ glyph_cache_get :: proc(c: ^Glyph_Cache, r: rune, size: u16) -> (entry: Glyph_En
 	return entry, true
 }
 
-// glyph_font: the font that has r (the fallback when the font lacks it),
-// and its glyph (0: neither has it).
-glyph_font :: proc(c: ^Glyph_Cache, r: rune) -> (^font.Font, font.Glyph) {
+// glyph_drawn: r drawn by the caller, if the font lacks it and it is one.
+@(private)
+glyph_drawn :: proc(c: ^Glyph_Cache, r: rune) -> (font.Drawn, bool) {
+	if c.drawn == nil || font.glyph_index(c.font, r) != 0 {return {}, false}
+	return c.drawn(r)
+}
+
+// glyph_advance: how far r moves the pen at an em size, in its units
+// (the font's '?' for what neither the font nor the caller draws).
+glyph_advance :: proc(c: ^Glyph_Cache, r: rune, size: f32) -> f32 {
+	if drawn, is_drawn := glyph_drawn(c, r); is_drawn {return drawn.advance * size}
 	g := font.glyph_index(c.font, r)
-	if g == 0 && c.fallback != nil {
-		if fg := font.glyph_index(c.fallback, r); fg != 0 {return c.fallback, fg}
-	}
-	return c.font, g
+	if g == 0 && r != 0 {g = font.glyph_index(c.font, '?')}
+	return font.advance(c.font, g) * size / c.font.units_per_em
 }
 
 // shelf_place finds room for a w×h glyph, one pixel of padding around it

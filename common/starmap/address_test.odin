@@ -3,6 +3,7 @@ package starmap
 import "core:fmt"
 import "core:strings"
 import "core:testing"
+import "core:unicode/utf8"
 
 @(test)
 test_addresses :: proc(t: ^testing.T) {
@@ -30,7 +31,7 @@ test_addresses :: proc(t: ^testing.T) {
 	back, ok = address_parse(text, {})
 	testing.expect(t, ok && back == home, text)
 	// Seven symbols: a world in the galaxy given.
-	world_only := text[:len(text) - 1 - 4 * GALAXY_LENGTH]
+	world_only := text[:len(text) - 1 - utf8.rune_size(SYMBOL_RUNE_FIRST) * GALAXY_LENGTH]
 	back, ok = address_parse(world_only, home.galaxy)
 	testing.expect(t, ok && back == home, world_only)
 	// A symbol twice, too few, not a symbol: not addresses.
@@ -40,7 +41,47 @@ test_addresses :: proc(t: ^testing.T) {
 	_, ok = address_parse("abc", {})
 	testing.expect(t, !ok)
 	testing.expect(t, address_hash(home) != address_hash(address_derive(1)))
-	for r in SYMBOL_RUNES {testing.expect(t, r >= 0x10C00 && r <= 0x10C48)}
+	// Every symbol is its own rune, and only those runes are symbols.
+	for i in 0 ..< SYMBOLS {
+		back, is_symbol := symbol_of_rune(symbol_rune(u8(i)))
+		testing.expect(t, is_symbol && back == i)
+	}
+	_, ok = symbol_of_rune(symbol_rune(SYMBOLS))
+	testing.expect(t, !ok)
+	_, ok = symbol_of_rune('a')
+	testing.expect(t, !ok)
+}
+
+// The symbols' shapes: each drawn, inside its em box, and no two alike.
+@(test)
+test_symbol_shapes :: proc(t: ^testing.T) {
+	shapes: [SYMBOLS][dynamic][2][2]f32
+	defer for s in shapes {delete(s)}
+	for &s, i in shapes {
+		symbol_strokes(i, &s)
+		testing.expectf(t, len(s) > 0, "symbol %d has no strokes", i)
+		for stroke in s {
+			for p in stroke {
+				testing.expectf(
+					t,
+					p.x > 0 && p.x < SYMBOL_ADVANCE && p.y > 0 && p.y < 1,
+					"symbol %d reaches %v",
+					i,
+					p,
+				)
+			}
+		}
+	}
+	for a in 0 ..< SYMBOLS {
+		for b in a + 1 ..< SYMBOLS {
+			same := len(shapes[a]) == len(shapes[b])
+			for k in 0 ..< len(shapes[a]) {
+				if !same {break}
+				same = shapes[a][k] == shapes[b][k]
+			}
+			testing.expectf(t, !same, "symbols %d and %d look alike", a, b)
+		}
+	}
 }
 
 // Earth's address is valid and never changes: saves and terrain are named by it.
