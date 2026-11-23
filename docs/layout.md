@@ -210,7 +210,7 @@ package** is enforced by the `layout` lint (see above).
 | `server/store` | A universe's files as files, whatever server runs: their names, the save transaction (a batch staged, committed, recovered), backups and restores, export and import, migrations, compacting region files, the packs a universe lists and the registry built from them | `*.odin` |
 | `server/path` | Pathfinding over the blocks for a body of a size: a walker's way from one block to another (A*), and fields: the way to one goal from every block of an area, which many walkers share | `*.odin` |
 | `server/grid` | Networks over blocks (power lines, pipes): the parts that blocks of a grid's kinds and the machines they reach form, kept as blocks change | `*.odin` |
-| `server/play` | What the server parts of games share, built on the game API alone (docs/games.md): phases and their clocks, a walled arena from a template, watchers, the admin's settings, what is kept of players by name, squads (shared routes, formations, fighting), hunting and a wave survival's crowd | `*.odin` |
+| `server/play` | What the server parts of games share, built on the game API alone (docs/games.md): phases and their clocks, a walled arena from a template, watchers, the admin's settings, what is kept of players by name, squads (shared routes, formations, fighting), hunting, a wave survival's crowd and open-world creatures' minds | `*.odin` |
 | `server/playtest` | A game's server tests' rig: the game on a stepped server with its players, waiting for its phases, the host's commands and what each player was told; only tests import it | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |
