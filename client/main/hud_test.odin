@@ -186,3 +186,51 @@ test_hud_pickups_and_target :: proc(t: ^testing.T) {
 	ui_frame(app)
 	testing.expect(t, !said(app, "shambler"), "it goes once the crosshair has left it")
 }
+
+// The target frame's creature is one in sight: a solid block between the eyes and it
+// hides it, a gate's frame too (it is a solid, targetable block); the open gate's surface
+// (not targetable) does not.
+@(test)
+test_target_stops_at_blocks :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, false)
+	defer overlay_fixture_destroy(&f)
+	s := f.s
+	reg := testkit.test_reg()
+	shambler, _ := game.registry_kind(reg, "voxiverse:shambler")
+	e := engine.Other_Entity {
+		kind = shambler,
+	}
+	engine.track_add(&e.track, {tick = 10, position = {0.5, 0, -6.5}})
+	s.entities[9] = e
+	defer delete(s.entities)
+	s.render_clock = {
+		time   = 10,
+		newest = 10,
+		heard  = true,
+	}
+	s.camera.position = {0.5, 1.6, 0.5}
+	s.camera.yaw, s.camera.pitch = 0, 0 // (facing -z: the shambler 7 blocks ahead)
+	World :: struct {
+		at:    game.Block_Pos,
+		block: game.Block,
+	}
+	w: World
+	get :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
+		w := (^World)(data)
+		return w.block if p == w.at else .Air, true
+	}
+	query := game.Block_Query{&w, get, &reg.blocks, {}}
+	aimed := proc(s: ^engine.Session, q: game.Block_Query) -> bool {
+		engine.aim_update(s, q)
+		_, ok := s.hud.aimed.?
+		return ok
+	}
+	testing.expect(t, aimed(s, query), "nothing between: the shambler")
+	for b in ([]game.Block{.Stone, .Gate_Ring, .Gate_Chevron}) {
+		w = {{0, 1, -3}, b}
+		testing.expectf(t, !aimed(s, query), "%v hides it", b)
+	}
+	w = {{0, 1, -3}, .Gate_Horizon}
+	testing.expect(t, aimed(s, query), "the open gate's surface does not")
+}
