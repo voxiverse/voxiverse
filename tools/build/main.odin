@@ -135,6 +135,7 @@ TEST_PACKAGES :: []string {
 	"server/core",
 	"server/play",
 	"server/playtest",
+	"server/dedicated",
 	"server/packs",
 	"client/render",
 	"client/mesh",

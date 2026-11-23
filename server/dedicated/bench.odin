@@ -150,83 +150,28 @@ run_benchmark :: proc(scenario: string, smoke := false) -> bool {
 // bench_repetition: one server, its players joining, warming up, measured.
 @(private = "file")
 bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -> bool {
-	config := core.Config {
-		seed              = BENCH_SEED,
-		view_radius       = 6 if party else 12,
-		view_height       = 4 if party else 6,
-		workers           = max(1, base.cpu_count() / 2),
-		everyone_cheats   = !party, // (the teleport up, flying)
-		mode              = "survival" if party else "",
-		max_players       = BENCH_BOTS,
-		listen            = true,
-		port              = 0, // any free one
-		name              = "benchmark",
-		no_natural_spawns = true,
-		save_dir          = PARTY_UNIVERSE if party else "",
-	}
-	config.game, _ = game_find(game.DEFAULT_GAME) // (the engine's own world, as a player gets)
 	if party {os.remove_all(PARTY_UNIVERSE)}
 	srv := new(core.Server)
 	defer free(srv)
-	if !core.start(srv, config, {}) {return false}
+	if !core.start(srv, bench_config(party), {}) {return false}
 	stopped := false
 	defer if !stopped {core.stop(srv)}
 	for !sync.atomic_load(&srv.listening) {time.sleep(time.Millisecond)}
-	port := srv.host.socket.port
-
-	bots := new([BENCH_BOTS]Bot) // (each Link is large: not on the stack)
-	defer free(bots)
-	for &b, i in bots {
-		b.name = fmt.aprintf("bot%d", i + 1)
-		seed: [32]u8
-		for k in 0 ..< 32 {seed[k] = u8(k * 13 + i * 101 + 7)}
-		access.account_key_set(&b.key, seed[:])
-		b.yaw = f32(i) * 2 * math.PI / BENCH_BOTS
-		b.rng = u64(i + 1) * 0x9E3779B97F4A7C15
-		b.party = party
-		b.changes = 1000 // (the first tick takes a weapon in hand)
-		b.weapon = 0
-		b.scratch = new(game.Block_Array)
-		b.schema = protocol.game_schema()
-		protocol.receiver_init(&b.rx, &b.schema, srv.registry)
-		netcode.link_connect(&b.link, {net.IP4_Loopback, port}, "", time.tick_now())
-	}
-	defer for &b in bots {
-		netcode.link_close(&b.link, "benchmark over")
-		for p in b.messages {netcode.link_free(&b.link, p)}
-		delete(b.messages)
-		free(b.scratch)
-		protocol.receiver_destroy(&b.rx)
-		protocol.schema_destroy(&b.schema)
-		delete(b.name)
-		delete(b.others)
-	}
-
-	// Joining: every bot in, up and flying.
-	started := time.tick_now()
-	for {
-		pump(bots[:])
-		all_flying := true
-		for b in bots {all_flying &&= b.stage == .Flying}
-		if all_flying {break}
-		if time.duration_seconds(time.tick_since(started)) > BENCH_JOIN_TIMEOUT {
-			log.errorf("bench the players never all got flying")
-			return false
-		}
-		time.sleep(2 * time.Millisecond)
-	}
+	bots := bots_make(srv.host.socket.port, srv.registry, party, time.tick_now())
+	defer bots_destroy(bots)
+	bots_join(bots[:]) or_return
 	// Warm-up, then the measured part.
 	phase := time.tick_now()
 	warmup := 1.0 if smoke else f64(BENCH_WARMUP_SECONDS)
 	measure := 3.0 if smoke else f64(BENCH_MEASURE_SECONDS)
 	for time.duration_seconds(time.tick_since(phase)) < warmup {
-		pump(bots[:])
+		pump(bots[:], time.tick_now())
 		time.sleep(2 * time.Millisecond)
 	}
 	base.metrics_start()
 	phase = time.tick_now()
 	for time.duration_seconds(time.tick_since(phase)) < measure {
-		pump(bots[:])
+		pump(bots[:], time.tick_now())
 		time.sleep(2 * time.Millisecond)
 	}
 	base.bench_repetition_end(result)
@@ -246,6 +191,93 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 	return ok
 }
 
+// bench_config: the server a repetition runs.
+@(private)
+bench_config :: proc(party: bool) -> core.Config {
+	config := core.Config {
+		seed              = BENCH_SEED,
+		view_radius       = 6 if party else 12,
+		view_height       = 4 if party else 6,
+		workers           = max(1, base.cpu_count() / 2),
+		everyone_cheats   = !party, // (the teleport up, flying)
+		mode              = "survival" if party else "",
+		max_players       = BENCH_BOTS,
+		listen            = true,
+		port              = 0, // any free one
+		name              = "benchmark",
+		no_natural_spawns = true,
+		save_dir          = PARTY_UNIVERSE if party else "",
+	}
+	config.game, _ = game_find(game.DEFAULT_GAME) // (the engine's own world, as a player gets)
+	return config
+}
+
+// bots_make: BENCH_BOTS players connecting to the server at port (on the
+// loopback, or on sim, a test's simulated network), whose registry is reg.
+@(private)
+bots_make :: proc(
+	port: int,
+	reg: ^game.Registry,
+	party: bool,
+	now: time.Tick,
+	sim: ^netcode.Simnet = nil,
+) -> ^[BENCH_BOTS]Bot {
+	bots := new([BENCH_BOTS]Bot) // (each Link is large: not on the stack)
+	for &b, i in bots {
+		b.name = fmt.aprintf("bot%d", i + 1)
+		seed: [32]u8
+		for k in 0 ..< 32 {seed[k] = u8(k * 13 + i * 101 + 7)}
+		access.account_key_set(&b.key, seed[:])
+		b.yaw = f32(i) * 2 * math.PI / BENCH_BOTS
+		b.rng = u64(i + 1) * 0x9E3779B97F4A7C15
+		b.party = party
+		b.changes = 1000 // (the first tick takes a weapon in hand)
+		b.weapon = 0
+		b.scratch = new(game.Block_Array)
+		b.schema = protocol.game_schema()
+		protocol.receiver_init(&b.rx, &b.schema, reg)
+		netcode.link_connect(&b.link, {net.IP4_Loopback, port}, "", now, sim = sim)
+	}
+	return bots
+}
+
+@(private)
+bots_destroy :: proc(bots: ^[BENCH_BOTS]Bot) {
+	for &b in bots {
+		netcode.link_close(&b.link, "benchmark over")
+		for p in b.messages {netcode.link_free(&b.link, p)}
+		delete(b.messages)
+		free(b.scratch)
+		protocol.receiver_destroy(&b.rx)
+		protocol.schema_destroy(&b.schema)
+		delete(b.name)
+		delete(b.others)
+	}
+	free(bots)
+}
+
+// bots_join: every bot in, up and flying (the party's: in), or false after
+// BENCH_JOIN_TIMEOUT.
+@(private)
+bots_join :: proc(bots: []Bot) -> bool {
+	started := time.tick_now()
+	for {
+		pump(bots, time.tick_now())
+		if all_flying(bots) {return true}
+		if time.duration_seconds(time.tick_since(started)) > BENCH_JOIN_TIMEOUT {
+			log.errorf("bench the players never all got flying")
+			return false
+		}
+		time.sleep(2 * time.Millisecond)
+	}
+}
+
+@(private)
+all_flying :: proc(bots: []Bot) -> bool {
+	for b in bots {if b.stage != .Flying {return false}}
+	return true
+}
+
 // report_session: where the party's recording is (the server has written and closed it).
 @(private = "file")
 report_session :: proc() {
@@ -262,11 +294,10 @@ report_session :: proc() {
 	}
 }
 
-// pump: each bot's network in and out, its messages handled, its input sent
-// when one is due.
-@(private = "file")
-pump :: proc(bots: []Bot) {
-	now := time.tick_now()
+// pump: each bot's network in and out at now, its messages handled, its
+// input sent when one is due.
+@(private)
+pump :: proc(bots: []Bot, now: time.Tick) {
 	for &b in bots {
 		was := b.link.state
 		netcode.link_update(&b.link, now)
@@ -289,6 +320,12 @@ pump :: proc(bots: []Bot) {
 			m, ok := protocol.decode_server(p, b.scratch, b.rx.reg)
 			if !ok {continue}
 			#partial switch v in m {
+			case protocol.Packs:
+				// The game's own pack is offered to every joiner over UDP. A bot
+				// shares the server's registry (rx.reg), so it has every pack
+				// already: it asks for none and says it built the same content.
+				send(&b, protocol.Pack_Want{})
+				send(&b, protocol.Packs_Ready{v.content})
 			case protocol.Challenge:
 				send(&b, protocol.Proof{access.account_sign(&b.key, v.nonce)})
 			case protocol.Characters:
