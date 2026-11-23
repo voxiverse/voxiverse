@@ -44,6 +44,55 @@ pack's model.
 The statistics it keeps of a player: `sheep.sheared` (5 experience each) and `sheep.fed` (2),
 and of a world `sheep.born`, shown with the engine's.
 
+## Its creatures
+
+Beside the sheep the home world has sixteen creatures of its own (`pack/data/entities`:
+`wildlife.json`, `predators.json`, `machines.json`), each with its model, its voice, its
+place and hours and what it leaves where it dies (its kind's `drops`: hide, meat, feathers,
+fish, shell plates, chitin, venom glands, and the machines' scrap, power cells and lenses,
+`pack/data/items/creature_drops.json`; nothing makes anything of them yet). Their minds are
+the server's (`server/wild.odin`), made of `server:play`'s (`mind.odin`): what each does is
+its state, and what a player sees of it (asleep, warning, winding up a blow, aloft) is the
+look of that state, drawn by its model.
+
+| Creature | Where and when | What it does | Health |
+|---|---|---|---|
+| loper | grass, by day, herds of 3 to 5 | grazes with its herd, watches a player from 10 blocks, runs with the herd from one within 5 | 8 |
+| twitchet | open ground, day and dusk, 1 or 2 | freezes, ears up, at a player within 9 blocks; bolts from one within 5 | 2 |
+| wheelwing | open ground, by day, 1 to 3 | pecks on the ground, wheels over its ground 6 to 12 blocks up, lands again; takes off from a player within 7 | 3 |
+| glassfin | in water over sand, gravel, dirt or clay, any hour, schools of 2 to 4 | swims with its school, darts from a player within 5, never leaves the water | 2 |
+| domeback | open ground, by day, alone | browses slowly, minds no one; hurt, shuts itself in its shell for 6 seconds (a quarter of any harm gets through) | 20 |
+| hacklebird | open ground, by day | guards its ground: a player within 9 blocks sees its crest and ruff go up; one who stays within 5, or hits it, is kicked (3) until 16 blocks from its ground | 12 |
+| snouter | grass in the woods, by day | roots about; a player within 6 sees its back bristle and dust fly; one who stays within 4, or hits it, is charged (4) | 16 |
+| pitmaw | the floor of caves, any hour, never within 48 blocks of the spawn | lies buried with its eye stalks out; rises in a spray of grit (a second) at a player within 5 blocks and bites (4); slow, so walking away escapes it; buries itself again | 14 |
+| barbcaster | sand or gravel by the water, dusk to dawn | keeps 6 to 10 blocks off and flings barbs (2) from its tail, drawing it back for most of a second first | 9 |
+| duskrunner | open ground in the woods, by night, packs of 3 or 4 | the pack circles a player 6 blocks off; one at a time, its markings flaring first, darts in to bite (2); one badly hurt runs | 6 |
+| cragmaul | open ground and bare rock, by night, alone | slow and heavy: lifts both fists over its head for more than a second before each blow (7); cannot run | 40 |
+| sentry | posted at the remains | folded at its post until a player comes within 10 blocks of the post; wakes (sparks, a second and a half), shoots bolts (3) charging each first, folds again at its post, whole, once the player has gone | 24 |
+| tender | posted at the remains | a mending drone that hovers from stone to stone 1 to 3 blocks up, working sparks into each; minds no one; hurt, flies off up | 8 |
+| watcher | near the remains, by day | hovers 10 to 16 blocks from a player and 5 up, keeping it in sight for most of a minute, then rises and goes; never attacks; hurt, goes at once | 10 |
+| bulwark | posted at the ruin's north gate | the guardian, kneeling until a player comes within 7 blocks of its post; rises (two and a half seconds) and fights with both fists, raising them for a second and a half before each blow (9); gives up 16 blocks from its post and kneels again, whole | 160 |
+| longstrider | grass, by day, rare, alone, 40 to 60 blocks off | a giant as tall as the trees, to walk toward: walks slowly where it likes, grazing, and minds no one; hurt, walks away | 300 |
+
+Every attack is wound up first (`play.fight_fair`): a player who sees it coming can step out
+of reach or behind something. The creatures that fight go for a player who can be hurt (not
+in creative, not watching) and leave alone one fighting at the ruin; the timid ones flee any
+player they see. They come by themselves by their spawn rules (the sea's and the caves'
+too: a rule's `place`), but a barbcaster only near water, a duskrunner or a snouter only
+under trees, a watcher only within 96 blocks of remains, and none round a player who has 24
+of them within 64 blocks. One with no player within 48 blocks thinks once in eight ticks.
+
+The machines are the remains' own (`server/remains_machines.odin`) and never touch a gate. When the
+ruined site is built in a session it posts its own, each kept with the world and set down
+again if it is not at its post: a sentry at each corner of its apron, two tenders by its
+walls and the bulwark before its north gate (the south gate is where the ruin puts players
+out). Other remains take machines the same way: `remains_mark` their middle (watchers come
+near it) and `remains_post` a machine at a block. Hurt while asleep, a machine lets half the
+harm through.
+
+`/creatures wildlife|guards|predators|machines|giant|all [still]` sets a group down in a row
+in front of you (the summoning permission), `still` standing for a picture.
+
 ## Its nights
 
 From dusk to dawn (a fifth of the day either side of midnight) the base pack's hostile
@@ -55,7 +104,7 @@ overriding only the creatures' `spawn`) and the engine's spawner runs them, so t
 each world's seed and tick like everything else, within its entity budget; a natural one goes
 when nobody is near. Each goes for the nearest player within 16 blocks who can be hurt and
 strikes it (`play.hunt_tick`, `server/danger.odin`); one in creative mode, or watching, is left
-alone. They drop nothing (a kind has no drops as data). The spitters, hulks and the matriarch
+alone. They drop nothing (their kinds have no drops). The spitters, hulks and the matriarch
 come only in Horde's waves, which are fought at the ruined site (below) too.
 
 ## Its ruined site
@@ -240,13 +289,17 @@ engine's files and the character's `trader`: the save migration made them the sa
 
 `rules.odin` (its name and description), `genetics.odin` (the sheep's genes), `pack.odin`
 (its pack: `pack/data/entities/sheep.json`, the sheep's body, looks, model and spawn rule;
+`wildlife.json`, `predators.json` and `machines.json`, the other creatures', with
+`block_tags/creatures.json`, the grounds they come on, and `items/creature_drops.json` and
+`models/creature_drops.json`, what they leave;
 `pack/data/entities/hostile.json`, the nights' spawn rules; `pack/data/blocks/kit.json`, a
 block of every material),
 the markets' model (above), `records.odin` (what it replicates) and `text.odin`
 (what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
 and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and
 feeding, `entity_use`; their wild genes, `spawned`; their flight, `entity_hurt`), each sheep's
-record (`Sheep`) kept on its entity, and runs the markets (`economy.odin`, each world's
+record (`Creature`) kept on its entity, the other creatures' minds (`wild.odin`) and
+the remains' machines (`remains_machines.odin`), and runs the markets (`economy.odin`, each world's
 economy, its `world_state` and file; `trader.odin`, the character's `Trader_Record` and the
 market on the wire; `interventions.odin`), lets the night's creatures hunt
 (`danger.odin`) and keeps the ruined site and its fight (`ruin.odin`: the site from the seed,

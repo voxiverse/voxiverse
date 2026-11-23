@@ -6,6 +6,7 @@ import "common:base"
 import "common:game"
 import "games:sandbox"
 import "server:core"
+import "server:play"
 
 // The sheep (its pack's `sandbox:sheep`, whose brain is the game's): each stands and looks
 // about, looks at a player who comes near, wanders, grazes (a shorn one eats the grass in
@@ -26,15 +27,23 @@ Sheep_State :: enum u8 {
 	Mate, // ready to breed: walking to another that is
 }
 
-// Sheep: the game's record on each sheep (core.entity_data), kept with it.
-Sheep :: struct {
-	state: Sheep_State,
-	shorn: bool,
-	genes: sandbox.Genes,
-	timer: i32, // ticks left in this state
-	grows: i32, // ticks before it is grown (0: an adult; a lamb is born with LAMB_TICKS)
-	love:  i32, // ticks it is still ready to breed
-	wait:  i32, // ticks before it may breed again
+// Creature: the game's record on each of its creatures (core.entity_data), kept with it:
+// a sheep's state, wool, genes and clocks (the fields' names are those saved since the
+// sheep were the only creature), and every other creature's mind and what it shows
+// (wild.odin).
+Creature :: struct {
+	state:   Sheep_State,
+	shorn:   bool,
+	genes:   sandbox.Genes,
+	timer:   i32, // ticks left in this state
+	grows:   i32, // ticks before it is grown (0: an adult; a lamb is born with LAMB_TICKS)
+	love:    i32, // ticks it is still ready to breed
+	wait:    i32, // ticks before it may breed again
+	mind:    play.Mind, // a wild creature's (wild.odin)
+	shown:   play.Mind_State, // the state whose look it shows (wild_show)
+	winding: bool, // ... and whether it shows "winding"
+	showing: bool, // it shows them
+	still:   bool, // it stands still for a picture (/creatures ... still)
 }
 
 GRAZE_EAT_TICKS :: 10 // ticks left of a graze when the head is down and the grass goes
@@ -46,23 +55,27 @@ WANDER_RANGE :: 8 // blocks it wanders, at most, each way
 MATE_NEAR :: 1.6 // blocks apart at which two ready sheep have their lamb
 
 // sheep: a sheep's record (nil for another creature).
-sheep :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> ^Sheep {
+sheep :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> ^Creature {
 	if core.entity_kind(w, h) != state(s).sheep {return nil}
-	return core.entity_data(w, h, Sheep)
+	return core.entity_data(w, h, Creature)
 }
 
 // adult: the sheep has grown up.
-adult :: proc(d: ^Sheep) -> bool {return d.grows <= 0}
+adult :: proc(d: ^Creature) -> bool {return d.grows <= 0}
 
-// think: the game's brain for its kinds (Game.think): every sheep of the world, each tick.
+// think: the game's brain for its kinds (Game.think): every sheep of the world, and every
+// creature of the roster (wild.odin), each tick.
 think :: proc(
 	s: ^core.Server,
 	w: ^core.World,
 	kind: game.Kind_Id,
 	entities: []game.Entity_Handle,
 ) {
-	if kind != state(s).sheep {return}
-	for h in entities {sheep_think(s, w, h)}
+	if kind == state(s).sheep {
+		for h in entities {sheep_think(s, w, h)}
+	} else if which, ours := wild_of(s, kind); ours {
+		for h in entities {wild_think(s, w, which, h)}
+	}
 }
 
 // sheep_think: one sheep's tick: its clocks, its state, its head and its looks.
@@ -151,7 +164,7 @@ sheep_think :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) {
 }
 
 // show: what a player sees of the sheep, from its record.
-show :: proc(w: ^core.World, h: game.Entity_Handle, d: ^Sheep) {
+show :: proc(w: ^core.World, h: game.Entity_Handle, d: ^Creature) {
 	core.entity_show(w, h, "shorn", d.shorn)
 	core.entity_show(w, h, "lamb", !adult(d))
 	core.entity_show(w, h, "black", sandbox.genes_black(d.genes))
@@ -160,7 +173,7 @@ show :: proc(w: ^core.World, h: game.Entity_Handle, d: ^Sheep) {
 }
 
 // rest: the sheep stops what it did and stands for a while, at its walking pace again.
-rest :: proc(w: ^core.World, h: game.Entity_Handle, d: ^Sheep, ticks: i32) {
+rest :: proc(w: ^core.World, h: game.Entity_Handle, d: ^Creature, ticks: i32) {
 	d.state, d.timer = .Idle, ticks
 	core.entity_stand(w, h)
 	core.entity_set_speed(w, h, 0)
@@ -287,22 +300,31 @@ entity_use :: proc(
 	return ""
 }
 
-// spawned: a sheep that came by itself has wild genes (Game.spawned).
+// spawned: a sheep that came by itself has wild genes; a creature of the roster begins, or
+// is refused (wild_spawned) (Game.spawned).
 spawned :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> bool {
 	if d := sheep(s, w, h); d != nil {
 		d.genes = sandbox.genes_wild(&state(s).rng)
 		show(w, h, d)
 	}
+	if which, ours := wild_of(s, core.entity_kind(w, h)); ours {
+		return wild_spawned(s, w, which, h)
+	}
 	return true
 }
 
-// entity_hurt: a hurt sheep runs from what hurt it (Game.entity_hurt).
+// entity_hurt: a hurt sheep runs from what hurt it; a creature of the roster does as its
+// mind says (wild_hurt) (Game.entity_hurt).
 entity_hurt :: proc(
 	s: ^core.Server,
 	w: ^core.World,
 	h: game.Entity_Handle,
 	harm: core.Entity_Harm,
 ) {
+	if which, ours := wild_of(s, core.entity_kind(w, h)); ours {
+		wild_hurt(s, w, which, h, harm)
+		return
+	}
 	d := sheep(s, w, h)
 	if d == nil {return}
 	r := &state(s).rng

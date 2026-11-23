@@ -1,0 +1,263 @@
+// The home world's wildlife: walkers whose minds are the sandbox's (games/sandbox/server/
+// wild.odin, made of server/play's minds), their looks the game's to show and these models'
+// to draw, each coming by itself where and when its spawn rule says. Grazers, a small runner,
+// a bird, a fish and a shelled browser that leave a player alone; two that guard their
+// ground; and a giant to walk toward.
+{
+	// A herd grazer of the grasslands by day: it keeps with its herd, grazes, watches a
+	// player from 10 blocks and runs, with the whole herd, from one within 5.
+	"loper": {
+		"voice": "bellow",
+		"box": [0.9, 1.5], "health": 8, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 2.0, "run_speed": 5.5, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"drops": [
+			{"item": "sandbox:raw_meat", "count": [1, 2]},
+			{"item": "sandbox:hide", "count": [1, 2]}
+		],
+		"model": {"parts": [
+			{"box": [-0.32, 0.75, -0.55, 0.32, 1.2, 0.5], "color": [176, 150, 104]},
+			{"box": [-0.33, 0.75, -0.3, 0.33, 0.85, 0.3], "color": [222, 208, 172]},
+			{"box": [-0.06, 1.2, -0.45, 0.06, 1.32, 0.35], "color": [120, 72, 48]},
+			{"box": [-0.12, 1.0, -0.85, 0.12, 1.45, -0.5], "color": [176, 150, 104], "swing": "pitch", "hinge": [0, 1.1, -0.55]},
+			{"box": [-0.14, 1.3, -1.12, 0.14, 1.55, -0.8], "color": [190, 164, 118], "skin": "head", "swing": "pitch", "hinge": [0, 1.1, -0.55]},
+			{"box": [-0.18, 1.55, -0.95, -0.1, 1.74, -0.88], "color": [90, 70, 50], "swing": "pitch", "hinge": [0, 1.1, -0.55]},
+			{"box": [0.1, 1.55, -0.95, 0.18, 1.74, -0.88], "color": [90, 70, 50], "swing": "pitch", "hinge": [0, 1.1, -0.55]},
+			{"box": [-0.28, 0, -0.45, -0.14, 0.78, -0.31], "color": [92, 74, 52], "skin": "legs", "swing": "walk"},
+			{"box": [0.14, 0, -0.45, 0.28, 0.78, -0.31], "color": [92, 74, 52], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.28, 0, 0.3, -0.14, 0.78, 0.44], "color": [92, 74, 52], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.14, 0, 0.3, 0.28, 0.78, 0.44], "color": [92, 74, 52], "skin": "legs", "swing": "walk"},
+			{"box": [-0.05, 0.9, 0.5, 0.05, 1.15, 0.62], "color": [120, 72, 48]}
+		]},
+		"spawn": {
+			"on": "voxiverse:grass", "day": [0.25, 0.75], "every": 120, "chance": 0.35, "cap": 8,
+			"within": 64, "distance": [24, 48], "group": [3, 5], "sky": true
+		}
+	},
+	// A small runner of open ground, by day and dusk: it freezes, ears up, when a player
+	// is within 9 blocks and bolts from one within 5.
+	"twitchet": {
+		"voice": "squeak",
+		"box": [0.4, 0.4], "health": 2, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 2.5, "run_speed": 6.5, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"looks": ["watch"],
+		"drops": [
+			{"item": "sandbox:raw_meat", "chance": 0.7},
+			{"item": "sandbox:hide", "chance": 0.4}
+		],
+		"model": {"parts": [
+			{"box": [-0.13, 0.08, -0.18, 0.13, 0.3, 0.16], "color": [138, 120, 100]},
+			{"box": [-0.1, 0.16, -0.32, 0.1, 0.34, -0.16], "color": [150, 132, 110], "skin": "head"},
+			{"box": [-0.09, 0.34, -0.22, -0.04, 0.44, -0.18], "color": [176, 140, 130], "hidden": ["watch"]},
+			{"box": [0.04, 0.34, -0.22, 0.09, 0.44, -0.18], "color": [176, 140, 130], "hidden": ["watch"]},
+			{"box": [-0.09, 0.34, -0.24, -0.04, 0.58, -0.2], "color": [196, 150, 140], "shown": ["watch"]},
+			{"box": [0.04, 0.34, -0.24, 0.09, 0.58, -0.2], "color": [196, 150, 140], "shown": ["watch"]},
+			{"box": [-0.07, 0.14, 0.16, 0.07, 0.32, 0.3], "color": [214, 204, 192]},
+			{"box": [-0.12, 0, -0.14, -0.06, 0.1, -0.08], "color": [100, 86, 70], "skin": "legs", "swing": "walk"},
+			{"box": [0.06, 0, -0.14, 0.12, 0.1, -0.08], "color": [100, 86, 70], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.12, 0, 0.06, -0.06, 0.1, 0.12], "color": [100, 86, 70], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.06, 0, 0.06, 0.12, 0.1, 0.12], "color": [100, 86, 70], "skin": "legs", "swing": "walk"}
+		]},
+		"spawn": {
+			"on": "#voxiverse:wild_plant_soil", "day": [0.2, 0.85], "every": 90, "chance": 0.3,
+			"cap": 4, "within": 48, "distance": [16, 36], "group": [1, 2], "sky": true
+		}
+	},
+	// A bird of open ground by day: it pecks on the ground, wheels over its ground 6 to 12
+	// blocks up, lands again, and takes off from a player within 7 blocks.
+	"wheelwing": {
+		"voice": "chirp",
+		"box": [0.5, 0.4], "health": 3, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.0, "run_speed": 7.0, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"looks": ["idle", "rest", "wander", "flee", "return"],
+		"drops": [{"item": "sandbox:feather", "count": [1, 3]}],
+		"model": {"parts": [
+			{"box": [-0.1, 0.12, -0.22, 0.1, 0.3, 0.16], "color": [70, 96, 130]},
+			{"box": [-0.08, 0.22, -0.34, 0.08, 0.38, -0.18], "color": [84, 110, 146], "skin": "head", "swing": "pitch", "hinge": [0, 0.26, -0.2]},
+			{"box": [-0.03, 0.26, -0.42, 0.03, 0.31, -0.34], "color": [232, 150, 50], "swing": "pitch", "hinge": [0, 0.26, -0.2]},
+			{"box": [-0.08, 0.2, 0.16, 0.08, 0.24, 0.34], "color": [50, 70, 100]},
+			{"box": [-0.13, 0.15, -0.15, -0.1, 0.29, 0.18], "color": [54, 78, 110], "hidden": ["wander", "flee", "return"]},
+			{"box": [0.1, 0.15, -0.15, 0.13, 0.29, 0.18], "color": [54, 78, 110], "hidden": ["wander", "flee", "return"]},
+			{"box": [-0.55, 0.26, -0.12, -0.1, 0.29, 0.12], "color": [60, 86, 120], "swing": "flap", "hinge": [-0.1, 0.28, 0], "hidden": ["idle", "rest"]},
+			{"box": [-0.62, 0.26, -0.08, -0.55, 0.29, 0.1], "color": [232, 232, 226], "swing": "flap", "hinge": [-0.1, 0.28, 0], "hidden": ["idle", "rest"]},
+			{"box": [0.1, 0.26, -0.12, 0.55, 0.29, 0.12], "color": [60, 86, 120], "swing": "flap", "hinge": [0.1, 0.28, 0], "hidden": ["idle", "rest"]},
+			{"box": [0.55, 0.26, -0.08, 0.62, 0.29, 0.1], "color": [232, 232, 226], "swing": "flap", "hinge": [0.1, 0.28, 0], "hidden": ["idle", "rest"]},
+			{"box": [-0.05, 0, -0.04, -0.02, 0.12, -0.01], "color": [200, 140, 60], "skin": "legs", "swing": "walk"},
+			{"box": [0.02, 0, -0.04, 0.05, 0.12, -0.01], "color": [200, 140, 60], "skin": "legs", "swing": "walk_back"}
+		]},
+		"spawn": {
+			"on": "#voxiverse:wild_plant_soil", "day": [0.22, 0.8], "every": 120, "chance": 0.3,
+			"cap": 5, "within": 48, "distance": [16, 40], "group": [1, 3], "sky": true
+		}
+	},
+	// A small fish of lakes, rivers and the shallows, any hour: a school swims together and
+	// darts from a player within 5 blocks, never out of the water.
+	"glassfin": {
+		"voice": "none",
+		"box": [0.5, 0.3], "health": 2, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.5, "run_speed": 4.5, "jump": 0, "step": 0},
+		"brain": "game",
+		"drops": [{"item": "sandbox:raw_fish"}],
+		"model": {"parts": [
+			{"box": [-0.08, 0.06, -0.25, 0.08, 0.24, 0.18], "color": [150, 200, 210]},
+			{"box": [-0.07, 0.08, -0.33, 0.07, 0.22, -0.25], "color": [172, 216, 222], "skin": "head"},
+			{"box": [-0.085, 0.12, -0.2, 0.085, 0.16, 0.15], "color": [232, 242, 242]},
+			{"box": [-0.02, 0.04, 0.18, 0.02, 0.28, 0.32], "color": [90, 150, 180], "swing": "walk", "hinge": [0, 0.15, 0.18]},
+			{"box": [-0.015, 0.24, -0.1, 0.015, 0.32, 0.08], "color": [90, 150, 180]},
+			{"box": [-0.14, 0.1, -0.15, -0.08, 0.13, -0.05], "color": [90, 150, 180], "swing": "flap", "hinge": [-0.08, 0.12, -0.1]},
+			{"box": [0.08, 0.1, -0.15, 0.14, 0.13, -0.05], "color": [90, 150, 180], "swing": "flap", "hinge": [0.08, 0.12, -0.1]}
+		]},
+		"spawn": {
+			"on": "#sandbox:water_bed", "place": "water", "day": [0, 1], "every": 100,
+			"chance": 0.4, "cap": 6, "within": 48, "distance": [12, 40], "group": [2, 4]
+		}
+	},
+	// A slow, shelled browser of open ground by day: it ignores a player, and hurt, it
+	// shuts itself in its shell (a quarter of any harm gets through) for a while.
+	"domeback": {
+		"voice": "grunt",
+		"box": [1.1, 0.9], "health": 20, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 0.6, "run_speed": 0.6, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"looks": ["hidden"],
+		"drops": [
+			{"item": "sandbox:shell_plate", "count": [1, 3]},
+			{"item": "sandbox:raw_meat", "count": [1, 2]}
+		],
+		"model": {"parts": [
+			{"box": [-0.5, 0.35, -0.5, 0.5, 0.8, 0.5], "color": [110, 120, 80]},
+			{"box": [-0.35, 0.8, -0.35, 0.35, 0.92, 0.35], "color": [96, 106, 70]},
+			{"box": [-0.52, 0.45, -0.2, 0.52, 0.6, -0.1], "color": [84, 90, 58]},
+			{"box": [-0.52, 0.45, 0.15, 0.52, 0.6, 0.25], "color": [84, 90, 58]},
+			{"box": [-0.55, 0.3, -0.55, 0.55, 0.38, 0.55], "color": [140, 130, 96]},
+			{"box": [-0.5, 0, -0.5, 0.5, 0.3, 0.5], "color": [100, 108, 72], "shown": ["hidden"]},
+			{"box": [-0.16, 0.3, -0.82, 0.16, 0.55, -0.5], "color": [130, 140, 110], "skin": "head", "swing": "pitch", "hinge": [0, 0.45, -0.5], "hidden": ["hidden"]},
+			{"box": [-0.05, 0.36, -0.9, 0.05, 0.46, -0.82], "color": [200, 190, 150], "swing": "pitch", "hinge": [0, 0.45, -0.5], "hidden": ["hidden"]},
+			{"box": [-0.45, 0, -0.4, -0.25, 0.32, -0.2], "color": [120, 128, 96], "skin": "legs", "swing": "walk", "hidden": ["hidden"]},
+			{"box": [0.25, 0, -0.4, 0.45, 0.32, -0.2], "color": [120, 128, 96], "skin": "legs", "swing": "walk_back", "hidden": ["hidden"]},
+			{"box": [-0.45, 0, 0.2, -0.25, 0.32, 0.4], "color": [120, 128, 96], "skin": "legs", "swing": "walk_back", "hidden": ["hidden"]},
+			{"box": [0.25, 0, 0.2, 0.45, 0.32, 0.4], "color": [120, 128, 96], "skin": "legs", "swing": "walk", "hidden": ["hidden"]},
+			{"box": [-0.08, 0.3, 0.5, 0.08, 0.4, 0.7], "color": [120, 128, 96], "hidden": ["hidden"]}
+		]},
+		"spawn": {
+			"on": "#voxiverse:wild_plant_soil", "day": [0.25, 0.75], "every": 300, "chance": 0.25,
+			"cap": 2, "within": 64, "distance": [24, 48], "group": [1, 1], "sky": true
+		}
+	},
+	// A tall bird that cannot fly and guards its ground, on open ground by day: a player
+	// within 9 blocks sees its crest and ruff raised for two seconds; one who stays within
+	// 5, or hits it, is kicked and pecked until it is 16 blocks from the bird's ground.
+	"hacklebird": {
+		"voice": "croak",
+		"box": [0.7, 1.9], "health": 12, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 2.2, "run_speed": 4.5, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 3, "reach": 1.0, "cooldown": 1.2, "keep": [0, 0.8], "notice": 9},
+		"looks": ["warn", "fight", "striking"],
+		"drops": [
+			{"item": "sandbox:feather", "count": [2, 4]},
+			{"item": "sandbox:raw_meat", "count": [1, 2]}
+		],
+		"model": {"parts": [
+			{"box": [-0.16, 0, -0.05, -0.08, 0.9, 0.05], "color": [180, 150, 60], "skin": "legs", "swing": "walk"},
+			{"box": [0.08, 0, -0.05, 0.16, 0.9, 0.05], "color": [180, 150, 60], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.25, 0.85, -0.3, 0.25, 1.3, 0.35], "color": [80, 60, 50]},
+			{"box": [-0.2, 1.0, 0.35, 0.2, 1.35, 0.6], "color": [60, 44, 36]},
+			{"box": [-0.3, 0.95, -0.2, -0.25, 1.25, 0.25], "color": [70, 52, 44], "swing": "flap", "hinge": [-0.25, 1.25, 0]},
+			{"box": [0.25, 0.95, -0.2, 0.3, 1.25, 0.25], "color": [70, 52, 44], "swing": "flap", "hinge": [0.25, 1.25, 0]},
+			{"box": [-0.08, 1.25, -0.38, 0.08, 1.7, -0.24], "color": [200, 190, 160], "swing": "strike", "hinge": [0, 1.3, -0.3]},
+			{"box": [-0.1, 1.6, -0.5, 0.1, 1.82, -0.28], "color": [190, 180, 150], "skin": "head", "swing": "strike", "hinge": [0, 1.3, -0.3]},
+			{"box": [-0.03, 1.66, -0.62, 0.03, 1.74, -0.5], "color": [60, 50, 40], "swing": "strike", "hinge": [0, 1.3, -0.3]},
+			{"box": [-0.02, 1.82, -0.42, 0.02, 1.9, -0.32], "color": [200, 60, 40], "swing": "strike", "hinge": [0, 1.3, -0.3], "hidden": ["warn", "fight"]},
+			{"box": [-0.02, 1.82, -0.48, 0.02, 2.15, -0.26], "color": [232, 72, 40], "swing": "strike", "hinge": [0, 1.3, -0.3], "shown": ["warn"]},
+			{"box": [-0.02, 1.82, -0.48, 0.02, 2.15, -0.26], "color": [232, 72, 40], "swing": "strike", "hinge": [0, 1.3, -0.3], "shown": ["fight"]},
+			{"box": [-0.14, 1.4, -0.42, 0.14, 1.55, -0.2], "color": [222, 92, 50], "swing": "strike", "hinge": [0, 1.3, -0.3], "shown": ["warn"]},
+			{"box": [-0.14, 1.4, -0.42, 0.14, 1.55, -0.2], "color": [222, 92, 50], "swing": "strike", "hinge": [0, 1.3, -0.3], "shown": ["fight"]}
+		]},
+		"spawn": {
+			"on": "#voxiverse:wild_plant_soil", "day": [0.25, 0.8], "every": 240, "chance": 0.25,
+			"cap": 2, "within": 64, "distance": [24, 48], "group": [1, 2], "sky": true, "safe": 32
+		}
+	},
+	// A stocky tusked digger of the woods by day: it roots about, and a player within 6
+	// blocks sees its back bristle and hears it stamp; one who stays within 4, or hits it,
+	// is charged until it is 14 blocks off.
+	"snouter": {
+		"voice": "growl",
+		"box": [1.0, 1.0], "health": 16, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.8, "run_speed": 4.6, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 4, "reach": 1.0, "cooldown": 1.5, "keep": [0, 0.9], "notice": 6},
+		"looks": ["warn", "fight", "striking"],
+		"drops": [
+			{"item": "sandbox:hide", "count": [1, 2]},
+			{"item": "sandbox:raw_meat", "count": [2, 3]}
+		],
+		"model": {
+			"parts": [
+				{"box": [-0.4, 0.35, -0.5, 0.4, 0.9, 0.55], "color": [88, 64, 48]},
+				{"box": [-0.26, 0.35, -0.85, 0.26, 0.75, -0.5], "color": [100, 74, 56], "skin": "head", "swing": "pitch", "hinge": [0, 0.6, -0.5]},
+				{"box": [-0.12, 0.38, -0.98, 0.12, 0.55, -0.85], "color": [170, 130, 120], "swing": "pitch", "hinge": [0, 0.6, -0.5]},
+				{"box": [-0.2, 0.42, -0.95, -0.14, 0.62, -0.88], "color": [230, 220, 190], "swing": "pitch", "hinge": [0, 0.6, -0.5]},
+				{"box": [0.14, 0.42, -0.95, 0.2, 0.62, -0.88], "color": [230, 220, 190], "swing": "pitch", "hinge": [0, 0.6, -0.5]},
+				{"box": [-0.35, 0, -0.42, -0.17, 0.38, -0.24], "color": [64, 48, 36], "skin": "legs", "swing": "walk"},
+				{"box": [0.17, 0, -0.42, 0.35, 0.38, -0.24], "color": [64, 48, 36], "skin": "legs", "swing": "walk_back"},
+				{"box": [-0.35, 0, 0.3, -0.17, 0.38, 0.48], "color": [64, 48, 36], "skin": "legs", "swing": "walk_back"},
+				{"box": [0.17, 0, 0.3, 0.35, 0.38, 0.48], "color": [64, 48, 36], "skin": "legs", "swing": "walk"},
+				{"box": [-0.08, 0.9, -0.4, 0.08, 1.0, 0.45], "color": [60, 44, 34], "hidden": ["warn", "fight"]},
+				{"box": [-0.1, 0.9, -0.45, 0.1, 1.25, 0.5], "color": [150, 104, 64], "shown": ["warn"]},
+				{"box": [-0.1, 0.9, -0.45, 0.1, 1.25, 0.5], "color": [150, 104, 64], "shown": ["fight"]},
+				{"box": [-0.04, 0.6, 0.55, 0.04, 0.85, 0.62], "color": [64, 48, 36]}
+			],
+			"puffs": {"warn": {"color": [120, 100, 76], "chance": 0.5, "height": 0.1}}
+		},
+		"spawn": {
+			"on": "voxiverse:grass", "day": [0.25, 0.75], "every": 240, "chance": 0.25,
+			"cap": 2, "within": 64, "distance": [24, 48], "group": [1, 2], "safe": 32
+		}
+	},
+	// A giant of the grasslands by day, rare, seen from far off: four legs tall as trees
+	// and a neck that reaches down to graze. It walks slowly where it likes and minds no
+	// one; hurt, it walks away.
+	"longstrider": {
+		"voice": "bellow",
+		"box": [3.0, 4.0], "health": 300, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 0.9, "run_speed": 1.8, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"looks": ["grown"],
+		"drops": [
+			{"item": "sandbox:hide", "count": [4, 6]},
+			{"item": "sandbox:raw_meat", "count": [6, 8]}
+		],
+		"model": {
+			"parts": [
+				{"box": [-0.45, 0, -0.45, -0.35, 2.6, -0.35], "color": [110, 116, 100], "skin": "legs", "swing": "walk", "hinge": [-0.4, 2.6, -0.4]},
+				{"box": [0.35, 0, -0.45, 0.45, 2.6, -0.35], "color": [110, 116, 100], "skin": "legs", "swing": "walk_back", "hinge": [0.4, 2.6, -0.4]},
+				{"box": [-0.45, 0, 0.35, -0.35, 2.6, 0.45], "color": [110, 116, 100], "skin": "legs", "swing": "walk_back", "hinge": [-0.4, 2.6, 0.4]},
+				{"box": [0.35, 0, 0.35, 0.45, 2.6, 0.45], "color": [110, 116, 100], "skin": "legs", "swing": "walk", "hinge": [0.4, 2.6, 0.4]},
+				{"box": [-0.5, 2.5, -0.7, 0.5, 3.2, 0.7], "color": [170, 180, 160]},
+				{"box": [-0.3, 3.2, -0.3, 0.3, 3.5, 0.4], "color": [150, 160, 140]},
+				{"box": [-0.45, 2.1, -0.5, 0.45, 2.5, 0.5], "color": [204, 192, 140]},
+				{"box": [-0.12, 2.9, -1.4, 0.12, 3.3, -0.7], "color": [170, 180, 160], "swing": "pitch", "hinge": [0, 3.1, -0.7]},
+				{"box": [-0.15, 2.9, -1.75, 0.15, 3.2, -1.4], "color": [182, 192, 172], "skin": "head", "swing": "pitch", "hinge": [0, 3.1, -0.7]},
+				{"box": [-0.05, 2.6, 0.7, 0.05, 3.0, 1.2], "color": [150, 160, 140]}
+			],
+			"scale": {"grown": 3}
+		},
+		"spawn": {
+			"on": "voxiverse:grass", "day": [0.2, 0.8], "every": 1200, "chance": 0.25, "cap": 1,
+			"within": 128, "distance": [40, 60], "group": [1, 1], "sky": true, "despawn": 120,
+			"safe": 64
+		}
+	}
+}

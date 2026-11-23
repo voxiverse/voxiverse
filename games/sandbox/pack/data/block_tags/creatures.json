@@ -1,0 +1,22 @@
+{
+	// Where the home world's creatures come (their spawn rules' "on": data/entities).
+	"water_bed": {
+		"values": ["voxiverse:sand", "voxiverse:gravel", "voxiverse:dirt", "voxiverse:clay"]
+	},
+	"cave_floor": {
+		"values": ["voxiverse:stone", "voxiverse:gravel", "voxiverse:dirt"]
+	},
+	"shore": {
+		"values": ["voxiverse:sand", "voxiverse:gravel"]
+	},
+	"open_ground": {
+		"values": [
+			"voxiverse:grass",
+			"voxiverse:dirt",
+			"voxiverse:sand",
+			"voxiverse:stone",
+			"voxiverse:gravel",
+			"voxiverse:snow"
+		]
+	}
+}

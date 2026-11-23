@@ -34,7 +34,7 @@ meadow :: proc(t: ^testing.T, rig: ^Rig) -> bool {
 }
 
 // lay: a sheep at p, with its record.
-lay :: proc(rig: ^Rig, p: [3]f64, d: Sheep = {}) -> game.Entity_Handle {
+lay :: proc(rig: ^Rig, p: [3]f64, d: Creature = {}) -> game.Entity_Handle {
 	s := playtest.srv(rig)
 	h := core.entity_spawn(s.home, state(s).sheep, p, false)
 	if h != 0 {sheep(s, s.home, h)^ = d}

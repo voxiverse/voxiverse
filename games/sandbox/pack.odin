@@ -2,8 +2,9 @@ package sandbox
 
 import "common:game"
 
-// The game's pack (games/sandbox/pack, docs/games.md): its animals, the sheep, what the home
-// world's creatures leave where they die, the hours the base pack's hostile creatures
+// The game's pack (games/sandbox/pack, docs/games.md): its animals, the sheep and the home
+// world's other creatures (its wildlife, predators and the remains' machines, with the
+// grounds they come on and what they leave), the hours the base pack's hostile creatures
 // come out, a block of every material of the kit, and the ruined site's altar, ward, rounds
 // and the mode its fighters are in. Loaded only where the sandbox is played.
 PACK :: game.Pack_Source {
@@ -12,6 +13,10 @@ PACK :: game.Pack_Source {
 		{"pack.json", #load("pack/pack.json")},
 		{"data/entities/sheep.json", #load("pack/data/entities/sheep.json")},
 		{"data/entities/hostile.json", #load("pack/data/entities/hostile.json")},
+		{"data/entities/wildlife.json", #load("pack/data/entities/wildlife.json")},
+		{"data/entities/predators.json", #load("pack/data/entities/predators.json")},
+		{"data/entities/machines.json", #load("pack/data/entities/machines.json")},
+		{"data/block_tags/creatures.json", #load("pack/data/block_tags/creatures.json")},
 		{"data/items/creature_drops.json", #load("pack/data/items/creature_drops.json")},
 		{"data/models/creature_drops.json", #load("pack/data/models/creature_drops.json")},
 		{"data/blocks/kit.json", #load("pack/data/blocks/kit.json")},

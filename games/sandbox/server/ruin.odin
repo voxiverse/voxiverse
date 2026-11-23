@@ -533,6 +533,7 @@ ruin_build :: proc(s: ^core.Server, w: ^core.World) {
 	site_level(w, ruin_area(site), site.floor, act)
 	template_box := core.Box{site.origin, site.origin + {RUIN_SIDE, RUIN_HEIGHT, RUIN_SIDE} - 1}
 	core.bulk_edit(w, {shape = template_box, op = .Paste, template = &t, partial = true}, act)
+	ruin_posts(s, w)
 	r.built = true
 	log.infof("ruin built at %v", r.site.origin)
 }

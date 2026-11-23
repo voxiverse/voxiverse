@@ -1,0 +1,163 @@
+// The home world's predators: each has its place and its hour, and each attack is wound
+// up for long enough to see it coming and step away (server/play: fight_fair). Their minds
+// are the sandbox's (games/sandbox/server/wild.odin); a natural one goes when nobody is near.
+{
+	// An ambusher of the caves, any hour: buried in the floor with only its eye stalks
+	// out, it rises in a spray of grit when a player comes within 5 blocks, and goes back
+	// under once the player has been gone a while. Slow: walking away escapes it.
+	"pitmaw": {
+		"voice": "chitter",
+		"box": [1.0, 0.9], "health": 14, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 2.0, "run_speed": 2.0, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 4, "reach": 1.0, "cooldown": 1.6, "keep": [0, 0.9], "notice": 5},
+		"looks": ["hidden", "wake", "striking"],
+		"drops": [
+			{"item": "sandbox:chitin", "count": [1, 2]},
+			{"item": "sandbox:venom_gland", "chance": 0.35}
+		],
+		"model": {
+			"parts": [
+				{"box": [-0.45, 0, -0.45, 0.45, 0.12, 0.45], "color": [90, 80, 70], "shown": ["hidden"]},
+				{"box": [-0.45, 0.2, -0.45, 0.45, 0.7, 0.45], "color": [150, 140, 130], "hidden": ["hidden"]},
+				{"box": [-0.1, 0.7, -0.3, 0.1, 0.8, 0.4], "color": [120, 110, 100], "hidden": ["hidden"]},
+				{"box": [-0.4, 0.5, -0.62, 0.4, 0.7, -0.45], "color": [130, 120, 110], "swing": "strike", "hinge": [0, 0.7, -0.45], "hidden": ["hidden"]},
+				{"box": [-0.38, 0.2, -0.6, 0.38, 0.5, -0.45], "color": [150, 40, 50], "hidden": ["hidden"]},
+				{"box": [-0.55, 0, -0.32, -0.42, 0.25, -0.18], "color": [110, 100, 90], "skin": "legs", "swing": "walk", "hidden": ["hidden"]},
+				{"box": [0.42, 0, -0.32, 0.55, 0.25, -0.18], "color": [110, 100, 90], "skin": "legs", "swing": "walk_back", "hidden": ["hidden"]},
+				{"box": [-0.55, 0, 0.18, -0.42, 0.25, 0.32], "color": [110, 100, 90], "skin": "legs", "swing": "walk_back", "hidden": ["hidden"]},
+				{"box": [0.42, 0, 0.18, 0.55, 0.25, 0.32], "color": [110, 100, 90], "skin": "legs", "swing": "walk", "hidden": ["hidden"]},
+				{"box": [-0.2, 0.1, -0.3, -0.14, 0.85, -0.24], "color": [140, 130, 120]},
+				{"box": [0.14, 0.1, -0.3, 0.2, 0.85, -0.24], "color": [140, 130, 120]},
+				{"box": [-0.23, 0.85, -0.33, -0.11, 0.95, -0.21], "color": [232, 220, 90]},
+				{"box": [0.11, 0.85, -0.33, 0.23, 0.95, -0.21], "color": [232, 220, 90]}
+			],
+			"puffs": {"wake": {"color": [120, 105, 90], "chance": 0.7, "height": 0.2}}
+		},
+		"spawn": {
+			"on": "#sandbox:cave_floor", "place": "cave", "day": [0, 1], "every": 200,
+			"chance": 0.35, "cap": 2, "within": 48, "distance": [16, 40], "group": [1, 1],
+			"safe": 48
+		}
+	},
+	// A low, many-legged thing of the shore from dusk to dawn: it keeps 6 to 10 blocks
+	// off and flings barbs from its tail, which it draws back for most of a second first.
+	"barbcaster": {
+		"voice": "chitter",
+		"box": [0.9, 0.8], "health": 9, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.8, "run_speed": 1.8, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 2, "reach": 0.8, "cooldown": 2.0, "shot": "sandbox:barb", "keep": [6, 10], "shoot": [3, 14], "notice": 14},
+		"looks": ["winding", "striking"],
+		"drops": [
+			{"item": "sandbox:chitin", "count": [1, 3]},
+			{"item": "sandbox:venom_gland", "chance": 0.2}
+		],
+		"model": {"parts": [
+			{"box": [-0.4, 0.2, -0.45, 0.4, 0.5, 0.35], "color": [80, 100, 110]},
+			{"box": [-0.3, 0.25, -0.6, 0.3, 0.45, -0.45], "color": [96, 118, 128], "skin": "head"},
+			{"box": [-0.55, 0, -0.35, -0.4, 0.3, -0.25], "color": [200, 120, 70], "skin": "legs", "swing": "walk"},
+			{"box": [0.4, 0, -0.35, 0.55, 0.3, -0.25], "color": [200, 120, 70], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.55, 0, -0.1, -0.4, 0.3, 0], "color": [200, 120, 70], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.4, 0, -0.1, 0.55, 0.3, 0], "color": [200, 120, 70], "skin": "legs", "swing": "walk"},
+			{"box": [-0.55, 0, 0.15, -0.4, 0.3, 0.25], "color": [200, 120, 70], "skin": "legs", "swing": "walk"},
+			{"box": [0.4, 0, 0.15, 0.55, 0.3, 0.25], "color": [200, 120, 70], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.12, 0.45, 0.2, 0.12, 0.75, 0.45], "color": [70, 90, 100]},
+			{"box": [-0.1, 0.75, 0.05, 0.1, 0.95, 0.35], "color": [70, 90, 100]},
+			{"box": [-0.05, 0.9, -0.12, 0.05, 1.02, 0.08], "color": [230, 220, 200], "hidden": ["winding"]},
+			{"box": [-0.07, 0.95, 0.15, 0.07, 1.3, 0.32], "color": [250, 240, 160], "shown": ["winding"]},
+			{"box": [-0.2, 0.45, -0.58, -0.12, 0.6, -0.5], "color": [30, 30, 34]},
+			{"box": [0.12, 0.45, -0.58, 0.2, 0.6, -0.5], "color": [30, 30, 34]}
+		]},
+		"spawn": {
+			"on": "#sandbox:shore", "day": [0.72, 0.28], "every": 200, "chance": 0.35, "cap": 3,
+			"within": 48, "distance": [20, 40], "group": [1, 2], "sky": true, "safe": 48
+		}
+	},
+	// A barbcaster's barb: it hurts what it hits by the barbcaster's damage.
+	"barb": {
+		"voice": "none",
+		"box": [0.25, 0.25], "physics": "projectile",
+		"projectile": {"speed": 14, "gravity": 0, "life": 2, "explode": 0},
+		"model": {"parts": [
+			{"box": [-0.05, 0.08, -0.2, 0.05, 0.17, 0.2], "color": [240, 230, 200]}
+		]}
+	},
+	// A lean hunter of the woods by night, in packs of three or four: they circle a player
+	// 5 to 7 blocks off, and one at a time, its markings flaring first, darts in to bite.
+	// One badly hurt runs.
+	"duskrunner": {
+		"voice": "growl",
+		"box": [0.7, 0.8], "health": 6, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 4.0, "run_speed": 5.0, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 2, "reach": 0.8, "cooldown": 1.2, "keep": [0, 0.6], "notice": 16},
+		"looks": ["winding", "striking"],
+		"drops": [
+			{"item": "sandbox:hide"},
+			{"item": "sandbox:raw_meat", "chance": 0.6}
+		],
+		"model": {"parts": [
+			{"box": [-0.2, 0.45, -0.45, 0.2, 0.72, 0.4], "color": [64, 58, 78]},
+			{"box": [-0.14, 0.5, -0.72, 0.14, 0.74, -0.45], "color": [74, 68, 90], "skin": "head", "swing": "strike", "hinge": [0, 0.6, -0.45]},
+			{"box": [-0.08, 0.5, -0.88, 0.08, 0.62, -0.72], "color": [90, 84, 104], "swing": "strike", "hinge": [0, 0.6, -0.45]},
+			{"box": [-0.12, 0.74, -0.6, -0.06, 0.86, -0.54], "color": [50, 46, 62], "swing": "strike", "hinge": [0, 0.6, -0.45]},
+			{"box": [0.06, 0.74, -0.6, 0.12, 0.86, -0.54], "color": [50, 46, 62], "swing": "strike", "hinge": [0, 0.6, -0.45]},
+			{"box": [-0.18, 0, -0.38, -0.08, 0.48, -0.28], "color": [50, 46, 62], "skin": "legs", "swing": "walk"},
+			{"box": [0.08, 0, -0.38, 0.18, 0.48, -0.28], "color": [50, 46, 62], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.18, 0, 0.26, -0.08, 0.48, 0.36], "color": [50, 46, 62], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.08, 0, 0.26, 0.18, 0.48, 0.36], "color": [50, 46, 62], "skin": "legs", "swing": "walk"},
+			{"box": [-0.04, 0.6, 0.4, 0.04, 0.68, 0.75], "color": [50, 46, 62]},
+			{"box": [-0.21, 0.6, -0.3, 0.21, 0.64, 0.3], "color": [150, 140, 170], "hidden": ["winding"]},
+			{"box": [-0.21, 0.6, -0.3, 0.21, 0.64, 0.3], "color": [240, 120, 60], "shown": ["winding"]}
+		]},
+		"spawn": {
+			"on": "#voxiverse:wild_plant_soil", "day": [0.8, 0.2], "every": 300, "chance": 0.3,
+			"cap": 4, "within": 64, "distance": [28, 44], "group": [3, 4], "sky": true,
+			"safe": 64
+		}
+	},
+	// A slow, heavy brute of the bare hills by night: it lifts both fists over its head for
+	// more than a second before it brings them down; it cannot run.
+	"cragmaul": {
+		"voice": "growl",
+		"box": [1.6, 2.2], "health": 40, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.3, "run_speed": 1.3, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 7, "reach": 1.6, "cooldown": 2.2, "keep": [0, 1.2], "notice": 12},
+		"looks": ["winding", "striking"],
+		"drops": [
+			{"item": "sandbox:hide", "count": [2, 3]},
+			{"item": "sandbox:raw_meat", "count": [2, 4]},
+			{"item": "sandbox:shell_plate", "count": [1, 2], "chance": 0.5}
+		],
+		"model": {
+			"parts": [
+				{"box": [-0.5, 0, -0.2, -0.15, 0.8, 0.25], "color": [70, 68, 62], "skin": "legs", "swing": "walk"},
+				{"box": [0.15, 0, -0.2, 0.5, 0.8, 0.25], "color": [70, 68, 62], "skin": "legs", "swing": "walk_back"},
+				{"box": [-0.7, 0.8, -0.4, 0.7, 1.9, 0.45], "color": [110, 106, 98]},
+				{"box": [-0.6, 1.9, -0.2, 0.6, 2.05, 0.45], "color": [80, 100, 60]},
+				{"box": [-0.25, 1.6, -0.65, 0.25, 2.0, -0.3], "color": [124, 120, 110], "skin": "head"},
+				{"box": [-0.3, 1.9, -0.68, 0.3, 2.0, -0.6], "color": [60, 58, 54]},
+				{"box": [-1.05, 0.5, -0.3, -0.7, 1.7, 0.2], "color": [96, 92, 86], "swing": "walk_back", "hinge": [-0.875, 1.7, -0.05], "hidden": ["winding"]},
+				{"box": [-1.1, 0.25, -0.4, -0.65, 0.6, 0.1], "color": [70, 68, 62], "swing": "walk_back", "hinge": [-0.875, 1.7, -0.05], "hidden": ["winding"]},
+				{"box": [0.7, 0.5, -0.3, 1.05, 1.7, 0.2], "color": [96, 92, 86], "swing": "strike", "hinge": [0.875, 1.7, -0.05], "hidden": ["winding"]},
+				{"box": [0.65, 0.25, -0.4, 1.1, 0.6, 0.1], "color": [70, 68, 62], "swing": "strike", "hinge": [0.875, 1.7, -0.05], "hidden": ["winding"]},
+				{"box": [-1.05, 1.7, -0.3, -0.7, 2.9, 0.2], "color": [96, 92, 86], "shown": ["winding"]},
+				{"box": [-1.1, 2.8, -0.4, -0.65, 3.15, 0.1], "color": [70, 68, 62], "shown": ["winding"]},
+				{"box": [0.7, 1.7, -0.3, 1.05, 2.9, 0.2], "color": [96, 92, 86], "shown": ["winding"]},
+				{"box": [0.65, 2.8, -0.4, 1.1, 3.15, 0.1], "color": [70, 68, 62], "shown": ["winding"]}
+			],
+			"puffs": {"striking": {"color": [130, 120, 100], "chance": 0.8, "height": 0.1}}
+		},
+		"spawn": {
+			"on": "#sandbox:open_ground", "day": [0.8, 0.2], "every": 600, "chance": 0.25,
+			"cap": 1, "within": 64, "distance": [28, 48], "group": [1, 1], "sky": true,
+			"safe": 64
+		}
+	}
+}

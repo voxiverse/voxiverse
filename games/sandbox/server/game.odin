@@ -22,7 +22,7 @@ GAME :: core.Game {
 	pack           = sandbox.PACK,
 	server_state   = Sandbox,
 	client_state   = Ruin_Seat,
-	entity_data    = Sheep,
+	entity_data    = Creature,
 	character_data = Trader_Record,
 	world_state    = Sandbox_World,
 	world_files    = {
@@ -49,6 +49,7 @@ GAME :: core.Game {
 	entity_use     = entity_use,
 	entity_hurt    = entity_hurt,
 	entity_died    = entity_died,
+	harming        = wild_harming,
 	editing        = editing,
 	picking        = ruin_picking,
 	dropping       = ruin_dropping,
@@ -59,11 +60,15 @@ GAME :: core.Game {
 	world_save     = world_save,
 }
 
-// Sandbox: the session's state: the sheep's randomness and the registry's names they use,
-// the ruined site, and what the remains are built of.
+// Sandbox: the session's state: the creatures' randomness and the registry's names they
+// use, the remains the machines keep to, the ruined site, and what the remains are built
+// of.
 Sandbox :: struct {
 	rng:              base.Rng,
 	sheep:            game.Kind_Id,
+	wild:             [Wild]game.Kind_Id, // the roster's kinds (wild.odin)
+	marked:           [MAX_MARKED][3]f64, // the home world's remains marked (remains_machines.odin)
+	marked_count:     int,
 	grass, dirt:      game.Block,
 	wheat:            game.Item,
 	wool, black_wool: game.Item,
@@ -74,8 +79,8 @@ Sandbox :: struct {
 
 state :: proc(s: ^core.Server) -> ^Sandbox {return core.game_state(s, Sandbox)}
 
-// start: the names the sheep, the ruin and the remains use, from the session's registry; the sheep's
-// randomness from the universe's seed.
+// start: the names the creatures, the ruin and the remains use, from the session's
+// registry; the creatures' randomness from the universe's seed.
 start :: proc(s: ^core.Server) -> bool {
 	g := state(s)
 	reg := s.registry
@@ -86,6 +91,7 @@ start :: proc(s: ^core.Server) -> bool {
 	g.wheat = game.registry_item(reg, "wheat") or_return
 	g.wool = game.item_of_block(reg, game.registry_block(reg, "wool") or_return)
 	g.black_wool = game.item_of_block(reg, game.registry_block(reg, "black_wool") or_return)
+	wild_start(s) or_return
 	return ruin_start(s) && remains_start(s)
 }
 
@@ -191,6 +197,7 @@ request :: proc(s: ^core.Server, c: ^core.Client, r: core.Request) {
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
 	if name == "interventions" {return interventions_command(s, c, args)}
 	if name == "showroom" {return showroom_command(s, c, args)}
+	if name == "creatures" {return creatures_command(s, c, args)}
 	if name == "town" && len(args) == 0 {return town_command(s, c)}
 	if name != "sheep" {return false}
 	if !core.allowed(s, c, "world.summon") {
@@ -198,7 +205,7 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 		return true
 	}
 	g := state(s)
-	d := Sheep{}
+	d := Creature{}
 	for a in args {
 		switch a {
 		case "lamb":
