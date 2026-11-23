@@ -66,7 +66,7 @@ odinup install
 The first build also fetches the pinned shader compiler (checksum-verified, into `build/`).
 Subsequent builds take seconds.
 
-Once the game is running, choose **Singleplayer**, create a world, and play.
+Once the game is running, choose **Singleplayer**, then **New Universe**, and play.
 
 ### Development tools
 
@@ -134,22 +134,22 @@ git tag -a v0.21.0 -m "Pre-Alpha 1"
 
 ### Saves
 
-**Singleplayer** lists the games. Choose one to see its page: its saves and no other game's,
-most recently played first, each with when it was last played and how long it has been
-played. From a game's page you can:
+Voxiverse is one game: an open world of planets to explore. The other games built with it
+are encounters inside that world (Horde's waves are fought at the ruin near every home
+world's spawn), and run on their own only as dedicated servers
+([below](#running-a-dedicated-server)).
 
-- start a new save (**New Universe** in Sandbox opens the universe creation screen, where
-  any text is a seed and an empty seed selects a random one; **New Save** elsewhere asks
-  for a name);
-- play the selected save (or double-click it);
-- rename a save or open its folder, delete it (asked first), export it to one file, or
+**Singleplayer** lists your universes, most recently played first, each with its galaxy, its
+game mode, when it was last played and how long it has been played. From there you can:
+
+- start a new one (**New Universe** opens the universe creation screen, where any text is a
+  seed and an empty seed selects a random one);
+- play the selected universe (or double-click it);
+- rename a universe or open its folder, delete it (asked first), export it to one file, or
   import one.
 
-A game whose rounds keep nothing between plays has **Play** instead of saves (none of the
-games built now is one).
-
-**Continue**, first on the title, opens the save you played last (it says which game and
-which save); it is not there when that save is gone.
+**Continue**, first on the title, opens the universe you played last (it says which); it is
+not there when that universe is gone.
 
 The game saves every minute and when you leave the world. Saves are stored in
 `voxiverse/saves` in your user data directory: `~/.local/share` on Linux, `%LOCALAPPDATA%` on
@@ -262,19 +262,24 @@ joins an address once.
 
 ### Opening your own world
 
-**Multiplayer > Host** lists the games as Singleplayer does: pick one, then a save or New,
+**Multiplayer > Host** lists your universes as Singleplayer does: pick one, or New Universe,
 and the world opens to your network as it starts. In a world, pause and choose **Open to
-LAN**. Others on your network see the world, and its game, under **Multiplayer**, or can
-join `your-address:27315` by **Direct Connection**.
+LAN**. Others on your network see the world under **Multiplayer**, or can join
+`your-address:27315` by **Direct Connection**.
 
 ### Running a dedicated server
 
 ```sh
+./build.sh serve -- --universe universes/home                          # the open world
 ./build.sh serve -- --game horde --universe universes/yard --password secret
 ```
 
+A dedicated server plays the open world unless `--game` names another of the games built in:
+`horde` and `arena` run as standalone game servers, which players join from **Multiplayer**.
 Run `build/voxiverse-server --help` for every flag (game, port, name, seats, view distance,
-permissions). Ctrl+C saves the universe and stops the server.
+permissions). Ctrl+C saves the universe and stops the server. To play one of those games
+alone while working on it, `./build.sh run -- --game horde` goes straight into a world that
+plays it, nothing saved.
 
 ### Playing over the internet
 

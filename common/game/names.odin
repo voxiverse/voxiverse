@@ -6,8 +6,8 @@ package game
 // Game_Info: what names a game (docs/games.md), declared once in its shared package
 // and taken by both of its parts (core.Game and engine.Game hold it by `using`): its
 // id (its folder's name in games/, what Welcome names), the name players read and a
-// line saying what it is, both in plain English (Singleplayer's list of games, and the
-// head of the game's page).
+// line saying what it is, both in plain English (the name heads the loading screen and
+// the game menu, and names a server's game in Multiplayer).
 Game_Info :: struct {
 	id:          string,
 	name:        string,

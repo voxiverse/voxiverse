@@ -25,10 +25,8 @@ escape :: proc(app: ^engine.App) {
 		return
 	}
 	switch app.screen {
-	case .Singleplayer:
-		screen.singleplayer_back(app)
 	case .Universes:
-		// New, rename, delete or import back to the page first, then to the games.
+		// Rename, delete or import back to the page first, then to the title (or Multiplayer).
 		if app.universes.mode != .List {app.universes.mode = .List} else {screen.page_back(app)}
 	case .Creation:
 		app.screen = .Universes

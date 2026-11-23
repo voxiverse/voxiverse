@@ -19,8 +19,8 @@ import "common:game"
 // (games/towers/server) builds the field, runs the waves and the towers; the client part
 // (games/towers/client) shows the run, the creeps' health and where a block would go.
 
-// INFO: the game's id, name and description, for both of its parts (the launcher lists
-// it by them).
+// INFO: the game's id, name and description, for both of its parts (its name heads the
+// loading screen and the game menu, and names a server's game in Multiplayer).
 INFO :: game.Game_Info {
 	id          = "towers",
 	name        = "Towers",

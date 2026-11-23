@@ -21,7 +21,7 @@ import "common:protocol"
 // that runs another version, or a game this build does not have, is listed and cannot be
 // joined, the row saying why. One selected is joined (or double-clicked); Direct
 // Connection joins an address; Add Server keeps one, Remove Server forgets the selected;
-// Host opens the games to host one (singleplayer.odin). The player's name lives in
+// Host opens Singleplayer's universes to host one (universes.odin). The player's name lives in
 // Options; the first visit without one asks for it.
 
 MULTIPLAYER_WIDTH :: 640
@@ -74,10 +74,10 @@ multiplayer_back :: proc(app: ^engine.App) {
 	app.screen = .Title
 }
 
-// host_open: Host: the games, to host one (the same list and pages as Singleplayer).
+// host_open: Host: the universes, to host one (Singleplayer's page, titled for hosting).
 host_open :: proc(app: ^engine.App) {
 	multiplayer_close(&app.multiplayer)
-	singleplayer_open(app, host = true)
+	universes_open(app, host = true)
 }
 
 multiplayer_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {

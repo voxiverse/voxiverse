@@ -11,8 +11,8 @@ import "common:game"
 // (records.odin). The server part (games/stopwatch/server) runs the game; the client
 // part (games/stopwatch/client) shows a player their time.
 
-// INFO: the game's id, name and description, for both of its parts (the launcher
-// lists it by them).
+// INFO: the game's id, name and description, for both of its parts (its name heads the
+// loading screen and the game menu, and names a server's game in Multiplayer).
 INFO :: game.Game_Info {
 	id          = "stopwatch",
 	name        = "Stopwatch",

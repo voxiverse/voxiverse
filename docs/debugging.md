@@ -71,7 +71,7 @@ Messages begin with the subsystem (`gpu`, `server`, `session`, ...) and write va
 | `run -- --check <name>` | Runs an exit check (see [Checks](#checks)). |
 | `run -- --scene <name>` | Renders one visual-baseline scene offscreen and quits (see [Visual baselines](#visual-baselines)). |
 | `run -- --null-audio` | Mixes into the null device (real time, no sound card). |
-| `run -- --game <id>` | Straight into a scratch world playing that game, past the title, a script (`--exec`) too, which then runs in it (not with `--scene`, `--check` or `--benchmark`, which choose their own worlds); a world started here (`singleplayer`, a new universe) plays it ([games.md](games.md)); default: `sandbox`. A saved universe plays the game it records. |
+| `run -- --game <id>` | Straight into a scratch world playing that game, past the title, a script (`--exec`) too, which then runs in it (not with `--scene`, `--check` or `--benchmark`, which choose their own worlds); a world started here (`singleplayer`, a universe the `universe` command makes) plays it ([games.md](games.md)); default: `sandbox`. A saved universe plays the game it records; one made from Singleplayer always plays `sandbox`. This is how a developer plays another game (`horde`, `arena`) alone. |
 | <kbd>F2</kbd> / `screenshot [name]` | Saves the next frame as `build/screenshots/<name>.png`. The world checks take a screenshot at the start and end of each flight. |
 | `build shot <name> [--game <id>] -- <script>` | Plays a console script (`;` between its lines, as `--exec` takes it) headless on lavapipe under `xvfb-run` at 1280x720 and quits when it says `quit`: its `screenshot` commands land in `build/screenshots/`, its log and state in `build/shots/<name>/`. It builds the client alone, and only when something it is built from changed (`build/voxiverse.stamp`: the sources, the command line, the compiler; as every build of the game does), and runs it with no sound card. Linux. How a game's screenshots are taken: [games.md](games.md#screenshots). |
 | <kbd>F3</kbd> | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; IMMEDIATE without, or MAILBOX where the window system offers nothing else), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time, the simulation island you are in (id and chunks), and the line of the game the world plays (`game <id>: ...`). The game's HUD is drawn below it while it is open. |
@@ -196,10 +196,10 @@ commands are:
 
 | Command | Purpose |
 |---|---|
-| `singleplayer` | A scratch world, never saved. |
+| `singleplayer` | A scratch world, never saved, playing the game `--game` names (default: `sandbox`). |
 | `universe [--earth] <name>` | Plays the saved universe (created if new: with `--earth` its home world is Earth, as the creation screen's default; else one made from the seed). Saves go to `VX_SAVES` if it is set. |
 | `join <host[:port]> [password]`, `leave`, `quit` | Session control. |
-| `screen <title\|game\|menu\|inventory [creative]\|stats\|options [tab]\|singleplayer\|universes [<game>\|create]\|multiplayer [direct]\|credits\|quit>` | Switches screens (`singleplayer`: the games; `universes`: a game's page, sandbox's unless named; `create`: its creation screen). |
+| `screen <title\|game\|menu\|inventory [creative]\|stats\|options [tab]\|universes [create]\|host\|multiplayer [direct]\|credits\|quit>` | Switches screens (`universes`: Singleplayer, the game's universes; `create`: the creation screen; `host`: the same page, to host one). |
 | `set`, `vars`, `reset` | Variables (see [Variables](#variables)). |
 | `screenshot [name]`, `renderdoc [title]`, `net_trace`, `audio_capture`, `crash` | Diagnostics (`crash`: development builds; `renderdoc`: queues a frame capture when attached). |
 | `look <yaw> <pitch>`, `camera <first\|behind\|facing> [degrees]` | Places the camera for a picture (<kbd>F5</kbd> cycles the camera modes). |

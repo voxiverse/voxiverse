@@ -121,9 +121,8 @@ SCREEN_WORDS := []string {
 	"inventory",
 	"stats",
 	"options",
-	"singleplayer",
-	"host",
 	"universes",
+	"host",
 	"multiplayer",
 	"quit",
 }

@@ -224,7 +224,7 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		c,
 		{
 			"screen",
-			"screen <title|game|menu|inventory [creative]|stats|options [tab]|singleplayer|universes [<game>|create]|multiplayer [direct]|quit>: switch screens (game: back to it; menu: the game menu; singleplayer: the games; universes: a game's saves, sandbox's unless named, create: its creation screen; quit: the quit dialog)",
+			"screen <title|game|menu|inventory [creative]|stats|options [tab]|universes [create]|host|multiplayer [direct]|quit>: switch screens (game: back to it; menu: the game menu; universes: Singleplayer's universes, create: the creation screen; host: the universes, to host one; quit: the quit dialog)",
 			proc(app: ^engine.App, args: []string) {
 				then := args[1] if len(args) > 1 else ""
 				switch args[0] {
@@ -257,26 +257,10 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 					} else {
 						app.screen = .Options
 					}
-				case "singleplayer":
-					screen.singleplayer_open(app)
 				case "host":
-					screen.singleplayer_open(app, host = true) // (Multiplayer's Host)
+					screen.universes_open(app, host = true) // (Multiplayer's Host)
 				case "universes":
-					id := "" // (the default game's page)
-					if then != "" && then != "create" {
-						g, known := engine.game_find(app.games, then)
-						if !known {
-							engine.console_print(
-								&app.console,
-								fmt.tprintf("screen: this version has no game %s", then),
-								.Warning,
-							)
-							return
-						}
-						id = g.id // (the page keeps the id: the game's own, not the line's)
-					}
-					app.singleplayer.host = false // (a page to play alone)
-					screen.universes_open(app, id)
+					screen.universes_open(app) // (Singleplayer's: to play alone)
 					if then == "create" {screen.creation_open(app)}
 				case "multiplayer":
 					screen.multiplayer_open(app)
@@ -290,7 +274,7 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 				case:
 					engine.console_print(
 						&app.console,
-						"screen: title, game, menu, inventory, stats, options, credits, singleplayer, host, universes, multiplayer or quit",
+						"screen: title, game, menu, inventory, stats, options, credits, universes, host, multiplayer or quit",
 						.Warning,
 					)
 				}
@@ -386,7 +370,7 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		c,
 		{
 			"singleplayer",
-			"enter a singleplayer world",
+			"enter a scratch world, never saved, playing the game --game names (default: the game Singleplayer lists)",
 			proc(app: ^engine.App, args: []string) {
 				engine.enter_world(app, "", engine.SCRATCH_SEED) // a scratch world: nothing saved
 			},

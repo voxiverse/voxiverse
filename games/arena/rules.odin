@@ -17,8 +17,8 @@ import "common:game"
 // (games/arena/server) runs the matches and builds the courtyard; the client part
 // (games/arena/client) shows the match, the kill feed and the scoreboard.
 
-// INFO: the game's id, name and description, for both of its parts (the launcher
-// lists it by them).
+// INFO: the game's id, name and description, for both of its parts (its name heads the
+// loading screen and the game menu, and names a server's game in Multiplayer).
 INFO :: game.Game_Info {
 	id          = "arena",
 	name        = "Arena",

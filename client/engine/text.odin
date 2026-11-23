@@ -17,15 +17,8 @@ Text :: enum u16 {
 	Options,
 	Title_Quit_Game,
 	Title_Version, // {0}: the version
-	Title_Continue, // {0}: the game, {1}: the save
-	Universes_New_Save, // a game page's New (sandbox's: Universes_New_Universe)
-	Universes_New_Save_Title,
-	Universes_Default_Name, // {0}: the game, {1}: a number
+	Title_Continue, // {0}: the universe
 	Universes_Play,
-	Universes_Keeps_Nothing, // {0}: the game
-	Universes_Saves_None, // a game page with no saves (sandbox's: Universes_None_Yet)
-	Universes_Saves_Count, // {0}: how many (the Singleplayer list)
-	Universes_Saves_One,
 	Universes_Info, // {0}, {1}: two parts of a save's line
 	Universes_Played_When, // {0}: when (last_played)
 	Universes_Played_For, // {0}: how long (time_played)
@@ -115,7 +108,7 @@ Text :: enum u16 {
 	Multiplayer_Save,
 	Multiplayer_Host,
 	Multiplayer_Host_Title, // the games' list, to host one
-	Multiplayer_Host_Note, // under it, and on a game's page while hosting
+	Multiplayer_Host_Note, // under it, on Singleplayer's page while hosting
 	Multiplayer_Players, // {0} playing, {1} at most
 	Multiplayer_Password,
 	Multiplayer_No_Answer,
@@ -141,7 +134,6 @@ Text :: enum u16 {
 	Universes_Fewer_Options,
 	Universes_More_Options,
 	Universes_Seed_Leave_Empty_For_A,
-	Universes_Create_Save,
 	Universes_Edit_Save,
 	Universes_Open_Folder,
 	Universes_Save,
@@ -206,15 +198,8 @@ TEXT_EN := [Text]string {
 	.Options                                = "Options",
 	.Title_Quit_Game                        = "Quit Game",
 	.Title_Version                          = "Voxiverse {0}",
-	.Title_Continue                         = "Continue: {0}, {1}",
-	.Universes_New_Save                     = "New Save",
-	.Universes_New_Save_Title               = "New Save",
-	.Universes_Default_Name                 = "{0} {1}",
+	.Title_Continue                         = "Continue: {0}",
 	.Universes_Play                         = "Play",
-	.Universes_Keeps_Nothing                = "Every round of {0} starts afresh: there is nothing to save.",
-	.Universes_Saves_None                   = "No saves yet: New Save starts one",
-	.Universes_Saves_Count                  = "{0} saves",
-	.Universes_Saves_One                    = "1 save",
 	.Universes_Info                         = "{0}  ·  {1}",
 	.Universes_Played_When                  = "played {0}",
 	.Universes_Played_For                   = "{0} in all",
@@ -330,7 +315,6 @@ TEXT_EN := [Text]string {
 	.Universes_Fewer_Options                = "Fewer options",
 	.Universes_More_Options                 = "More options",
 	.Universes_Seed_Leave_Empty_For_A       = "Seed (leave empty for a random world)",
-	.Universes_Create_Save                  = "Create Save",
 	.Universes_Edit_Save                    = "Edit Save",
 	.Universes_Open_Folder                  = "Open Folder",
 	.Universes_Save                         = "Save",

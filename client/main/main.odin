@@ -168,7 +168,7 @@ run :: proc(
 		   !autopilot.scene_begin(app, opts.scene) {app.script_failed, app.quit = true, true}
 		// --game goes straight into a scratch world playing it, a script (--exec) too, which
 		// then runs in that world (no scene, check or benchmark of its own: they choose
-		// their worlds); else the title's launcher lists the games.
+		// their worlds); else the title, whose Singleplayer plays the default game's universes.
 		if opts.game != "" && opts.scene == "" && opts.check == "" && !app.benchmark {
 			app.launch = app.game
 		}

@@ -233,7 +233,7 @@ The types these name:
 - `game.Block_Type :: distinct u16`: one block definition (a number per definition, in load order); a Block is a state id, and a type owns a run of them (Type_Def).
 - `game.Edit_System :: enum u8 {...}`: the mechanism of a change.
 - `game.Entity_Handle :: distinct u32`: Entity_Handle is a generation-checked handle into the store's slots.
-- `game.Game_Info :: struct {...}`: what names a game (docs/games.md), declared once in its shared package and taken by both of its parts (core.Game and engine.Game hold it by `using`): its id (its folder's name in games/, what Welcome names), the name players read and a line saying what it is, both in plain English (Singleplayer's list of games, and the head of the game's page).
+- `game.Game_Info :: struct {...}`: what names a game (docs/games.md), declared once in its shared package and taken by both of its parts (core.Game and engine.Game hold it by `using`): its id (its folder's name in games/, what Welcome names), the name players read and a line saying what it is, both in plain English (the name heads the loading screen and the game menu, and names a server's game in Multiplayer).
 - `game.Item :: distinct u16`
 - `game.Kind_Id :: distinct u16`: an entity kind, the registry index + 1; 0 is none (and "any" in a filter).
 - `game.Lane_Item :: struct {...}`

@@ -9,13 +9,15 @@ import "core:time"
 import "client:engine"
 import "client:overlay"
 import "client:screen"
+import "common:game"
 import "common:starmap"
 import "generated:games"
 import games_client "generated:games/client"
 import "server:core"
 
-// A game's page (screen/universes.odin): the order, what a save knows from its config,
-// that a page shows its game's saves only, Export and Import through the buttons. (Rename
+// Singleplayer's universes (screen/universes.odin): the order, what a save knows from its
+// config, that only the game's universes are listed, Export and Import through the
+// buttons. (Rename
 // and Delete's one confirmation: menus_test.odin's test_saves_screen; that
 // entering a universe puts the character where it last stood:
 // server/core/gamemode_test.odin.)
@@ -86,8 +88,9 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 }
 
 // A save knows the game its universe plays (universe.cfg's game; one from before games
-// were recorded plays sandbox), and a game's page shows its saves and no other game's; a
-// universe of a game this build lacks is not opened, and its page says why.
+// were recorded plays sandbox), and Singleplayer lists the game's universes and no save of
+// another game; a universe of a game this build lacks is not opened (the `universe`
+// command, which opens any save, says why).
 @(test)
 test_cards_know_their_game :: proc(t: ^testing.T) {
 	dir := "build/test/cards_game"
@@ -114,35 +117,33 @@ test_cards_know_their_game :: proc(t: ^testing.T) {
 		for text in app.ui.texts {if text == want {return true}}
 		return false
 	}
-	screen.universes_open(app, "sandbox")
+	screen.universes_open(app)
 	ui_frame(app)
-	testing.expect(t, shows(app, "Older"), "sandbox's page lacks its save")
+	testing.expect(t, shows(app, "Older"), "Singleplayer lacks its universe")
 	testing.expect(t, !shows(app, "Yard") && !shows(app, "Elsewhere"), "another game's save")
-	screen.universes_open(app, "nonesuch")
-	ui_frame(app)
-	testing.expect(t, shows(app, "Elsewhere") && !shows(app, "Older"), "nonesuch's page")
-	screen.save_play(app, 0)
+	testing.expect_value(t, len(screen.page_saves(&app.universes)), 1)
+	why := screen.universe_enter(app, e[0].path)
 	testing.expect(t, app.session == nil, "a universe of a game this build lacks was opened")
-	testing.expect_value(
-		t,
-		app.universes.message,
-		"This universe plays nonesuch, a game this version does not have",
-	)
+	testing.expect_value(t, why, "This universe plays nonesuch, a game this version does not have")
 	free_all(context.temp_allocator)
 }
 
-// A real universe, made by the server (stepped, nobody joined, stopped).
+// A real universe, made by the server (stepped, nobody joined, stopped), recording the
+// game Singleplayer lists (the engine's own rules: no hook of that game's runs).
 @(private = "file")
 server_made :: proc(t: ^testing.T, dir, name: string) -> bool {
 	path := filepath.join({dir, name}, context.temp_allocator) or_else ""
 	h := new(core.Harness) // (heap: a Harness is too big for a test thread's stack on macOS, #104)
 	defer free(h)
+	played := core.HARNESS_GAME
+	played.id = game.DEFAULT_GAME
 	config := core.Config {
 		seed        = 5,
 		view_radius = 2,
 		view_height = 1,
 		save_dir    = path,
 		generator   = .Classic,
+		game        = played,
 	}
 	if !testing.expect(t, core.harness_start(h, config)) {return false}
 	core.harness_stop(h)
@@ -163,7 +164,7 @@ test_export_and_import_through_the_cards :: proc(t: ^testing.T) {
 	defer screen.universes_destroy(&app.universes)
 	defer screen.creation_destroy(&app.creation)
 	defer overlay.toasts_destroy(&app.toasts)
-	screen.universes_open(app, "harness") // (the game the server_made universe plays)
+	screen.universes_open(app)
 	testing.expect_value(t, len(app.universes.entries), 1)
 	ui_frame(app)
 

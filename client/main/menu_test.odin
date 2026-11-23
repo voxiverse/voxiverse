@@ -24,6 +24,7 @@ import "common:game"
 import "common:netcode"
 import "common:protocol"
 import "common:starmap"
+import "generated:games"
 import games_client "generated:games/client"
 
 // A UI test's app: the font, the UI and the base registry (a screen's
@@ -58,8 +59,6 @@ ui_frame :: proc(app: ^engine.App, input: ui.Input = {}) {
 		screen.options_screen(app, &app.ui)
 	case .Credits:
 		screen.credits_screen(app, &app.ui)
-	case .Singleplayer:
-		screen.singleplayer_screen(app, &app.ui)
 	case .Universes:
 		screen.universes_screen(app, &app.ui)
 	case .Creation:
@@ -226,7 +225,7 @@ test_keys_by_place :: proc(t: ^testing.T) {
 	testing.expect_value(t, engine.key_label(nil, .Mouse_Right), "Right Button")
 }
 
-// select_save selects the save called name on its game's page, as a click on its row
+// select_save selects the universe called name in Singleplayer, as a click on its row
 // does (once: a second click soon after plays it).
 select_save :: proc(t: ^testing.T, app: ^engine.App, name: string, loc := #caller_location) {
 	s := screen.page_selected(&app.universes)
@@ -234,7 +233,7 @@ select_save :: proc(t: ^testing.T, app: ^engine.App, name: string, loc := #calle
 	click(t, app, name, loc)
 }
 
-// A game's page: its saves newest first; Rename and Delete (asked first) of the one
+// Singleplayer: its universes newest first; Rename and Delete (asked first) of the one
 // selected.
 @(test)
 test_saves_screen :: proc(t: ^testing.T) {
@@ -439,9 +438,9 @@ test_multiplayer_saved_servers :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-// Host opens the games to host one: the same list, titled so and saying what hosting
-// does, then the game's page, its Play now Host; Back returns from the page to the games
-// still hosting, and from them to Multiplayer. Singleplayer from the title plays alone.
+// Host opens Singleplayer's universes to host one: the same page, titled so and saying
+// what hosting does, its Play now Host; Back returns to Multiplayer. Singleplayer from the
+// title plays alone.
 @(test)
 test_multiplayer_host :: proc(t: ^testing.T) {
 	dir := "build/test/saves-host"
@@ -449,44 +448,39 @@ test_multiplayer_host :: proc(t: ^testing.T) {
 	defer os.remove_all(dir)
 	screen.saves_override = dir
 	defer screen.saves_override = ""
+	home := filepath.join({dir, "Home"}, context.temp_allocator) or_else ""
+	os.make_directory_all(home)
+	cfg := filepath.join({home, "universe.cfg"}, context.temp_allocator) or_else ""
+	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)string("format = 1\n")) == nil)
 	app := ui_app(t)
 	defer ui_app_free(app)
 	defer screen.multiplayer_destroy(&app.multiplayer)
 	defer screen.universes_destroy(&app.universes)
-	app.games, app.server_games = games_with_rounds()
+	app.games, app.server_games = games_client.CLIENT, games.SERVER
 	base.var_text_set(&app.settings.name, "alice")
 	screen.multiplayer_open(app)
 	ui_frame(app)
 	click(t, app, "Host")
-	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
-	testing.expect(t, app.singleplayer.host)
-	testing.expect(t, !app.multiplayer.searching, "Multiplayer still looks for servers")
-	testing.expect(t, said(app, "Host a Game"), "the games are not titled for hosting")
-	testing.expect(t, said(app, engine.tr(.Multiplayer_Host_Note)))
-
-	click(t, app, ROUNDS.name) // (a game that keeps nothing: Play alone on its page)
 	testing.expect_value(t, app.screen, engine.Screen.Universes)
-	testing.expect_value(t, app.universes.game, ROUNDS.id)
+	testing.expect(t, app.universes.host)
+	testing.expect(t, !app.multiplayer.searching, "Multiplayer still looks for servers")
+	testing.expect(t, said(app, "Host a Game"), "the universes are not titled for hosting")
 	testing.expect(t, said(app, engine.tr(.Multiplayer_Host_Note)))
 	_, play := ui.find_widget(&app.ui, "Play")
 	testing.expect(t, !play, "the hosting page says Play")
-	click(t, app, "Host")
-	testing.expect_value(t, app.launch, ROUNDS.id) // (the frame starts it, opened to the LAN)
-	app.launch = ""
+	_, host := ui.find_widget(&app.ui, "Host")
+	testing.expect(t, host, "the hosting page has no Host")
 
-	click(t, app, "Back")
-	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
-	testing.expect(t, app.singleplayer.host)
 	click(t, app, "Back")
 	testing.expect_value(t, app.screen, engine.Screen.Multiplayer)
 	click(t, app, "Back")
 	testing.expect_value(t, app.screen, engine.Screen.Title)
 
 	click(t, app, "Singleplayer")
-	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
-	testing.expect(t, !app.singleplayer.host)
+	testing.expect_value(t, app.screen, engine.Screen.Universes)
+	testing.expect(t, !app.universes.host)
 	testing.expect(t, said(app, "Singleplayer"))
-	click(t, app, ROUNDS.name)
+	testing.expect(t, !said(app, engine.tr(.Multiplayer_Host_Note)), "playing alone says hosting")
 	_, play = ui.find_widget(&app.ui, "Play")
 	testing.expect(t, play, "the page to play alone has no Play")
 	free_all(context.temp_allocator)
@@ -533,14 +527,12 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 		},
 	)
 	app.games = games_client.CLIENT
-	app.screen = .Singleplayer
-	check(t, app, "Singleplayer")
 	app.screen = .Universes
-	check(t, app, "a game's page")
+	check(t, app, "Singleplayer")
 	app.universes.list.selected = 0
 	for mode in engine.Saves_Mode {
 		app.universes.mode = mode
-		check(t, app, fmt.tprint("a game's page", mode))
+		check(t, app, fmt.tprint("Singleplayer", mode))
 	}
 	screen.multiplayer_open(app)
 	for mode in engine.Multiplayer_Mode {
@@ -856,15 +848,10 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_connect(app, .Xbox)
 	testing.expect_value(t, app.actions.device, engine.Device.Pad)
 
-	// The title: Singleplayer is lit at once; A opens the games, the list lit; A opens
-	// the first's page (sandbox's), New lit.
+	// The title: Singleplayer is lit at once; A opens the universes, New lit.
 	testing.expect_value(t, ui.focused_label(&app.ui), "Singleplayer")
 	pad_tap(app, .A)
-	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
-	testing.expect_value(t, ui.focused_label(&app.ui), "games")
-	pad_tap(app, .A)
 	testing.expect_value(t, app.screen, engine.Screen.Universes)
-	testing.expect_value(t, app.universes.game, game.DEFAULT_GAME)
 	testing.expect_value(t, len(screen.page_saves(&app.universes)), 2)
 	testing.expect_value(t, ui.focused_label(&app.ui), "New Universe")
 	// The saves: Down enters them, Down selects, and leaves at the last.
@@ -897,8 +884,6 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_focus(t, app, "Ignite")
 	pad_tap(app, .B) // (no Cancel button: B goes back)
 	testing.expect_value(t, app.screen, engine.Screen.Universes)
-	pad_tap(app, .B)
-	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
 	pad_tap(app, .B)
 	testing.expect_value(t, app.screen, engine.Screen.Title)
 

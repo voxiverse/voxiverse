@@ -331,12 +331,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		ui.end_frame(&app.ui)
 	}
 	if app.launch != "" {
-		// (A game page's pick, hosted when chosen to host, or --game: a world, from the next frame.)
-		engine.play_game(
-			app,
-			app.launch,
-			open_lan = app.singleplayer.host && app.screen == .Universes,
-		)
+		engine.play_game(app, app.launch) // (--game: a world, from the next frame)
 		app.launch = ""
 	}
 	if capture_this_frame || app.renderdoc_requested {

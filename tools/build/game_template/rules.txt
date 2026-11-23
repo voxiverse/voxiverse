@@ -10,8 +10,8 @@ import "common:game"
 // (records.odin) and what its HUD says (text.odin). The server part (games/@id@/server)
 // keeps the rule; the client part (games/@id@/client) shows the points.
 
-// INFO: the game's id, name and description, for both of its parts (the launcher lists
-// it by them).
+// INFO: the game's id, name and description, for both of its parts (its name heads the
+// loading screen and the game menu, and names a server's game in Multiplayer).
 INFO :: game.Game_Info {
 	id          = "@id@",
 	name        = "@Name@",

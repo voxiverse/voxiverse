@@ -90,9 +90,9 @@ TITLE_COLUMN :: 400
 // LOGO_GAP: the gap under the logo.
 LOGO_GAP :: 40
 
-// title_screen: the logo and splash, then at most five buttons: Continue (the save played
-// last, by its game and its name, when it is there to open: continue_save), Singleplayer
-// (the games, each with its saves), Multiplayer, Options and Quit Game. Nothing else: the
+// title_screen: the logo and splash, then at most five buttons: Continue (the universe
+// played last, by its name, when it is there to open: continue_save), Singleplayer (the
+// universes), Multiplayer, Options and Quit Game. Nothing else: the
 // developer chat is F9's. In the corners: the version, and an update (update_notice).
 title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "title")
@@ -102,7 +102,7 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if !app.settings.reduce_motion {
 		holiday_back(app, ctx, holiday, app.last_frame_ms / 1000)
 	}
-	continue_game, continue_name, continuing := continue_save(app)
+	continue_name, continuing := continue_save(app)
 	rows: f32 = 5 if continuing else 4
 	stack := rows * t.row_height + (rows - 1) * t.spacing + 80
 	column := ui.rect_center(ctx.screen, TITLE_COLUMN, stack + LOGO_GAP)
@@ -174,11 +174,11 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	defer ui.end_column(ctx)
 	ui.default_focus(ctx)
 	if continuing {
-		text := engine.tr(.Title_Continue, continue_game, continue_name)
+		text := engine.tr(.Title_Continue, continue_name)
 		text = ui.text_elide(ctx, text, TITLE_COLUMN - 2 * t.padding, t.font_size)
 		if ui.button(ctx, text, ui.next(ctx), id = "continue") {continue_play(app)}
 	}
-	if ui.button(ctx, engine.tr(.Title_Singleplayer), ui.next(ctx)) {singleplayer_open(app)}
+	if ui.button(ctx, engine.tr(.Title_Singleplayer), ui.next(ctx)) {universes_open(app)}
 	if ui.button(ctx, engine.tr(.Title_Multiplayer), ui.next(ctx)) {multiplayer_open(app)}
 	if ui.button(ctx, engine.tr(.Options), ui.next(ctx)) {
 		app.options.tab = .Video

@@ -21,7 +21,6 @@ Save_Entry :: struct {
 
 Saves_Mode :: enum u8 {
 	List,
-	New, // naming a new save (a game other than sandbox: sandbox's New is the creation screen)
 	Edit, // rename (and open the folder)
 	Delete, // confirming
 	Import, // asking for the file
@@ -32,26 +31,20 @@ Saves_Mode :: enum u8 {
 Last_Save :: struct {
 	checked: bool, // looked at, for name (universes_refresh clears it: a save renamed or gone)
 	name:    base.Var_Text,
-	game:    string, // the name of the game it plays ("": nothing to continue: gone, unreadable, or its game not in this build); constant data
+	found:   bool, // a universe of the game to continue (not: gone, unreadable, another game's, or its game not in this build)
 }
 
-// Singleplayer_Screen: the games, to choose one; to play alone, or to host (Multiplayer's
-// Host: the same list and the same pages, and the world they start opens to the LAN).
-Singleplayer_Screen :: struct {
-	list: ui.Scroll_List, // the game selected and the first in view
-	host: bool, // chosen to host: the world started from the list or a game's page opens to the LAN
-}
-
-// Universes_Screen: a game's page, its saves. It lists every save on the disk and shows
-// its game's.
+// Universes_Screen: Singleplayer, the game's universes; to play alone, or to host
+// (Multiplayer's Host: the same page, and the world it starts opens to the LAN). It reads
+// every save on the disk and lists the game's.
 Universes_Screen :: struct {
-	game:       string, // the game whose page it is, by id (constant data)
+	host:       bool, // chosen to host: the world started from the page opens to the LAN
 	entries:    [dynamic]Save_Entry, // every save, of every game, the one played last first
 	mode:       Saves_Mode,
 	list:       ui.Scroll_List, // the page's saves: the one selected (its place among them) and the first in view
 	last_row:   int, // the save clicked last (its place on the page) ...
 	last_click: time.Tick, // ... and when (a second click on it within DOUBLE_CLICK plays it)
-	name:       [dynamic]u8, // Edit's and New's name
+	name:       [dynamic]u8, // Edit's name
 	path:       [dynamic]u8, // Import's file
 	message:    string, // why the last action failed (shown on the list)
 	last:       Last_Save, // the title's Continue

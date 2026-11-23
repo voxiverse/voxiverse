@@ -7,6 +7,13 @@ outside its folder ([layout.md](layout.md), rule 6, and the `import` lint). This
 reference for writing one: its shape, a walk-through, every hook and call by task, how to
 test it and take its pictures, and the rules.
 
+Players are offered one game: `sandbox` (`game.DEFAULT_GAME`, the open world, which they know
+by the product's name), whose universes the title's Singleplayer lists
+([Singleplayer](#singleplayer)). The other games are encounters inside that world (the
+sandbox's ruin fights Horde's waves) and standalone game servers, `voxiverse-server --game
+<id>`, which players join from Multiplayer; a developer plays one alone with `voxiverse
+--game <id>`.
+
 ## The shape of a game
 
 ```
@@ -36,9 +43,8 @@ rules, so the records and requests a game declares are the protocol's types.
 
 What names a game is declared once, in its shared package, and both parts take it: a
 `game.Game_Info` holding its id (the folder's name), the name players read and a line saying
-what it is. Singleplayer lists the games by them ([Singleplayer](#singleplayer)); the
-description is one line in its small text, at most `screen.TITLE_WIDTH` wide (a
-`client/main` test measures every game's). `core.Game` and `engine.Game` hold it by
+what it is. The name heads the loading screen and the game menu and names a server's game
+in Multiplayer; the description is one line. `core.Game` and `engine.Game` hold it by
 `using`, so `g.id` reads as a field of either.
 
 No file lists the games. The build driver writes two before every `odin` it runs, from the
@@ -71,8 +77,8 @@ are known to git (`git add --intent-to-add`), so right after it `./build.sh chec
 A game that is not being worked on is shelved, not deleted: an empty file
 `games/<id>/SHELVED` (or one saying why, and since when) and nothing else. The driver
 (`game_built` in `tools/build/main.odin`, the one test every list of games asks) then
-leaves the game out of the lists of games, so out of both programs, Singleplayer and the
-packages; its test packages do not run in `test` or `gate` (`test games/<id>/server` says
+leaves the game out of the lists of games, so out of both programs and the packages; its
+test packages do not run in `test` or `gate` (`test games/<id>/server` says
 it is shelved), and `build sheet` draws no sheet of its pack. `check` still type-checks
 every package of it, formats it and lints it, so an engine change that would break it
 fails there, its packages marked `(shelved)`; `check`, `test` and `help` name the shelved
@@ -671,29 +677,30 @@ ours)"). A client without that game fails the session before playing with "the s
 <id>, a game this version does not have"; nothing is half-applied.
 
 A world of our own plays the game `voxiverse --game <id>` names (default: `sandbox`), but a
-saved universe plays the game it records (`universe.cfg`'s `game`, [saves.md](saves.md)): the
-game's page and the `universe` command open it with that game, and a universe of a game
+saved universe plays the game it records (`universe.cfg`'s `game`, [saves.md](saves.md)):
+Singleplayer and the `universe` command open it with that game, and a universe of a game
 this build lacks is not opened. The client starts its embedded server with that game's
 server part (`App.server_games`). The dedicated server runs one with `voxiverse-server --game
 <id>`.
 
 ### Singleplayer
 
-The title has no games of its own: its Singleplayer lists the games the client was built
-with (`screen.singleplayer_games`: the default first, the rest by folder), each its name,
-its description and how many saves it has, in a list that scrolls (`ui.list_begin`). Each
-game is self-contained: choosing one opens its page (`client/screen/universes.odin`), its
-name and description over its saves and no other game's. New is at the top: sandbox's opens
-the universe creation screen, another game's asks a name and makes a save of it on the
-scratch world's seed (`screen.save_create`, the world the game is made on). A game whose
-server part keeps nothing between runs (`engine.game_keeps`: no `save`, `world_save`,
-`character_data` or `machine_data`; none of the built games, so `client/main`'s tests add
-one) has Play instead, which starts a scratch world playing it (`App.launch`,
-`engine.play_game`), the same path as `--game <id>`. `--game <id>`
-with no `--exec`, `--scene`, `--check` or `--benchmark` skips the title and goes straight
-into that world. A new game appears in the list with nothing more to do. The title's splash
-may carry a game's flavour: `assets/splashes.txt`'s `[game <id>]` section, whose lines join
-the everyday ones; `check` refuses a section naming a game with no folder in `games/`.
+The title offers one game and one kind of save: its Singleplayer
+(`client/screen/universes.odin`) lists the universes of `game.DEFAULT_GAME`, titled
+Singleplayer and naming no game, New Universe at the top (the universe creation screen,
+whose universe plays that game), then the universes, the one played last first. A save of
+another game on the disk (one a developer made with the `universe` command, or from before
+the title offered one game) is read, never changed, and not listed; Continue does not offer
+it either, and `settings.cfg`'s `last_save` naming one is kept until a universe is played.
+Multiplayer's Host opens the same page to host a universe. A game other than the default is
+played alone with `voxiverse --game <id>`: with no `--exec`, `--scene`, `--check` or
+`--benchmark` it skips the title and goes straight into a scratch world playing it
+(`App.launch`, `engine.play_game`); the `singleplayer` command starts the same world, and
+`universe <name>` makes a universe of it or opens a save of any game. A new game needs
+nothing more to be played that way, and to be played by others it runs as a dedicated
+server. The title's splash may carry a game's flavour: `assets/splashes.txt`'s `[game <id>]`
+section, whose lines join the everyday ones; `check` refuses a section naming a game with no
+folder in `games/`.
 
 ## The game's pack
 

@@ -10,7 +10,6 @@ import "client:engine"
 import "client:screen"
 import "client:ui"
 import "common:base"
-import "common:game"
 import "generated:games"
 import games_client "generated:games/client"
 import "server:core"
@@ -59,10 +58,11 @@ test_title_buttons :: proc(t: ^testing.T) {
 	)
 }
 
-// Continue: on the title, first, while the save played last is there to open, named by
-// its game and its own name; playing a save makes it the one; a save that is gone, one
-// that is unreadable, one whose game this build lacks, or none at all: no Continue, and
-// the title keeps to four buttons.
+// Continue: on the title, first, while the universe played last is there to open, named
+// by its name alone (there is one game); playing a universe makes it the one; a save that
+// is gone, one that is unreadable, one whose game this build lacks, one of another game
+// than Singleplayer's (a horde save: the setting is left as it is), or none at all: no
+// Continue, and the title keeps to four buttons.
 @(test)
 test_title_continue :: proc(t: ^testing.T) {
 	dir := "build/test/title_continue"
@@ -76,7 +76,8 @@ test_title_continue :: proc(t: ^testing.T) {
 		file := filepath.join({save, "universe.cfg"}, context.temp_allocator) or_else ""
 		_ = os.write_entire_file(file, transmute([]u8)text)
 	}
-	cfg(dir, "Yard 2", "format = 1\nseed = 1\ngame = horde\n")
+	cfg(dir, "Yard 2", "format = 1\nseed = 1\ngame = sandbox\n")
+	cfg(dir, "Horde Yard", "format = 1\nseed = 1\ngame = horde\n")
 	cfg(dir, "Elsewhere", "format = 1\nseed = 1\ngame = nonesuch\n")
 	os.make_directory_all(filepath.join({dir, "Empty"}, context.temp_allocator) or_else "")
 	app := ui_app(t)
@@ -101,7 +102,7 @@ test_title_continue :: proc(t: ^testing.T) {
 	// Played: the save is the one Continue opens.
 	screen.save_played(app, filepath.join({dir, "Yard 2"}, context.temp_allocator) or_else "")
 	label, n = buttons(app)
-	testing.expect_value(t, label, "Continue: Horde, Yard 2")
+	testing.expect_value(t, label, "Continue: Yard 2")
 	testing.expect_value(t, n, 5)
 	r, _ := ui.find_widget(&app.ui, label)
 	single, _ := ui.find_widget(&app.ui, "Singleplayer")
@@ -113,11 +114,19 @@ test_title_continue :: proc(t: ^testing.T) {
 	label, n = buttons(app)
 	testing.expect_value(t, label, "")
 	testing.expect_value(t, n, 4)
-	for name in ([]string{"Empty", "Elsewhere", "../escape"}) {
+	for name in ([]string{"Empty", "Elsewhere", "Horde Yard", "../escape"}) {
 		base.var_text_set(&app.settings.last_save, name)
 		label, _ = buttons(app)
 		testing.expectf(t, label == "", "%s: %q", name, label)
+		testing.expect_value(t, base.var_text(&app.settings.last_save), name)
 	}
+	testing.expect(
+		t,
+		os.is_file(
+			filepath.join({dir, "Horde Yard", "universe.cfg"}, context.temp_allocator) or_else "",
+		),
+		"the horde save was touched",
+	)
 	free_all(context.temp_allocator)
 }
 
@@ -168,123 +177,62 @@ test_splash_motion :: proc(t: ^testing.T) {
 	}
 }
 
-// ROUNDS: a game that keeps nothing (no save hook, no kept data), whose page is a single
-// Play. None of the games built keeps nothing, so the tests of that page bring their own:
-// the lists of games with it first, so it is listed second, after the default game
-// (games_with_rounds).
-ROUNDS :: game.Game_Info {
-	id          = "rounds",
-	name        = "Rounds",
-	description = "Plays a round; keeps nothing.",
-}
-
-// games_with_rounds: ROUNDS, then the lists of games this build has (in the temp allocator).
-games_with_rounds :: proc() -> (client: []engine.Game, server: []core.Game) {
-	client = slice.concatenate(
-		[][]engine.Game{{{info = ROUNDS}}, games_client.CLIENT},
-		context.temp_allocator,
-	)
-	server = slice.concatenate(
-		[][]core.Game{{{info = ROUNDS}}, games.SERVER},
-		context.temp_allocator,
-	)
-	return
-}
-
-// Singleplayer: every game this build has (the default first, then by folder), each its
-// name and its one line (within TITLE_WIDTH), in a list that scrolls to the last; none on
-// the title. Choosing one opens its page: a game that keeps something shows New and its
-// saves, one that keeps nothing a single Play, which asks for a world playing it
-// (App.launch, which the frame starts); the session that world's server part makes
-// plays that game.
+// Singleplayer: one game, so no list of games: the title's Singleplayer opens the game's
+// universes, titled Singleplayer and naming no game, New Universe first, then its
+// universes (one from before games were recorded too) and no save of another game, which
+// stays on the disk as it was. Every game built can still be played alone (`--game`, the
+// dedicated server, the `universe` command): a world hosted with its server part, whose
+// session plays it.
 @(test)
-test_singleplayer_lists_and_opens_every_game :: proc(t: ^testing.T) {
+test_singleplayer_lists_the_game_universes_only :: proc(t: ^testing.T) {
 	dir := "build/test/singleplayer_saves"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	screen.saves_override = dir
 	defer screen.saves_override = ""
+	cfg :: proc(dir, name, text: string) {
+		save := filepath.join({dir, name}, context.temp_allocator) or_else ""
+		os.make_directory_all(save)
+		file := filepath.join({save, "universe.cfg"}, context.temp_allocator) or_else ""
+		_ = os.write_entire_file(file, transmute([]u8)text)
+	}
+	cfg(dir, "Home", "format = 1\nseed = 1\ngame = sandbox\n")
+	cfg(dir, "Before Games", "format = 1\nseed = 2\n")
+	cfg(dir, "Horde Yard", "format = 1\nseed = 3\ngame = horde\n")
+	cfg(dir, "Arena Pit", "format = 1\nseed = 4\ngame = arena\n")
 	r := rig_make(t)
 	defer rig_free(r)
 	app := r.app
 	app.session = nil
 	app.screen = .Title
-	app.games, app.server_games = games_with_rounds()
+	app.games, app.server_games = games_client.CLIENT, games.SERVER
 	ui_frame(app)
-	order := make([dynamic]string, context.temp_allocator)
-	append(&order, game.DEFAULT_GAME)
-	for g in app.games {if g.id != game.DEFAULT_GAME {append(&order, g.id)}}
-	testing.expect_value(t, len(order), len(app.server_games))
-	for id in order {
-		g, _ := engine.game_find(app.games, id)
-		_, on_title := ui.find_widget(&app.ui, g.name)
-		testing.expectf(t, !on_title, "%s is on the title", g.name)
-	}
-
 	click(t, app, "Singleplayer")
-	testing.expect_value(t, app.screen, engine.Screen.Singleplayer)
-	about := app.ui.theme.font_size * screen.GAME_ABOUT
-	last: f32 = -1
-	for id, i in order {
-		g, found := engine.game_find(app.games, id)
-		if !testing.expectf(t, found, "%s has no client part", id) {break}
-		// (one below the view: scrolled to)
-		if _, shown := ui.find_widget(&app.ui, g.name); !shown {
-			app.singleplayer.list.selected = i
-			app.singleplayer.list.first = i
-			ui_frame(app)
-			last = -1
-		}
-		r, shown := ui.find_widget(&app.ui, g.name)
-		if !testing.expectf(t, shown, "%s is not listed", g.name) {continue}
-		testing.expectf(t, r.y > last, "%s is out of order", g.name)
-		last = r.y
-		testing.expect(t, slice.contains(app.ui.texts[:], g.description), g.description)
-		testing.expectf(
-			t,
-			ui.measure_text(&app.ui, g.description, about) <= screen.TITLE_WIDTH,
-			"%s's description is wider than the list",
-			g.id,
-		)
+	testing.expect_value(t, app.screen, engine.Screen.Universes)
+	testing.expect(t, !app.universes.host, "Singleplayer hosts")
+	testing.expect(t, slice.contains(app.ui.texts[:], "Singleplayer"), "not titled Singleplayer")
+	for g in app.games {
+		testing.expectf(t, !slice.contains(app.ui.texts[:], g.name), "the page names %s", g.name)
 	}
-
-	// Each game's page: its name; New and its saves, or Play alone.
-	for id in order {
-		g, _ := engine.game_find(app.games, id)
-		app.singleplayer.list = {
-			selected = -1,
-		}
-		app.screen = .Singleplayer
-		ui_frame(app)
-		for i, at in order {if i == id {app.singleplayer.list.first = at}}
-		ui_frame(app)
-		click(t, app, g.name)
-		testing.expect_value(t, app.screen, engine.Screen.Universes)
-		testing.expect_value(t, app.universes.game, id)
-		testing.expect(
-			t,
-			slice.contains(app.ui.texts[:], g.name),
-			"the page is not headed by its game",
-		)
-		if engine.game_keeps(app, id) {
-			_, has_new := ui.find_widget(
-				&app.ui,
-				"New Universe" if id == game.DEFAULT_GAME else "New Save",
-			)
-			testing.expectf(t, has_new, "%s's page has no New", id)
-		} else {
-			click(t, app, "Play")
-			testing.expect_value(t, app.launch, id)
-			testing.expect(t, app.session == nil, "nothing starts in the UI itself")
-			app.launch = ""
-		}
+	_, has_new := ui.find_widget(&app.ui, "New Universe")
+	testing.expect(t, has_new, "no New Universe")
+	for name in ([]string{"Home", "Before Games"}) {
+		testing.expectf(t, slice.contains(app.ui.texts[:], name), "%s is not listed", name)
 	}
-	testing.expect(t, !engine.game_keeps(app, ROUNDS.id), "Rounds keeps nothing")
-	testing.expect(t, engine.game_keeps(app, "horde"), "Horde keeps its best wave")
+	for name in ([]string{"Horde Yard", "Arena Pit"}) {
+		testing.expectf(t, !slice.contains(app.ui.texts[:], name), "%s is listed", name)
+		file := filepath.join({dir, name, "universe.cfg"}, context.temp_allocator) or_else ""
+		testing.expectf(t, os.is_file(file), "%s was touched", name)
+	}
+	testing.expect_value(t, len(screen.page_saves(&app.universes)), 2)
+	testing.expect_value(t, len(app.universes.entries), 4)
+	click(t, app, "Back")
+	testing.expect_value(t, app.screen, engine.Screen.Title)
 
 	// What the frame starts: a world hosted with that game's server part, whose session
 	// plays it (on the stepped server; the embedded one runs on its own thread).
-	for id in order {
+	for g in app.games {
+		id := g.id
 		hosted := engine.host_game(app, id)
 		testing.expect_value(t, hosted.id, id)
 		rig := new(Frame_Rig)
