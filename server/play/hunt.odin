@@ -63,8 +63,13 @@ prey_fair :: proc(s: ^core.Server, c: ^core.Client) -> bool {
 // hunt_tick: every creature of w that fights and that its game steers (`"brain":
 // "steered"` with an attack) goes for the fair player nearest it within its attack's
 // notice (prey_fair), or stands where it is when none is: an open world's hostile
-// creatures, each tick. A world nobody plays in is left as it is.
-hunt_tick :: proc(s: ^core.Server, w: ^core.World) {
+// creatures, each tick. A world nobody plays in is left as it is. leave (optional) says
+// which creatures the game hunts with otherwise (a crowd's: crowd_tick); they are skipped.
+hunt_tick :: proc(
+	s: ^core.Server,
+	w: ^core.World,
+	leave: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> bool = nil,
+) {
 	players, fair := 0, 0
 	for &c in s.clients {
 		if c.state != .Playing || c.world != w {continue}
@@ -76,7 +81,7 @@ hunt_tick :: proc(s: ^core.Server, w: ^core.World) {
 	for h in core.entities_next(&it) {
 		info := game.kind_info(s.registry, core.entity_kind(w, h))
 		a, fights := info.attack.?
-		if !fights || info.brain != .Steered {continue}
+		if !fights || info.brain != .Steered || (leave != nil && leave(s, w, h)) {continue}
 		prey: ^core.Client
 		if fair > 0 {prey = prey_nearest(s, w, core.entity_pos(w, h), f64(a.notice), prey_fair)}
 		if prey == nil {core.entity_stand(w, h)} else {hunt(s, w, h, prey)}

@@ -283,7 +283,18 @@ The types these name:
 - `hunt :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle, prey: ^core.Client)`: creature h of w goes for prey: it keeps its kind's band of distances from the player's feet and, as its attack allows, strikes it or shoots at its chest.
 - `prey_nearest :: proc(s: ^core.Server, w: ^core.World, p: [3]f64, radius: f64, may: proc(s: ^core.Server, c: ^core.Client) -> bool) -> ^core.Client`: the player in w nearest p (horizontally) within radius blocks that may says a creature goes for (nil: none); of two as near, the first seat's.
 - `prey_fair :: proc(s: ^core.Server, c: ^core.Client) -> bool`: c plays, alive, in a mode that can be hurt (it has health and is neither invulnerable nor bodiless: not creative, not a spectator), so an open world's creature goes for it.
-- `hunt_tick :: proc(s: ^core.Server, w: ^core.World)`: every creature of w that fights and that its game steers (`"brain": "steered"` with an attack) goes for the fair player nearest it within its attack's notice (prey_fair), or stands where it is when none is: an open world's hostile creatures, each tick.
+- `hunt_tick :: proc(s: ^core.Server, w: ^core.World, leave: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> bool = nil)`: every creature of w that fights and that its game steers (`"brain": "steered"` with an attack) goes for the fair player nearest it within its attack's notice (prey_fair), or stands where it is when none is: an open world's hostile creatures, each tick.
+- `Crowd :: struct {...}`: a game's waves in one world: the kinds, the wave on its way out of the lairs and the creatures out.
+- `crowd_start :: proc(s: ^core.Server, c: ^Crowd) -> bool`: the foes' kinds looked up in the session's registry (the game's start hook); false: the registry lacks one.
+- `crowd_send :: proc(s: ^core.Server, c: ^Crowd, n: int)`: wave n sets out: its creatures come out from this tick on (crowd_spawn_due).
+- `crowd_spawn_due :: proc(s: ^core.Server, c: ^Crowd, w: ^core.World, lairs: [][3]f64, every: f64)`: the next creature of the wave comes out of the next lair (lairs: the points they come out at, taken in turn) when due, `every` seconds after the last: the matriarch first, then of the kind with the most still to come, so a wave mixes them.
+- `crowd_tick :: proc(s: ^core.Server, c: ^Crowd, w: ^core.World, may: proc(s: ^core.Server, c: ^core.Client) -> bool)`: every creature of the crowd in w finds its prey (the player nearest it that may says it hunts), closes in and attacks; one with none stands.
+- `crowd_waiting :: proc(c: ^Crowd) -> (n: int)`: the creatures of the wave still to come out.
+- `crowd_spawn :: proc(s: ^core.Server, c: ^Crowd, w: ^core.World, f: wave.Foe, p: [3]f64) -> game.Entity_Handle`: a creature of a kind at p in w, as tough as the wave; 0 when the crowd or the world is full.
+- `crowd_find :: proc(c: ^Crowd, id: u32) -> ^Foe_Slot`: the slot of a creature by its entity id (nil: none of the crowd's).
+- `crowd_forget :: proc(c: ^Crowd, id: u32)`: a creature's slot goes (it died, or is gone).
+- `crowd_clear :: proc(c: ^Crowd, w: ^core.World)`: every creature of the crowd in w goes, and none is to come.
+- `MAX_FOES :: 160`: creatures of a crowd alive at once (a wave's later ones wait their turn)
 - `foe_nearest :: proc(w: ^core.World, h: game.Entity_Handle, radius: f64) -> game.Entity_Handle`: the nearest living entity within radius of h that is on a team other than its own (and on one: no team is nobody's foe), 0 for none.
 - `fight :: proc(w: ^core.World, h, foe: game.Entity_Handle, reach: f32) -> (struck, killed: bool)`: one tick of a fighter at a foe: it keeps within its reach of it (closing in by its own path) and strikes when its attack is ready (core.entity_strike, its kind's damage and cooldown; whether it struck, and whether the foe died of it).
 - `By_Name :: struct($T: typeid, $N: int) {...}`: what a game keeps of each player across sessions, by the player's name (a racer's best, a hero's level, a commander's wins): at most N rows of the game's T, found or made by name, written to the universe's game.cfg as `<key> = <T's numbers> <name>` lines (the game says how T is written and read: its numbers, in order) and read back from the lines settings_read handed the game.
@@ -298,6 +309,7 @@ The types these name:
 
 The types these name:
 
+- `Foe_Slot :: struct {...}`: a creature of the crowd.
 - `base.Var_Table :: struct {...}`
 - `core.Box :: struct {...}`: lo..hi inclusive.
 - `core.Client :: struct {...}`: one connection to the server, and once it is playing, a player: its seat, its world, its player and inventory.
@@ -309,6 +321,7 @@ The types these name:
 - `game.Entity_Handle :: distinct u32`: Entity_Handle is a generation-checked handle into the store's slots.
 - `game.Kind_Id :: distinct u16`: an entity kind, the registry index + 1; 0 is none (and "any" in a filter).
 - `game.Template :: struct {...}`
+- `wave.Foe :: enum u8 {Shambler, Skitter, Spitter, Hulk, Matriarch}`: the creatures (the base pack's hostile kinds, which any game may use).
 
 ## `client/engine` (`engine.`): What a game's client part calls
 

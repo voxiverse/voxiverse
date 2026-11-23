@@ -197,6 +197,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/script/testdata/trace` | Programs and their instruction traces | `*.vxs`, `*.txt` |
 | `common/steam` | What both Steam packages share: SteamID, loading the library from beside the executable, the fake's tickets | `*.odin` |
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |
+| `common/wave` | A wave survival's rules both sides share, whichever game runs it: which base-pack creatures come, how many and how tough each wave | `*.odin` |
 | `common/worldgen` | World generators (the Earth one can stand on the planet model's relief) | `*.odin` |
 | `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
 | `games` | Where the games live (rule 6) | `README.md` |
@@ -209,7 +210,7 @@ package** is enforced by the `layout` lint (see above).
 | `server/store` | A universe's files as files, whatever server runs: their names, the save transaction (a batch staged, committed, recovered), backups and restores, export and import, migrations, compacting region files, the packs a universe lists and the registry built from them | `*.odin` |
 | `server/path` | Pathfinding over the blocks for a body of a size: a walker's way from one block to another (A*), and fields: the way to one goal from every block of an area, which many walkers share | `*.odin` |
 | `server/grid` | Networks over blocks (power lines, pipes): the parts that blocks of a grid's kinds and the machines they reach form, kept as blocks change | `*.odin` |
-| `server/play` | What the server parts of games share, built on the game API alone (docs/games.md): phases and their clocks, a walled arena from a template, watchers, the admin's settings, what is kept of players by name, squads (shared routes, formations, fighting) | `*.odin` |
+| `server/play` | What the server parts of games share, built on the game API alone (docs/games.md): phases and their clocks, a walled arena from a template, watchers, the admin's settings, what is kept of players by name, squads (shared routes, formations, fighting), hunting and a wave survival's crowd | `*.odin` |
 | `server/playtest` | A game's server tests' rig: the game on a stepped server with its players, waiting for its phases, the host's commands and what each player was told; only tests import it | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |

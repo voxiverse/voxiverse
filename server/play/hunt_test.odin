@@ -82,3 +82,32 @@ test_a_spitter_keeps_its_distance_and_spits :: proc(t: ^testing.T) {
 	d := core.entity_pos(w, h) - c.player.position
 	testing.expectf(t, d.x * d.x + d.z * d.z > 9, "the spitter came within %v", d)
 }
+
+// The open world's hunting leaves the creatures its game hunts otherwise (a crowd's).
+@(test)
+test_hunting_leaves_what_the_game_hunts :: proc(t: ^testing.T) {
+	sess := new(core.Session)
+	defer free(sess)
+	c, ok := hunt_start(t, sess)
+	defer core.session_stop(sess)
+	if !ok {return}
+	s := &sess.h.srv
+	w := s.home
+	core.game_mode(s, c, "survival")
+	shambler, _ := game.registry_kind(s.registry, "voxiverse:shambler")
+	h := core.entity_spawn(w, shambler, c.player.position + {5, 0, 0}, false)
+	if !testing.expect(t, h != 0) {return}
+	at := core.entity_pos(w, h)
+	leave :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> bool {return true}
+	for _ in 0 ..< 3 * game.TICK_RATE {
+		hunt_tick(s, w, leave)
+		core.harness_step(&sess.h)
+	}
+	moved := core.entity_pos(w, h) - at
+	testing.expectf(
+		t,
+		moved.x * moved.x + moved.z * moved.z < 0.25,
+		"it was hunted with: %v",
+		moved,
+	)
+}
