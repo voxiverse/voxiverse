@@ -329,7 +329,8 @@ Tip_Line :: struct {
 	gap:   bool, // a little space above it
 }
 
-// item_tooltip: an item's tooltip by the pointer, or beside a slot (the pad's cursor): its
+// item_tooltip: an item's tooltip by the pointer, or beside a slot (the pad's cursor), on
+// the top layer on the panels' colour, opaque, framed in its rarity's colour: its
 // name in its rarity's colour, its type line, its stats (beside each, how it differs from
 // `compared`'s, green for better and red for worse), what it grants, its description,
 // and "Compared with <item>" or "Equipped" (worn: it is the stack worn or held).
@@ -404,8 +405,8 @@ item_tooltip :: proc(
 	defer ui.end_layer(ctx, prev)
 	ui.push_clip_rect(ctx, ctx.screen)
 	defer ui.pop_clip_rect(ctx)
-	ui.fill_rect(ctx, tip, t.slot_fill)
-	ui.stroke_rect(ctx, tip, 1, ui.with_alpha(rarity_color(t, item_rarity(reg, item)), 160))
+	ui.fill_rect(ctx, tip, ui.with_alpha(t.background, 255)) // (opaque: nothing under it shows through)
+	ui.stroke_rect(ctx, tip, 1, rarity_color(t, item_rarity(reg, item)))
 	row := ui.rect_shrink(tip, t.padding)
 	row.y -= 2
 	for l in lines {

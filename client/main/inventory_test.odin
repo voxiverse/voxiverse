@@ -642,4 +642,7 @@ test_chest_take_all_and_compare :: proc(t: ^testing.T) {
 	testing.expect(t, said(f.app, "Speed +20%  (+10)"), "better than the boots")
 	testing.expect(t, said(f.app, "Jump +0%  (-10)"), "worse at jumping")
 	testing.expect(t, said(f.app, "Compared with boots"))
+	// On the top layer, its box opaque: nothing under it shows through.
+	tip := f.app.ui.output.layers[.Tooltip].vertices
+	testing.expect(t, len(tip) >= 4 && tip[0].color.a == 255, "the tooltip is opaque, on top")
 }
