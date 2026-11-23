@@ -205,9 +205,11 @@ test_world_plays_a_game :: proc(t: ^testing.T) {
 	for text in app.ui.texts {shown ||= text == fmt.tprintf("count %d", view.count.ticks)}
 	ui_end(app)
 	testing.expect(t, shown, "the game's HUD was not drawn")
-	testing.expect_value(t, view.screen, ui.Rect{0, 0, SCREEN.x, SCREEN.y})
-	// With F3 open (drawn first, as app_ui does), the game's HUD is given the screen
-	// below the overlay, so neither covers the other.
+	// The game's HUD is given the screen below the compass along the top; with F3 open
+	// (drawn first, as app_ui does), below the overlay and the compass under it, so none
+	// covers another.
+	compass := f32(hud.COMPASS_MARGIN + hud.COMPASS_HEIGHT)
+	testing.expect_value(t, view.screen, ui.Rect{0, compass, SCREEN.x, SCREEN.y - compass})
 	mixer := new(audio.Mixer)
 	defer free(mixer)
 	audio.mixer_init(mixer, audio.DEVICE_RATE)
@@ -217,7 +219,7 @@ test_world_plays_a_game :: proc(t: ^testing.T) {
 	hud.hud_draw(app, &app.ui)
 	ui_end(app)
 	testing.expect(t, app.debug_bottom > 100, "F3 did not say how far down it reaches")
-	testing.expect_value(t, view.screen.y, app.debug_bottom)
+	testing.expect_value(t, view.screen.y, app.debug_bottom + compass)
 	testing.expect_value(t, view.screen.y + view.screen.h, SCREEN.y)
 	testing.expect_value(t, app.ui.screen, ui.Rect{0, 0, SCREEN.x, SCREEN.y})
 	testing.expect_value(

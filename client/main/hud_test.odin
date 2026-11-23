@@ -1,5 +1,7 @@
 package main
 
+import "core:math"
+import "core:strings"
 import "core:testing"
 
 import "client:engine"
@@ -8,7 +10,8 @@ import "client:menu"
 import "client:testkit"
 import "common:game"
 
-// The HUD: F1, the item-name popup and its fade.
+// The HUD: F1, the item-name popup and its fade; the health bar, the compass, the effects,
+// the pickup feed and the target frame.
 
 @(test)
 test_popup_timing :: proc(t: ^testing.T) {
@@ -89,4 +92,97 @@ ui_frame :: proc(app: ^engine.App) {
 	ui_begin(app)
 	hud.hud_draw(app, &app.ui)
 	ui_end(app)
+}
+
+@(private = "file")
+said :: proc(app: ^engine.App, text: string) -> bool {
+	for x in app.ui.texts {if x == text {return true}}
+	return false
+}
+
+@(private = "file")
+said_part :: proc(app: ^engine.App, part: string) -> bool {
+	for x in app.ui.texts {if strings.contains(x, part) {return true}}
+	return false
+}
+
+// The health bar says the health in numbers; a hit leaves its trail and makes the
+// screen's edge glow; the compass names the way the eyes face; worn gear that changes the
+// character shows in the effects row.
+@(test)
+test_hud_health_compass_and_effects :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, false)
+	defer overlay_fixture_destroy(&f)
+	app, s := f.app, f.s
+	menu.player_menu_close(app)
+	s.max_health, s.health = 20, 20
+	ui_frame(app)
+	testing.expect(t, said(app, "20 / 20"), "the health in numbers")
+	s.health = 14
+	ui_frame(app)
+	testing.expect(t, said(app, "14 / 20"))
+	testing.expect(t, s.feel.pulse.color.a > 0, "a hit makes the edge glow")
+	testing.expect_value(t, s.hud.trail, 20)
+
+	// Facing north (yaw 0) the N is in the middle; facing east, the E.
+	s.camera.yaw = 0
+	ui_frame(app)
+	testing.expect(t, said(app, "N") && said(app, "NE") && said(app, "NW") && !said(app, "S"))
+	s.camera.yaw = -math.PI / 2
+	ui_frame(app)
+	testing.expect(t, said(app, "E") && said(app, "SE") && !said(app, "W"))
+	near :: proc(a, b: f32) -> bool {return abs(a - b) < 0.01}
+	testing.expect(t, near(hud.compass_heading(-math.PI / 2), 90), "east is 90")
+	testing.expect(t, near(hud.compass_bearing({0, 0, 0}, {0, 0, -5}), 0), "north is -z")
+	testing.expect(t, near(hud.compass_bearing({0, 0, 0}, {5, 0, 0}), 90), "east is +x")
+	testing.expect_value(t, hud.compass_offset(350, 10), -20)
+
+	// The feather charm worn as a trinket: its air jump in the effects row.
+	testing.expect(t, !said(app, "+1"))
+	s.inventory.equipment[.Trinket_1] = {game.item_of_material(.Feather_Charm), 1, 0, 0}
+	ui_frame(app)
+	testing.expect(t, said(app, "+1"), "the charm's effect")
+}
+
+// The pickup feed: what comes into the inventory is a line ("+3 dirt"), the first look is
+// no news, more of the same soon after adds to the line, and lines go after a while; the
+// target frame names the creature under the crosshair with its health.
+@(test)
+test_hud_pickups_and_target :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, false)
+	defer overlay_fixture_destroy(&f)
+	app, s := f.app, f.s
+	menu.player_menu_close(app)
+	reg := testkit.test_reg()
+	dirt := game.item_of_block(reg, .Dirt)
+	s.inventory.slots[3] = {dirt, 5, 0, 0}
+	ui_frame(app)
+	testing.expect(t, !said_part(app, "+5"), "what was there already is no news")
+	s.inventory.slots[4] = {dirt, 3, 0, 0}
+	ui_frame(app)
+	testing.expect(t, said(app, "+3 dirt"))
+	s.inventory.slots[4].count = 5
+	ui_frame(app)
+	testing.expect(t, said(app, "+5 dirt"), "more soon after joins the line")
+	s.feel.clock += hud.PICKUP_SECONDS * game.TICK_RATE + 1
+	ui_frame(app)
+	testing.expect(t, !said(app, "+5 dirt"), "and it goes")
+
+	shambler, known := game.registry_kind(reg, "voxiverse:shambler")
+	if !testing.expect(t, known) {return}
+	s.entities[9] = {
+		kind       = shambler,
+		health     = 6,
+		max_health = 20,
+	}
+	defer delete(s.entities)
+	s.hud.aimed = 9
+	ui_frame(app)
+	testing.expect(t, said(app, "shambler") && said(app, "6 / 20"), "the target frame")
+	s.hud.aimed = nil
+	s.feel.clock += hud.TARGET_HOLD * game.TICK_RATE + 1
+	ui_frame(app)
+	testing.expect(t, !said(app, "shambler"), "it goes once the crosshair has left it")
 }

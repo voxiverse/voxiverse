@@ -238,6 +238,8 @@ Text :: enum u16 {
 	Character_Jump_Value,
 	Character_Air_Jumps,
 	Character_Grapple,
+	Hud_Health, // {0}: health, {1}: the most
+	Hud_Pickup, // {0}: how many, {1}: the item
 	Compass_N,
 	Compass_NE,
 	Compass_E,
@@ -490,6 +492,8 @@ TEXT_EN := [Text]string {
 	.Character_Jump_Value                   = "{0} blocks",
 	.Character_Air_Jumps                    = "Air jumps",
 	.Character_Grapple                      = "Grapple reach",
+	.Hud_Health                             = "{0} / {1}",
+	.Hud_Pickup                             = "+{0} {1}",
 	.Compass_N                              = "N",
 	.Compass_NE                             = "NE",
 	.Compass_E                              = "E",

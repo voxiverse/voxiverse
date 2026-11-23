@@ -102,6 +102,7 @@ Session :: struct {
 	pointer_over_ui:  bool, // the pointer is over the UI (ui.pointer_over): the world does not take its clicks
 	puffs:            [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
 	feel:             Feel, // the feedback under way and its clock (feel.odin)
+	hud:              Hud_State, // what the HUD keeps between frames (popup.odin)
 	journal:          Journal, // the places found and the creatures met (marks.odin)
 	world_map:        Minimap, // the player menu's map (marks.odin; its cells in the arena, made when first shown)
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
@@ -613,6 +614,12 @@ aim_update :: proc(s: ^Session, query: game.Block_Query) {
 	   ok {
 		s.aim_entity = id
 	}
+	// Farther, for the HUD's target frame: the creature in sight under the crosshair.
+	s.hud.aimed = nil
+	dir := [3]f64{f64(f.x), f64(f.y), f64(f.z)}
+	sight := f64(TARGET_RANGE)
+	if hit, ok := game.raycast(query, s.camera.position, dir, sight); ok {sight = hit.distance}
+	if id, _, ok := entity_aimed(s, s.camera.position, dir, sight); ok {s.hud.aimed = id}
 }
 
 // movement_toggles: sneak and sprint as Options chooses: held, or toggled by

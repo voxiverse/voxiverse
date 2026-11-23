@@ -13,6 +13,7 @@ import "common:game"
 
 POPUP_HOLD :: 1.5
 POPUP_FADE :: 0.5
+POPUP_LIFT :: 96 // UI units over the hotbar's row
 
 // popup_update: one frame with the selected slot and its stack.
 popup_update :: proc(p: ^engine.Item_Popup, selected: int, held: game.Stack, dt: f32) {
@@ -34,7 +35,7 @@ popup_alpha :: proc(p: ^engine.Item_Popup, reduce_motion: bool) -> f32 {
 	return clamp(1 - (p.age - POPUP_HOLD) / POPUP_FADE, 0, 1)
 }
 
-// hud_popup: the name above the hotbar (and the hearts).
+// hud_popup: the name above the hotbar (and the health bar), in its rarity's colour.
 hud_popup :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	s := app.session
 	p := &app.popup
@@ -44,10 +45,11 @@ hud_popup :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if alpha <= 0 {return}
 	faded := ctx.theme
 	faded.opacity *= alpha
+	faded.text = menu.rarity_color(&faded, menu.item_rarity(s.reg, p.item)) // (its name in its rarity's colour)
 	ui.theme_scope(ctx, faded)
 	t := &ctx.theme
 	r := ctx.screen
-	row := ui.cut_bottom(&r, engine.SLOT_SIZE.y + 24 + 50) // (above the hearts)
+	row := ui.cut_bottom(&r, engine.SLOT_SIZE.y + 24 + POPUP_LIFT) // (above the health bar and the effects)
 	row = ui.cut_top(&row, t.row_height)
 	ui.label_elided(ctx, menu.item_title(s.reg, p.item), row, .Center)
 }
