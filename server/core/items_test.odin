@@ -355,3 +355,46 @@ slot_of :: proc(c: ^Client, item: game.Item) -> int {
 	for st, i in c.inventory.slots {if st.item == item && !game.stack_empty(st) {return i}}
 	return -1
 }
+
+// A game may keep a stack in (its dropping hook): the drop is undone and nothing lies in
+// the world; a stack it lets go is thrown as ever.
+@(test)
+test_a_game_keeps_a_drop_in :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.mode = "survival"
+	config.game = {
+		info = {id = "keeper", name = "Keeper"},
+		dropping = proc(s: ^Server, c: ^Client, stack: game.Stack) -> string {
+			return "Kept" if stack.item == game.item_of_block(s.registry, .Stone) else ""
+		},
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, joined := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, joined) {return}
+	s := &sess.h.srv
+	c := &s.clients[0]
+	stone := game.item_of_block(s.registry, .Stone)
+	dirt := game.item_of_block(s.registry, .Dirt)
+	ledger_inventory(s, c.world, .Clear, &c.inventory) // (the audit stays balanced)
+	c.inventory = {}
+	item_give(s, c, stone, 10)
+	item_give(s, c, dirt, 10)
+	items :: proc(w: ^World) -> (n: int) {
+		it := entities_each(w)
+		for h in entities_next(&it) {
+			if entity_kind(w, h) == w.server.registry.engine.item {n += 1}
+		}
+		return
+	}
+	before := items(c.world)
+	inventory_request(s, c, {1, {.Drop, 0, 1}}) // (slot 0: the stone, all of it)
+	testing.expect_value(t, item_count(c, stone), 10)
+	testing.expect_value(t, items(c.world), before)
+	inventory_request(s, c, {2, {.Drop, 1, 1}}) // (slot 1: the dirt)
+	testing.expect_value(t, item_count(c, dirt), 0)
+	testing.expect_value(t, items(c.world), before + 1)
+}

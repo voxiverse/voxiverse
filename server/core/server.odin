@@ -147,6 +147,7 @@ Game :: struct {
 	action:         proc(s: ^Server, c: ^Client, index: int), // c pressed the game's action `index` (0 ..< game.MAX_GAME_ACTIONS; the client part's Game.actions names them); not while dead
 	request:        proc(s: ^Server, c: ^Client, r: Request), // c's client part sent one of the game's requests (Game_Kinds.requests), decoded and checked (request_value)
 	picking:        proc(s: ^Server, c: ^Client, stack: game.Stack) -> Pickup, // c walks over a dropped stack it may pick up: take it, leave it, or the game took it its own way
+	dropping:       proc(s: ^Server, c: ^Client, stack: game.Stack) -> (refusal: string), // c would throw stack out of its inventory (the drop key, or a stack let go off the inventory's screen): "" lets it, anything else refuses it (the stack stays where it was, c is told the text); not asked of what a death drops
 	harming:        proc(s: ^Server, h: ^Harming), // any harm about to be done, to a player or an entity: may change h.amount (0 or less: none)
 	save:           proc(s: ^Server, out: ^strings.Builder), // what it keeps with the universe, as text (game.cfg), at each save's tick
 	load:           proc(s: ^Server, text: string) -> (ok: bool), // its game.cfg, after start, before the first tick (a universe that has one); false: start fails

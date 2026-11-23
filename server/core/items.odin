@@ -21,12 +21,22 @@ import "common:protocol"
 inventory_request :: proc(s: ^Server, c: ^Client, q: protocol.Inventory_Request) {
 	chest_refresh(s, c)
 	before := c.inventory.cursor
+	was := c.inventory
 	dropped, ok := game.inventory_apply(
 		s.registry,
 		&c.inventory,
 		q.action,
 		has_ability(s, c, .Catalog),
 	)
+	if ok && !game.stack_empty(dropped) && s.config.game.dropping != nil {
+		// The game may keep a stack in: the request is undone (its answer rolls the
+		// client's prediction back), and nothing is thrown.
+		if why := s.config.game.dropping(s, c, dropped); why != "" {
+			c.inventory = was
+			dropped, ok = {}, false
+			notice(s, c, why)
+		}
+	}
 	if ok && q.action.kind == .Take {
 		// The catalog makes the stack, and takes back what was on the cursor.
 		ledger_stack(s, c.world, .Catalog_Return, before, -1)
