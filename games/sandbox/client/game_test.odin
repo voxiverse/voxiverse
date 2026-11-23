@@ -3,6 +3,7 @@ package sandbox_client
 import "core:testing"
 
 import "client:engine"
+import "client:menu"
 import "client:playtest"
 import "common:game"
 import sandbox_server "games:sandbox/server"
@@ -74,4 +75,28 @@ test_sandbox_crafting_screen :: proc(t: ^testing.T) {
 	testing.expect(t, playtest.drawn(rig, "No fabricator near"))
 	testing.expect(t, playtest.drawn(rig, "None yet: make a beacon"))
 	testing.expect(t, playtest.drawn_within(rig, 720))
+}
+
+// An item's tooltip says what the survival loop's data makes of it: a tool's tier and speed,
+// what a consumable does, the defence and fall guard an armour piece gives.
+@(test)
+test_sandbox_item_tooltips :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	reg := rig.s.reg
+	has :: proc(lines: []string, want: string) -> bool {
+		for l in lines {if l == want {return true}}
+		return false
+	}
+	Want :: struct {
+		item, line: string,
+	}
+	for w in ([]Want{{"sandbox:flint_pick", "Common pick"}, {"sandbox:flint_pick", "Gathers tier 1"}, {"sandbox:flint_pick", "2.5x as fast as hands"}, {"sandbox:alloy_drill", "Yield +1"}, {"sandbox:field_dressing", "Common consumable"}, {"sandbox:field_dressing", "Heals 4"}, {"sandbox:stim_patch", "Harm -25% for 30 s"}, {"sandbox:padded_boots", "Defence +2%"}, {"sandbox:padded_boots", "Fall guard +25%"}}) {
+		item, ok := game.registry_item(reg, w.item)
+		if !testing.expectf(t, ok, "no %s", w.item) {continue}
+		lines := menu.item_lines(reg, item)
+		testing.expectf(t, has(lines, w.line), "%s: %v, not %q", w.item, lines, w.line)
+	}
 }

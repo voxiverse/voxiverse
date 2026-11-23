@@ -110,7 +110,7 @@ effects_row :: proc(ctx: ^ui.Context, s: ^engine.Session, icons: ^engine.Item_Ic
 		for k in menu.Stat {
 			if k in stats.has && k in menu.STAT_SIGNED {
 				effect = menu.number_text(stats.value[k], true)
-				if k == .Speed || k == .Jump {effect = fmt.tprintf("%s%%", effect)}
+				if k in menu.STAT_PERCENT {effect = fmt.tprintf("%s%%", effect)}
 				break
 			}
 		}

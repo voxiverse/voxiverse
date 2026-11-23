@@ -34,7 +34,7 @@ import "common:game"
 
 INVENTORY_COLUMNS :: 5 // the bag's, and a chest's
 PREVIEW_COLUMNS :: 3 // the player's preview, as wide as this many slots
-CHARACTER_ROWS :: 5 // the character's numbers under the doll
+CHARACTER_ROWS :: 7 // the character's numbers under the doll
 CHARACTER_ROW :: 22
 CATALOG_COLUMNS :: 13 // (as wide as both panes)
 SORT_WIDTH :: 80
@@ -397,7 +397,8 @@ chest_take_all :: proc(s: ^engine.Session) {
 }
 
 // character_stats: the character's numbers under the doll, as what they wear makes them
-// (game.derive_mods, the same the movement reads): health, speed, jump, air jumps.
+// (game.derive_mods, the same the movement and the server's harm read): health, speed,
+// jump, air jumps, grapple reach, defence and fall guard; the rows shrink to fit.
 @(private = "file")
 character_stats :: proc(app: ^engine.App, ctx: ^ui.Context, r: ui.Rect) {
 	s := app.session
@@ -431,12 +432,16 @@ character_stats :: proc(app: ^engine.App, ctx: ^ui.Context, r: ui.Rect) {
 			.Character_Grapple,
 			engine.tr(.Character_Jump_Value, number_text(mods.grapple.range)) if mods.grapple.range > 0 else engine.tr(.Character_None),
 		},
+		{.Character_Defence, engine.tr(.Character_Percent, number_text(mods.defence * 100))},
+		{.Character_Fall_Guard, engine.tr(.Character_Percent, number_text(mods.fall_guard * 100))},
 	}
 	area := ui.rect_shrink(r, t.padding / 2)
+	height := min(f32(CHARACTER_ROW), area.h / CHARACTER_ROWS)
+	size := min(t.font_size, height - 2)
 	for row in rows {
-		line := ui.cut_top(&area, CHARACTER_ROW)
-		ui.draw_text(ctx, line, engine.tr(row.name), t.font_size, t.text_muted)
-		ui.draw_text(ctx, line, row.value, t.font_size, t.text, .Right)
+		line := ui.cut_top(&area, height)
+		ui.draw_text(ctx, line, engine.tr(row.name), size, t.text_muted)
+		ui.draw_text(ctx, line, row.value, size, t.text, .Right)
 	}
 }
 

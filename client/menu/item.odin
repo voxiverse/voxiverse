@@ -135,6 +135,12 @@ item_type :: proc(reg: ^game.Registry, item: game.Item) -> engine.Text {
 	switch {
 	case info.weapon != nil:
 		return .Item_Type_Weapon
+	case info.gather.kind == .Pick:
+		return .Item_Type_Pick
+	case info.gather.kind == .Blade:
+		return .Item_Type_Blade
+	case info.consume != nil:
+		return .Item_Type_Consumable
 	case info.melee != nil:
 		return .Item_Type_Melee
 	case info.tool != nil || info.grapple != nil:
@@ -167,10 +173,15 @@ Stat :: enum u8 {
 	Magazine,
 	Range, // blocks
 	Reach, // a melee weapon's, blocks
+	Tier, // a tool's: the blocks it gathers (game.Gather_Info)
+	Gather_Speed, // ... how many times as fast as hands
+	Yield, // ... what it adds to an ore's or stone's drop
 	Max_Health, // the modifiers': worn or held
 	Speed, // percent
 	Jump, // percent
 	Air_Jumps,
+	Defence, // percent of harm taken off
+	Fall_Guard, // percent of a fall's harm taken off
 }
 
 Stats :: struct {
@@ -196,6 +207,11 @@ item_stats :: proc(reg: ^game.Registry, item: game.Item) -> (st: Stats) {
 		put(&st, .Damage, m.damage)
 		put(&st, .Reach, m.reach)
 	}
+	if g := info.gather; g.tier > 0 || g.speed > 0 {
+		put(&st, .Tier, f32(g.tier))
+		put(&st, .Gather_Speed, max(g.speed, 1))
+		if g.yield > 0 {put(&st, .Yield, f32(g.yield))}
+	}
 	for m in info.modifiers {
 		if m.amount == 0 {continue}
 		#partial switch m.kind {
@@ -207,6 +223,10 @@ item_stats :: proc(reg: ^game.Registry, item: game.Item) -> (st: Stats) {
 			put(&st, .Jump, m.amount * 100)
 		case .Air_Jumps:
 			put(&st, .Air_Jumps, m.amount)
+		case .Defence:
+			put(&st, .Defence, m.amount * 100)
+		case .Fall_Guard:
+			put(&st, .Fall_Guard, m.amount * 100)
 		}
 	}
 	return
@@ -214,19 +234,46 @@ item_stats :: proc(reg: ^game.Registry, item: game.Item) -> (st: Stats) {
 
 @(rodata)
 STAT_TEXT := [Stat]engine.Text {
-	.Damage     = .Stat_Damage,
-	.Fire_Rate  = .Stat_Fire_Rate,
-	.Magazine   = .Stat_Magazine,
-	.Range      = .Stat_Range,
-	.Reach      = .Stat_Reach,
-	.Max_Health = .Stat_Max_Health,
-	.Speed      = .Stat_Speed,
-	.Jump       = .Stat_Jump,
-	.Air_Jumps  = .Stat_Air_Jumps,
+	.Damage       = .Stat_Damage,
+	.Fire_Rate    = .Stat_Fire_Rate,
+	.Magazine     = .Stat_Magazine,
+	.Range        = .Stat_Range,
+	.Reach        = .Stat_Reach,
+	.Tier         = .Stat_Tier,
+	.Gather_Speed = .Stat_Gather_Speed,
+	.Yield        = .Stat_Yield,
+	.Max_Health   = .Stat_Max_Health,
+	.Speed        = .Stat_Speed,
+	.Jump         = .Stat_Jump,
+	.Air_Jumps    = .Stat_Air_Jumps,
+	.Defence      = .Stat_Defence,
+	.Fall_Guard   = .Stat_Fall_Guard,
 }
 
-// STAT_SIGNED: the stats that are changes (a modifier's), written with their sign.
-STAT_SIGNED :: bit_set[Stat]{.Max_Health, .Speed, .Jump, .Air_Jumps}
+// STAT_SIGNED: the stats that are changes (a modifier's, a tool's yield), written with their
+// sign; STAT_PERCENT those that are percentages.
+STAT_SIGNED :: bit_set[Stat]{.Yield, .Max_Health, .Speed, .Jump, .Air_Jumps, .Defence, .Fall_Guard}
+STAT_PERCENT :: bit_set[Stat]{.Speed, .Jump, .Defence, .Fall_Guard}
+
+// use_lines: what using an item up does (its `consume`): "Heals 4", "1 health a second for
+// 10 s", "Harm -20% for 10 s".
+use_lines :: proc(reg: ^game.Registry, item: game.Item) -> []string {
+	lines := make([dynamic]string, context.temp_allocator)
+	info, _ := game.item_info(reg, item)
+	use, is := info.consume.?
+	if !is {return lines[:]}
+	if use.heal > 0 {append(&lines, engine.tr(.Use_Heal, number_text(use.heal)))}
+	if use.seconds > 0 && use.regen > 0 {
+		append(&lines, engine.tr(.Use_Regen, number_text(use.regen), number_text(use.seconds)))
+	}
+	if use.seconds > 0 && use.defence > 0 {
+		append(
+			&lines,
+			engine.tr(.Use_Defence, number_text(use.defence * 100), number_text(use.seconds)),
+		)
+	}
+	return lines[:]
+}
 
 // number_text: a number as a tooltip writes it: whole when it is, else one decimal; signed
 // when asked.
@@ -264,6 +311,7 @@ item_lines :: proc(reg: ^game.Registry, item: game.Item, with_tags := false) -> 
 	st := item_stats(reg, item)
 	for s in Stat {if s in st.has {append(&lines, stat_line(s, st.value[s]))}}
 	append(&lines, ..ability_lines(reg, item))
+	append(&lines, ..use_lines(reg, item))
 	info, _ := game.item_info(reg, item)
 	if info.description != "" {append(&lines, info.description)}
 	if with_tags {
@@ -368,6 +416,7 @@ item_tooltip :: proc(
 		first = false
 	}
 	for l in ability_lines(reg, item) {append(&lines, Tip_Line{l, t.text, false})}
+	for l in use_lines(reg, item) {append(&lines, Tip_Line{l, t.text, false})}
 	info, _ := game.item_info(reg, item)
 	if info.description != "" {
 		for part, i in ui.wrap_words(ctx, info.description, t.font_size, inner_w) {
