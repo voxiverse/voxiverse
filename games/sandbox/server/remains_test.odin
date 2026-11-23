@@ -13,7 +13,7 @@ import "server:playtest"
 
 // The remains on a running sandbox (remains.odin): the court built round the dead gate as the
 // player arrives, the spawn clear and the gate reached from it on foot; a vault built when a
-// player comes near, its chest stocked; the machines the sites keep; what is built remembered
+// player comes near, its relic vault inside; the machines the sites keep; what is built remembered
 // when the universe opens again; and a universe saved before there were remains given none.
 
 // remains_session: a universe of the sandbox (g: GAME, named by the caller, whose frame holds
@@ -201,10 +201,10 @@ test_remains_court_at_spawn :: proc(t: ^testing.T) {
 	}
 }
 
-// A vault is built when a player comes near it, its chest stocked; the other scattered sites,
-// out of reach, are not.
+// A vault is built when a player comes near it, the survival loop's relic vault in its
+// chamber; the other scattered sites, out of reach, are not.
 @(test)
-test_remains_vault_stocked :: proc(t: ^testing.T) {
+test_remains_vault_sealed :: proc(t: ^testing.T) {
 	sess := new(core.Session)
 	defer free(sess)
 	if !remains_session(t, sess, GAME, 7919, false) {return}
@@ -226,12 +226,8 @@ test_remains_vault_stocked :: proc(t: ^testing.T) {
 	if !testing.expect(t, built, "the vault was never built") {return}
 	u := [2]i32{i32(site.along.x), i32(site.along.y)}
 	at := site.middle - u
-	chest := game.Block_Pos{at.x, site.floor + 1, at.y}
-	b, _ := core.block_at(w, chest)
-	testing.expect_value(t, b, game.Block.Chest)
-	held := 0
-	for st in core.chest_slots(w, chest) {if !game.stack_empty(st) {held += 1}}
-	testing.expectf(t, held >= 2 && held <= 4, "the vault's chest holds %d stacks", held)
+	b, _ := core.block_at(w, {at.x, site.floor + 1, at.y})
+	testing.expect_value(t, b, state(s).remains_kit.relic_vault)
 	door, _ := core.block_at(w, {site.middle.x + 2 * u.x, site.floor + 2, site.middle.y + 2 * u.y})
 	testing.expect_value(t, door, state(s).remains_kit.steel)
 	far := 0

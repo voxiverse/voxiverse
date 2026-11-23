@@ -63,7 +63,7 @@ test_remains_over_seeds :: proc(t: ^testing.T) {
 	placed: [Remain_Kind]int
 	worlds_with: [Remain_Kind]int
 	fewest, most, total := max(int), 0, 0
-	chests := 0
+	vaults := 0
 	worst_spread: [Remain_Kind]i32
 	worst_wet: f64
 	for n in i64(1) ..= SEEDS {
@@ -126,7 +126,7 @@ test_remains_over_seeds :: proc(t: ^testing.T) {
 			if site.kind == .Road {continue}
 			scattered += 1
 			worst_wet = max(worst_wet, wet)
-			if site.kind == .Vault {chests += 1}
+			if site.kind == .Vault {vaults += 1}
 			d := [2]f64{f64(site.middle.x - court.middle.x), f64(site.middle.y - court.middle.y)}
 			far := math.sqrt(d.x * d.x + d.y * d.y)
 			testing.expectf(
@@ -166,7 +166,7 @@ test_remains_over_seeds :: proc(t: ^testing.T) {
 		most,
 		f64(total) / SEEDS,
 		placed[.Road],
-		chests,
+		vaults,
 	)
 	for k in Remain_Kind {
 		log.infof(

@@ -24,20 +24,21 @@ import "server:core"
 //   toward the ruin (ruin.odin) and broken off between, so one who follows it comes there;
 // - scattered REMAINS_NEAR to REMAINS_FAR blocks from the gate, each kind once and a few
 //   more: a fallen pylon beside its stump (Pylon), a wall half buried with a doorway (Wall),
-//   a round tower fallen in on one side, a chest inside one in two (Tower), a grassed mound
-//   over a sealed chamber holding a chest (Vault), a ring of standing stones round a dead
-//   plinth (Stones). Each is drawn from its own seed (remains_build.odin): its size, its way,
-//   its breaks, what grows on it.
+//   a round tower fallen in on one side, a remains cache inside one in two (Tower), a grassed
+//   mound over a sealed chamber holding a relic vault (Vault), a ring of standing stones
+//   round a dead plinth (Stones). Each is drawn from its own seed (remains_build.odin): its
+//   size, its way, its breaks, what grows on it, and the survival loop's finds (survival.odin:
+//   salvage heaps in its rubble, now and then an alloy relic).
 //
 // Every site stands on dry land that is not too uneven for its kind (site_ground), clear of
 // the court, the ruin, the generator's structures and the others. A site is built once, in
 // one paste, when a player is near it and its ground is loaded (the court as the first player
-// arrives); from then on it is the world's like any block (players may dig it and take what
-// the chests hold), and the world's file (REMAINS_FILE) remembers which are built. A world
+// arrives); from then on it is the world's like any block (players may dig it and break its
+// finds open: survival.odin's remains_spill), and the world's file (REMAINS_FILE) remembers which are built. A world
 // saved before there were remains gets none: nothing is built over what its players made.
 // Each built site but the road's is marked for the watchers, and as it is built it sets down
 // the machine it keeps, if any (remains_machines.odin: sentries asleep at the vaults and the
-// towers with a chest, menders at the rings of stones, the pylons and behind the gate, no
+// towers with a cache, menders at the rings of stones, the pylons and behind the gate, no
 // sentry near the spawn).
 
 MAX_REMAINS :: 32 // sites a world plans, the court and the road's stretches too
@@ -114,33 +115,16 @@ Remains :: struct {
 	dirty:       bool, // changed since its file was staged
 }
 
-// Remains_Loot: what a chest of the remains may hold: an item by name, how many (lo..hi), how often
-// against the others.
-Remains_Loot :: struct {
-	name:   string,
-	lo, hi: int,
-	weight: int,
-}
-
-@(rodata)
-REMAINS_LOOT := [?]Remains_Loot {
-	{"seeds", 4, 12, 4},
-	{"wheat", 2, 8, 4},
-	{"lamp", 1, 4, 3},
-	{"hoe", 1, 1, 2},
-	{"cap", 1, 1, 1},
-	{"boots", 1, 1, 1},
-	{"grappling_hook", 1, 1, 1},
-}
-
-// Remains_Kit: what the remains are built of and hold, in this session's registry.
+// Remains_Kit: what the remains are built of and the finds they hold (the survival loop's
+// blocks: survival.odin), in this session's registry.
 Remains_Kit :: struct {
 	slate_tiles, polished_slate, slate, slate_bricks: game.Block,
 	basalt_bricks, polished_basalt, basalt_cobble:    game.Block,
 	limestone, polished_limestone:                    game.Block,
 	mossy_bricks, moss, leaves:                       game.Block,
 	steel, rust, copper, grating, riveted:            game.Block,
-	loot:                                             [len(REMAINS_LOOT)]game.Item,
+	salvage_heap, alloy_relic:                        game.Block, // (survival.odin's finds)
+	remains_cache, relic_vault:                       game.Block,
 }
 
 // remains_start: the names the remains use, from the session's registry (the game's start).
@@ -167,7 +151,10 @@ remains_start :: proc(s: ^core.Server) -> bool {
 	k.copper = block(reg, "verdigris_copper") or_return
 	k.grating = block(reg, "iron_grating") or_return
 	k.riveted = block(reg, "riveted_iron") or_return
-	for &item, i in k.loot {item = game.registry_item(reg, REMAINS_LOOT[i].name) or_return}
+	k.salvage_heap = block(reg, "salvage_heap") or_return
+	k.alloy_relic = block(reg, "alloy_relic") or_return
+	k.remains_cache = block(reg, "remains_cache") or_return
+	k.relic_vault = block(reg, "relic_vault") or_return
 	return true
 }
 
@@ -460,36 +447,6 @@ remains_clear :: proc(
 	home, _ := gen.home.?
 	for f in found {if f != home {return false}}
 	return true
-}
-
-// remains_stock: a chest of the remains filled from REMAINS_LOOT, `stacks` rolls of it, booked
-// as the game's.
-remains_stock :: proc(
-	s: ^core.Server,
-	w: ^core.World,
-	p: game.Block_Pos,
-	stacks: int,
-	rng: ^base.Rng,
-) {
-	slots := core.chest_slots(w, p)
-	if slots == nil {
-		log.errorf("remains: no chest at %v to stock", p)
-		return
-	}
-	k := &state(s).remains_kit
-	total := 0
-	for row in REMAINS_LOOT {total += row.weight}
-	for i in 0 ..< min(stacks, len(slots)) {
-		roll := base.rng_int_max(rng, total)
-		for row, j in REMAINS_LOOT {
-			roll -= row.weight
-			if roll >= 0 {continue}
-			count := base.rng_roll(rng, row.lo, row.hi)
-			slots[i] = {k.loot[j], count, 0, 0}
-			core.items_made(s, w, k.loot[j], count)
-			break
-		}
-	}
 }
 
 // ---- the world's file ----

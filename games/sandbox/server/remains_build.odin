@@ -13,8 +13,17 @@ import "server:core"
 // over the site's footprint whose cells are void (what stands there stays: the land, the
 // trees growing through) until drawn, which knows the land's top at each of its columns; most
 // of what is drawn stands on that, sunk a block into it, so a site follows the land as if it
-// had settled there. Then it is pasted in one bulk edit, its chests are stocked, and the
-// machine it keeps (remain_post) is set down at its post (remains_machines.odin).
+// had settled there. Then it is pasted in one bulk edit, and the machine it keeps
+// (remain_post) is set down at its post (remains_machines.odin).
+//
+// What a survivor takes from a site are the survival loop's blocks (survival.odin), drawn
+// with the rest from the site's seed: salvage heaps among a tower's rubble, along a fallen
+// pylon and in a wall's doorway (REMAINS_HEAPS of them), now and then an alloy relic in
+// place of a tower's floor stone, a pylon's grating or a ring's plinth (REMAINS_RELIC), a
+// remains cache against a tower's far wall in one tower of two and a relic vault in a vault's
+// chamber. The court near the spawn holds none.
+REMAINS_HEAPS :: 0.1 // of a tower's rubble, a fallen pylon's shaft or a wall's doorways
+REMAINS_RELIC :: 0.35 // of towers, pylons and rings of stones that hold an alloy relic
 
 // The court: its floor reaches COURT_SIDE blocks beyond the gate's box on either side,
 // COURT_BACK behind it (north) and COURT_FRONT in front (south, toward the spawn, which is 8
@@ -33,7 +42,7 @@ Draft :: struct {
 	origin: game.Block_Pos,
 	ground: []i32, // the land's top at each column (land_at), [x + z * size.x] from the origin
 	dry:    []bool, // ... and whether it is dry ground
-	chests: [dynamic]game.Block_Pos, // the chests drawn, to stock
+	finds:  int, // the caches and relic vaults drawn
 }
 
 // draft_make: a draft over the columns `at`, from layer bottom to top, every cell void.
@@ -44,7 +53,6 @@ draft_make :: proc(l: ^Land, at: Footprint, bottom, top: i32) -> Draft {
 		origin = {at.lo.x, bottom, at.lo.y},
 		ground = make([]i32, size.x * size.z, context.temp_allocator),
 		dry    = make([]bool, size.x * size.z, context.temp_allocator),
-		chests = make([dynamic]game.Block_Pos, context.temp_allocator),
 	}
 	slice.fill(d.t.cells, game.VOID)
 	for z in i32(0) ..< size.z {
@@ -106,8 +114,7 @@ cell :: proc(p: [2]f64) -> [2]i32 {return {i32(math.floor(p.x)), i32(math.floor(
 @(private = "file")
 centre :: proc(c: [2]i32) -> [2]f64 {return {f64(c.x) + 0.5, f64(c.y) + 0.5}}
 
-// remains_build: one site of the remains, drawn and pasted, its chests stocked and its
-// machine kept.
+// remains_build: one site of the remains, drawn and pasted, its machine kept.
 remains_build :: proc(s: ^core.Server, w: ^core.World, site: Remain) {
 	k := &state(s).remains_kit
 	land := land_of(w)
@@ -115,7 +122,6 @@ remains_build :: proc(s: ^core.Server, w: ^core.World, site: Remain) {
 	area := remain_area(site)
 	d := draft_make(&land, site.at, area.lo.y, area.hi.y)
 	rng := base.rng_make(site.seed)
-	stacks: [2]int
 	switch site.kind {
 	case .Court:
 		court_level(w, site, area, act)
@@ -128,22 +134,19 @@ remains_build :: proc(s: ^core.Server, w: ^core.World, site: Remain) {
 		wall_draw(&d, site, k, &rng)
 	case .Tower:
 		tower_draw(&d, site, k, &rng)
-		stacks = {1, 2}
 	case .Vault:
 		vault_draw(&d, site, k, &rng)
-		stacks = {2, 4}
 	case .Stones:
 		stones_draw(&d, site, k, &rng)
 	}
 	box := core.Box{d.origin, d.origin + d.t.size - 1}
 	core.bulk_edit(w, {shape = box, op = .Paste, template = &d.t, partial = true}, act)
-	for p in d.chests {remains_stock(s, w, p, base.rng_roll(&rng, stacks[0], stacks[1]), &rng)}
 	if which, at, keeps := remain_post(&d, site); keeps {remains_keep(s, w, which, at)}
-	log.infof("remains built kind=%v middle=%v chests=%d", site.kind, site.middle, len(d.chests))
+	log.infof("remains built kind=%v middle=%v finds=%d", site.kind, site.middle, d.finds)
 }
 
 // remain_post: the machine a site keeps and its post (its feet), drawn: a sentry folded in
-// the cut before a vault's door, and in the middle of a tower that holds a chest; a mender
+// the cut before a vault's door, and in the middle of a tower that holds a cache; a mender
 // beside the plinth of a ring of stones, by a fallen pylon's stump, and on the court's floor
 // at the middle of its back row, between the broken pylons' pieces, the court's one machine
 // (it never flies into the gate: play's fliers keep out of a gate's surface); none at a wall
@@ -159,7 +162,7 @@ remain_post :: proc(d: ^Draft, site: Remain) -> (which: Wild, at: game.Block_Pos
 		return .Sentry, {p.x, site.floor + 1, p.y}, true
 	case .Tower:
 		g, _ := draft_ground(d, site.middle.x, site.middle.y)
-		return .Sentry, {site.middle.x, g + 1, site.middle.y}, len(d.chests) > 0
+		return .Sentry, {site.middle.x, g + 1, site.middle.y}, d.finds > 0
 	case .Stones:
 		g, _ := draft_ground(d, site.middle.x + 1, site.middle.y)
 		return .Tender, {site.middle.x + 1, g + 1, site.middle.y}, true
@@ -487,10 +490,16 @@ pylon_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 			p := cell(foot + u * t + v * o)
 			if head {
 				draft_column(d, p.x, p.y, 0, 2, k.copper)
-				if o == 0 {draft_column(d, p.x, p.y, 1, 1, k.grating)}
+				if o == 0 {
+					relic := roll(site.seed, 0, 0, 11) < REMAINS_RELIC
+					draft_column(d, p.x, p.y, 1, 1, k.alloy_relic if relic else k.grating)
+				}
 				continue
 			}
 			draft_column(d, p.x, p.y, 0, 1, k.rust if int(t) % 4 == 0 else k.steel)
+			if roll(site.seed, p.x, p.y, 10) < REMAINS_HEAPS {
+				draft_column(d, p.x, p.y, 1, 1, k.salvage_heap)
+			}
 			if roll(site.seed, p.x, p.y) < 0.12 {draft_column(d, p.x, p.y, 2, 2, k.leaves)}
 		}
 	}
@@ -540,6 +549,9 @@ wall_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 				for y in i32(-1) ..= h {draft_column(d, p.x, p.y, y, y, brick(site.seed, k, p.x, p.y, y))}
 				if opening {
 					draft_column(d, p.x, p.y, 1, 2, .Air)
+					if roll(site.seed, p.x, p.y, 10) < REMAINS_HEAPS {
+						draft_column(d, p.x, p.y, 1, 1, k.salvage_heap)
+					}
 					lintel :=
 						height(site.seed, phase, wave, door - 1 + offset) >= 3 &&
 						height(site.seed, phase, wave, door + 2 + offset) >= 3
@@ -569,7 +581,8 @@ wall_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 // tower_draw: a round tower fallen in on its way: its ring of wall standing high on the far
 // side and down to its footing on that one, a band of polished stone every fourth course,
 // slits and a doorway, a floor of polished slate inside, its rubble spilled on the land
-// beyond the fallen side; a chest inside against the far wall in one tower of two.
+// beyond the fallen side; a remains cache inside against the far wall in one tower of two,
+// salvage heaps in the rubble, an alloy relic in the floor of some.
 @(private = "file")
 tower_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 	R := f64(site.size)
@@ -612,7 +625,9 @@ tower_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 				chance := 0.65 * (1 - (f32(r) - f32(R)) / 8)
 				if _, dry := draft_ground(d, x, z); !dry || h >= chance {continue}
 				rubble := [3]game.Block{k.basalt_cobble, .Gravel, k.basalt_bricks}
-				draft_column(d, x, z, 1, 1, rubble[int(roll(seed, x, z, 4) * 3)])
+				b := rubble[int(roll(seed, x, z, 4) * 3)]
+				if roll(seed, x, z, 10) < REMAINS_HEAPS {b = k.salvage_heap}
+				draft_column(d, x, z, 1, 1, b)
 				if r < R + 3 &&
 				   roll(seed, x, z, 5) < chance / 2 {draft_column(d, x, z, 2, 2, k.basalt_cobble)}
 			}
@@ -621,14 +636,18 @@ tower_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 	if base.rng_f32(rng) < 0.5 {
 		p := cell(mid - u * (R - 1.5))
 		g, _ := draft_ground(d, p.x, p.y)
-		draft_put(d, {p.x, g + 1, p.y}, .Chest)
-		append(&d.chests, game.Block_Pos{p.x, g + 1, p.y})
+		draft_put(d, {p.x, g + 1, p.y}, k.remains_cache)
+		d.finds += 1
+	}
+	if roll(seed, 0, 0, 11) < REMAINS_RELIC {
+		p := cell(mid - v * (R - 1.5))
+		draft_column(d, p.x, p.y, 0, 0, k.alloy_relic)
 	}
 }
 
 // vault_draw: a mound of earth grassed over, standing on the land's middle height, over a
 // chamber of riveted iron whose door (dark steel, sealed: one digs in) shows in a cut on the
-// mound's way, framed in polished basalt with copper over it; a chest inside.
+// mound's way, framed in polished basalt with copper over it; a relic vault inside.
 @(private = "file")
 vault_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 	M := f64(site.size)
@@ -689,13 +708,14 @@ vault_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 		}
 	}
 	p := site.middle - u
-	draft_put(d, {p.x, b + 1, p.y}, .Chest)
-	append(&d.chests, game.Block_Pos{p.x, b + 1, p.y})
+	draft_put(d, {p.x, b + 1, p.y}, k.relic_vault)
+	d.finds += 1
 }
 
 // stones_draw: a ring of standing stones (slate or limestone, the seed's), each two wide, a
 // block in the land and two to four over it, some gone and some fallen outward; in the middle
-// a polished floor and on it a dead plinth of dark steel capped with copper.
+// a polished floor and on it a dead plinth of dark steel (an alloy relic in some) capped with
+// copper.
 @(private = "file")
 stones_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 	R := f64(site.size)
@@ -729,6 +749,7 @@ stones_draw :: proc(d: ^Draft, site: Remain, k: ^Remains_Kit, rng: ^base.Rng) {
 	for dz in i32(-1) ..= 1 {
 		for dx in i32(-1) ..= 1 {draft_column(d, site.middle.x + dx, site.middle.y + dz, 0, 0, polished)}
 	}
-	draft_column(d, site.middle.x, site.middle.y, 1, 1, k.steel)
+	plinth := k.alloy_relic if roll(site.seed, 0, 0, 11) < REMAINS_RELIC else k.steel
+	draft_column(d, site.middle.x, site.middle.y, 1, 1, plinth)
 	draft_column(d, site.middle.x, site.middle.y, 2, 2, k.copper)
 }

@@ -66,7 +66,7 @@ copper and iron ore their raw ore (the pack's overrides of the base pack's block
 
 The remains (salvage heaps, ancient alloy relics, remains caches, sealed relic vaults:
 `sandbox:salvage_heap`, `alloy_relic`, `remains_cache`, `relic_vault`) are never placed by a
-player: the spawn area's ancient remains hold them. A heap leaves salvage, a relic ancient
+player: the remains round the home gate hold them (below, "Its remains"). A heap leaves salvage, a relic ancient
 alloy, a vault a data shard; a cache (tier 1) and a vault spill a draw of finds when broken
 open (`server/survival.odin`: `CACHE_LOOT`, `VAULT_LOOT`; `remains_spill` for remains opened
 another way).
@@ -305,11 +305,14 @@ places them, `server/remains_build.odin` draws them). All of it comes from the w
 - **Scattered remains**, 60 to 380 blocks from the gate, one of each kind and four or five more,
   at least 40 blocks apart: a fallen pylon beside its stump, its copper head at the far end; a
   wall half buried, rising and falling along its length, with a doorway and sometimes a corner;
-  a round tower fallen in on one side, its rubble spilled, a chest inside one in two; a grassed
-  mound over a sealed chamber of riveted iron whose dark steel door shows in a cut, with a chest
-  inside (one digs in); a ring of standing stones round a dead plinth. Each is drawn from its
-  own seed (its size, its way, its breaks, what grows on it) and follows the land, sunk a block
-  into it. The chests hold a few of seeds, wheat, lamps, a hoe, a cap, boots or a grappling hook.
+  a round tower fallen in on one side, its rubble spilled, a remains cache inside one in two; a
+  grassed mound over a sealed chamber of riveted iron whose dark steel door shows in a cut, with
+  a relic vault inside (one digs in); a ring of standing stones round a dead plinth. Each is
+  drawn from its own seed (its size, its way, its breaks, what grows on it) and follows the
+  land, sunk a block into it. What a survivor takes from them is the survival loop's (above):
+  salvage heaps in a tenth of a tower's rubble, along a fallen pylon's shaft and in a wall's
+  doorway, an alloy relic in about a third of the towers' floors, pylons' gratings and rings'
+  plinths, the towers' caches and the vaults' relic vaults. The court holds none.
 
 Every site stands on dry ground not too uneven for its kind, clear of the court, the ruin's
 apron, the generator's structures and each other. Over 60 seeds of the Earth generator: 4 to
@@ -317,13 +320,13 @@ apron, the generator's structures and each other. Over 60 seeds of the Earth gen
 53 (in the others the way to the ruin is water or cliffs), at most 1% of a site on wet ground.
 A site is built in one paste when a player comes within 192 blocks of it and its ground is
 loaded (the court as the first player arrives), and is then the world's like any block: dig
-it, take what the chests hold. The world's `sandbox.remains.txt` remembers which are built; a
+it, break its finds open. The world's `sandbox.remains.txt` remembers which are built; a
 world saved before there were remains gets none, so nothing is built over what its players
 made.
 
 The remains keep their machines (above), each set down once as its site is built and kept
 with the world: a sentry asleep in the cut before each vault's door and in each tower that
-holds a chest, a tender over each ring of stones and by each fallen pylon's stump, and one
+holds a cache, a tender over each ring of stones and by each fallen pylon's stump, and one
 tender on the court's floor behind the gate, which no machine ever touches. No sentry keeps a
 post within 64 blocks of the spawn (the most any predator's spawn rule keeps clear), the
 bulwark is the ruin's alone, and a world whose creatures do not come by themselves (the image
