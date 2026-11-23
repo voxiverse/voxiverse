@@ -342,6 +342,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		pack_watch        = base.DEV, // (a development build reloads packs when their files change)
 		spawn             = config.spawn,
 		no_natural_spawns = config.no_natural_spawns,
+		gate_open         = 86400 if config.no_natural_spawns else 0, // (a scene on a slow machine takes longer than a gate stays open)
 		upload            = config.upload,
 		rules             = still_rules() if config.no_natural_spawns else {},
 		name              = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
