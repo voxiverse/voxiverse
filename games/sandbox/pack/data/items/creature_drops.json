@@ -1,0 +1,47 @@
+{
+	// What the home world's creatures leave where they die (their kinds' "drops":
+	// data/entities): the beasts' hide, meat, feathers, shell and chitin, and what is left
+	// of the ancient machines. Nothing makes anything of them yet; the item roster's
+	// recipes may.
+	"hide": {
+		"model": "sandbox:hide",
+		"description": "A beast's skin, scraped and rolled."
+	},
+	"raw_meat": {
+		"model": "sandbox:raw_meat",
+		"description": "Meat from a beast. Raw."
+	},
+	"feather": {
+		"model": "sandbox:feather",
+		"description": "A flight feather, light and stiff."
+	},
+	"raw_fish": {
+		"model": "sandbox:raw_fish",
+		"description": "A glassfin, still cold from the water."
+	},
+	"shell_plate": {
+		"model": "sandbox:shell_plate",
+		"description": "A plate of a domeback's shell, or a cragmaul's hide: hard as stone."
+	},
+	"chitin": {
+		"model": "sandbox:chitin",
+		"description": "A piece of a hard, light shell."
+	},
+	"venom_gland": {
+		"model": "sandbox:venom_gland",
+		"description": "A sac of venom. Handle it carefully."
+	},
+	"scrap": {
+		"model": "sandbox:scrap",
+		"description": "Plates and wire of an ancient machine, of a metal nobody makes."
+	},
+	"power_cell": {
+		"model": "sandbox:power_cell",
+		"description": "An ancient machine's cell. It is still warm.",
+		"stack": 16
+	},
+	"lens": {
+		"model": "sandbox:lens",
+		"description": "An ancient machine's eye, clear and faintly lit."
+	}
+}
