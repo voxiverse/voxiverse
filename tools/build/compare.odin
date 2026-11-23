@@ -94,10 +94,10 @@ bench_compare :: proc(args: []string) -> bool {
 		fmt.printfln("bench  building %s (%s)", side.label, side.root)
 		os.set_working_directory(side.root)
 		os.make_directory_all("build") // (a new worktree has none)
-		ok: bool
-		if slice.contains(TOOL_SCENARIOS, scenario) {
+		ok := compare_prepare()
+		if ok && slice.contains(TOOL_SCENARIOS, scenario) {
 			_, ok = build_tool("bench")
-		} else {
+		} else if ok {
 			_, ok = build_game({"--release"})
 		}
 		os.set_working_directory(main_root)
@@ -110,6 +110,22 @@ bench_compare :: proc(args: []string) -> bool {
 		}
 	}
 	compare_report(sides[:], scenario)
+	return true
+}
+
+// compare_prepare writes, in the tree at the working directory, what main writes in this
+// one before any odin runs: the lists of games and the block texture atlas. build/ is
+// not committed, so a new worktree has neither, and odin will not take the collection
+// `generated` without its folder. A ref from before the atlas was made at build time has
+// no tools/atlas, and nothing in it loads the atlas: it is left without one.
+@(private = "file")
+compare_prepare :: proc() -> bool {
+	if !write_game_lists() {return false}
+	if os.is_dir(path_join({"tools", "atlas"})) && !write_atlas() {
+		cwd, _ := os.get_working_directory(context.temp_allocator)
+		fmt.eprintfln("build: bench compare: no block texture atlas for %s", cwd)
+		return false
+	}
 	return true
 }
 
