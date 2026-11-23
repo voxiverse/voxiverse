@@ -167,7 +167,7 @@ main :: proc() {
 			     "challenge",
 			     "proof",
 			     "choose",
-			     "dial",
+			     "open_gate",
 			     "teleport",
 			     "characters",
 			     "world_changed",
@@ -374,8 +374,12 @@ describe :: proc(
 			return fmt.tprintf("pack_want count=%d", v.count), true
 		case protocol.Packs_Ready:
 			return fmt.tprintf("packs_ready content=%016x", v.content), true
-		case protocol.Dial:
-			return fmt.tprintf("dial gate=%v address=%s", v.gate, starmap.address_dir(v.address)),
+		case protocol.Open_Gate:
+			return fmt.tprintf(
+					"open_gate gate=%v address=%s",
+					v.gate,
+					starmap.address_dir(v.address),
+				),
 				true
 		case protocol.Choose:
 			return fmt.tprintf("choose character=%q", v.character), true

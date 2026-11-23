@@ -675,7 +675,7 @@ test_keep_awake_on_title :: proc(t: ^testing.T) {
 
 // pad_frame: one frame as app_frame makes it, without window or GPU: the
 // events, the actions, the menus' own actions (back, pause, the pad's
-// navigation), the chat and dial keys, then what is on the screen.
+// navigation), the chat and gate keys, then what is on the screen.
 pad_frame :: proc(app: ^engine.App, events: ..platform.Event) {
 	engine.input_update(&app.input, events)
 	engine.actions_sync(app, 1.0 / 60)
@@ -684,7 +684,7 @@ pad_frame :: proc(app: ^engine.App, events: ..platform.Event) {
 	overlay.chat_keys(app, &input)
 	menu.chest_sync(app)
 	menu.player_menu_keys(app)
-	overlay.dial_keys(app)
+	overlay.gate_keys(app)
 	ui.begin_frame(&app.ui, input, {1280, 720}, 1)
 	s := app.session
 	if app.screen == .Game && s != nil && s.state == .Playing && s.loading == nil {
@@ -1005,7 +1005,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect_value(t, app.screen, engine.Screen.Title)
 
 	// With a session: the characters, the loading screen, the game menu, the
-	// dial and the chat.
+	// gate and the chat.
 	s := r.s
 	s.reg = testkit.test_reg()
 	app.session = s
@@ -1081,10 +1081,11 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_tap(app, .Start)
 	testing.expect_value(t, app.overlays.count, 0)
 
-	// The dial: seven symbols by directions and A, one erased by X.
-	overlay.dial_open(app, {10, 20, 30})
+	// The gate: seven symbols by directions and A, one erased by X, then
+	// A on Open (the focus is there once the address is whole).
+	overlay.gate_entry_open(app, {10, 20, 30})
 	pad_frame(app)
-	d := &app.dial
+	d := &app.gate_entry
 	pad_tap(app, .A) // 0
 	pad_go(app, .Down)
 	pad_tap(app, .A) // one row down
@@ -1095,12 +1096,15 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect_value(t, d.count, 2)
 	for _ in 0 ..< 4 {pad_tap(app, .A)}
 	testing.expect_value(t, d.count, 6)
-	testing.expect(t, engine.overlay_is_open(&app.overlays, .Dial))
 	pad_tap(app, .A)
-	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Dial))
+	testing.expect_value(t, d.count, 7)
+	testing.expect(t, engine.overlay_is_open(&app.overlays, .Gate))
+	testing.expect_value(t, ui.focused_label(&app.ui), "Open")
+	pad_tap(app, .A)
+	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Gate))
 	m, decoded := protocol.decode_client(s.writer.buf[:], testkit.test_reg())
-	_, is_dial := m.(protocol.Dial)
-	testing.expect(t, decoded && is_dial, "no Dial sent")
+	_, is_open := m.(protocol.Open_Gate)
+	testing.expect(t, decoded && is_open, "no Open_Gate sent")
 	clear(&s.writer.buf)
 
 	// The chat: opened by D-pad Up, "hi" typed, sent by Start.

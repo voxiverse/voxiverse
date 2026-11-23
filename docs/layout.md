@@ -146,7 +146,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/dev` | Developer overlays and panels: the audio recorder and inspector, the F3 panels | `*.odin` |
 | `client/hud` | The in-game HUD: crosshair and hearts, hotbar, player list, item popup | `*.odin` |
 | `client/menu` | The game menu, the player menu, the inventory and statistics sections | `*.odin` |
-| `client/overlay` | The overlay stack's drawing and the dialogs: chat, death, dial, LAN, quit, toasts | `*.odin` |
+| `client/overlay` | The overlay stack's drawing and the dialogs: chat, death, the gate's address, LAN, quit, toasts | `*.odin` |
 | `client/prompt` | Button prompts: an action's glyph and the prompt bar | `*.odin` |
 | `client/screen` | The title, options, credits, universes, creation, ignite, multiplayer and loading screens | `*.odin` |
 | `client/engine` | The client's state and machinery: `App`, `Session`, the world copy, settings, input, prediction, sounds, the client side of a game (`Game`), and the state every feature of `App` holds | `*.odin` |

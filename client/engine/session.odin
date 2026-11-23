@@ -178,6 +178,7 @@ Session :: struct {
 	edit_timer:       f32, // seconds until a held button edits again
 	input_yaw:        f32, // the yaw of the last input predicted (the one an edit follows)
 	sounds:           [dynamic]Sound_Event, // this frame's; the App plays and clears them
+	gate_gathers:     [4]Gate_Gather, // gates opening in sight (gates.odin)
 	walked:           f32, // blocks on the ground since the last footstep
 	drop_repeat:      Drop_Repeat, // the drop key held (items.odin)
 	inventory:        game.Inventory, // as we predict it (items.odin)

@@ -26,6 +26,7 @@ layout(buffer_reference, std430) readonly buffer Scene {
 	vec4 figure;        // rgb: the least light a figure is drawn in; w: 1 graded, 0 not
 	vec4 grade;         // rgb: tint; w: saturation (1 as it is)
 	vec4 grade_more;    // x: contrast (1 as it is); y: vignette; zw: 1 / the target's size
+	vec4 gate;          // xyz: the middle of a gate's opening whose void is gathering; w: seconds since it began, < 0: none
 	ivec4 camera_chunk; // xyz: the camera's chunk; w: no block at this y or above is drawn (render/scene.odin's NO_CUT: none)
 	Cloud_Map cloud_map;
 };

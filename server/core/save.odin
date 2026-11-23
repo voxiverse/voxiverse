@@ -617,7 +617,7 @@ write_world_file :: proc(w: ^World) -> bool {
 	slice.sort_by(working[:], game.chunk_pos_less)
 	for pos in working {fmt.sbprintfln(&b, "working = %d,%d,%d", pos.x, pos.y, pos.z)}
 	for g in w.gates {
-		if g.phase != .Dead {continue} 	// (one dialing or open is not kept: it closes)
+		if g.phase != .Dead {continue} 	// (an open one is not kept: it closes)
 		lo := g.structure.lo
 		fmt.sbprintfln(&b, "gate.dead = %d,%d,%d,%d", lo.x, lo.y, lo.z, g.structure.rotation)
 	}

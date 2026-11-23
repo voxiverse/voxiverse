@@ -57,7 +57,7 @@ World :: struct {
 	idle_since:        u64, // the last tick someone was in it
 	touched:           [dynamic]game.Chunk_Pos, // chunks changed this tick (a stepped server's hash; heap)
 	kept:              [dynamic]Box, // boxes of chunks (not blocks) kept loaded whoever is near (world_keep; heap)
-	gates:             [dynamic]Gate, // not at rest: dialing, open or dead (gates.odin)
+	gates:             [dynamic]Gate, // not at rest: open or dead (gates.odin)
 	tops_pending:      map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
 	journal:           Journal, // who changed which block (journal.odin)
 	journal_resume:    Journal_Resume, // where its world.cfg says the journal ends

@@ -49,7 +49,7 @@ handle_global_keys :: proc(app: ^engine.App, input: ^ui.Input) {
 	overlay.chat_keys(app, input)
 	menu.chest_sync(app)
 	menu.player_menu_keys(app)
-	overlay.dial_keys(app)
+	overlay.gate_keys(app)
 	engine.game_screen_sync(app)
 	overlay.death_sync(app)
 }

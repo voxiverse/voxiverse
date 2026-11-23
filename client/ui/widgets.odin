@@ -78,13 +78,15 @@ button :: proc(
 	r: Rect,
 	disabled := false,
 	id := "", // what the id is made of when the text changes (the focus stays)
+	text_size: f32 = 0, // (0: the theme's font size)
 	loc := #caller_location,
 ) -> bool {
 	t := &ctx.theme
 	shown := display_label(text)
+	size := text_size if text_size > 0 else t.font_size
 	if disabled {
 		stroke_rect(ctx, r, t.border_width, with_alpha(t.border, t.disabled_alpha))
-		draw_text(ctx, r, shown, t.font_size, with_alpha(t.text, t.disabled_alpha), .Center)
+		draw_text(ctx, r, shown, size, with_alpha(t.text, t.disabled_alpha), .Center)
 		return false
 	}
 	it := interact(
@@ -102,7 +104,7 @@ button :: proc(
 	}
 	fill_rect(ctx, r, fill)
 	stroke_rect(ctx, r, t.border_width, t.border)
-	draw_text(ctx, r, shown, t.font_size, ink, .Center)
+	draw_text(ctx, r, shown, size, ink, .Center)
 	focus_ring(ctx, r, it)
 	return it.clicked
 }

@@ -24,7 +24,7 @@ Theme :: struct {
 	border_width:   f32,
 	opacity:        f32, // 0..1: multiplies the alpha of everything drawn
 	// Fills and inks the screens draw (defaults are the old literals).
-	slot_fill:      Color, // slots, dial cells, tooltips
+	slot_fill:      Color, // slots, the gate's address, tooltips
 	faint_border:   Color,
 	list_fill:      Color,
 	list_border:    Color,

@@ -611,7 +611,7 @@ save_new_dialog :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		w.mode = .List
 		return
 	}
-	if ui.button(ctx, engine.tr(.Dial_Cancel), cancel) {w.mode = .List}
+	if ui.button(ctx, engine.tr(.Cancel), cancel) {w.mode = .List}
 }
 
 // save_import_dialog asks for the exported file's path.
@@ -640,7 +640,7 @@ save_import_dialog :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		if why != "" {message_set(w, engine.tr(.Universes_Import_Failed, why))}
 		return
 	}
-	if ui.button(ctx, engine.tr(.Dial_Cancel), cancel) {w.mode = .List}
+	if ui.button(ctx, engine.tr(.Cancel), cancel) {w.mode = .List}
 }
 
 @(private = "file")
@@ -681,7 +681,7 @@ save_edit :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		universes_refresh(w)
 		return
 	}
-	if ui.button(ctx, engine.tr(.Dial_Cancel), cancel) {w.mode = .List}
+	if ui.button(ctx, engine.tr(.Cancel), cancel) {w.mode = .List}
 }
 
 @(private = "file")
@@ -726,7 +726,7 @@ save_delete_confirm :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		return
 	}
 	ui.default_focus(ctx)
-	if ui.button(ctx, engine.tr(.Dial_Cancel), cancel) {w.mode = .List}
+	if ui.button(ctx, engine.tr(.Cancel), cancel) {w.mode = .List}
 }
 
 // save_export writes the save called name as one file (default <saves>/<name>.vxu)

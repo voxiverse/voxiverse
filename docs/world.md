@@ -27,7 +27,8 @@ The address alone determines the world's kind (generator parameters, palette, gr
 length), so it is the same kind of world in any universe; the universe seed determines its
 terrain. The address also says what lives there (`worldgen.world_life`: life, how many peoples,
 how old their history; about 1 world in 8 with animals has peoples; the home world, Earth, has
-none): the dial shows it for the world a last symbol would reach, the creation screen for the
+none): the gate's address shows it for the world written (or one symbol short, for the symbol
+under the pointer), the creation screen for the
 home world. The home world is Earth, which has one fixed address in every universe
 (`EARTH_GALAXY`, the Milky Way's, and `EARTH_WORLD` in `common/starmap/address.odin`; a test pins
 them, they never change). Earth's terrain is seeded from its address alone (`terrain_seed` in
@@ -79,17 +80,26 @@ thick; nothing on the frame lights. They are rare structures, none within
 `worldgen.gate_distance` (2000) blocks of a world's middle. `/locate gate` places an admin in
 front of the nearest one.
 
-To use a gate, right-click its frame from within 8 blocks and pick seven symbols in the dial
-overlay. The symbols lock one by one (0.4 s each, shown nowhere on the gate) and the far
-world's gate, the one nearest its middle, locks with them; both ends open for 30 s, and
-walking into the horizon arrives at the dialed world's gate.
+To use a gate, right-click its frame from within 8 blocks: the gate's address overlay
+(`client/overlay/gate.odin`) shows the address being written as one line in a field, and a
+board of the 40 symbols below it, a row for each body and a column for each set of marks.
+Each symbol pressed is added to the address (none twice; Backspace or Erase takes the last
+back); once all seven are there the board takes no more, the line under the field says what
+lives on that world, and Open (or Enter) sends it (`protocol.Open_Gate`). The gate opens at
+once, and the far world's gate, the one nearest its middle, with it; both ends stay open for
+30 s, and walking into the opening arrives at the other world's gate.
 
-An open gate's horizon fills its opening at once (no burst, no fade). It is drawn by the
+An open gate's opening is filled with the void (`Gate_Horizon` blocks). It is drawn by the
 translucent pass (`water.frag`'s `portal`, marked by the mesher: `client/mesh`'s `PORTAL`)
 rather than from its texture: a dark void with depth, four sheets of small motes at growing
 depths behind the plane (so they slide against each other as the eye moves), each drifting
 and turning slowly at its own rate, a faint shimmer, and a thin flickering rim where it
-meets the frame. A closed gate's opening, and a dead gate's, is empty. Refusals are returned as notices. The server logs `gate dialed`.
+meets the frame. When a client sees the void appear (a block change, not a chunk arriving
+with the gate already open: `client/engine/gates.odin`), it gathers: over one second
+it swells from the opening's middle behind a bright front, the opening still clear beyond
+it, and the rim brightens as it comes (the scene's `gate`: the nearest gathering gate), and
+the gate sounds a low rising swell (`sfx.Gate_Sound.Open`). A closed gate's opening, and a
+dead gate's, is empty. Refusals are returned as notices. The server logs `gate opened`.
 
 A world may have a home gate (`worldgen.home_gate`): a gate standing in front of its spawn,
 its frame 8 blocks north of it (where a newcomer looks), or up to 16 where the land there is
@@ -97,8 +107,8 @@ not dry and smooth or another structure stands (`home_gate_place`). The generato
 spawn first, then stands the gate. A new universe whose game asks for it (`Config.home_gate`:
 the sandbox) gives its home world one. Travellers to a world with a home gate arrive there.
 
-A gate may be dead: its opening stays empty, dialling it says only that the gate is dark, and
-dialling its world from elsewhere finds nothing answering there. A new world's home gate
+A gate may be dead: its opening stays empty, opening it says only that the gate is dark, and
+opening a gate onto its world from elsewhere finds nothing answering there. A new world's home gate
 starts dead; `core.gate_wake` (a game's, when what wakes it is done) or `/gate wake`
 (`world.gate`: the nearest gate within 256 blocks) brings it to life, after which it is any
 gate; `/gate kill` makes a gate at rest dead again. Dead gates are saved in `world.cfg`; a

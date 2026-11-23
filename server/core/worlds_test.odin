@@ -506,7 +506,7 @@ test_a_game_sends_players_between_worlds :: proc(t: ^testing.T) {
 	testing.expect_value(t, trips.from[1], away)
 	testing.expect_value(t, trips.to[1], home)
 
-	// Through an open gate at the player's feet, as one dialed would be.
+	// Through an open gate at the player's feet, as one opened would be.
 	for _ in 0 ..< 3 {session_step(sess, false)}
 	feet := c.player.position
 	ring := worldgen.Structure {
@@ -525,7 +525,7 @@ test_a_game_sends_players_between_worlds :: proc(t: ^testing.T) {
 			outgoing = true,
 			to = away,
 			far = ring,
-			next_at = s.tick + 100,
+			close_at = s.tick + 100,
 		},
 	)
 	session_step(sess, false)

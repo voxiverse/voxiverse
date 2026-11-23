@@ -160,7 +160,7 @@ App :: struct {
 	launch:              string, // a game to play this frame in a world kept nowhere (its id, constant data: --game, a game page's Play): the frame starts it after the UI (play_game)
 	singleplayer:        Singleplayer_Screen, // the list of the games (client/screen/singleplayer.odin)
 	item_icons:          Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
-	dial:                Dial_View, // the dial overlay's (overlay_dial.odin)
+	gate_entry:          Gate_Entry, // the address being written on a gate (overlay/gate.odin)
 	quit:                bool,
 	quit_frames:         int, // frames drawn since quit, for screenshots asked before it (frame.odin)
 	frame_stats:         base.Frame_Stats,

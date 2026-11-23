@@ -12,9 +12,9 @@ import "common:protocol"
 import "common:starmap"
 import "common:worldgen"
 
-// The exit check over UDP: misdials are refused; a dialed gate opens,
-// alice walks through its horizon to the far world's gate, and once the
-// gates close she dials home from there and walks back.
+// The exit check over UDP: wrong addresses are refused; a gate opens,
+// alice walks through its opening to the far world's gate, and once the
+// gates close she opens one home from there and walks back.
 @(test)
 test_gates_over_the_network :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "net_gates"}, context.temp_allocator) or_else ""
@@ -121,9 +121,9 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	}
 	if !testing.expect(t, walk_up(t, alice, here), "alice never reached the gate") {return}
 
-	// Misdials: another galaxy, this very world, not a gate (and a symbol
-	// twice is not an address: no Dial decodes).
-	misdial :: proc(t: ^testing.T, c: ^Net_Client, d: protocol.Dial, why: string) {
+	// Refusals: another galaxy, this very world, not a gate (and a symbol
+	// twice is not an address: no Open_Gate decodes).
+	refused :: proc(t: ^testing.T, c: ^Net_Client, d: protocol.Open_Gate, why: string) {
 		before := len(c.notices)
 		net_send(c, d)
 		@(static) n: int
@@ -132,21 +132,21 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		testing.expectf(
 			t,
 			ok && strings.contains(c.notices[len(c.notices) - 1], why),
-			"misdial: %v",
+			"refused: %v",
 			c.notices[before:],
 		)
 	}
 	frame := worldgen.gate_at(here, 3, 5)
 	elsewhere := away
 	elsewhere.galaxy = starmap.address_derive(5).galaxy
-	misdial(t, alice, {frame, elsewhere}, "galaxy")
-	misdial(t, alice, {frame, home}, "own world")
-	misdial(t, alice, {frame - {0, 40, 0}, away}, "not a gate")
+	refused(t, alice, {frame, elsewhere}, "galaxy")
+	refused(t, alice, {frame, home}, "own world")
+	refused(t, alice, {frame - {0, 40, 0}, away}, "not a gate")
 
-	// Dial: the horizon forms; walk in.
+	// Open: the void fills the opening; walk in.
 	@(static) gate: worldgen.Structure
 	gate = here
-	net_send(alice, protocol.Dial{frame, away})
+	net_send(alice, protocol.Open_Gate{frame, away})
 	ok = net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return gate_seen(cs[0], gate, .Gate_Horizon)
 		}, 10)
@@ -173,14 +173,14 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		front,
 	)
 
-	// The gates close; she dials home from here and walks back.
+	// The gates close; she opens the gate home from here and walks back.
 	gate = there
 	ok = net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return len(cs[0].chunks) > 20 && gate_seen(cs[0], gate, .Air)
 		}, 15)
 	testing.expect(t, ok, "the far gate never closed")
 	if !testing.expect(t, walk_up(t, alice, there)) {return}
-	net_send(alice, protocol.Dial{worldgen.gate_at(there, 10, 5), home})
+	net_send(alice, protocol.Open_Gate{worldgen.gate_at(there, 10, 5), home})
 	ok = net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return gate_seen(cs[0], gate, .Gate_Horizon)
 		}, 10)
@@ -223,9 +223,9 @@ dead_gate_config :: proc(dir: string, home_gate := true) -> Config {
 	}
 }
 
-// A new universe's home gate stands dead in front of the spawn: dialling it
-// says only that it is dark, and dialling its world from elsewhere finds
-// nothing there. Woken, it dials and is travelled through as any gate.
+// A new universe's home gate stands dead in front of the spawn: opening it
+// says only that it is dark, and opening a gate onto its world finds
+// nothing there. Woken, it opens and is travelled through as any gate.
 @(test)
 test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "dead_gate"}, context.temp_allocator) or_else ""
@@ -268,7 +268,7 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 
 	// Dead: dark here, and nothing answers from elsewhere.
 	c.player.position = front
-	testing.expect_value(t, gate_dial(srv, c, {frame, away}), "the gate is dark")
+	testing.expect_value(t, gate_open(srv, c, {frame, away}), "the gate is dark")
 	testing.expect_value(t, len(w.gates), 1)
 	testing.expect_value(t, travel(srv, c, away), "")
 	far, has_far := worldgen.arrival_gate(&c.world.chunks.gen)
@@ -276,7 +276,7 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	c.player.position, _ = worldgen.gate_front(far)
 	testing.expect_value(
 		t,
-		gate_dial(srv, c, {worldgen.gate_at(far, 0, 5), w.address}),
+		gate_open(srv, c, {worldgen.gate_at(far, 0, 5), w.address}),
 		"nothing answers at that address",
 	)
 	testing.expect_value(t, len(c.world.gates), 0)
@@ -289,13 +289,13 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(w.gates), 0)
 	testing.expect(t, !gate_wake(w, frame - {0, 40, 0}), "woke what is not a gate")
 
-	// Alive: dialled, and walked through to the far gate.
+	// Alive: opened, and walked through to the far gate.
 	c.player.position = front
-	testing.expect_value(t, gate_dial(srv, c, {frame, away}), "")
+	testing.expect_value(t, gate_open(srv, c, {frame, away}), "")
 	testing.expect(t, !gate_kill(w, frame), "a gate in use killed")
 	Walk :: struct {
 		c:       ^Client,
-		horizon: [3]f64,
+		opening: [3]f64,
 		to:      starmap.Address,
 	}
 	centre := worldgen.gate_at(home, 5, 1)
@@ -303,7 +303,7 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	through :: proc(data: rawptr) -> bool {
 		walk := (^Walk)(data)
 		if walk.c.world.address == walk.to {return true}
-		walk.c.player.position, walk.c.landing = walk.horizon, nil // (in the opening)
+		walk.c.player.position, walk.c.landing = walk.opening, nil // (in the opening)
 		return false
 	}
 	_, through_ok := harness_step_until(h, through, &walk, 20 * game.TICK_RATE)

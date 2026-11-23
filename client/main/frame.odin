@@ -388,21 +388,19 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			)
 			fog := f32(s.welcome.view_radius * game.CHUNK_SIZE)
 			sky := render.look_sky(s.game.look, game.time_of_day(s.clock))
-			scene = render.scene_upload(
-				&app.scenes,
-				g,
-				render.scene_make(
-					camera,
-					sky,
-					fog,
-					s.cloud_drift,
-					engine.eye_in_water(s),
-					app.settings.brightness,
-					app.settings.clouds,
-					s.game.look,
-					{width, height},
-				),
+			made := render.scene_make(
+				camera,
+				sky,
+				fog,
+				s.cloud_drift,
+				engine.eye_in_water(s),
+				app.settings.brightness,
+				app.settings.clouds,
+				s.game.look,
+				{width, height},
 			)
+			made.gate = engine.gate_gather_scene(s, camera.chunk, s.view.position)
+			scene = render.scene_upload(&app.scenes, g, made)
 			engine.world_debug_lines(app)
 			engine.avatars_draw(
 				s,

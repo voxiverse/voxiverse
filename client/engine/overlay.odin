@@ -8,7 +8,7 @@ Overlay :: enum u8 {
 	Player_Menu, // the player menu: the inventory and the statistics (menu_player.odin)
 	Console,
 	Quit_Dialog,
-	Dial, // a gate's symbols (overlay_dial.odin)
+	Gate, // a gate's address (overlay/gate.odin)
 	Audio_Inspector, // F8, dev builds: the audio freeze and solo (dev_audio_inspector.odin)
 	Consent, // the one-time question about sharing play data (telemetry.odin)
 	Open_To_LAN, // the game menu's dialog (overlay_lan.odin)
@@ -40,7 +40,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Player_Menu = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Console = {takes = {.Keyboard, .Mouse}},
 	.Quit_Dialog = {takes = {.Keyboard, .Mouse}},
-	.Dial = {takes = {.Keyboard, .Mouse}, in_game = true},
+	.Gate = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Audio_Inspector = {takes = {.Mouse}, in_game = true}, // the game runs on
 	.Consent = {takes = {.Keyboard, .Mouse}},
 	.Open_To_LAN = {takes = {.Keyboard, .Mouse, .World}, in_game = true},

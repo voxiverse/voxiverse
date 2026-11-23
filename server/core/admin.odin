@@ -458,8 +458,8 @@ admin_locate :: proc(s: ^Server, c: ^Client, args_in: []string) -> bool {
 			return true
 		}
 		if kind == .Gate {
-			// In front of it, on its platform, looking at its ring's foot
-			// (right-click dials).
+			// In front of it, on its platform, looking at its opening's foot
+			// (right-click opens it).
 			front, yaw := worldgen.gate_front(st)
 			c.player.flying = false
 			land(s, c, front, {yaw + math.PI, GATE_LOOK_PITCH}, .Exact)
@@ -467,7 +467,7 @@ admin_locate :: proc(s: ^Server, c: ^Client, args_in: []string) -> bool {
 				s,
 				c,
 				fmt.tprintf(
-					"gate at %d %d %d (right-click it to dial)",
+					"gate at %d %d %d (right-click it to write an address)",
 					st.lo.x,
 					st.lo.y,
 					st.lo.z,

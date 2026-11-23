@@ -29,6 +29,7 @@ Sound_Kind :: enum u8 {
 	Hit, // the hit marker's
 	Hit_Head,
 	Reload,
+	Gate_Open, // a gate's void gathering (gates.odin)
 }
 
 Sound_Event :: struct {
@@ -56,6 +57,7 @@ Sound_Bank :: struct {
 	player:       [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
 	creature:     [game.Entity_Voice][sfx.Creature_Sound][sfx.VARIANTS]audio.Sound_Id, // (none for the voice None)
 	blast:        [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
+	gate:         [sfx.Gate_Sound][sfx.VARIANTS]audio.Sound_Id,
 	gun:          [sfx.Gun_Sound][sfx.VARIANTS]audio.Sound_Id,
 	samples:      [dynamic][]f32, // owned
 }
@@ -105,6 +107,9 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	}
 	for x in sfx.Gun_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.gun[x][v] = add(b, m, sfx.gun_sound(x, v), fmt.tprintf("gun.%v.%d", x, v))}
+	}
+	for x in sfx.Gate_Sound {
+		for v in 0 ..< sfx.VARIANTS {b.gate[x][v] = add(b, m, sfx.gate_sound(x, v), fmt.tprintf("gate.%v.%d", x, v))}
 	}
 }
 
@@ -258,6 +263,8 @@ sounds_play :: proc(
 			range = 4 * SOUND_RANGE // explosions carry
 		case .Shot_Pistol, .Shot_Rifle, .Shot_Sniper:
 			range = 3 * SOUND_RANGE // and so do shots
+		case .Gate_Open:
+			range = 2 * SOUND_RANGE // a gate opening, further than a step
 		}
 		gain := audio.spatial_gain(
 			{f32(d.x), f32(d.y), f32(d.z)},
@@ -287,6 +294,17 @@ sounds_play :: proc(
 				m,
 				{
 					sound = b.creature[e.voice][.Die][variant],
+					gain = gain,
+					pitch = pitch,
+					bus = .World,
+					cutoff = cutoff,
+				},
+			)
+		case .Gate_Open:
+			audio.play(
+				m,
+				{
+					sound = b.gate[.Open][variant],
 					gain = gain,
 					pitch = pitch,
 					bus = .World,

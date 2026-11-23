@@ -46,8 +46,8 @@ Block :: enum u16 {
 	Glass,
 	// Gates: found, never made or broken.
 	Gate_Ring,
-	Gate_Chevron, // dark
-	Gate_Chevron_Lit, // locked while dialing, and while open
+	Gate_Chevron, // (the ring gates before; left in chunks saved with them)
+	Gate_Chevron_Lit, // lit (the ring gates before; left in chunks saved with them)
 	Gate_Horizon, // the open gate's surface: walking in travels
 	Wool, // white
 	// Farming: tilled ground, and wheat in eight stages (block states,

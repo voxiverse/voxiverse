@@ -240,14 +240,14 @@ apply_block :: proc(s: ^Session, g: protocol.Received) {
 	base.profile_scope("apply block change")
 	v := (^protocol.Block_Record)(g.value)
 	p := protocol.key_block(g.key)
-	if !v.heard {
-		world_set_block(&s.world, p, game.Block(v.block)) // the world's own changes (flowing water): quietly
-		return
-	}
-	// Someone else's edit: heard where it happened.
 	old, _ := world_block(&s.world, p)
 	block := game.Block(v.block)
-	if world_set_block(&s.world, p, block) && old != block {edit_sound(s, p, old, block)}
+	changed := world_set_block(&s.world, p, block) && old != block
+	// A gate opening: its void gathers (gates.odin).
+	if changed && block == .Gate_Horizon {gate_void_appeared(s, p)}
+	// The world's own changes (flowing water) are quiet; someone else's edit
+	// is heard where it happened.
+	if changed && v.heard {edit_sound(s, p, old, block)}
 }
 
 // apply_machine keeps what a machine shows, by its chunk (machine_shown reads it).

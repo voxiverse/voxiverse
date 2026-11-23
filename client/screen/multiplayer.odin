@@ -370,7 +370,7 @@ address_form :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		join_from_screen(app, address, string(m.password[:]))
 		return
 	}
-	if ui.button(ctx, engine.tr(.Dial_Cancel), ui.cut_right(&row, half)) {m.mode = .List}
+	if ui.button(ctx, engine.tr(.Cancel), ui.cut_right(&row, half)) {m.mode = .List}
 }
 
 // server_save keeps address in the list (on the disk too) and asks it, and selects it.
@@ -427,7 +427,7 @@ name_prompt :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		engine.settings_changed(app)
 		m.mode = .List
 	}
-	if ui.button(ctx, engine.tr(.Dial_Cancel), ui.cut_right(&row, half)) {multiplayer_back(app)}
+	if ui.button(ctx, engine.tr(.Cancel), ui.cut_right(&row, half)) {multiplayer_back(app)}
 }
 
 @(private = "file")

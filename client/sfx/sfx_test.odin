@@ -42,6 +42,9 @@ test_every_sound_is_well_formed :: proc(t: ^testing.T) {
 	for x in Blast_Sound {
 		for v in 0 ..< VARIANTS {check(t, "blast sound", blast_sound(x, v, context.temp_allocator), levels)}
 	}
+	for x in Gate_Sound {
+		for v in 0 ..< VARIANTS {check(t, "gate sound", gate_sound(x, v, context.temp_allocator), levels)}
+	}
 	for voice in game.Entity_Voice {
 		if voice == .None {continue}
 		for c in Creature_Sound {

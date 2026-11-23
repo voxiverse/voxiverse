@@ -59,7 +59,7 @@ lan_dialog_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		if d.started {ui.label(ctx, engine.tr(.Lan_Opening), ui.next(ctx), .Center, t.text_muted)}
 		if ui.button(
 			ctx,
-			engine.tr(.Dial_Cancel),
+			engine.tr(.Cancel),
 			ui.next(ctx),
 		) {engine.overlay_close(&app.overlays, .Open_To_LAN)}
 	} else {

@@ -143,7 +143,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 - `world_keep :: proc(w: ^World, area: Box)`: the chunks that hold the blocks of area stay loaded in w whoever is near (and so simulated, as every loaded chunk is), until world_release; those not loaded are asked for at once and every tick until they are (keep_request).
 - `world_ready :: proc(w: ^World, area: Box) -> bool`: every chunk that holds the blocks of area is loaded and generated, so a bulk_edit of area changes all of it.
 - `world_release :: proc(w: ^World)`: w no longer keeps any area; its chunks go as no player wants them.
-- `gate_wake :: proc(w: ^World, p: game.Block_Pos) -> bool`: gate_wake brings the dead gate a block of which is at p (its frame, its platform) to life: from now on it is dialled and arrived at as any gate.
+- `gate_wake :: proc(w: ^World, p: game.Block_Pos) -> bool`: gate_wake brings the dead gate a block of which is at p (its frame, its platform) to life: from now on it is opened and arrived at as any gate.
 - `gate_kill :: proc(w: ^World, p: game.Block_Pos) -> bool`: gate_kill makes the gate a block of which is at p dead (gate_wake's reverse).
 - `under_sky :: proc(w: ^World, p: game.Block_Pos) -> bool`: nothing stands above the block p (the sky's light reaches it).
 - `block_at :: proc(w: ^World, p: game.Block_Pos) -> (game.Block, bool)`: the block at p in w; false while its chunk is not loaded (or still generating), and the block is then .Air.

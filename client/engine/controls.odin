@@ -23,7 +23,7 @@ Bindings :: struct {
 	sneak:           platform.Key,
 	sprint:          platform.Key,
 	attack:          platform.Key, // break the aimed block, hit
-	use:             platform.Key, // place, use the held item, dial a gate
+	use:             platform.Key, // place, use the held item, use a gate
 	pick:            platform.Key, // pick the aimed block into the hand
 	inventory:       platform.Key,
 	stats:           platform.Key, // open the statistics
@@ -112,7 +112,7 @@ BINDING_VARS := [?]base.Var {
 	{
 		field = "use",
 		label = "Use / Place",
-		help = "Place a block, use the item in your hand, or dial a gate.",
+		help = "Place a block, use the item in your hand, or open a gate.",
 	},
 	{field = "pick", label = "Pick Block", help = "Take the block you aim at into your hand."},
 	{
@@ -303,7 +303,7 @@ PAD_BINDING_VARS := [?]base.Var {
 	{field = "sneak", help = "pad: sneak."},
 	{field = "sprint", help = "pad: run faster."},
 	{field = "attack", help = "pad: break the block you aim at, or hit."},
-	{field = "use", help = "pad: place a block, use the item in hand, dial a gate."},
+	{field = "use", help = "pad: place a block, use the item in hand, open a gate."},
 	{field = "pick", help = "pad: take the aimed block into your hand."},
 	{field = "inventory", help = "pad: open the inventory."},
 	{field = "player_menu", help = "pad: open the player menu."},

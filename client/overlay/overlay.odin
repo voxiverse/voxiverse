@@ -121,8 +121,8 @@ draw_overlays :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			console.console_ui(app, ctx, top)
 		case .Quit_Dialog:
 			quit_dialog(app, ctx)
-		case .Dial:
-			dial_ui(app, ctx, top)
+		case .Gate:
+			gate_ui(app, ctx, top)
 		case .Audio_Inspector:
 			dev.audio_inspector_ui(app, ctx)
 		case .Consent:

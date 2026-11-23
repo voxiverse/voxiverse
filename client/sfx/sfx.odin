@@ -46,6 +46,10 @@ Blast_Sound :: enum u8 {
 	Boom, // an explosion: a deep thump, a rumble, crackle
 }
 
+Gate_Sound :: enum u8 {
+	Open, // a gate's void gathering: a low swell, rising
+}
+
 Gun_Sound :: enum u8 {
 	Pistol, // a sharp crack and a short thump
 	Rifle, // a tighter, higher crack
@@ -381,7 +385,44 @@ blast_sound :: proc(x: Blast_Sound, variant: int, allocator := context.allocator
 	return finish(&s, 0.95, allocator)
 }
 
+// gate_sound: a gate's sounds.
+gate_sound :: proc(x: Gate_Sound, variant: int, allocator := context.allocator) -> []f32 {
+	s := Synth {
+		rng = seed(5150 + u32(x) * 131 + u32(variant) * 7),
+	}
+	r := rand_range(&s.rng, 0.95, 1.05)
+	switch x {
+	case .Open:
+		swell(&s, 0.9, 70 * r, 140 * r, 1)
+	}
+	return finish(&s, 0.8, allocator)
+}
+
 // --- Synthesis -------------------------------------------------------------
+
+// swell: a low tone with a fifth above it and a band of noise round them,
+// all rising from lo to hi Hz over seconds and growing louder until a short
+// fall at the end.
+@(private)
+swell :: proc(s: ^Synth, seconds, lo, hi, gain: f32) {
+	n := min(int(seconds * RATE), len(s.buf))
+	f := bandpass(lo * 4, 0.8)
+	phase: f32
+	for i in 0 ..< n {
+		u := f32(i) / f32(n)
+		hz := lo * math.pow(hi / lo, u)
+		if i % 32 == 0 {
+			g := bandpass(hz * 4, 0.8)
+			f.b0, f.b1, f.b2, f.a1, f.a2 = g.b0, g.b1, g.b2, g.a1, g.a2
+		}
+		phase += hz / RATE
+		voice := 0.6 * math.sin(math.TAU * phase) + 0.25 * math.sin(math.TAU * phase * 1.5)
+		air := biquad(&f, rand_range(&s.rng, -1, 1))
+		env := u * u * min((1 - u) / 0.15, 1)
+		s.buf[i] += (voice + 0.9 * air) * env * gain
+	}
+	s.len = max(s.len, n)
+}
 
 // hiss: noise through a band rising from lo to hi Hz over seconds, fading.
 @(private)

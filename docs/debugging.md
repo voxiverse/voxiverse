@@ -259,7 +259,7 @@ light and mesh (the client's), as the average and the slowest 1%.
 ## Overlays
 
 Every in-game panel is an overlay on a single stack (`client/engine/overlay.odin`): the game
-menu, Options, tuning, chat, the player menu, console, quit dialog, gate dial, audio
+menu, Options, tuning, chat, the player menu, console, quit dialog, gate address, audio
 inspector, consent question, Open to LAN and death. Each overlay declares whether it takes the
 keyboard, frees the mouse, or pauses the world. The top overlay receives the keys, the focus
 and Escape.

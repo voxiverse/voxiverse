@@ -23,7 +23,7 @@ quit_dialog :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.default_focus(ctx) // (never quits by mistake)
 	if ui.button(
 		ctx,
-		engine.tr(.Dial_Cancel),
+		engine.tr(.Cancel),
 		ui.next(ctx, btn_w),
 	) {engine.overlay_close(&app.overlays, .Quit_Dialog)}
 }

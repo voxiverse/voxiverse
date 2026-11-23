@@ -17,7 +17,7 @@ One word per thing, in code, docs and UI alike. Where the code uses another word
 | Symbol | One of the 40 letters addresses are written in, our own: one of five bodies with any of three marks, drawn by code. In text, a rune of Unicode's Private Use Area (U+E000 on) that the UI draws itself; outside the game an address is shared in Latin letters | `starmap.symbol_rune`, `starmap.symbol_strokes` (`common/starmap/address.odin`) |
 | Address | A world's name in a universe: a galaxy (eight different symbols, in order) and a world in it (seven different symbols, in order). Written world first; the galaxy left out means the gate's own. The address alone decides what kind of world it is (generator parameters, rules); the universe seed adds the exact terrain. The same address is the same kind of world in any universe | `game.Address`, `world_kind` |
 | Galaxy | The first part of an address: worlds sharing it are in the same galaxy | `Address.galaxy` |
-| Gate | A structure that dials addresses and carries characters to the gate of the world dialed. "Stargate" is not a name we use | `server/core/gates.odin`, `common/worldgen/gates.odin` |
+| Gate | A slab doorway that opens onto an address written on it and carries characters to the gate of that world. "Stargate" is not a name we use, nor "dial", "chevron" or "horizon" in what players read | `server/core/gates.odin`, `common/worldgen/gates.odin` |
 | Spawn | Where a world receives arrivals with no place of their own | `core.World_Spawn` |
 | Landing | The step every arrival goes through: held still until the blocks are loaded, then stood where it fits | `core.land`, `game.landing_spot` |
 
@@ -42,7 +42,7 @@ One word per thing, in code, docs and UI alike. Where the code uses another word
 | Join / leave | A client connects to a universe as a character, or disconnects |
 | Arrive / depart | A character enters or leaves a world: on joining, on leaving, and travelling |
 | Travel | Moving a character from one world to another in the same universe: through a gate, or the `travel` command; never between universes |
-| Dial | Entering an address on a gate, symbol by symbol, in order |
+| Open (a gate) | Writing an address on a gate and sending it: the gate opens at once, its void gathering in its opening |
 | Teleport | Moving within one world (tp, home, warp, spawn, back) |
 | Tick, frame | The server's fixed step (30 per second, `game.TICK_RATE`); the client's drawn frame |
 

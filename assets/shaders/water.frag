@@ -31,14 +31,23 @@ vec2 hash22(vec2 p) {
 	return fract((q.xx + q.yz) * q.zy);
 }
 
+// GATE_GATHER: seconds the void takes to gather in an opening gate
+// (client/engine/gates.odin's GATE_GATHER_SECONDS); GATE_GATHER_REACH:
+// blocks from the opening's middle its front has reached by then (past the
+// opening's far corners).
+const float GATE_GATHER = 1.0;
+const float GATE_GATHER_REACH = 5.0;
+
 // portal: a gate's open surface at pos, n its normal: a dark void with depth
-// behind the plane. Sheets of small motes lie at growing depths along the
-// eye's ray, so they slide against each other as the eye moves; each drifts
-// and turns slowly at its own rate, the void shimmers faintly, and a thin
-// restless rim flickers along the sides of the cell that meet the frame
-// (sides: -h, +h, -y, +y as bits, h the plane's horizontal axis). Its own
-// light: neither lit nor shaded by the world's.
-vec3 portal(Scene s, vec3 pos, vec3 n, uint sides) {
+// behind the plane, and its alpha. Sheets of small motes lie at growing
+// depths along the eye's ray, so they slide against each other as the eye
+// moves; each drifts and turns slowly at its own rate, the void shimmers
+// faintly, and a thin restless rim flickers along the sides of the cell that
+// meet the frame (sides: -h, +h, -y, +y as bits, h the plane's horizontal
+// axis). Its own light: neither lit nor shaded by the world's. While the
+// gate is opening (s.gate), the void swells from the opening's middle behind
+// a bright front, still clear beyond it, and the rim brightens as it comes.
+vec4 portal(Scene s, vec3 pos, vec3 n, uint sides) {
 	vec3 view = normalize(pos - s.camera.xyz);
 	if (dot(n, view) < 0.0) n = -n; // (into the depth, whichever side the eye is on)
 	float facing = max(dot(n, view), 0.25);
@@ -72,15 +81,27 @@ vec3 portal(Scene s, vec3 pos, vec3 n, uint sides) {
 	if ((sides & 8u) != 0u) edge = min(edge, 1.0 - f.y);
 	float flicker = 0.5 + 0.5 * sin(t * 3.1 + (p.x + p.y) * 4.0) * sin(t * 1.9 - p.y * 7.0);
 	float wobble = 0.05 * sin(t * 2.3 + (p.x + p.y) * 5.0);
-	color += (1.0 - smoothstep(0.0, 0.16 + wobble, edge)) * (0.35 + 0.65 * flicker) * vec3(0.2, 0.26, 0.5);
-	return color;
+	vec3 rim = (1.0 - smoothstep(0.0, 0.16 + wobble, edge)) * (0.35 + 0.65 * flicker) * vec3(0.2, 0.26, 0.5);
+	float d = length(pos - s.gate.xyz);
+	if (s.gate.w < 0.0 || s.gate.w >= GATE_GATHER || d >= GATE_GATHER_REACH) return vec4(color + rim, 0.95);
+	// Opening: what is drawn over the world behind is the void inside the
+	// front at 0.95, the front's glow and the rim added on top.
+	float k = s.gate.w / GATE_GATHER;
+	float front = GATE_GATHER_REACH * (1.0 - (1.0 - k) * (1.0 - k)); // fast, then easing
+	float inside = 1.0 - smoothstep(front - 0.6, front, d);
+	float glow = exp(-4.0 * abs(d - front)) * (1.0 - k * k);
+	float bright = smoothstep(0.0, 0.4, k) * (1.0 + 1.2 * (1.0 - k));
+	vec3 over = color * 0.95 * inside + rim * bright + glow * vec3(0.35, 0.45, 0.9);
+	float alpha = max(0.95 * inside, min(1.0, 1.5 * max(over.r, max(over.g, over.b))));
+	return vec4(over / max(alpha, 1e-3), alpha);
 }
 
 void main() {
 	vec3 n = normalize(cross(dFdx(in_pos), dFdy(in_pos))); // (outside the branch: derivatives)
 	if ((in_portal & 1u) != 0u) {
-		vec3 color = fog_mix(push.scene, portal(push.scene, in_pos, n, in_portal >> 1), in_pos - push.scene.camera.xyz);
-		out_color = vec4(graded(push.scene, color, gl_FragCoord.xy), 0.95);
+		vec4 surface = portal(push.scene, in_pos, n, in_portal >> 1);
+		vec3 color = fog_mix(push.scene, surface.rgb, in_pos - push.scene.camera.xyz);
+		out_color = vec4(graded(push.scene, color, gl_FragCoord.xy), surface.a);
 		return;
 	}
 	vec4 texel = texture(sampler2DArray(array_textures[push.textures], samplers[push.sampler_id]), in_uvw);

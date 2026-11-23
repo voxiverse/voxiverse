@@ -222,7 +222,7 @@ loading_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.default_focus(ctx)
 	if ui.button(
 		ctx,
-		engine.tr(.Dial_Cancel),
+		engine.tr(.Cancel),
 		ui.rect_center(ui.cut_top(&column, t.row_height), 200, t.row_height),
 	) {
 		engine.leave_world(app)

@@ -72,7 +72,7 @@ Config :: struct {
 	conditions:            netcode.Conditions, // simulated loss etc. on what the server sends (tests)
 	spawn:                 Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
 	world_idle:            f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
-	gate_open:             f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
+	gate_open:             f64, // seconds an opened gate stays open (0: GATE_OPEN_TICKS)
 	pack_watch:            bool, // development: reload the packs when their files change (pack_reload.odin)
 	no_natural_spawns:     bool, // none appear by themselves (benchmarks: the same work every run)
 	net:                   ^netcode.Simnet, // listen on this simulated network, not UDP (needs stepped; no conditions: the network's are the only ones)
@@ -1198,8 +1198,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		chat_say(s, c, v.text)
 	case protocol.Inventory_Request:
 		inventory_request(s, c, v)
-	case protocol.Dial:
-		notice_if(s, c, gate_dial(s, c, v))
+	case protocol.Open_Gate:
+		notice_if(s, c, gate_open(s, c, v))
 	case protocol.Edit:
 		queue_action(s, c, v)
 	case protocol.Attack:

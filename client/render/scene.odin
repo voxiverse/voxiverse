@@ -33,6 +33,7 @@ Scene :: struct {
 	figure:        [4]f32, // rgb: the least light a figure is drawn in; w: 1 graded (grade, grade_more), 0 not
 	grade:         [4]f32, // rgb: the picture's tint; w: its saturation (1 as it is)
 	grade_more:    [4]f32, // x: contrast (1 as it is); y: vignette (0 none); zw: 1 / the target's size in pixels
+	gate:          [4]f32, // xyz: the middle of a gate's opening whose void is gathering (from the camera chunk's origin); w: seconds since it began, < 0: none
 	camera_chunk:  [4]i32, // xyz: the camera's chunk (what "from the camera chunk's origin" is from); w: the world is cut at this y (NO_CUT: not)
 	cloud_map:     u64, // address of the Cloud_Map (set by scene_upload)
 	_:             u64,
@@ -210,6 +211,7 @@ scene_make :: proc(
 		figure = {figure.r, figure.g, figure.b, 1 if look_graded(look) else 0},
 		grade = {tint.r, tint.g, tint.b, 1 + g.saturation},
 		grade_more = {1 + g.contrast, g.vignette, inverse.x, inverse.y},
+		gate = {0, 0, 0, -1},
 		camera_chunk = {
 			camera.chunk.x,
 			camera.chunk.y,

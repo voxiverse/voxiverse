@@ -58,9 +58,9 @@ Packs_Ready :: struct {
 	content: u64,
 }
 
-// Dial: dial the gate a block of which is at gate, to address (its galaxy
-// the gate's own, for now).
-Dial :: struct {
+// Open_Gate: open the gate a block of which is at gate onto address (its
+// galaxy the gate's own, for now).
+Open_Gate :: struct {
 	gate:    game.Block_Pos,
 	address: starmap.Address,
 }
@@ -338,7 +338,7 @@ Client_Message :: union {
 	Inventory_Request,
 	Proof,
 	Choose,
-	Dial,
+	Open_Gate,
 	Use_Entity,
 	Stats_Request,
 	Telemetry_Report,
@@ -607,7 +607,7 @@ Client_Kind :: enum u8 {
 	Inventory_Request,
 	Proof,
 	Choose,
-	Dial,
+	Open_Gate,
 	Use_Entity,
 	Stats_Request,
 	Telemetry_Report,
@@ -734,8 +734,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "game_request"
 		case u8(Client_Kind.Choose):
 			return "choose"
-		case u8(Client_Kind.Dial):
-			return "dial"
+		case u8(Client_Kind.Open_Gate):
+			return "open_gate"
 		}
 	} else {
 		switch kind {
@@ -820,8 +820,8 @@ encode_client :: proc(w: ^game.Writer, m: Client_Message) {
 	case Choose:
 		game.write_u8(w, u8(Client_Kind.Choose))
 		game.write_string(w, v.character)
-	case Dial:
-		game.write_u8(w, u8(Client_Kind.Dial))
+	case Open_Gate:
+		game.write_u8(w, u8(Client_Kind.Open_Gate))
 		write_block_pos(w, v.gate)
 		write_address(w, v.address)
 	case Input:
@@ -1104,8 +1104,8 @@ decode_client :: proc(data: []u8, reg: ^game.Registry = nil) -> (m: Client_Messa
 		m = Choose {
 			character = game.read_string(&r, game.MAX_NAME_LENGTH),
 		}
-	case u8(Client_Kind.Dial):
-		d := Dial {
+	case u8(Client_Kind.Open_Gate):
+		d := Open_Gate {
 			gate = read_block_pos(&r),
 		}
 		d.address = read_address(&r)

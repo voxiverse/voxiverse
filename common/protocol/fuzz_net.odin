@@ -187,7 +187,7 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	case 12:
 		m = Choose{"Alex"}
 	case 13:
-		g: Dial
+		g: Open_Gate
 		g.gate = edge_pos(rng)
 		for &b in g.address.galaxy {b = u8(base.rng_int_max(rng, starmap.SYMBOLS))}
 		for &b in g.address.world {b = u8(base.rng_int_max(rng, starmap.SYMBOLS))}

@@ -11,12 +11,12 @@ import "common:game"
 // a few blocks in front of its spawn (Params.home_gate: a new sandbox
 // universe's home world; home_gate_place). Travellers to a world arrive at
 // its home gate, or else at its gate nearest the middle (arrival_gate).
-// The server opens them (server/core/gates.odin): horizon blocks fill the
-// opening. Nothing on the frame lights.
+// The server opens them (server/core/gates.odin): the void (Gate_Horizon
+// blocks) fills the opening. Nothing on the frame lights.
 //
 // The box, the platform and the front are those of the ring gates the
 // frame replaced, and the opening lies wholly inside the ring's: a world
-// saved with the old ring still opens a horizon only where it had air.
+// saved with the old ring still fills with the void only where it had air.
 
 GATE_SIZE :: [2]i32{11, 10} // across, up (the frame's plane), on a platform
 GATE_DEPTH :: 3
@@ -36,7 +36,7 @@ gate_plane :: proc(rotation: u8, l: [3]i32) -> (u, v, w: i32) {
 }
 
 // gate_cell: the block at (u, v) of the frame's plane: the frame, the
-// opening (the horizon, when open), or outside. The opening is three wide
+// opening (the void, when open), or outside. The opening is three wide
 // and seven high, one more cell in its head; the frame stands two thick
 // round it (a slab's width each side, a lintel above), its top corners cut.
 Gate_Cell :: enum u8 {
@@ -70,7 +70,7 @@ gate_at :: proc(s: Structure, u, v: i32) -> game.Block_Pos {
 	return s.lo + {u, v, 1}
 }
 
-// gate_inside appends the cells of s's opening (its horizon, when open).
+// gate_inside appends the cells of s's opening (its void, when open).
 gate_inside :: proc(s: Structure, out: ^[dynamic]game.Block_Pos) {
 	for v in i32(1) ..< GATE_SIZE.y {
 		for u in i32(0) ..< GATE_SIZE.x {
