@@ -5,6 +5,8 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
+import "common:game"
+import "common:starmap"
 import "common:worldgen"
 import "games:sandbox"
 import "server:core"
@@ -263,4 +265,57 @@ test_town_says_a_world_off_earth_has_none :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, playtest.told(rig, TOWN_NOT_EARTH), "not told the world is not Earth")
 	testing.expect(t, world_of(s.home).economy == nil, "an economy made off Earth")
+}
+
+// On Earth (a universe on the planet), whether a column is dry land is read from the land the
+// engine makes there, whose seed is Earth's address's, not the universe's: a column of the
+// sea that the universe's seed would call land is not where a player taken to a town lands.
+@(test)
+test_dry_land_reads_earths_land :: proc(t: ^testing.T) {
+	h := new(core.Harness)
+	defer free(h)
+	config := core.Config {
+		game        = GAME,
+		seed        = 33,
+		earth       = true,
+		view_radius = 2,
+		view_height = 1,
+		max_players = 1,
+		rules       = game.rules_still(),
+	}
+	if !testing.expect(t, core.harness_start(h, config)) {return}
+	defer core.harness_stop(h)
+	w := h.srv.home
+	params := w.params
+	earth := i64(starmap.address_hash(w.address))
+	if !testing.expect(t, w.address == starmap.earth_address() && earth != w.seed) {return}
+	// The sea's columns near the spawn that the universe's seed would call land.
+	sp := w.spawn.position
+	found: [dynamic][2]i32
+	defer delete(found)
+	for dz := i32(-1536); dz <= 1536 && len(found) < 4; dz += 16 {
+		for dx := i32(-1536); dx <= 1536 && len(found) < 4; dx += 16 {
+			x, z := i32(sp.x) + dx, i32(sp.z) + dz
+			truth := worldgen.column_at(&params, earth, x, z)
+			other := worldgen.column_at(&params, w.seed, x, z)
+			if truth.height < f32(params.sea_level) - 2 &&
+			   other.height >= f32(params.sea_level) + 2 {
+				append(&found, [2]i32{x, z})
+			}
+		}
+	}
+	if !testing.expect(t, len(found) > 0, "no column the two seeds disagree on") {return}
+	for at in found {
+		// The world's own blocks: water there.
+		area := core.Box{{at.x, params.sea_level - 2, at.y}, {at.x, params.sea_level, at.y}}
+		core.world_keep(w, area)
+		for _ in 0 ..< 600 {
+			if core.world_ready(w, area) {break}
+			core.harness_step(h)
+		}
+		b, loaded := core.block_at(w, {at.x, params.sea_level - 1, at.y})
+		testing.expectf(t, loaded && b == .Water, "%v: %v under the sea's top", at, b)
+		testing.expectf(t, !dry_land(w, at.x, at.y), "%v, the sea, is dry land", at)
+		core.world_release(w)
+	}
 }

@@ -327,7 +327,7 @@ town_landing :: proc(w: ^core.World, tw: sandbox.Town) -> (x, z: i32, ok: bool) 
 // river covers it.
 dry_land :: proc(w: ^core.World, x, z: i32) -> bool {
 	params := w.params
-	c := worldgen.column_at(&params, w.seed, x, z)
+	c := worldgen.column_at(&params, terrain_seed(w), x, z)
 	#partial switch c.biome {
 	case .Ocean, .Frozen_Ocean, .River:
 		return false

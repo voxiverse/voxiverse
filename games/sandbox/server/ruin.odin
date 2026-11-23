@@ -7,7 +7,6 @@ import "core:slice"
 
 import "common:base"
 import "common:game"
-import "common:starmap"
 import "common:wave"
 import "common:worldgen"
 import "games:sandbox"
@@ -535,13 +534,6 @@ ruin_site :: proc(w: ^core.World) -> Site {
 	return best
 }
 
-// ruin_terrain_seed: the seed w's land is made from (Earth's: its address's, the same in
-// every universe).
-ruin_terrain_seed :: proc(w: ^core.World) -> i64 {
-	if w.address == starmap.earth_address() {return i64(starmap.address_hash(w.address))}
-	return w.seed
-}
-
 // ruin_ground: for a site whose middle is column (x, z), sampled on a grid of 5 by 5 over
 // it and its apron as the world's generator makes the land: the floor's layer (the middle
 // height of the samples, and never under the sea's top), the lowest and the highest the land
@@ -563,7 +555,7 @@ ruin_ground :: proc(w: ^core.World, x, z: i32) -> (floor, lo, hi: i32, dry: bool
 		}
 	case:
 		params := w.params
-		seed := ruin_terrain_seed(w)
+		seed := terrain_seed(w)
 		for dz, j in STEPS {
 			for dx, i in STEPS {
 				c := worldgen.column_at(&params, seed, x + dx, z + dz)

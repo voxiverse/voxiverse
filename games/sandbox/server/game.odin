@@ -2,6 +2,7 @@ package sandbox_server
 
 import "common:base"
 import "common:game"
+import "common:starmap"
 import "common:worldgen"
 import "games:sandbox"
 import "server:core"
@@ -135,6 +136,14 @@ configure :: proc(config: ^core.Config) {
 	config.generator = .Earth
 	config.home_gate = true
 	if config.kit == "" {config.kit = KIT}
+}
+
+// terrain_seed: the seed w's land is made from, as the engine makes it: Earth's is its
+// address's, the same in every universe; any other world's is its own (World.seed). What the
+// sandbox asks of common:worldgen about a world's land (dry_land, ruin_ground) is asked with it.
+terrain_seed :: proc(w: ^core.World) -> i64 {
+	if w.address == starmap.earth_address() {return i64(starmap.address_hash(w.address))}
+	return w.seed
 }
 
 #assert(worldgen.Kind.Earth == {}, "the Earth generator is the zero kind (an unset Config's)")
