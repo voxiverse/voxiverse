@@ -1,20 +1,24 @@
 # Sandbox
 
-The engine's open world as a game, and the game a session plays when nobody names another
-(`game.DEFAULT_GAME`). A universe of planets, the home world Earth or one made from the seed,
-with its climate, sheep, farming, peoples and their markets, and gates between worlds: build, explore, survive or
-create. There is no round and no score. A new player is given the rocket launcher.
+The engine's open world as a game, the one game players are offered (the title's
+Singleplayer lists its universes), and the game a session plays when nobody names another
+(`game.DEFAULT_GAME`). Players know it by the product's name, Voxiverse (its `INFO.name`);
+the folder, the id and what saves and the wire carry stay `sandbox`. A universe of planets,
+the home world Earth or one made from the seed, with its climate, sheep, farming, peoples and
+their markets, and gates between worlds: build, explore, survive or create. There is no round
+and no score. A new player is given the rocket launcher.
 
 ## Playing it
 
 ```sh
-./build.sh run                                # the title: Sandbox is first in the list of games
+./build.sh run                                # the title: Singleplayer lists its universes
 ./build.sh run -- --game sandbox              # straight into a scratch Sandbox world
 ./build.sh serve -- --universe build/universe # the dedicated server plays it by default
 ```
 
 The title's Singleplayer opens the saved universes; a new one made there (its planet, seed and
-mode) plays the sandbox.
+mode) plays the sandbox. The other games are met inside it as encounters (Horde's waves at
+the ruined site, below) and run on their own only as dedicated servers.
 
 ## Its sheep
 

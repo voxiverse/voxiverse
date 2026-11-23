@@ -391,7 +391,7 @@ test_server_rows :: proc(t: ^testing.T) {
 	testing.expect_value(t, rows[3].name, "Bob's")
 	testing.expect_value(t, rows[3].address, "192.168.1.20:27315")
 	testing.expect_value(t, rows[3].saved, -1)
-	testing.expect_value(t, rows[3].game, "Sandbox")
+	testing.expect_value(t, rows[3].game, "Voxiverse") // (this build's name for it, not the server's)
 	testing.expect(t, rows[3].password && rows[3].why_not == "")
 
 	testing.expect_value(t, rows[4].game, "Moon Base") // (the server's name for it)
