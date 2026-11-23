@@ -240,7 +240,7 @@ The types these name:
 - `game.Item :: distinct u16`
 - `game.Kind_Id :: distinct u16`: an entity kind, the registry index + 1; 0 is none (and "any" in a filter).
 - `game.Lane_Item :: struct {...}`
-- `game.Logbook_Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon}`: what kind of place a logbook's place is (its name when it has none of its own).
+- `game.Logbook_Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon, Remains}`: what kind of place a logbook's place is (its name when it has none of its own).
 - `game.Pack_Source :: struct {...}`
 - `game.Stack :: struct {...}`: some of one item (count 0: empty, item NO_ITEM).
 - `game.Template :: struct {...}`

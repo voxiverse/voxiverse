@@ -86,6 +86,7 @@ PLACE_KIND_NAMES := [game.Logbook_Place_Kind]string {
 	.Town    = "town",
 	.Outpost = "outpost",
 	.Beacon  = "beacon",
+	.Remains = "remains",
 }
 
 @(private = "file")
