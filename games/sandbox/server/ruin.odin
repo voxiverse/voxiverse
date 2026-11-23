@@ -362,6 +362,13 @@ ruin_picking :: proc(s: ^core.Server, c: ^core.Client, stack: game.Stack) -> cor
 	return .Take
 }
 
+// ruin_dropping: a fighter throws nothing away while it fights: what it holds is the ruin's
+// kit, given back in exchange for its own things at the end, and not for anyone outside.
+ruin_dropping :: proc(s: ^core.Server, c: ^core.Client, stack: game.Stack) -> string {
+	if ruin_seat(s, c).fighting == 0 {return ""}
+	return "The ruin keeps what it gave you until the fight is over"
+}
+
 // ruin_entity_died: a creature of the fight killed leaves its crowd.
 ruin_entity_died :: proc(s: ^core.Server, w: ^core.World, dead: core.Dead_Entity) {
 	if w == s.home {play.crowd_forget(&ruin_of(s).crowd, dead.id)}

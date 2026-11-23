@@ -91,7 +91,9 @@ The guns are tuned as Horde tunes them (loading the ruin's rounds, `sandbox:roun
 takes them from the pockets, and with none the gun stays empty), but only for the players in
 the encounter's mode: the tuning is the mode's `weapons` (`pack/data/game_modes/encounter.json`,
 the engine's `game.weapon_of`), not an `"override"` of the items, so every other player's guns
-stay the base pack's. The ruin's rounds vanish when anyone not fighting walks over one.
+stay the base pack's. Nothing of the kit leaves the fight: a fighter cannot throw anything
+away while it fights (the `dropping` hook refuses it), and the ruin's rounds vanish when
+anyone not fighting walks over one.
 
 The fight ends when the fifth wave is dead: every fighter standing has its own things back (in
 place of the encounter's) and its own mode, and the altar drops each a sniper, jump boots and

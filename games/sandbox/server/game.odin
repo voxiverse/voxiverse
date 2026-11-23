@@ -48,6 +48,7 @@ GAME :: core.Game {
 	entity_died    = entity_died,
 	editing        = editing,
 	picking        = ruin_picking,
+	dropping       = ruin_dropping,
 	machine_use    = ruin_use,
 	command        = command,
 	world_opened   = world_opened,

@@ -160,6 +160,19 @@ test_ruin_fight_to_the_reward :: proc(t: ^testing.T) {
 	h := playtest.host(rig)
 	testing.expect_value(t, ruin_use(s, h, ruin_altar(r.site)), "")
 	fighting_as_told(t, rig, h)
+	// Its kit stays its own: it cannot throw a gun away, and the ruin's rounds are nothing to
+	// anyone else.
+	pistol, _ := game.registry_item(s.registry, "voxiverse:pistol")
+	testing.expect(
+		t,
+		GAME.dropping(s, h, game.Stack{item = pistol, count = 1}) != "",
+		"a fighter threw its gun away",
+	)
+	testing.expect_value(
+		t,
+		GAME.picking(s, h, game.Stack{item = r.round, count = 5}),
+		core.Pickup.Take,
+	)
 	gate := game.Block_Pos{r.site.origin.x + RUIN_MID, r.site.floor + 1, r.site.origin.z}
 	ward, _ := core.block_at(w, gate)
 	testing.expect_value(t, ward, r.ward)
@@ -192,6 +205,12 @@ test_ruin_fight_to_the_reward :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, r.phase.now, sandbox.Ruin_Phase.Asleep)
 	back_as_before(t, rig, h)
+	testing.expect_value(t, GAME.dropping(s, h, game.Stack{item = pistol, count = 1}), "")
+	testing.expect_value(
+		t,
+		GAME.picking(s, h, game.Stack{item = r.round, count = 5}),
+		core.Pickup.Taken,
+	)
 	ward, _ = core.block_at(w, gate)
 	testing.expect_value(t, ward, game.Block.Air)
 
