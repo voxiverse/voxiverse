@@ -150,15 +150,8 @@ stats_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	t := &ctx.theme
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
-	ui.backdrop(ctx)
-	panel := ui.rect_center(ctx.screen, 560, min(520, ctx.screen.h - 2 * t.padding))
-	ui.panel(ctx, panel)
-	inner := ui.rect_shrink(panel, t.padding)
-	if to, picked := section_tabs(app, ctx, ui.cut_top(&inner, t.row_height)); picked {
-		player_menu_show(app, to)
-		return
-	}
-	ui.cut_top(&inner, t.spacing)
+	inner, shown := section_frame(app, ctx)
+	if !shown {return}
 	search := ui.cut_top(&inner, t.row_height)
 	ui.text_input(ctx, "stats search", &v.filter, search, "search")
 	ui.cut_top(&inner, t.spacing)

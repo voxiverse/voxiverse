@@ -446,6 +446,7 @@ inventory_prompts :: proc(app: ^engine.App, items: ^[dynamic]Prompt_Item) {
 	}
 	append(items, Prompt_Item{.Menu_Tertiary, "Search" if on_catalog else "Move", .None})
 	append(items, Prompt_Item{.Menu_Back, "Close", .None})
+	if v.tab == .Chest {append(items, Prompt_Item{.Catalog, "Take all", .None})}
 	if v.tab != .Chest {
 		append(items, Prompt_Item{.Section_Prev, "Sections", .Section_Next})
 		if app.session != nil && engine.session_ability(app.session, .Catalog) {

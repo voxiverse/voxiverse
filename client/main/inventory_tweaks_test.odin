@@ -385,10 +385,15 @@ test_equipment_slots :: proc(t: ^testing.T) {
 	overlay_frame(&f, {}) // (sets the screen's size)
 	l := menu.inventory_layout(&f.app.ui, .Inventory)
 	testing.expect(t, l.slots[head].w > 0 && l.slots[feet].w > 0 && l.preview.w > 0)
-	for e in 0 ..< game.EQUIP_SLOTS {
-		r := l.slots[game.EQUIP_BASE + e]
-		testing.expect(t, r.x + r.w <= l.preview.x, "the slots are left of the player")
+	for e in ([]game.Equip_Slot{.Head, .Chest, .Legs, .Feet}) {
+		r := l.slots[game.EQUIP_BASE + int(e)]
+		testing.expect(t, r.x + r.w <= l.preview.x, "the armour is left of the player")
 	}
+	for e in ([]game.Equip_Slot{.Offhand, .Trinket_1, .Trinket_2}) {
+		r := l.slots[game.EQUIP_BASE + int(e)]
+		testing.expect(t, r.x >= l.preview.x + l.preview.w, "the rest is right of the player")
+	}
+	testing.expect(t, l.hand.x >= l.preview.x + l.preview.w, "and so is the hand")
 
 	// A cap on the cursor: the feet refuse it, the head takes it.
 	inv.cursor = {cap_, 1, 0, 0}

@@ -5,8 +5,8 @@ import "core:fmt"
 import "client:engine"
 import "client:ui"
 
-// The player menu: one overlay with a section open (Inventory, Statistics;
-// later the Map, Journal, Character and Atlas). A section is a row of
+// The player menu: one overlay with a section open (the Inventory with the character, the
+// Statistics; later the Map, Journal and Atlas). A section is a row of
 // SECTIONS (its key, whether it is shown, its draw proc) and a draw proc
 // that calls section_tabs for the strip. A hidden section's key does
 // nothing: its row is there for the day it is built.
@@ -52,6 +52,7 @@ player_menu_show :: proc(app: ^engine.App, id: engine.Section_Id) {
 		engine.overlay_open(&app.overlays, .Player_Menu)
 	}
 	m.section, m.last, m.has_last = id, id, true
+	app.ui.focused = 0 // (the section's own first widget takes the focus, not a tab of the last)
 	switch id {
 	case .Inventory:
 		inventory_enter(app)
@@ -138,7 +139,38 @@ player_menu_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	if draw := SECTIONS[app.player_menu.section].draw; draw != nil {draw(app, ctx, top)}
 }
 
-SECTION_TAB_WIDTH :: 130
+SECTION_TAB_WIDTH :: 140
+PLAYER_MENU_SIZE :: ui.Vec2{760, 520} // every section's panel (UI units: it fits 1280x720 at scale 1)
+
+// player_menu_panel: the panel every section of the player menu is drawn in, and its
+// title row (the tabs); what is left under them.
+player_menu_panel :: proc(ctx: ^ui.Context) -> (panel, title, content: ui.Rect) {
+	t := &ctx.theme
+	panel = ui.rect_center(
+		ctx.screen,
+		min(PLAYER_MENU_SIZE.x, ctx.screen.w),
+		min(PLAYER_MENU_SIZE.y, ctx.screen.h),
+	)
+	content = ui.rect_shrink(panel, t.padding)
+	title = ui.cut_top(&content, t.row_height)
+	ui.cut_top(&content, 2 * t.spacing)
+	return
+}
+
+// section_frame: a section's panel and tabs over the backdrop; what is under the tabs (and
+// false when a tab was picked: the section is left).
+section_frame :: proc(app: ^engine.App, ctx: ^ui.Context) -> (content: ui.Rect, ok: bool) {
+	ui.backdrop(ctx)
+	panel, title: ui.Rect
+	panel, title, content = player_menu_panel(ctx)
+	ui.panel(ctx, panel)
+	if to, picked := section_tabs(app, ctx, title); picked {
+		player_menu_show(app, to)
+		return
+	}
+	return content, true
+}
+
 
 // section_tabs: the strip of shown sections in r with their keys, the open
 // one lit; the one chosen with the mouse, if any.

@@ -449,6 +449,32 @@ The types these name:
 - `ui.Context :: struct {...}`
 - `ui.Rect :: struct {...}`
 
+## `client/menu` (`menu.`): Items and panes: `client:menu`
+
+- `stack_slot :: proc(ctx: ^ui.Context, reg: ^game.Registry, icons: ^engine.Item_Icons, r: ui.Rect, stack: game.Stack, selected: bool, key := 0)`: stack_slot draws a slot holding stack: its icon (its name, if it has none), its count (more than one), its number key (key > 0), framed when selected, and an item rarer than common framed in its rarity's colour.
+- `INVENTORY_SLOT :: ui.Vec2 {...}`: a slot's size in a screen (the hotbar's is engine.SLOT_SIZE).
+- `item_tooltip :: proc(ctx: ^ui.Context, reg: ^game.Registry, stack: game.Stack, compared: game.Stack = {}, worn := false, beside: Maybe(ui.Rect) = nil)`: an item's tooltip by the pointer, or beside a slot (the pad's cursor): its name in its rarity's colour, its type line, its stats (beside each, how it differs from `compared`'s, green for better and red for worse), what it grants, its description, and "Compared with <item>" or "Equipped" (worn: it is the stack worn or held).
+- `slot_tooltip :: proc(ctx: ^ui.Context, reg: ^game.Registry, inv: ^game.Inventory, slot: int, beside: Maybe(ui.Rect) = nil)`: the tooltip of an inventory's slot (a chest's too), compared with what is worn or held.
+- `item_title :: proc(reg: ^game.Registry, item: game.Item) -> string`: an item's name as players read it ("rocket launcher").
+- `item_rarity :: proc(reg: ^game.Registry, item: game.Item) -> game.Rarity`: an item's rarity (common for an item that names none, or no item).
+- `rarity_color :: proc(t: ^ui.Theme, r: game.Rarity) -> ui.Color`: the theme's colour for a rarity (an item's name, its slot's frame).
+- `pane :: proc(ctx: ^ui.Context, r: ui.Rect, title: string) -> ui.Rect`: a titled part of a screen (the bag, the equipment, a chest's slots, a list): its frame and title; what is left inside for its content.
+- `pane_size :: proc(t: ^ui.Theme, w, h: f32) -> ui.Vec2`: how big a pane is round content w by h.
+
+The types these name:
+
+- `engine.Item_Icons :: map[game.Item]ui.Icon`
+- `game.Inventory :: struct {...}`
+- `game.Item :: distinct u16`
+- `game.Rarity :: enum u8 {Common, Uncommon, Rare, Epic, Legendary}`: how rare an item is (its pack's `rarity`; common when it names none): what colours its name.
+- `game.Registry :: struct {...}`
+- `game.Stack :: struct {...}`: some of one item (count 0: empty, item NO_ITEM).
+- `ui.Color :: [4]u8`
+- `ui.Context :: struct {...}`
+- `ui.Rect :: struct {...}`
+- `ui.Theme :: struct {...}`
+- `ui.Vec2 :: [2]f32`
+
 ## `client/overview` (`overview.`): Commanding from above: `client:overview`
 
 - `Selection :: struct {...}`: the entities of its side a player has picked, its control groups, and the click or drag in progress.

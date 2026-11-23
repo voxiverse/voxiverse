@@ -46,6 +46,9 @@ Theme :: struct {
 	meter_fill:     Color,
 	graph_back:     Color,
 	graph_line:     Color,
+	rarity:         [5]Color, // an item's name by its rarity: common, uncommon, rare, epic, legendary (game.Rarity)
+	gain:           Color, // a stat that would rise (an item compared with the one worn)
+	loss:           Color, // ... and fall
 }
 
 DEFAULT_THEME :: Theme {
@@ -90,6 +93,15 @@ DEFAULT_THEME :: Theme {
 	meter_fill     = {90, 170, 220, 255},
 	graph_back     = {20, 20, 20, 255},
 	graph_line     = {230, 160, 60, 255},
+	rarity         = {
+		{225, 225, 225, 255},
+		{100, 210, 100, 255},
+		{80, 150, 255, 255},
+		{185, 110, 245, 255},
+		{255, 165, 45, 255},
+	},
+	gain           = {120, 240, 120, 255},
+	loss           = {240, 110, 100, 255},
 }
 
 // Theme_Saved is what theme_scope hands back to its deferred end.

@@ -476,9 +476,10 @@ test_stats_with_a_pad :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-// The layout: with a container open it docks above the pockets and the
-// preview is hidden; without one the preview shows; the catalog docks in
-// Creative; the details panel sits right of the pockets.
+// The layout: two panes, the equipment (the doll round the preview, the character's
+// numbers under it) or an open chest's slots with Take all on the left, the bag on the
+// right; Creative's catalog over both; the hotbar in one place on every tab; all of it on
+// a 1280x720 screen.
 @(test)
 test_inventory_layout_sections :: proc(t: ^testing.T) {
 	f: Overlay_Fixture
@@ -489,26 +490,52 @@ test_inventory_layout_sections :: proc(t: ^testing.T) {
 	plain := menu.inventory_layout(&f.app.ui, .Inventory)
 	chest := menu.inventory_layout(&f.app.ui, .Chest)
 	creative := menu.inventory_layout(&f.app.ui, .Creative)
+	inside :: proc(outer, r: ui.Rect) -> bool {
+		return(
+			r.x >= outer.x &&
+			r.y >= outer.y &&
+			r.x + r.w <= outer.x + outer.w &&
+			r.y + r.h <= outer.y + outer.h \
+		)
+	}
 	testing.expect(t, plain.preview.w > 0 && plain.preview.h > 0, "the preview shows")
+	testing.expect(t, inside(plain.left, plain.preview) && inside(plain.left, plain.hand))
+	testing.expect(t, plain.stats.w > 0 && inside(plain.left, plain.stats))
+	for e in game.Equip_Slot {
+		testing.expectf(
+			t,
+			inside(plain.left, plain.slots[game.EQUIP_BASE + int(e)]),
+			"%v is on the doll",
+			e,
+		)
+	}
+	testing.expect(
+		t,
+		plain.left.x + plain.left.w <= plain.right.x,
+		"the equipment left of the bag",
+	)
+	for i in game.HOTBAR_SLOTS ..< game.INVENTORY_SLOTS {
+		testing.expect(
+			t,
+			inside(plain.right, plain.slots[i]) && inside(chest.right, chest.slots[i]),
+		)
+	}
+	testing.expect(t, plain.sort.w > 0 && plain.search.w > 0 && inside(plain.right, plain.search))
 	testing.expect_value(t, chest.preview.w, 0)
-	first_chest, first_pocket := chest.slots[game.CHEST_BASE], chest.slots[game.HOTBAR_SLOTS]
-	last_chest := chest.slots[game.CHEST_BASE + game.CHEST_SLOTS - 1]
-	testing.expect(
-		t,
-		last_chest.y + last_chest.h <= first_pocket.y,
-		"the container lies above the pockets",
-	)
-	testing.expect(t, first_chest.y < first_pocket.y)
-	testing.expect(
-		t,
-		plain.details.w > 0 && plain.details.x >= plain.slots[game.INVENTORY_SLOTS - 1].x,
-	)
-	testing.expect(t, plain.sort.w > 0 && plain.search.w > 0)
-	testing.expect(t, creative.catalog.w > 0 && creative.details.w > 0)
+	testing.expect_value(t, chest.slots[game.EQUIP_BASE].w, 0)
+	for i in game.CHEST_BASE ..< game.ALL_SLOTS {
+		testing.expect(t, inside(chest.left, chest.slots[i]), "the chest's slots in the left pane")
+	}
+	testing.expect(t, chest.take_all.w > 0 && inside(chest.left, chest.take_all))
+	testing.expect(t, creative.catalog.w > 0 && creative.slots[game.HOTBAR_SLOTS].w == 0)
+	for i in 0 ..< game.HOTBAR_SLOTS {
+		testing.expect(t, plain.slots[i] == chest.slots[i] && plain.slots[i] == creative.slots[i])
+	}
 	// Everything is on the screen.
 	for l in ([]menu.Inventory_Layout{plain, chest, creative}) {
 		testing.expect(t, l.panel.x >= 0 && l.panel.y >= 0)
 		testing.expect(t, l.panel.x + l.panel.w <= SCREEN.x && l.panel.y + l.panel.h <= SCREEN.y)
+		for r in l.slots {if r.w > 0 {testing.expect(t, inside(l.panel, r))}}
 	}
 }
 
@@ -550,10 +577,61 @@ test_inventory_sort_search_and_tooltip :: proc(t: ^testing.T) {
 
 	boots := game.item_of_armor(.Boots)
 	lines := menu.item_lines(reg, boots)
+	testing.expect_value(t, len(lines), 5)
 	testing.expect_value(t, lines[0], "boots")
-	testing.expect_value(t, lines[1], "Worn on the feet.")
+	testing.expect_value(t, lines[1], "Common boots")
 	testing.expect_value(t, lines[2], "Speed +10%")
 	testing.expect_value(t, lines[3], "Jump +10%")
-	none := menu.item_lines(reg, stone) // (a block's item: no description)
-	testing.expect_value(t, len(none), 1)
+	testing.expect_value(t, lines[4], "Worn on the feet.")
+	charm := menu.item_lines(reg, game.item_of_material(.Feather_Charm))
+	testing.expect_value(t, charm[1], "Uncommon trinket")
+	testing.expect_value(t, charm[2], "Air jumps +1")
+	none := menu.item_lines(reg, stone) // (a block's item: its name and type, no description)
+	testing.expect_value(t, len(none), 2)
+	testing.expect_value(t, none[1], "Common block")
+}
+
+// A chest's Take all moves everything that fits into the inventory (each stack a quick
+// move); a tooltip compares an item with what is worn where it would go.
+@(test)
+test_chest_take_all_and_compare :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, false)
+	defer overlay_fixture_destroy(&f)
+	reg := testkit.test_reg()
+	inv := &f.s.inventory
+	stone, dirt := game.item_of_block(reg, .Stone), game.item_of_block(reg, .Dirt)
+	inv.chest[0], inv.chest[7] = {stone, 5, 0, 0}, {dirt, 2, 0, 0}
+	inv.chest_open = true
+	overlay_frame(&f, {})
+	testing.expect_value(t, f.app.inventory_view.tab, engine.Inventory_Tab.Chest)
+	take, found := ui.find_widget(&f.app.ui, "Take all")
+	if !testing.expect(t, found, "a Take all button") {return}
+	at := ui.Vec2{take.x + take.w / 2, take.y + take.h / 2}
+	overlay_frame(&f, {mouse = at})
+	overlay_frame(&f, {mouse = at, mouse_pressed = {.Left}, mouse_down = {.Left}})
+	overlay_frame(&f, {mouse = at, mouse_released = {.Left}})
+	testing.expect_value(t, game.inventory_count(inv, stone), 5)
+	testing.expect_value(t, game.inventory_count(inv, dirt), 2)
+	for st in inv.chest {testing.expect(t, game.stack_empty(st), "the chest is empty")}
+
+	// Jump boots against the boots worn: compared, and the difference said.
+	inv.chest_open = false
+	boots := game.item_of_armor(.Boots)
+	jump, _ := game.item_by_name(reg, "jump_boots")
+	inv.equipment[.Feet] = {boots, 1, 0, 0}
+	inv.slots[6] = {jump, 1, 0, 0}
+	with, worn := menu.item_compared(reg, inv, 6)
+	testing.expect(t, with == inv.equipment[.Feet] && !worn)
+	_, worn = menu.item_compared(reg, inv, game.EQUIP_BASE + int(game.Equip_Slot.Feet))
+	testing.expect(t, worn, "the boots worn are the ones worn")
+	overlay_frame(&f, {mouse = overlay_slot_at(&f, 6)})
+	said :: proc(app: ^engine.App, text: string) -> bool {
+		for x in app.ui.texts {if x == text {return true}}
+		return false
+	}
+	testing.expect(t, said(f.app, "jump boots") && said(f.app, "Rare boots"), "its name and type")
+	testing.expect(t, said(f.app, "Speed +20%  (+10)"), "better than the boots")
+	testing.expect(t, said(f.app, "Jump +0%  (-10)"), "worse at jumping")
+	testing.expect(t, said(f.app, "Compared with boots"))
 }

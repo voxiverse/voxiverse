@@ -479,8 +479,9 @@ Where an item is worn is its `equip`: `"head"`, `"chest"`, `"legs"`, `"feet"`, `
 (which takes anything) or `"trinket"` (either of the two trinket slots: the feather charm);
 what wearing it changes is its `modifiers`. How rare it is is its `rarity`, one of
 `"common"` (the default when it names none), `"uncommon"`, `"rare"`, `"epic"` and
-`"legendary"` (`game.Rarity`), which changes nothing in play. A stack's own `data` (a rolled
-grade, `core.item_drop`) is the game's and is not this.
+`"legendary"` (`game.Rarity`): it colours the item's name in its tooltip, on the hotbar's
+name line and in the pickup feed, and frames its slot, and changes nothing else. A stack's
+own `data` (a rolled grade, `core.item_drop`) is the game's and is not this.
 
 ## The client's side: `engine.Game`
 
@@ -531,6 +532,18 @@ number and no cast.
 | `Look`, `Grade` | What its `look` field holds: its atmosphere ([below](#a-games-look)) |
 | `Game_Camera`, `Game_Camera_Kind`, `pointer_tool(s)`, `Pointer_Tool`, `Pointer_Press` | The camera its `camera` hook asks for; under a top-down or free camera, what the pointer is over and what each button did |
 | `Scoreboard`, `SCOREBOARD_COLUMNS`, `scoreboard_columns(board, ...)`, `scoreboard_row(board, name, ...)` | Filling the player list (the `scoreboard` hook) |
+
+### Items and panes: `client:menu`
+
+A game's own screen (a crafting bench, a trader) draws items and its parts as the
+inventory does, so every screen has one look:
+
+| Name | What it is for |
+|---|---|
+| `stack_slot(ctx, reg, icons, r, stack, selected, key)`, `INVENTORY_SLOT` | A slot holding a stack: its icon, its count, framed in its rarity's colour |
+| `item_tooltip(ctx, reg, stack, compared, worn, beside)`, `slot_tooltip(ctx, reg, inv, slot, beside)` | An item's tooltip: its name in its rarity's colour, a type line, its stats (compared with `compared`'s, green better, red worse), its description |
+| `item_title(reg, item)`, `item_rarity(reg, item)`, `rarity_color(theme, rarity)` | An item's name as players read it, its rarity and that rarity's colour |
+| `pane(ctx, r, title)`, `pane_size(theme, w, h)` | A titled part of a screen (the bag, a list): its frame and title, and the rect left inside; how big one is round its content |
 
 ### What a game's HUD is made of
 

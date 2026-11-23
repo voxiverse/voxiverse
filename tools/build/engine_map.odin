@@ -29,6 +29,7 @@ MAP_LISTS :: []Map_List {
 	{GAME_KIT_DIR, "## What the games share: `server:play`"},
 	{"client/engine", "### What a game's client part calls"},
 	{"client/engine", "### What a game's HUD is made of"},
+	{"client/menu", "### Items and panes: `client:menu`"},
 	{"client/overview", "### Commanding from above: `client:overview`"},
 }
 
