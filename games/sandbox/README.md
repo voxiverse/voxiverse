@@ -114,7 +114,11 @@ The items, by kind (every one an ingredient or a use; `test_survival_every_item_
 walks what yields what):
 
 - **Raw**: fibre, flint, coal, raw copper, raw iron; from the remains salvage (uncommon),
-  ancient alloy and data shards (rare).
+  ancient alloy and data shards (rare); from the creatures (below) hide, raw meat, feathers,
+  raw fish and chitin, shell plates and venom glands (uncommon), and the machines' scrap
+  (uncommon), power cells and lenses (rare). What the creatures leave makes padding, trail
+  rations (meat by hand, fish cooked at a fabricator), flechettes, climbing spikes, stim
+  patches, charge cells, optics, salvage, padded boots and a plate cuirass another way.
 - **Refined**: cord, padding, copper and iron ingots, wire, charge cells, optics, circuit
   boards, alloy plate; and the base pack's planks, glass, stone bricks, lamps, chest and hoe.
 - **Tools**: flint pick (tier 1), copper pick (tier 2), alloy drill (tier 3, one more of each).
@@ -170,7 +174,8 @@ Beside the sheep the home world has sixteen creatures of its own (`pack/data/ent
 `wildlife.json`, `predators.json`, `machines.json`), each with its model, its voice, its
 place and hours and what it leaves where it dies (its kind's `drops`: hide, meat, feathers,
 fish, shell plates, chitin, venom glands, and the machines' scrap, power cells and lenses,
-`pack/data/items/creature_drops.json`; nothing makes anything of them yet). Their minds are
+`pack/data/items/creature_drops.json`; the survival loop's recipes make things of them,
+above). Their minds are
 the server's (`server/wild.odin`), made of `server:play`'s (`mind.odin`): what each does is
 its state, and what a player sees of it (asleep, warning, winding up a blow, aloft) is the
 look of that state, drawn by its model.

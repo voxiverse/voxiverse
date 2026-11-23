@@ -1,8 +1,8 @@
 {
 	// What the home world's creatures leave where they die (their kinds' "drops":
 	// data/entities): the beasts' hide, meat, feathers, shell and chitin, and what is left
-	// of the ancient machines. Nothing makes anything of them yet; the item roster's
-	// recipes may.
+	// of the ancient machines; recipes/survival.json makes things of each. Rarity: common
+	// unless said.
 	"hide": {
 		"model": "sandbox:hide",
 		"description": "A beast's skin, scraped and rolled."
@@ -21,7 +21,8 @@
 	},
 	"shell_plate": {
 		"model": "sandbox:shell_plate",
-		"description": "A plate of a domeback's shell, or a cragmaul's hide: hard as stone."
+		"description": "A plate of a domeback's shell, or a cragmaul's hide: hard as stone.",
+		"rarity": "uncommon"
 	},
 	"chitin": {
 		"model": "sandbox:chitin",
@@ -29,19 +30,23 @@
 	},
 	"venom_gland": {
 		"model": "sandbox:venom_gland",
-		"description": "A sac of venom. Handle it carefully."
+		"description": "A sac of venom. Handle it carefully.",
+		"rarity": "uncommon"
 	},
 	"scrap": {
 		"model": "sandbox:scrap",
-		"description": "Plates and wire of an ancient machine, of a metal nobody makes."
+		"description": "Plates and wire of an ancient machine, of a metal nobody makes.",
+		"rarity": "uncommon"
 	},
 	"power_cell": {
 		"model": "sandbox:power_cell",
 		"description": "An ancient machine's cell. It is still warm.",
-		"stack": 16
+		"stack": 16,
+		"rarity": "rare"
 	},
 	"lens": {
 		"model": "sandbox:lens",
-		"description": "An ancient machine's eye, clear and faintly lit."
+		"description": "An ancient machine's eye, clear and faintly lit.",
+		"rarity": "rare"
 	}
 }

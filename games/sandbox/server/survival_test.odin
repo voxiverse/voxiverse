@@ -330,8 +330,9 @@ test_survival_remains_loot :: proc(t: ^testing.T) {
 }
 
 // Every item the survival loop adds is had somehow: from what the world's blocks leave when
-// gathered, the remains' blocks and their loot, and what the recipes make of those, again and
-// again. An item nothing yields would be filler.
+// gathered, the remains' blocks and their loot, what the creatures leave where they die, and
+// what the recipes make of those, again and again. An item nothing yields would be filler;
+// and each thing a creature leaves goes into a recipe, or it would be filler too.
 @(test)
 test_survival_every_item_is_obtainable :: proc(t: ^testing.T) {
 	rig := new(Rig)
@@ -367,6 +368,20 @@ test_survival_every_item_is_obtainable :: proc(t: ^testing.T) {
 	for l in CACHE_LOOT {had[survival_of(s).loot[l.what]] = true}
 	for l in VAULT_LOOT {had[survival_of(s).loot[l.what]] = true}
 	had[survival_of(s).loot[.Salvage]] = true
+	dropped := make(map[game.Item]bool, context.temp_allocator)
+	for &kind in reg.kinds {
+		for d in kind.drops {had[d.item], dropped[d.item] = true, true}
+	}
+	for item in dropped {
+		used := false
+		for &r in reg.recipes {
+			if _, ours := sandbox.recipe_station(&r); !ours {continue}
+			needs, _, n := game.recipe_needs(&r)
+			for k in 0 ..< n {used ||= needs[k].item == item}
+		}
+		testing.expectf(t, used, "no recipe takes %s", game.item_id(reg, item))
+	}
+	testing.expectf(t, len(dropped) >= 10, "the creatures leave %d things", len(dropped))
 	for grew := true; grew; {
 		grew = false
 		for &r in reg.recipes {
@@ -378,7 +393,13 @@ test_survival_every_item_is_obtainable :: proc(t: ^testing.T) {
 		}
 	}
 	for f in sandbox.PACK.files {
-		if f.path != "data/items/survival.json" && f.path != "data/blocks/survival.json" {continue}
+		switch f.path {
+		case "data/items/survival.json",
+		     "data/blocks/survival.json",
+		     "data/items/creature_drops.json":
+		case:
+			continue
+		}
 		value, err := json.parse(f.data, .JSON5, allocator = context.temp_allocator)
 		if !testing.expectf(t, err == nil, "%s: %v", f.path, err) {continue}
 		for name in value.(json.Object) {

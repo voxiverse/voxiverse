@@ -61,5 +61,18 @@
 	"survey_scanner": {"type": "process", "machine": "sandbox:fabricator", "time": 4, "inputs": [{"item": "sandbox:circuit_board", "count": 1}, {"item": "sandbox:optic", "count": 1}, {"item": "sandbox:charge_cell", "count": 1}], "output": {"item": "sandbox:survey_scanner", "count": 1}},
 	"tether_hook": {"type": "process", "machine": "sandbox:fabricator", "time": 4, "inputs": [{"item": "sandbox:iron_ingot", "count": 2}, {"item": "sandbox:cord", "count": 4}, {"item": "sandbox:charge_cell", "count": 1}], "output": {"item": "sandbox:tether_hook", "count": 1}},
 	"long_hook": {"type": "process", "machine": "sandbox:fabricator", "time": 5, "inputs": [{"item": "sandbox:tether_hook", "count": 1}, {"item": "sandbox:alloy_plate", "count": 2}, {"item": "sandbox:charge_cell", "count": 1}], "output": {"item": "sandbox:long_hook", "count": 1}},
-	"recall_unit": {"type": "process", "machine": "sandbox:fabricator", "time": 4, "inputs": [{"item": "sandbox:charge_cell", "count": 1}, {"item": "sandbox:optic", "count": 1}, {"item": "sandbox:salvage", "count": 1}], "output": {"item": "sandbox:recall_unit", "count": 1}}
+	"recall_unit": {"type": "process", "machine": "sandbox:fabricator", "time": 4, "inputs": [{"item": "sandbox:charge_cell", "count": 1}, {"item": "sandbox:optic", "count": 1}, {"item": "sandbox:salvage", "count": 1}], "output": {"item": "sandbox:recall_unit", "count": 1}},
+	// What the home world's creatures leave (items/creature_drops.json), made into the same
+	// things another way.
+	"hide_padding": {"type": "process", "machine": "sandbox:hand", "time": 1.5, "inputs": [{"item": "sandbox:hide", "count": 2}, {"item": "sandbox:cord", "count": 1}], "output": {"item": "sandbox:padding", "count": 2}},
+	"meat_ration": {"type": "process", "machine": "sandbox:hand", "time": 1, "inputs": [{"item": "sandbox:raw_meat", "count": 2}], "output": {"item": "sandbox:trail_ration", "count": 1}},
+	"fish_ration": {"type": "process", "machine": "sandbox:fabricator", "time": 2, "inputs": [{"item": "sandbox:raw_fish", "count": 2}, {"item": "sandbox:coal", "count": 1}], "output": {"item": "sandbox:trail_ration", "count": 2}},
+	"chitin_flechettes": {"type": "process", "machine": "sandbox:fabricator", "time": 1, "inputs": [{"item": "sandbox:chitin", "count": 1}, {"item": "sandbox:iron_ingot", "count": 1}], "output": {"item": "sandbox:flechettes", "count": 24}},
+	"chitin_spikes": {"type": "process", "machine": "sandbox:fabricator", "time": 3, "inputs": [{"item": "sandbox:chitin", "count": 3}, {"item": "sandbox:cord", "count": 2}], "output": {"item": "sandbox:climbing_spikes", "count": 1}},
+	"venom_stim_patch": {"type": "process", "machine": "sandbox:fabricator", "time": 2, "inputs": [{"item": "sandbox:venom_gland", "count": 1}, {"item": "sandbox:fibre", "count": 2}], "output": {"item": "sandbox:stim_patch", "count": 3}},
+	"cell_charge_cells": {"type": "process", "machine": "sandbox:fabricator", "time": 2, "inputs": [{"item": "sandbox:power_cell", "count": 1}], "output": {"item": "sandbox:charge_cell", "count": 2}},
+	"lens_optics": {"type": "process", "machine": "sandbox:fabricator", "time": 3, "inputs": [{"item": "sandbox:lens", "count": 1}, {"item": "sandbox:copper_ingot", "count": 1}], "output": {"item": "sandbox:optic", "count": 2}},
+	"scrap_salvage": {"type": "process", "machine": "sandbox:fabricator", "time": 2, "inputs": [{"item": "sandbox:scrap", "count": 3}], "output": {"item": "sandbox:salvage", "count": 1}},
+	"feather_boots": {"type": "process", "machine": "sandbox:hand", "time": 2, "inputs": [{"item": "sandbox:feather", "count": 3}, {"item": "sandbox:cord", "count": 1}], "output": {"item": "sandbox:padded_boots", "count": 1}},
+	"shell_cuirass": {"type": "process", "machine": "sandbox:fabricator", "time": 5, "inputs": [{"item": "sandbox:shell_plate", "count": 4}, {"item": "sandbox:iron_ingot", "count": 2}, {"item": "sandbox:padding", "count": 2}], "output": {"item": "sandbox:plate_cuirass", "count": 1}}
 }
