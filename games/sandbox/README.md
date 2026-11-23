@@ -113,6 +113,43 @@ What it tells its fighters: `sandbox.ruin` (the fight's phase, wave, creatures l
 seconds of a countdown or break; drawn as a bar across the top), and a notice as the ruin
 wakes, each wave sets out and is held, and a fighter falls.
 
+## Its remains
+
+A new universe's home world has the remains of whoever stood its gate there, so its first
+minutes have things to see and walk to; nothing says what they were (`server/remains.odin`
+places them, `server/remains_build.odin` draws them). All of it comes from the world's seed:
+
+- **The court.** The dead home gate stands a step down in a worn platform of slate tiles (21
+  by 11 blocks round the gate's box, its floor a layer over the gate's platform), with gravel,
+  moss and grass through it, a broken parapet open in front of the gate and toward the road,
+  up to three rings of steps down (or up) to the land round it, copper conduits in its floor
+  behind the gate, four pylons of dark steel on plinths (two flanking the gate, two behind it;
+  one or two stand whole with grating and a copper cap, the others are broken low, their pieces
+  lying on the floor) and up to eleven standing stones 18 to 20 blocks from the gate, some
+  gone, some fallen, none on the spawn's side. The spawn, 8 blocks in front of the frame,
+  looks at it.
+- **The old road.** Stretches of paving (8 to 16 blocks, 12 to 36 apart) with kerbs and posts,
+  from out of the court toward the ruin (below) to short of its apron, broken off where the
+  water or a cliff took it.
+- **Scattered remains**, 60 to 380 blocks from the gate, one of each kind and four or five more,
+  at least 40 blocks apart: a fallen pylon beside its stump, its copper head at the far end; a
+  wall half buried, rising and falling along its length, with a doorway and sometimes a corner;
+  a round tower fallen in on one side, its rubble spilled, a chest inside one in two; a grassed
+  mound over a sealed chamber of riveted iron whose dark steel door shows in a cut, with a chest
+  inside (one digs in); a ring of standing stones round a dead plinth. Each is drawn from its
+  own seed (its size, its way, its breaks, what grows on it) and follows the land, sunk a block
+  into it. The chests hold a few of seeds, wheat, lamps, a hoe, a cap, boots or a grappling hook.
+
+Every site stands on dry ground not too uneven for its kind, clear of the court, the ruin's
+apron, the generator's structures and each other. Over 60 seeds of the Earth generator: 4 to
+10 scattered sites a world (8.9 on average), every kind in 58 to 60 of the 60 worlds, the road in
+53 (in the others the way to the ruin is water or cliffs), at most 1% of a site on wet ground.
+A site is built in one paste when a player comes within 192 blocks of it and its ground is
+loaded (the court as the first player arrives), and is then the world's like any block: dig
+it, take what the chests hold. The world's `sandbox.remains.txt` remembers which are built; a
+world saved before there were remains gets none, so nothing is built over what its players
+made.
+
 ## Its peoples and markets
 
 On a world built on the planet (the home world when it is Earth), the sandbox keeps the
@@ -186,6 +223,11 @@ staged in the same save transaction when it changed, and checked by `voxiverse-s
   little-endian). A file that is cut, has a bad CRC, an unknown kind or records out of order is
   refused whole: the world moves it aside and starts with an empty log.
 
+- `sandbox.remains.txt`: the home world's remains built, as text: `before` alone (a world
+  saved before there were remains: none is built in it), or a line `built <x> <z>` for each
+  site built, naming its middle column. A line it does not know moves the file aside, and
+  nothing more is built.
+
 A character's trader is the sandbox's record on it, in its file's `game` member: `cash`,
 `cargo.<i>` (by the order of `sandbox.Good`), `seen.<i>.cell`, `.price`, `.month` (the month the
 price was true) and `.good`, `count` (at most 192 prices, the oldest forgotten first) and
@@ -208,7 +250,9 @@ record (`Sheep`) kept on its entity, and runs the markets (`economy.odin`, each 
 economy, its `world_state` and file; `trader.odin`, the character's `Trader_Record` and the
 market on the wire; `interventions.odin`), lets the night's creatures hunt
 (`danger.odin`) and keeps the ruined site and its fight (`ruin.odin`: the site from the seed,
-its template, the altar's use, the lock, the waves, the reward and the giving back); `client/`
+its template, the altar's use, the lock, the waves, the reward and the giving back), builds
+the remains round the home gate (`remains.odin`, `remains_build.odin`) on what the ruin and they
+share (`site.odin`: the land under a site, its levelling); `client/`
 draws the market's line and screen (`market.odin`) and the fight's bar (`ruin.odin`). The pack's
 `pack/data/blocks/ruin.json`, `items/ruin.json`, `models/ruin.json` and
 `game_modes/encounter.json` are the ruin's altar and ward, its rounds and the fighters' mode.

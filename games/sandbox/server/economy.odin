@@ -40,12 +40,13 @@ ECONOMY_VERSION :: 1
 @(private = "file")
 GOODS :: len(sandbox.Good)
 
-// Sandbox_World: what the sandbox keeps of each world (core.world_state): its economy and
-// its interventions log.
+// Sandbox_World: what the sandbox keeps of each world (core.world_state): its economy, its
+// interventions log and (the home world's) its remains.
 Sandbox_World :: struct {
 	economy:             ^World_Economy, // the markets near the players (heap; nil until needed)
 	interventions:       Intervention_Log, // what players did that the world's history carries forward (heap)
 	interventions_dirty: bool, // changed since its file was staged
+	remains:             Remains, // (remains.odin)
 }
 
 world_of :: proc(w: ^core.World) -> ^Sandbox_World {return core.world_state(w, Sandbox_World)}

@@ -9,7 +9,6 @@ import "server:core"
 import "server:playtest"
 
 // copy_dir copies the directory from into to (made), files and directories.
-@(private = "file")
 copy_dir :: proc(from, to: string) {
 	os.make_directory_all(to)
 	entries, _ := os.read_all_directory_by_path(from, context.temp_allocator)

@@ -12,7 +12,8 @@ import "server:core"
 // economy of a world built on the planet (economy.odin: its towns' markets; trader.odin: the
 // player as a trader; interventions.odin: what players did that the world's history carries
 // forward), lets the base pack's hostile creatures out at night (danger.odin) and keeps the
-// home world's ruined site, where Horde's waves are fought (ruin.odin). The rest of that world
+// home world's ruined site, where Horde's waves are fought (ruin.odin), and the remains round
+// its home gate that lead there (remains.odin). The rest of that world
 // (worlds and gates, climate, farming) is the engine's, chosen by the config.
 
 GAME :: core.Game {
@@ -27,6 +28,7 @@ GAME :: core.Game {
 	world_files    = {
 		{name = ECONOMY_FILE, check = economy_check},
 		{name = INTERVENTIONS_FILE, check = interventions_check},
+		{name = REMAINS_FILE, check = remains_check},
 	},
 	stats          = {
 		{name = "sheep.sheared", kind = .Count, xp = 5},
@@ -58,7 +60,7 @@ GAME :: core.Game {
 }
 
 // Sandbox: the session's state: the sheep's randomness and the registry's names they use,
-// and the ruined site.
+// the ruined site, and what the remains are built of.
 Sandbox :: struct {
 	rng:              base.Rng,
 	sheep:            game.Kind_Id,
@@ -67,11 +69,12 @@ Sandbox :: struct {
 	wool, black_wool: game.Item,
 	placed:           int, // sheep the command has set down (each a little further along)
 	ruin:             Ruin, // (ruin.odin)
+	remains_kit:      Remains_Kit, // (remains.odin)
 }
 
 state :: proc(s: ^core.Server) -> ^Sandbox {return core.game_state(s, Sandbox)}
 
-// start: the names the sheep and the ruin use, from the session's registry; the sheep's
+// start: the names the sheep, the ruin and the remains use, from the session's registry; the sheep's
 // randomness from the universe's seed.
 start :: proc(s: ^core.Server) -> bool {
 	g := state(s)
@@ -83,15 +86,16 @@ start :: proc(s: ^core.Server) -> bool {
 	g.wheat = game.registry_item(reg, "wheat") or_return
 	g.wool = game.item_of_block(reg, game.registry_block(reg, "wool") or_return)
 	g.black_wool = game.item_of_block(reg, game.registry_block(reg, "black_wool") or_return)
-	return ruin_start(s)
+	return ruin_start(s) && remains_start(s)
 }
 
-// tick: the economy (economy.odin), the night's creatures (danger.odin) and the ruined
-// site (ruin.odin).
+// tick: the economy (economy.odin), the night's creatures (danger.odin), the ruined site
+// (ruin.odin) and the remains (remains.odin: planned once the ruin is placed).
 tick :: proc(s: ^core.Server) {
 	economy_tick(s)
 	danger_tick(s)
 	ruin_tick(s)
+	remains_tick(s)
 }
 
 // joined: a new trader's purse (trader.odin); one who left a fight at the ruin gets its
@@ -148,10 +152,11 @@ terrain_seed :: proc(w: ^core.World) -> i64 {
 
 #assert(worldgen.Kind.Earth == {}, "the Earth generator is the zero kind (an unset Config's)")
 
-// world_opened: a world's interventions log and economy file are read back.
+// world_opened: a world's interventions log, economy file and remains file are read back.
 world_opened :: proc(s: ^core.Server, w: ^core.World) {
 	interventions_load(w)
 	economy_load(w)
+	remains_load(s, w)
 }
 
 // world_closed: what the sandbox made of a world is freed (its economy's build waited for).
@@ -165,6 +170,7 @@ world_closed :: proc(s: ^core.Server, w: ^core.World) {
 world_save :: proc(s: ^core.Server, w: ^core.World) {
 	interventions_write(w)
 	economy_write(w)
+	remains_write(s, w)
 }
 
 // action: the game's one action (its client part's MARKET_ACTION) asks for the market.
