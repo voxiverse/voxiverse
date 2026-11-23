@@ -10,7 +10,7 @@ import "common:game"
 // image, not drawn live), a tool a pixel sprite drawn here. Icons are large
 // and drawn smaller with a smooth filter, so they read clean.
 
-ICON_SIZE :: 128 // (drawn at a fraction of this, smoothed: a clean bitmap, not crunchy)
+ICON_SIZE :: 96 // (drawn at a fraction of this, smoothed: a clean bitmap, not crunchy; six pixels a texel of a 16 x 16 sprite, and the UI atlas holds about 400)
 ICON_SAMPLES :: 4 // per pixel, each way: the silhouette and edges are smooth, each texel stays a flat patch
 
 Item_Icons :: map[game.Item]ui.Icon
