@@ -233,6 +233,15 @@ are (slots, equipment from 100, the cursor). A file before has none: nothing is 
 The stacks set aside are the character's: they leave memory and come back with it, and the
 item ledger's audit counts them as held.
 
+### The logbook
+
+A character file of format 7 may have a `logbook`: the places the character found
+(`places`: each its `kind` by name, `gate` or `ruin` or the rest of `game.Logbook_Place_Kind`,
+its `world`'s address in directory form, the block `at` and its own `name` if it has one) and
+the creature kinds it met (`met`: their ids). The server keeps it with the character and
+sends it to the player (the `logbook` record); a place of a kind or world it cannot read, or
+a kind the registry no longer has, is skipped (and logged). A file before has none.
+
 ### The edit journal
 
 The edit journal stores block numbers, which are fixed for a universe. A universe's packs are

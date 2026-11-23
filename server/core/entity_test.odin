@@ -66,6 +66,19 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	)
 	if !testing.expect(t, ok, "the summoned dummy never showed up") {return}
 	testing.expect_value(t, len(far.entities), 0) // too far to be told
+	// Met: in near's logbook (the creature came into its view), not far's.
+	dummy, _ := game.registry_kind(h.srv.registry, "voxiverse:dummy")
+	for &c in h.srv.clients {
+		if c.state != .Playing {continue}
+		met := c.logbook.met_count == 1 && c.logbook.met[0] == dummy
+		testing.expectf(
+			t,
+			met == (client_name(&c) == "near"),
+			"%s met the dummy: %v",
+			client_name(&c),
+			met,
+		)
+	}
 
 	// It is steered away over the next seconds, on the ground, and near sees it go.
 	id: u32

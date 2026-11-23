@@ -103,7 +103,7 @@ Session :: struct {
 	puffs:            [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
 	feel:             Feel, // the feedback under way and its clock (feel.odin)
 	hud:              Hud_State, // what the HUD keeps between frames (popup.odin)
-	journal:          Journal, // the places found and the creatures met (marks.odin)
+	logbook:          protocol.Logbook_State, // the player's places found and creatures met, as the server last said (the Journal screen, the compass, the map)
 	world_map:        Minimap, // the player menu's map (marks.odin; its cells in the arena, made when first shown)
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen:     bool,

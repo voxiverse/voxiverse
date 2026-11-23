@@ -135,6 +135,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 - `inventory_set_aside :: proc(s: ^Server, c: ^Client) -> bool`: c's whole inventory (its slots, what it wears, the cursor's stack) is set aside and c holds nothing; false, and nothing changes, if one is set aside already (one at a time).
 - `inventory_give_back :: proc(s: ^Server, c: ^Client) -> bool`: the inventory set aside (inventory_set_aside) is c's again, in the slots it was in; what c holds now is gone, booked in the item ledger as the game's (what comes back was neither made nor lost).
 - `item_drop :: proc(s: ^Server, w: ^World, position: [3]f64, stack: game.Stack) -> game.Entity_Handle`: the game drops a stack into the world at position (loot, a chest's spill), with its game data (Stack.data: a rolled stat, a rarity); it hops up a little, lies there for its kind's life, and the first player to walk over it picks it up (the game's picking hook may decide).
+- `logbook_place :: proc(s: ^Server, c: ^Client, kind: game.Logbook_Place_Kind, at: [3]i32, name := "")`: logbook_place notes a place in c's logbook (a gate it opened; a game's places, such as the sandbox's ruin once found): kept with its character and sent to it, its journal lists it, the compass marks it and the map shows it.
 - `head_in_water :: proc(s: ^Server, c: ^Client) -> bool`: c's eyes are in water (where a game drowns a player: the engine does not).
 - `player_health_bonus :: proc(s: ^Server, c: ^Client, bonus: f32)`: the game adds bonus health points to c's most (a level's, a blessing's; 0: none): from the next tick its health tops out there, a lower most cuts what it has.
 - `heal_player :: proc(c: ^Client, amount: f32)`: c recovers amount health points (not past its most; not a dead one).
@@ -239,6 +240,7 @@ The types these name:
 - `game.Item :: distinct u16`
 - `game.Kind_Id :: distinct u16`: an entity kind, the registry index + 1; 0 is none (and "any" in a filter).
 - `game.Lane_Item :: struct {...}`
+- `game.Logbook_Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon}`: what kind of place a logbook's place is (its name when it has none of its own).
 - `game.Pack_Source :: struct {...}`
 - `game.Stack :: struct {...}`: some of one item (count 0: empty, item NO_ITEM).
 - `game.Template :: struct {...}`
@@ -386,8 +388,6 @@ The types these name:
 - `SCOREBOARD_COLUMNS :: 4`: the most columns a game's scoreboard has besides the name.
 - `scoreboard_columns :: proc(board: ^Scoreboard, headings: ..string)`: the board's headings after the name's (at most SCOREBOARD_COLUMNS).
 - `scoreboard_row :: proc(board: ^Scoreboard, name: string, cells: ..string, you := false)`: a row, after those there are: a name and its cells, in the columns' order; you: the player's own.
-- `journal_place :: proc(s: ^Session, kind: Place_Kind, at: [3]f64, name := "")`: journal_place notes a place in the journal (a game's client part calls it for its own places): a place of the same kind within PLACE_SAME blocks of one noted is that one, its name changed; past MAX_PLACES the oldest is forgotten.
-- `Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon}`: what kind of place a journal's place is (its name when it has none of its own).
 
 The types these name:
 

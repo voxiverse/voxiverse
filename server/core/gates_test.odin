@@ -292,6 +292,12 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	// Alive: opened, and walked through to the far gate.
 	c.player.position = front
 	testing.expect_value(t, gate_open(srv, c, {frame, away}), "")
+	testing.expect(
+		t,
+		c.logbook.place_count == 1 && c.logbook.places[0].kind == .Gate,
+		"the gate opened is in the logbook",
+	)
+	testing.expect_value(t, c.logbook.places[0].world, w.address)
 	testing.expect(t, !gate_kill(w, frame), "a gate in use killed")
 	Walk :: struct {
 		c:       ^Client,

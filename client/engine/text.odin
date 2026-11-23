@@ -253,6 +253,7 @@ Text :: enum u16 {
 	Journal_No_Places,
 	Journal_No_Creatures,
 	Journal_Distance, // {0}: metres, {1}: a compass point
+	Journal_Elsewhere,
 	Place_Gate,
 	Place_Ruin,
 	Place_Town,
@@ -507,6 +508,7 @@ TEXT_EN := [Text]string {
 	.Journal_No_Places                      = "Nothing found yet",
 	.Journal_No_Creatures                   = "None met yet",
 	.Journal_Distance                       = "{0} m {1}",
+	.Journal_Elsewhere                      = "another world",
 	.Place_Gate                             = "Gate",
 	.Place_Ruin                             = "Ruin",
 	.Place_Town                             = "Town",

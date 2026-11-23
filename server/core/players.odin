@@ -42,6 +42,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		c.inventory = saved.inventory
 		c.aside = saved.aside
 		c.character_data = saved.character_data
+		c.logbook = saved.logbook
 		ledger_inventory(s, w, .Scope_In, &c.inventory)
 		if aside, ok := &c.aside.?; ok {ledger_inventory(s, w, .Scope_In, aside)}
 		for st in saved.overflow {

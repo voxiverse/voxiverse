@@ -7,8 +7,8 @@ import "client:ui"
 
 // The compass: a strip along the top of the screen, the way the eyes face in its middle,
 // half the horizon each side of it: a tick every 15 degrees, the eight points named, and a
-// mark for each place in the journal (engine.journal_place: a gate, the ruin, a town, an
-// outpost a game notes), at the strip's end when it lies behind.
+// mark for each place of the player's logbook in this world (the server's: a gate it
+// opened, a game's places such as the ruin), at the strip's end when it lies behind.
 
 COMPASS_WIDTH :: 480
 COMPASS_HEIGHT :: 28
@@ -88,13 +88,15 @@ compass :: proc(ctx: ^ui.Context, s: ^engine.Session, top: f32) -> (bottom: f32)
 			ui.fill_rect(ctx, {x - 0.5, r.y + r.h - 7, 1, 5}, t.text_muted)
 		}
 	}
-	// The journal's places.
-	j := &s.journal
-	for &p in j.places[:j.place_count] {
-		d := p.at - s.camera.position
+	// The logbook's places in this world.
+	j := &s.logbook.logbook
+	for &q in j.places[:j.place_count] {
+		if !engine.logbook_here(s, &q) {continue}
+		p := engine.logbook_place_at(&q)
+		d := p - s.camera.position
 		if d.x * d.x + d.z * d.z > COMPASS_MARK_RANGE * COMPASS_MARK_RANGE {continue}
 		off := clamp(
-			compass_offset(compass_bearing(s.camera.position, p.at), heading),
+			compass_offset(compass_bearing(s.camera.position, p), heading),
 			-COMPASS_SPAN / 2,
 			COMPASS_SPAN / 2,
 		)

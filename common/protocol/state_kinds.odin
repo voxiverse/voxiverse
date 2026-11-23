@@ -1,6 +1,7 @@
 package protocol
 
 import "common:game"
+import "common:starmap"
 import "core:math"
 import "core:slice"
 
@@ -39,6 +40,7 @@ State_Kind :: enum u8 {
 	Island,
 	Machine,
 	Belt,
+	Logbook,
 }
 
 Event_Kind :: enum u8 {
@@ -170,6 +172,14 @@ Place :: struct {
 	wetness: i8,
 }
 
+// Logbook_State: the player's logbook (game.Logbook: the places found, the creatures met;
+// kept with the character) and the world the player is in now (which of its places are
+// here).
+Logbook_State :: struct {
+	here:    starmap.Address,
+	logbook: game.Logbook,
+}
+
 // Player_Died: the player died, of cause (sent before they land at the spawn).
 Player_Died :: struct {
 	cause:    string `net:"max=32"`, // a Source_Kind's name
@@ -290,6 +300,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		write_through = true,
 		check = check_belt_record,
 	},
+	.Logbook = {name = "logbook", value = Logbook_State, check = check_logbook},
 }
 
 @(rodata)
@@ -376,6 +387,11 @@ check_mode :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 @(private = "file")
 check_inventory :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	return game.inventory_valid(reg, &(^Inventory_State)(v).inventory)
+}
+
+@(private = "file")
+check_logbook :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	return game.logbook_valid(reg, &(^Logbook_State)(v).logbook)
 }
 
 @(private = "file")

@@ -41,6 +41,7 @@ APPLY := [protocol.State_Kind]Apply_Proc {
 	.Island        = apply_island,
 	.Machine       = apply_machine,
 	.Belt          = apply_belt,
+	.Logbook       = apply_logbook,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -139,6 +140,16 @@ apply_selection :: proc(s: ^Session, g: protocol.Received) {
 	s.selection = (^protocol.Selection)(g.value).corners // (drawn: camera.odin)
 }
 
+// apply_logbook: the player's logbook (the Journal screen, the compass, the map).
+@(private)
+apply_logbook :: proc(s: ^Session, g: protocol.Received) {
+	if g.op == .Remove {
+		s.logbook = {}
+		return
+	}
+	s.logbook = (^protocol.Logbook_State)(g.value)^
+}
+
 @(private)
 apply_island :: proc(s: ^Session, g: protocol.Received) {
 	s.island = (^protocol.Island)(g.value)^
@@ -205,8 +216,6 @@ apply_entity :: proc(s: ^Session, g: protocol.Received) {
 		e.team, e.vision = v.team, v.vision
 		return
 	}
-	if info := game.kind_info(s.reg, v.kind);
-	   info != nil && info.hittable {journal_meet(s, v.kind)}
 	s.entities[id] = {
 		kind       = v.kind,
 		stack      = v.stack,
@@ -246,10 +255,7 @@ apply_block :: proc(s: ^Session, g: protocol.Received) {
 	block := game.Block(v.block)
 	changed := world_set_block(&s.world, p, block) && old != block
 	// A gate opening: its void gathers (gates.odin).
-	if changed && block == .Gate_Horizon {
-		gate_void_appeared(s, p)
-		journal_place(s, .Gate, {f64(p.x), f64(p.y), f64(p.z)})
-	}
+	if changed && block == .Gate_Horizon {gate_void_appeared(s, p)}
 	// The world's own changes (flowing water) are quiet; someone else's edit
 	// is heard where it happened.
 	if changed && v.heard {edit_sound(s, p, old, block)}

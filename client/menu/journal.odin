@@ -10,12 +10,13 @@ import "client:overview"
 import "client:ui"
 import "common:game"
 
-// The journal (J) and the map (M): what the player has found in this world, from the
-// session's journal (engine.Journal: the gates used or seen open, a game's places such as
-// the sandbox's ruin and towns, the creatures that came into view).
+// The journal (J) and the map (M): what the player has found, from their logbook (kept
+// with their character by the server and sent to them: game.Logbook; the gates they
+// opened, a game's places such as the sandbox's ruin, the creatures that came into view).
 //
-// The journal is two panes: the places, nearest first, each with how far and which way
-// it lies ("120 m NE"), and the creatures met, in the order met. The map is the ground
+// The journal is two panes: the places, those in this world nearest first, each with how
+// far and which way it lies ("120 m NE"), then those in other worlds; and the creatures
+// met, in the order met. The map is the ground
 // round the player seen from above (engine.Minimap, the minimap's ground read from the
 // world as the session holds it, re-centred when the player walks off its middle), the
 // player an arrow at their place and heading, each place a dot with its name; the places
@@ -30,7 +31,7 @@ MAP_READS :: 3 // minimap_ground's rows read a frame while it is shown, times th
 MAP_LIST_WIDTH :: 220
 
 @(rodata)
-PLACE_TEXT := [engine.Place_Kind]engine.Text {
+PLACE_TEXT := [game.Logbook_Place_Kind]engine.Text {
 	.Gate    = .Place_Gate,
 	.Ruin    = .Place_Ruin,
 	.Town    = .Place_Town,
@@ -39,14 +40,16 @@ PLACE_TEXT := [engine.Place_Kind]engine.Text {
 }
 
 // place_title: a place as the journal names it: its own name, else its kind's.
-place_title :: proc(p: ^engine.Place) -> string {
-	if name := engine.place_name(p); name != "" {return name}
+place_title :: proc(p: ^game.Logbook_Place) -> string {
+	if name := game.place_name(p); name != "" {return name}
 	return engine.tr(PLACE_TEXT[p.kind])
 }
 
-// place_way: how far a place is from `from` and which way, "120 m NE".
-place_way :: proc(from: [3]f64, p: ^engine.Place) -> string {
-	d := p.at - from
+// place_way: how far a place is from `from` and which way, "120 m NE" (in another world:
+// that).
+place_way :: proc(s: ^engine.Session, from: [3]f64, p: ^game.Logbook_Place) -> string {
+	if !engine.logbook_here(s, p) {return engine.tr(.Journal_Elsewhere)}
+	d := engine.logbook_place_at(p) - from
 	far := math.sqrt(d.x * d.x + d.z * d.z)
 	bearing := math.mod(math.to_degrees(math.atan2(d.x, -d.z)) + 720 + 22.5, 360)
 	return engine.tr(.Journal_Distance, int(far), engine.tr(COMPASS_TEXT[int(bearing / 45) % 8]))
@@ -64,19 +67,22 @@ COMPASS_TEXT := [8]engine.Text {
 	.Compass_NW,
 }
 
-// places_by_distance: the journal's places, nearest to `from` first.
-places_by_distance :: proc(j: ^engine.Journal, from: [3]f64) -> []^engine.Place {
+// places_by_distance: the logbook's places, those in this world nearest to `from` first,
+// then those in others in the order found.
+places_by_distance :: proc(s: ^engine.Session, from: [3]f64) -> []^game.Logbook_Place {
 	Near :: struct {
-		p: ^engine.Place,
+		p: ^game.Logbook_Place,
 		d: f64,
 	}
+	j := &s.logbook.logbook
 	near := make([dynamic]Near, context.temp_allocator)
-	for &p in j.places[:j.place_count] {
-		d := p.at - from
-		append(&near, Near{&p, d.x * d.x + d.z * d.z})
+	for &p, i in j.places[:j.place_count] {
+		d := engine.logbook_place_at(&p) - from
+		far := d.x * d.x + d.z * d.z if engine.logbook_here(s, &p) else 1e30 + f64(i)
+		append(&near, Near{&p, far})
 	}
 	slice.sort_by(near[:], proc(a, b: Near) -> bool {return a.d < b.d})
-	out := make([]^engine.Place, len(near), context.temp_allocator)
+	out := make([]^game.Logbook_Place, len(near), context.temp_allocator)
 	for n, i in near {out[i] = n.p}
 	return out
 }
@@ -126,12 +132,12 @@ journal_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	half := (content.w - 2 * t.spacing) / 2
 	left := ui.cut_left(&content, half)
 	ui.cut_left(&content, 2 * t.spacing)
-	j := &s.journal
+	j := &s.logbook.logbook
 	names := make([dynamic]string, context.temp_allocator)
 	ways := make([dynamic]string, context.temp_allocator)
-	for p in places_by_distance(j, s.feet) {
+	for p in places_by_distance(s, s.feet) {
 		append(&names, place_title(p))
-		append(&ways, place_way(s.feet, p))
+		append(&ways, place_way(s, s.feet, p))
 	}
 	list_rows(
 		ctx,
@@ -168,14 +174,20 @@ map_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	under := ui.cut_bottom(&content, t.row_height)
 	side := min(content.w, content.h)
 	r := ui.Rect{content.x + (content.w - side) / 2, content.y, side, side}
-	j := &s.journal
+	j := &s.logbook.logbook
 	marks := make([dynamic]overview.Mark, context.temp_allocator)
-	for &p in j.places[:j.place_count] {append(&marks, overview.Mark{{p.at.x, p.at.z}, t.meter_fill, 8})}
+	for &p in j.places[:j.place_count] {
+		if !engine.logbook_here(s, &p) {continue}
+		at := engine.logbook_place_at(&p)
+		append(&marks, overview.Mark{{at.x, at.z}, t.meter_fill, 8})
+	}
 	overview.minimap_draw(m, s, ctx, r, nil, marks[:], t.list_fill, t.list_fill)
 	ui.push_clip_rect(ctx, r)
 	small := t.font_size * 0.8
 	for &p in j.places[:j.place_count] {
-		at := overview.minimap_point(m, r, p.at.x, p.at.z)
+		if !engine.logbook_here(s, &p) {continue}
+		spot := engine.logbook_place_at(&p)
+		at := overview.minimap_point(m, r, spot.x, spot.z)
 		label := ui.Rect{at.x + 6, at.y - 9, 200, 18}
 		name := place_title(&p)
 		ui.draw_text(ctx, {label.x + 1, label.y + 1, label.w, label.h}, name, small, t.text_shadow)
@@ -200,9 +212,9 @@ map_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	)
 	names := make([dynamic]string, context.temp_allocator)
 	ways := make([dynamic]string, context.temp_allocator)
-	for p in places_by_distance(j, s.feet) {
+	for p in places_by_distance(s, s.feet) {
 		append(&names, place_title(p))
-		append(&ways, place_way(s.feet, p))
+		append(&ways, place_way(s, s.feet, p))
 	}
 	list_rows(
 		ctx,

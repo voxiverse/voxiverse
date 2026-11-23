@@ -88,6 +88,7 @@ gate_open :: proc(s: ^Server, c: ^Client, d: protocol.Open_Gate) -> string {
 		starmap.address_dir(d.address),
 	)
 	record(s, c, .Gate_Dial, "opened")
+	logbook_place(s, c, .Gate, {centre.x, centre.y, centre.z})
 	return ""
 }
 

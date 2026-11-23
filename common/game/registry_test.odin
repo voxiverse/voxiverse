@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:strings"
 import "core:testing"
 
+import "common:starmap"
+
 // The base pack's block types after the builtins: four stairs (8 states each),
 // four slabs (3), a ladder (4), a fence (16) and a door (16).
 BASE_NEW_TYPES :: 11
@@ -1155,4 +1157,25 @@ test_gear_and_tiers :: proc(t: ^testing.T) {
 			errors_text(errs),
 		)
 	}
+}
+
+// A logbook notes a place once (one of its kind near one noted in the same world is that
+// one, named anew by a name), the same spot in another world apart, the oldest forgotten
+// past its room; a creature kind once.
+@(test)
+test_logbook_notes_once :: proc(t: ^testing.T) {
+	lb: Logbook
+	a, b := starmap.address_derive(1), starmap.address_derive(2)
+	testing.expect(t, logbook_place(&lb, .Gate, a, {10, 5, 10}))
+	testing.expect(t, !logbook_place(&lb, .Gate, a, {12, 5, 9}), "the same gate")
+	testing.expect(t, logbook_place(&lb, .Gate, a, {12, 5, 9}, "Home gate"), "named")
+	testing.expect_value(t, place_name(&lb.places[0]), "Home gate")
+	testing.expect(t, logbook_place(&lb, .Ruin, a, {12, 5, 9}), "another kind")
+	testing.expect(t, logbook_place(&lb, .Gate, b, {10, 5, 10}), "another world")
+	testing.expect_value(t, lb.place_count, 3)
+	for i in 0 ..< LOGBOOK_PLACES {logbook_place(&lb, .Beacon, a, {i32(i) * 100, 5, 1000})}
+	testing.expect_value(t, int(lb.place_count), LOGBOOK_PLACES)
+	testing.expect_value(t, lb.places[0].kind, Logbook_Place_Kind.Beacon) // (the gates forgotten first)
+	testing.expect(t, logbook_meet(&lb, Kind_Id(3)) && !logbook_meet(&lb, Kind_Id(3)))
+	testing.expect_value(t, lb.met_count, 1)
 }

@@ -689,6 +689,9 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 			record.max_health = u16(clamp(hp.max, 0, 65535))
 		}
 		state_put(s, c, .Entity, &record, key)
+		if info := game.kind_info(s.registry, record.kind); info != nil && info.hittable {
+			game.logbook_meet(&c.logbook, record.kind) // (a creature in its view: met)
+		}
 		motion := protocol.Entity_Motion {
 			entity_pos(w, h),
 			entity_yaw(w, h),

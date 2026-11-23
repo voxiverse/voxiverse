@@ -68,6 +68,8 @@ replicate_tick :: proc(s: ^Server, c: ^Client) {
 	rules := c.world.rules
 	state_put(s, c, .Rules, &rules)
 	island_put(s, c)
+	logbook := protocol.Logbook_State{c.world.address, c.logbook}
+	state_put(s, c, .Logbook, &logbook)
 	if c.clock_pending || s.time_stopped {
 		c.clock_pending = false
 		clock := protocol.Clock{c.world.clock, u32(s.tick)}

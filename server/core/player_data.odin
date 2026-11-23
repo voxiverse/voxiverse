@@ -29,7 +29,7 @@ import "common:starmap"
 
 CHARACTERS_DIR :: "characters"
 PLAYERS_DIR :: "players"
-PLAYER_FILE_FORMAT :: 6 // 6: an inventory set aside (`aside`; before: none). 5: the game's record on the character (`game`; before: none). 4: an item's game data (`data`; before: 0). 3: the trader (the sandbox's now: read by the save migration from format 8, ignored here). 2: a weapon's magazine (`ammo`); a file of 1 has none: full
+PLAYER_FILE_FORMAT :: 7 // 7: the logbook (`logbook`; before: none). 6: an inventory set aside (`aside`; before: none). 5: the game's record on the character (`game`; before: none). 4: an item's game data (`data`; before: 0). 3: the trader (the sandbox's now: read by the save migration from format 8, ignored here). 2: a weapon's magazine (`ammo`); a file of 1 has none: full
 
 Player_Record :: struct {
 	account:        Maybe(access.Account), // whose (none: from before accounts, unclaimed)
@@ -40,6 +40,7 @@ Player_Record :: struct {
 	inventory:      game.Inventory,
 	aside:          Maybe(game.Inventory), // the inventory set aside (inventory_set_aside; none: nothing is)
 	character_data: game.Character_Data, // the game's record on the character (Game.character_data)
+	logbook:        game.Logbook, // the places it found and the creatures it met (logbook_place)
 	dirty:          bool, // changed since its file was written
 	stats:          Counters, // its counters (heap; stats.odin)
 	overflow:       [MAX_OVERFLOW]game.Stack, // read but with no room (an older, bigger inventory): dropped at their feet on joining
@@ -61,6 +62,30 @@ Player_File :: struct {
 	items:    []File_Stack,
 	aside:    Maybe([]File_Stack) `json:"aside,omitempty"`, // format 6: the inventory set aside (inventory_set_aside), its stacks numbered as items'
 	game:     json.Value `json:"game,omitempty"`, // format 5: the game's record, a field by its path (written by hand: player_json)
+	logbook:  Maybe(File_Logbook) `json:"logbook,omitempty"`, // format 7: the places found (each in its world) and the creatures met, by name
+}
+
+// File_Logbook: a logbook as a player file keeps it (kinds by name: their numbers are the
+// registry's of the day).
+File_Logbook :: struct {
+	places: []File_Place,
+	met:    []string, // creature kinds' ids
+}
+
+File_Place :: struct {
+	kind:  string, // "gate", "ruin", ...
+	world: string, // its address (directory form)
+	at:    [3]i32,
+	name:  string `json:"name,omitempty"`,
+}
+
+@(rodata)
+PLACE_KIND_NAMES := [game.Logbook_Place_Kind]string {
+	.Gate    = "gate",
+	.Ruin    = "ruin",
+	.Town    = "town",
+	.Outpost = "outpost",
+	.Beacon  = "beacon",
 }
 
 @(private = "file")
@@ -196,6 +221,7 @@ player_parse :: proc(
 	if record, is_record := f.game.(json.Object); is_record && character != nil {
 		character_data_read(character, &r.character_data, record)
 	}
+	if lb, has := f.logbook.?; has {logbook_read(reg, lb, &r.logbook)}
 	n := stacks_read(reg, f.format, f.items, &r.inventory, r.overflow[:])
 	if stacks, set_aside := f.aside.?; set_aside {
 		aside: game.Inventory
@@ -268,6 +294,8 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record, character: typeid) -
 		items    = file_stacks(reg, &r.inventory),
 	}
 	if aside, set_aside := r.aside.?; set_aside {f.aside = file_stacks(reg, &aside)}
+	if r.logbook.place_count > 0 ||
+	   r.logbook.met_count > 0 {f.logbook = logbook_file(reg, &r.logbook)}
 	data, _ := json.marshal(
 		f,
 		{pretty = true, use_spaces = true, spaces = 2},
@@ -421,6 +449,7 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 		inventory      = c.inventory,
 		aside          = c.aside,
 		character_data = c.character_data,
+		logbook        = c.logbook,
 		mode           = mode_record_text(s, c),
 		dirty          = true,
 		stats          = counters_clone(c.stats),
@@ -488,4 +517,62 @@ give_kit :: proc(s: ^Server, c: ^Client) {
 		left := game.inventory_add(s.registry, &c.inventory, st)
 		ledger(s, c.world, .Kit, st.item, st.count - left.count)
 	}
+}
+
+// logbook_file: a logbook as a player file keeps it (temporary memory).
+@(private = "file")
+logbook_file :: proc(reg: ^game.Registry, lb: ^game.Logbook) -> File_Logbook {
+	places := make([]File_Place, lb.place_count, context.temp_allocator)
+	for &p, i in lb.places[:lb.place_count] {
+		places[i] = {
+			PLACE_KIND_NAMES[p.kind],
+			starmap.address_dir(p.world),
+			p.at,
+			strings.clone(game.place_name(&p), context.temp_allocator),
+		}
+	}
+	met := make([dynamic]string, context.temp_allocator)
+	for k in lb.met[:lb.met_count] {
+		if info := game.kind_info(reg, k); info != nil {append(&met, info.id)}
+	}
+	return {places, met[:]}
+}
+
+// logbook_read: a player file's logbook into lb; a place of a kind or world it cannot
+// read, or a creature kind the registry no longer has, is left out (and logged).
+@(private = "file")
+logbook_read :: proc(reg: ^game.Registry, f: File_Logbook, lb: ^game.Logbook) {
+	for p in f.places {
+		kind, known := game.Logbook_Place_Kind(0), false
+		for name, k in PLACE_KIND_NAMES {if name == p.kind {kind, known = k, true}}
+		world, valid := starmap.address_parse(p.world, {})
+		if !known || !valid || !game.in_world(game.chunk_of(p.at)) {
+			log.warnf("server player file logbook place skipped kind=%q world=%q", p.kind, p.world)
+			continue
+		}
+		game.logbook_place(lb, kind, world, p.at, p.name[:min(len(p.name), game.PLACE_NAME_MAX)])
+	}
+	for id in f.met {
+		kind, found := game.registry_kind(reg, id)
+		if !found {
+			log.warnf("server player file logbook creature skipped kind=%q", id)
+			continue
+		}
+		game.logbook_meet(lb, kind)
+	}
+}
+
+// logbook_place notes a place in c's logbook (a gate it opened; a game's places, such as
+// the sandbox's ruin once found): kept with its character and sent to it, its journal
+// lists it, the compass marks it and the map shows it. One of the same kind within
+// game.PLACE_SAME blocks in the same world is that one (named anew by a name). name: ""
+// for the kind's own.
+logbook_place :: proc(
+	s: ^Server,
+	c: ^Client,
+	kind: game.Logbook_Place_Kind,
+	at: [3]i32,
+	name := "",
+) {
+	game.logbook_place(&c.logbook, kind, c.world.address, at, name)
 }

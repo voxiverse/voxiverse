@@ -8,11 +8,12 @@ import "client:menu"
 import "client:testkit"
 import "client:ui"
 import "common:game"
+import "common:starmap"
 
-// The journal: places noted once (one near another of its kind is that one), named or
-// called by their kind, listed nearest first with how far and which way; the creatures met
-// once each. The map: the ground round the player (its cells made in the session's arena
-// the first time it is shown), the places listed beside it.
+// The journal: the logbook the server sent, its places named or called by their kind,
+// those in this world nearest first with how far and which way, one in another world said
+// so; the creatures met. The map: the ground round the player (its cells made in the
+// session's arena the first time it is shown), this world's places listed beside it.
 @(test)
 test_journal_and_map :: proc(t: ^testing.T) {
 	f: Overlay_Fixture
@@ -28,20 +29,25 @@ test_journal_and_map :: proc(t: ^testing.T) {
 	overlay_frame(&f, {})
 	testing.expect(t, said(app, "Nothing found yet") && said(app, "None met yet"))
 
-	engine.journal_place(s, .Gate, {10, 5, -100})
-	engine.journal_place(s, .Gate, {12, 5, -98}) // (the same gate)
-	engine.journal_place(s, .Ruin, {-300, 5, 0}, "Old ruin")
-	testing.expect_value(t, s.journal.place_count, 2)
+	here, there := starmap.address_derive(1), starmap.address_derive(2)
+	lb := &s.logbook.logbook
+	s.logbook.here = here
+	game.logbook_place(lb, .Beacon, there, {0, 5, 0}, "Far beacon")
+	game.logbook_place(lb, .Ruin, here, {-301, 5, -1}, "Old ruin")
+	game.logbook_place(lb, .Gate, here, {9, 5, -101})
 	shambler, _ := game.registry_kind(testkit.test_reg(), "voxiverse:shambler")
-	engine.journal_meet(s, shambler)
-	engine.journal_meet(s, shambler)
-	testing.expect_value(t, s.journal.met_count, 1)
+	game.logbook_meet(lb, shambler)
 	overlay_frame(&f, {})
 	testing.expect(t, said(app, "Gate") && said(app, "100 m N"), "the gate, 100 m north")
 	testing.expect(t, said(app, "Old ruin") && said(app, "300 m W"), "the ruin by its name")
+	testing.expect(t, said(app, "Far beacon") && said(app, "another world"), "elsewhere, said so")
 	testing.expect(t, said(app, "shambler"), "the creature met")
-	near := menu.places_by_distance(&s.journal, {})
-	testing.expect(t, len(near) == 2 && near[0].kind == .Gate, "nearest first")
+	near := menu.places_by_distance(s, {})
+	testing.expect(
+		t,
+		len(near) == 3 && near[0].kind == .Gate && near[2].kind == .Beacon,
+		"nearest first, elsewhere last",
+	)
 
 	// M: the map, its ground made the first time; the places beside it.
 	menu.player_menu_show(app, .Map)

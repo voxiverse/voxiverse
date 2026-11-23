@@ -6,6 +6,7 @@ import "core:testing"
 
 import "common:game"
 import "common:protocol"
+import "common:starmap"
 
 // The exit check, two players over UDP: armor goes on through the
 // inventory's own actions (only into the slot it fits; swapping; quick
@@ -149,4 +150,30 @@ test_trinkets_saved :: proc(t: ^testing.T) {
 	testing.expect_value(t, back.inventory.equipment[.Trinket_2], charm)
 	testing.expect_value(t, back.inventory.equipment[.Offhand], charm)
 	testing.expect(t, game.stack_empty(back.inventory.equipment[.Trinket_1]))
+}
+
+// The logbook is kept with the character (a player file of format 7): its places, each in
+// its world and with its name, and the creatures met by their kinds' ids; a file from
+// before it has none.
+@(test)
+test_logbook_saved :: proc(t: ^testing.T) {
+	reg := test_reg()
+	r: Player_Record
+	defer counters_free(&r.stats)
+	home, far := starmap.address_derive(3), starmap.address_derive(4)
+	game.logbook_place(&r.logbook, .Gate, home, {51, 6, 31})
+	game.logbook_place(&r.logbook, .Ruin, far, {-300, 12, 280}, "Old ruin")
+	dummy, _ := game.registry_kind(reg, "voxiverse:dummy")
+	game.logbook_meet(&r.logbook, dummy)
+	back, ok := player_parse(reg, player_json(reg, &r, nil), nil)
+	defer counters_free(&back.stats)
+	testing.expect(t, ok)
+	testing.expect_value(t, back.logbook, r.logbook)
+	old, old_ok := player_parse(
+		reg,
+		transmute([]u8)string(`{"format": 6, "position": [0, 0, 0], "look": [0, 0], "items": []}`),
+		nil,
+	)
+	defer counters_free(&old.stats)
+	testing.expect(t, old_ok && old.logbook.place_count == 0 && old.logbook.met_count == 0)
 }

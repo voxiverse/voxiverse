@@ -428,8 +428,8 @@ ruin_hold_creatures :: proc(s: ^core.Server, w: ^core.World) {
 	}
 }
 
-// ruin_put: each player is told the fight, or that there is none, and in the home world
-// where the site is once it is built (their journal's place).
+// ruin_put: each player is told the fight, or that there is none; in the home world, once
+// the site is built, it is a place in their logbook.
 ruin_put :: proc(s: ^core.Server) {
 	r := ruin_of(s)
 	shown := sandbox.Ruin_Fight {
@@ -450,8 +450,10 @@ ruin_put :: proc(s: ^core.Server) {
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		put := shown if ruin_fighting(s, &c) else none
-		if r.built && c.world == s.home {put.found, put.site = true, {altar.x, altar.y, altar.z}}
 		core.game_put(s, &c, &put)
+		// Found (built: someone came near it): a place in the logbook of everyone there.
+		if r.built &&
+		   c.world == s.home {core.logbook_place(s, &c, .Ruin, {altar.x, altar.y, altar.z})}
 	}
 }
 

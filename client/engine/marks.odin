@@ -313,79 +313,19 @@ flash_draw :: proc(ctx: ^ui.Context, f: ^Flash, s: ^Session, at: f32 = -160, sca
 	banner(ctx, at, text, scale * pop, color)
 }
 
-// The journal: the places the player has found in this world and the creatures met, as
-// this client has learnt them (kept with the session: a new session starts it empty). The
-// journal's screen lists them, the compass marks the places and the map shows them. The
-// engine notes the gates the player used or saw open and every creature that came into
-// view; a game's client part notes its own places (journal_place: its ruin, a town, an
-// outpost the player built).
+// The logbook's places as the HUD and the player menu show them (the server keeps the
+// logbook: game.Logbook, Session.logbook).
 
-MAX_PLACES :: 64
-MAX_MET :: 64 // creature kinds the journal remembers
-PLACE_NAME_MAX :: 32
-PLACE_SAME :: 24 // blocks: a place of a kind this near one already noted is that one
-
-// Place_Kind: what kind of place a journal's place is (its name when it has none of its own).
-Place_Kind :: enum u8 {
-	Gate,
-	Ruin,
-	Town,
-	Outpost,
-	Beacon,
+// logbook_place_at: where a logbook's place is (the middle of its block's column).
+logbook_place_at :: proc(p: ^game.Logbook_Place) -> [3]f64 {
+	return {f64(p.at.x) + 0.5, f64(p.at.y), f64(p.at.z) + 0.5}
 }
 
-// Place: a place in the journal (name_len 0: the kind's own name).
-Place :: struct {
-	kind:     Place_Kind,
-	at:       [3]f64,
-	name:     [PLACE_NAME_MAX]u8,
-	name_len: u8,
-}
-
-// Journal: the session's places and the creature kinds met, in the order found.
-Journal :: struct {
-	places:      [MAX_PLACES]Place,
-	place_count: int,
-	met:         [MAX_MET]game.Kind_Id,
-	met_count:   int,
-}
-
-// place_name: the place's own name ("" when it has none).
-place_name :: proc(p: ^Place) -> string {return string(p.name[:p.name_len])}
-
-// journal_place notes a place in the journal (a game's client part calls it for its own
-// places): a place of the same kind within PLACE_SAME blocks of one noted is that one, its
-// name changed; past MAX_PLACES the oldest is forgotten. name: "" for the kind's own name.
-journal_place :: proc(s: ^Session, kind: Place_Kind, at: [3]f64, name := "") {
-	j := &s.journal
-	p: ^Place
-	for &q in j.places[:j.place_count] {
-		d := q.at - at
-		if q.kind == kind && d.x * d.x + d.z * d.z <= PLACE_SAME * PLACE_SAME {p = &q}
-	}
-	if p == nil {
-		if j.place_count == MAX_PLACES {
-			copy(j.places[:], j.places[1:])
-			j.place_count -= 1
-		}
-		p = &j.places[j.place_count]
-		j.place_count += 1
-		p^ = {
-			kind = kind,
-			at   = at,
-		}
-	}
-	if name != "" || p.name_len == 0 {p.name_len = u8(copy(p.name[:], name))}
-}
-
-// journal_meet notes a creature kind as met (once; past MAX_MET no more are noted).
-journal_meet :: proc(s: ^Session, kind: game.Kind_Id) {
-	j := &s.journal
-	for k in j.met[:j.met_count] {if k == kind {return}}
-	if j.met_count == MAX_MET {return}
-	j.met[j.met_count] = kind
-	j.met_count += 1
-}
+// logbook_here: the place is in the world the player is in now.
+logbook_here :: proc(s: ^Session, p: ^game.Logbook_Place) -> bool {return(
+		p.world ==
+		s.logbook.here \
+	)}
 
 // The minimap's ground (client/overview draws it; the player menu's map too): a map seen
 // from above, each cell the colour of its top block, read a few rows a frame.
