@@ -38,10 +38,30 @@ survivor :: proc(t: ^testing.T, rig: ^Rig) -> bool {
 	return true
 }
 
-// break_at: the host breaks the block at p, as its client asks (an edit after its last
-// input), and the server answers.
+// break_at: the host breaks the block at p as its client does: it begins (an edit of face
+// EDIT_FACE_BREAK_BEGIN), holds on for the block's ticks with what is in its hand, then asks
+// for the break, and the server answers.
 break_at :: proc(rig: ^Rig, p: game.Block_Pos) {
+	s := playtest.srv(rig)
+	h := playtest.host(rig)
 	m := &rig.sess.mirror
+	b, _ := core.block_at(s.home, p)
+	abilities := game.derive_abilities(s.registry, h.mode, &h.inventory)
+	need := game.break_ticks(
+		s.registry,
+		&h.world.rules,
+		b,
+		game.inventory_held(&h.inventory),
+		abilities,
+	)
+	begin := protocol.Edit {
+		after = m.prediction.next_sequence - 1,
+		pos   = p,
+		block = .Air,
+		face  = game.EDIT_FACE_BREAK_BEGIN,
+	}
+	core.mirror_send(m, begin)
+	playtest.step(rig, need + 2)
 	m.edit_id += 1
 	e := protocol.Edit {
 		id    = m.edit_id,
@@ -147,7 +167,16 @@ test_survival_crafting :: proc(t: ^testing.T) {
 	testing.expect(t, playtest.told(rig, "You are making something already"))
 	playtest.step(rig, playtest.ticks(1.2))
 	testing.expect_value(t, core.item_count(h, cord), 2)
-	testing.expect(t, playtest.told(rig, "Made 2 Cord"))
+
+	// Leaving with it being made gives back what it took, and nothing is made.
+	core.item_give(s, h, fibre, 3)
+	core.harness_request(s, h, &ask)
+	testing.expect_value(t, core.item_count(h, fibre), 0)
+	craft_left(s, h) // (the left hook's part)
+	testing.expect_value(t, core.item_count(h, fibre), 3)
+	playtest.step(rig, playtest.ticks(1.2))
+	testing.expect_value(t, core.item_count(h, cord), 2)
+	core.item_clear(s, h, fibre)
 
 	// One short: refused, nothing taken.
 	core.item_give(s, h, fibre, 2)
@@ -218,6 +247,24 @@ test_survival_tools_gather_by_tier :: proc(t: ^testing.T) {
 	core.set_block(w, at, copper, act)
 	break_at(rig, at)
 	testing.expect_value(t, core.item_count(h, item_of(t, s, "sandbox:raw_copper")), 2)
+
+	// How long each takes on stone (break_time 1, the sandbox's): hands cannot; the drill is
+	// the fastest; a knife is no quicker than hands on stone, and quick on a log.
+	r := &w.rules
+	testing.expect_value(t, r.break_time, 1)
+	ticks :: proc(t: ^testing.T, s: ^core.Server, b: game.Block, item: string) -> int {
+		held := game.Stack{}
+		if item != "" {held = {item_of(t, s, item), 1, 0, 0}}
+		return game.break_ticks(s.registry, &s.home.rules, b, held, {})
+	}
+	log, _ := game.registry_block(s.registry, "log")
+	testing.expect_value(t, ticks(t, s, stone, "sandbox:flint_pick"), 30)
+	testing.expect_value(t, ticks(t, s, stone, "sandbox:copper_pick"), 19)
+	testing.expect_value(t, ticks(t, s, stone, "sandbox:alloy_drill"), 10)
+	testing.expect_value(t, ticks(t, s, log, ""), 60)
+	testing.expect_value(t, ticks(t, s, log, "sandbox:flint_knife"), 20)
+	testing.expect_value(t, ticks(t, s, log, "sandbox:machete"), 10)
+	testing.expect_value(t, ticks(t, s, log, "sandbox:flint_pick"), 60)
 }
 
 // What is worn turns harm aside while worn and not once taken off; a consumable used up

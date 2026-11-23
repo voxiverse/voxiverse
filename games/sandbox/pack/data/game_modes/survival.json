@@ -1,0 +1,10 @@
+{
+	// Survival is the sandbox's game: a survivor starts with what the game's kit gives
+	// (games/sandbox/server/game.odin, KIT) and gathers and makes the rest, so the base
+	// pack's survival kit (its guns, the launcher, the hook, jump boots) is given neither
+	// at the start nor after a death where the sandbox is played.
+	"voxiverse:survival": {
+		"override": true,
+		"kit": []
+	}
+}

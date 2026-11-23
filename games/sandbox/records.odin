@@ -96,6 +96,12 @@ Survival :: struct {
 	outposts:        [MAX_OUTPOSTS]Outpost_Line,
 }
 
+// Made (an event): the player's recipe was made and given: what and how many.
+Made :: struct {
+	item:  u16, // a game.Item
+	count: u16,
+}
+
 // Craft (a request): make the recipe of this index in the registry's recipes, one of the
 // sandbox's; the server judges where the player stands and what it carries.
 Craft :: struct {
@@ -111,6 +117,7 @@ KINDS :: protocol.Game_Kinds {
 	events   = {
 		{name = "sandbox.trade_refused", value = Trade_Refused},
 		{name = "sandbox.market_open", value = Market_Open},
+		{name = "sandbox.made", value = Made},
 	},
 	requests = {{name = "sandbox.trade", value = Trade}, {name = "sandbox.craft", value = Craft}},
 }

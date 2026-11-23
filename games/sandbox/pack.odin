@@ -24,6 +24,7 @@ PACK :: game.Pack_Source {
 		{"data/items/ruin.json", #load("pack/data/items/ruin.json")},
 		{"data/models/ruin.json", #load("pack/data/models/ruin.json")},
 		{"data/game_modes/encounter.json", #load("pack/data/game_modes/encounter.json")},
+		{"data/game_modes/survival.json", #load("pack/data/game_modes/survival.json")},
 		{"data/items/survival.json", #load("pack/data/items/survival.json")},
 		{"data/models/survival.json", #load("pack/data/models/survival.json")},
 		{"data/blocks/survival.json", #load("pack/data/blocks/survival.json")},

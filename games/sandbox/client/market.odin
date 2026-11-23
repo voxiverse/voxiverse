@@ -54,6 +54,7 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	}
 	if v, ok := engine.game_value(s, r, sandbox.Survival);
 	   ok && v != nil {view(s).craft.shown = v^}
+	if v, ok := engine.game_value(s, r, sandbox.Made); ok && v != nil {craft_made(s, v^)}
 	if v, ok := engine.game_value(s, r, sandbox.Ruin_Fight); ok && v != nil {ruin_received(s, v)}
 }
 

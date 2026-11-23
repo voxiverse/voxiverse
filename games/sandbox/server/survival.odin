@@ -28,6 +28,7 @@ Seat_Survival :: struct {
 	began:     u64,
 	done:      u64, // the tick it is made
 	scan_from: u64, // the tick the scanner works again
+	taken:     [game.MAX_PROCESS_INPUTS]game.Stack, // what the recipe being made took (given back if it leaves first)
 }
 
 // Survival_State: the session's: the registry's names the loop uses, and each seat's.
@@ -192,25 +193,56 @@ craft_ask :: proc(s: ^core.Server, c: ^core.Client, ask: sandbox.Craft) {
 		core.notice(s, c, "You do not carry what that takes")
 	case:
 		needs, tags, n := game.recipe_needs(r)
-		for k in 0 ..< n {take(s, c, needs[k], tags[k])}
+		ss.taken = {}
+		at := 0
+		for k in 0 ..< n {take(s, c, needs[k], tags[k], ss.taken[:], &at)}
 		ss.making, ss.began = i + 1, s.tick
 		ss.done = s.tick + u64(math.ceil(f64(r.time) * game.TICK_RATE))
 	}
 }
 
-// take: count of an item, or of the items of a tag, out of c's slots.
+// take: count of an item, or of the items of a tag, out of c's slots, each stack taken
+// noted in taken (from `at` on).
 @(private = "file")
-take :: proc(s: ^core.Server, c: ^core.Client, need: game.Stack, tag: i32) {
+take :: proc(
+	s: ^core.Server,
+	c: ^core.Client,
+	need: game.Stack,
+	tag: i32,
+	taken: []game.Stack,
+	at: ^int,
+) {
+	note :: proc(taken: []game.Stack, at: ^int, item: game.Item, n: int) {
+		if n <= 0 || at^ >= len(taken) {return}
+		taken[at^] = {item, n, 0, 0}
+		at^ += 1
+	}
 	if tag == game.NO_TAG {
-		core.item_take(s, c, need.item, need.count)
+		note(taken, at, need.item, core.item_take(s, c, need.item, need.count))
 		return
 	}
 	left := need.count
 	for st in c.inventory.slots {
 		if left <= 0 {break}
 		if game.stack_empty(st) || !game.registry_item_in_tag(s.registry, st.item, tag) {continue}
-		left -= core.item_take(s, c, st.item, min(left, st.count))
+		item := st.item
+		n := core.item_take(s, c, item, min(left, st.count))
+		note(taken, at, item, n)
+		left -= n
 	}
+}
+
+// craft_left: a player who leaves with a recipe being made gets back what it took.
+craft_left :: proc(s: ^core.Server, c: ^core.Client) {
+	ss := seat_survival(s, c)
+	if ss.making == 0 {return}
+	for st in ss.taken {
+		if game.stack_empty(st) {continue}
+		if given := core.item_give(s, c, st.item, st.count); given < st.count {
+			core.item_drop(s, c.world, c.player.position, {st.item, st.count - given, 0, 0})
+		}
+	}
+	ss.making, ss.taken = 0, {}
 }
 
 // survival_tick: each player's recipe made when its time is up (what does not fit is
@@ -227,11 +259,9 @@ survival_tick :: proc(s: ^core.Server) {
 			if given := core.item_give(s, &c, out.item, out.count); given < out.count {
 				core.item_drop(s, c.world, c.player.position, {out.item, out.count - given, 0, 0})
 			}
-			core.notice(
-				s,
-				&c,
-				fmt.tprintf("Made %d %s", out.count, sandbox.item_label(s.registry, out.item)),
-			)
+			ss.taken = {}
+			made := sandbox.Made{u16(out.item), u16(out.count)}
+			core.game_event(s, &c, &made)
 		}
 		if (s.tick + u64(core.player_id(s, &c))) % SURVIVAL_EVERY != 0 {continue}
 		shown := sandbox.Survival {

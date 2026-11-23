@@ -216,3 +216,9 @@ craft_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	}
 	if ui.button(ctx, sandbox.tr(.Craft_Close), close) {engine.game_screen_close(s)}
 }
+
+// craft_made: a recipe made (sandbox.Made): the engine's chime and "+2 Cord" floating up.
+craft_made :: proc(s: ^engine.Session, m: sandbox.Made) {
+	label := sandbox.item_label(s.reg, game.Item(m.item))
+	engine.made(s, sandbox.tr(.Craft_Made, m.count, label))
+}

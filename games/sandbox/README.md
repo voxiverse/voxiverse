@@ -6,7 +6,10 @@ Singleplayer lists its universes), and the game a session plays when nobody name
 the folder, the id and what saves and the wire carry stay `sandbox`. A universe of planets,
 the home world Earth or one made from the seed, with its climate, sheep, farming, peoples and
 their markets, and gates between worlds: build, explore, survive or create. There is no round
-and no score. A new player is given the rocket launcher.
+and no score. A universe nobody chose a mode for is played in survival (the creation screen
+starts there; creative stays a choice), and a new player is given one field dressing and
+nothing else (`KIT`; the pack empties the base pack's survival kit of its guns,
+`pack/data/game_modes/survival.json`).
 
 ## Playing it
 
@@ -33,8 +36,32 @@ and item `gather`, docs/packs.md). Hands break soil, sand, gravel, wood, leaves 
 stone, sandstone, coal and copper ore ask for tier 1 (a flint pick); iron ore and the
 ancient alloy relics tier 2 (a copper pick); the sealed relic vaults tier 3 (the alloy
 drill, which also gets one more of every ore and stone it breaks). A player in creative
-breaks everything. Breaking with too little a tool keeps the block and says what tier it
-needs. Where the sandbox is played, leaves leave fibre, gravel flint, coal ore coal, and
+breaks everything at once. Breaking with too little a tool keeps the block and says what
+tier it needs.
+
+Breaking takes time (the world rule `break_time`, which the sandbox sets to 1 as each world
+opens when it finds it at 0; another value, a half or a double, stands;
+docs/packs.md, "Breaking time"): hold the attack button on a block and a crack spreads over
+it until it breaks. Each block's hardness is the seconds hands take; a pick is quick on
+stone, ore and metal, a blade (the flint knife, the machete) on wood, plants and leaves,
+and any tool a little on soil and sand. The alloy drill is the fastest tool (and keeps its
+one more of every ore and stone). In seconds:
+
+| Block (hardness, kind) | Hands | Flint knife | Machete | Flint pick | Copper pick | Alloy drill |
+|---|---|---|---|---|---|---|
+| Leaves (0.3, blade) | 0.3 | 0.1 | 0.07 | 0.3 | 0.3 | 0.3 |
+| Dirt, grass, sand, gravel (0.6, any) | 0.6 | 0.4 | 0.2 | 0.5 | 0.3 | 0.17 |
+| Log, planks (2, blade) | 2 | 0.67 | 0.33 | 2 | 2 | 2 |
+| Stone, cobblestone (2.5, pick; tier 1) | no | no | no | 1 | 0.63 | 0.33 |
+| Coal ore (3.5, pick; tier 1) | no | no | no | 1.4 | 0.9 | 0.47 |
+| Copper ore (4, pick; tier 1) | no | no | no | 1.6 | 1 | 0.5 |
+| Iron ore (5, pick; tier 2) | no | no | no | no | 1.27 | 0.63 |
+| Salvage heap (2.5, pick; tier 1) | no | no | no | 1 | 0.63 | 0.33 |
+| Alloy relic (4.5, pick; tier 2) | no | no | no | no | 1.13 | 0.57 |
+| Relic vault (6, pick; tier 3) | no | no | no | no | no | 0.77 |
+
+(Whole ticks, rounded up: a pick's speed is 2.5, 4 and 8, the knife's 3 and the machete's 6;
+"no": the tool's tier is too low.) Where the sandbox is played, leaves leave fibre, gravel flint, coal ore coal, and
 copper and iron ore their raw ore (the pack's overrides of the base pack's blocks).
 
 The remains (salvage heaps, ancient alloy relics, remains caches, sealed relic vaults:
@@ -48,9 +75,11 @@ another way).
 anywhere and closes it again: every recipe, what it makes, what it takes against what you
 carry and how long it takes, those you can make where you stand first. Pick one and Make:
 the server takes what it needs then and gives what it makes when its time is up (one at a
-time; a line under the top says what is being made while the screen is closed). A recipe is
-the pack's, a process made by hand (`sandbox:hand`) or within 5 blocks of a fabricator
-(`sandbox:fabricator`, a block made by hand). Leaving with something being made loses it.
+time; a line under the top says what is being made while the screen is closed), and it lands
+with a chime made by code and "+2 Cord" floating up in front of you in gold (the event
+`sandbox.made`, the engine's `made`). A recipe is the pack's, a process made by hand
+(`sandbox:hand`) or within 5 blocks of a fabricator (`sandbox:fabricator`, a block made by
+hand). Leaving with something being made gives back what it took.
 
 **Using.** The third action (`Use`, B) works what is in the hand: a consumable is used up (a
 field dressing heals 4, a ration heals over time, a stim patch turns a quarter of harm
@@ -108,7 +137,8 @@ walks what yields what):
 - **Building**: fabricator, outpost beacon, hull plate, alloy panel, grating.
 
 What it tells its players: `sandbox.survival` (whether a fabricator is in reach, what is
-being made and how far, the world's outposts); what they ask: `sandbox.craft`.
+being made and how far, the world's outposts) and the event `sandbox.made`; what they ask:
+`sandbox.craft`.
 
 ## Its sheep
 

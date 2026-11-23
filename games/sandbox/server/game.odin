@@ -43,7 +43,7 @@ GAME :: core.Game {
 	think          = think,
 	spawned        = spawned,
 	joined         = joined,
-	left           = ruin_left,
+	left           = left,
 	died           = ruin_died,
 	respawned      = respawned,
 	action         = action,
@@ -114,6 +114,13 @@ tick :: proc(s: ^core.Server) {
 	survival_tick(s)
 }
 
+// left: one fighting at the ruin is out (ruin.odin); what it was making is given back
+// (survival.odin).
+left :: proc(s: ^core.Server, c: ^core.Client) {
+	ruin_left(s, c)
+	craft_left(s, c)
+}
+
 // respawned: one who fell in the ruin has its things back (ruin.odin); one with an outpost
 // stands there (outposts.odin).
 respawned :: proc(s: ^core.Server, c: ^core.Client) {
@@ -164,20 +171,24 @@ entity_died :: proc(
 	ruin_entity_died(s, w, dead)
 }
 
-// KIT: what a player new to a sandbox universe is given: the rocket launcher alone, in
-// hotbar slot 1 (blocks come from creative's catalog, or in survival from what is gathered and
-// made: survival.odin). A universe keeps the kit it was made with (universe.cfg).
-KIT :: "rocket_launcher 1"
+// KIT: what a player new to a sandbox universe is given: one field dressing, and
+// nothing else (the base pack's survival kit is emptied by the pack's
+// game_modes/survival.json; blocks come from creative's catalog, or in survival from what
+// is gathered and made: survival.odin). A universe keeps the kit it was made with
+// (universe.cfg).
+KIT :: "sandbox:field_dressing 1"
 
 // configure: a new world is made by the Earth generator (continents, biomes, rivers,
 // caves, trees), a new universe's home world has a dead gate in front of its spawn (what
-// wakes it is not decided yet: core.gate_wake is the call), and new players are given KIT
-// unless the caller names a kit; whether the home world is Earth itself or one made from
-// the seed is the caller's (Config.earth), as are the mode, the spawn and whether animals
+// wakes it is not decided yet: core.gate_wake is the call), a universe nobody chose a mode
+// for is played in survival, and new players are given
+// KIT unless the caller names a kit; whether the home world is Earth itself or one made
+// from the seed is the caller's (Config.earth), as are the spawn and whether animals
 // appear by themselves. A saved world keeps its own generator, gates and kit.
 configure :: proc(config: ^core.Config) {
 	config.generator = .Earth
 	config.home_gate = true
+	if config.mode == "" {config.mode = "survival"}
 	if config.kit == "" {config.kit = KIT}
 }
 
@@ -191,9 +202,11 @@ terrain_seed :: proc(w: ^core.World) -> i64 {
 
 #assert(worldgen.Kind.Earth == {}, "the Earth generator is the zero kind (an unset Config's)")
 
-// world_opened: a world's interventions log, economy file, remains file and outposts are
-// read back.
+// world_opened: breaking takes time in every sandbox world (the rule break_time: one at 0,
+// at once, is set to 1 as it opens; another value stands); a world's interventions log,
+// economy file, remains file and outposts are read back.
 world_opened :: proc(s: ^core.Server, w: ^core.World) {
+	if !(w.rules.break_time > 0) {core.game_rule(s, w, "break_time", "1")}
 	interventions_load(w)
 	economy_load(w)
 	remains_load(s, w)
