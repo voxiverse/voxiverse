@@ -46,7 +46,8 @@ HARNESS_GAME :: Game {
 
 // CREATURES_GAME: the game of the engine's tests that need creatures of a game's own:
 // HARNESS_GAME with a pack of neutral ones (creatures_pack: `creatures:walker`, a steered
-// walker a dummy's size that is hit, saved and summoned, and `creatures:thinker`, the same
+// walker a dummy's size that is hit, saved and summoned, `creatures:quarry`, one that leaves
+// drops, and `creatures:thinker`, the same
 // with its game's brain, which a test gives as Game.think) and a record on each
 // (Creature_Data). A client that joins one needs its client part
 // (engine.CREATURES_GAME). harness_creatures gives it as a value to keep.

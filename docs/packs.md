@@ -134,6 +134,12 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   its prey (nearer, it strikes; `[0, 16]`); `notice`, the blocks within which it notices a
   player in an open world (`hunt_tick`; 16).
 - `fields`: at most 8 saved numbers, `{"name": {"type": "u8"|"u16", "min": n, "max": n}}`.
+- `drops`: what one leaves where it dies, at most 4 of `{"item": "<item id>", "count":
+  [least, most], "chance": 0..1}` (`count` `[1, 1]` and `chance` 1 unless it says): of each,
+  on a draw of its chance, a count between its least and most, drawn from the world's
+  entities' randomness (`entity_drops` in `server/core/entities.odin`, booked in the item
+  ledger as `drop_mob`). Only a death leaves them: one that goes (despawned, a command's
+  kill, `entity_gone`) leaves nothing.
 - `model`: `rocket`, `item`, `player`, `{"box": [r, g, b]}` (one box, the kind's size)
   or `{"parts": [...]}`, a shape of at most 16 boxes in the creature's own space (blocks from
   the middle of its feet, `-z` its front): each `{"box": [x0, y0, z0, x1, y1, z1], "color":

@@ -20,6 +20,7 @@ Kind_Id :: distinct u16
 
 MAX_KIND_LOOKS :: 16
 MAX_KIND_FIELDS :: 8
+MAX_KIND_DROPS :: 4
 
 Entity_Physics :: enum u8 {
 	None,
@@ -221,6 +222,15 @@ Kind_Attack_Info :: struct {
 	notice:    f32, // blocks within which it notices a player (server/play: hunt_tick); 16 unless it says
 }
 
+// Kind_Drop: something a creature leaves where it dies (its kind's "drops"): between
+// count[0] and count[1] of an item, on a draw of its chance (server/core: entity_drops).
+Kind_Drop :: struct {
+	item:   Item,
+	name:   string, // the item as the pack names it
+	count:  [2]int, // the least and the most, inclusive
+	chance: f32, // 0..1: a draw at or above it leaves none
+}
+
 Kind_Info :: struct {
 	id:         string,
 	box:        [2]f32, // width (x and z), height
@@ -244,6 +254,7 @@ Kind_Info :: struct {
 	puffs:      []Look_Puff, // model Parts: what rises from it by a look
 	spawn:      Maybe(Kind_Spawn_Rule),
 	attack:     Maybe(Kind_Attack_Info), // it fights (a steered walker)
+	drops:      []Kind_Drop, // what it leaves where it dies
 }
 
 // Engine_Kinds: the base pack's kinds the engine's code acts on by name (the rocket
@@ -299,6 +310,7 @@ ENTITY_FIELDS := []string {
 	"model",
 	"spawn",
 	"attack",
+	"drops",
 	"override",
 }
 @(private)
@@ -607,7 +619,73 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 	if f := field_of(m, "spawn"); f != nil {
 		if rule, ok := read_spawn_rule(b, reg, f); ok {info.spawn = rule}
 	}
+	if f := field_of(m, "drops"); f != nil {
+		info.drops = read_drops(b, reg, f)
+	}
 	return info
+}
+
+// read_drops: at most MAX_KIND_DROPS of {"item": id, "count": [least, most], "chance": 0..1}
+// (count [1, 1] and chance 1 unless it says), each item one the registry has.
+@(private)
+read_drops :: proc(b: ^Reg_Build, reg: ^Registry, f: ^Def_Field) -> []Kind_Drop {
+	USAGE :: `drops is a list of at most 4 {"item": "<item id>", "count": [least, most], "chance": 0..1}`
+	v := f.value
+	if v.kind != .Array || len(v.items) > MAX_KIND_DROPS {
+		fail_field(b, f, v, USAGE)
+		return nil
+	}
+	out := make([dynamic]Kind_Drop)
+	for e in v.items {
+		if e.kind != .Object {
+			fail_field(b, f, e, USAGE)
+			continue
+		}
+		d := Kind_Drop {
+			count  = {1, 1},
+			chance = 1,
+		}
+		named, good := false, true
+		for m in e.members {
+			switch m.key {
+			case "item":
+				item, found := Item(0), false
+				if m.value.kind == .String {item, found = registry_item(reg, m.value.s)}
+				if !found {
+					fail_field(b, f, m.value, "a drop's item is an item id that exists")
+					good = false
+					continue
+				}
+				d.item, d.name, named = item, strings.clone(m.value.s), true
+			case "count":
+				p, ok := read_pair(b, f, m.value, "a drop's count", 0, 64, true)
+				if !ok {good = false}
+				d.count = {int(p[0]), int(p[1])}
+			case "chance":
+				x, is_number := json_number(m.value)
+				if !is_number || x < 0 || x > 1 {
+					fail_field(b, f, m.value, "a drop's chance is a number 0..1")
+					good = false
+					continue
+				}
+				d.chance = f32(x)
+			case:
+				fail_field(
+					b,
+					f,
+					m.value,
+					fmt.aprintf("\"%s\" is not a drop's field (item, count, chance)", m.key),
+				)
+				good = false
+			}
+		}
+		if !named && good {
+			fail_field(b, f, e, "a drop needs an \"item\"")
+			good = false
+		}
+		if good {append(&out, d)}
+	}
+	return out[:]
 }
 
 @(private)
@@ -1334,6 +1412,9 @@ entity_kinds_text :: proc(reg: ^Registry, sb: ^strings.Builder) {
 				a.shoot,
 				a.notice,
 			)
+		}
+		for d in k.drops {
+			fmt.sbprintf(sb, " drop=%s %v %v", d.name, d.count, d.chance)
 		}
 		if s, has := k.spawn.?; has {
 			fmt.sbprintf(

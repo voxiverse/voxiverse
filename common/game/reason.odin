@@ -6,7 +6,7 @@ package game
 // Reason: append-only (the number is in the event's n1).
 Reason :: enum u8 {
 	Drop_Block, // what a broken block leaves (block_drop)
-	Drop_Mob, // what a creature of the engine's dropped (none now: a game's drops are the game's)
+	Drop_Mob, // what a creature left where it died (its kind's drops: core.entity_drops)
 	Give, // admin_give
 	Kit, // a new player's kit
 	Catalog, // taken from the creative catalog

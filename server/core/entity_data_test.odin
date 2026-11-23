@@ -406,3 +406,40 @@ start_counting :: proc(h: ^Harness, dir: string) -> bool {
 	}
 	return harness_start(h, config)
 }
+
+// A creature that dies leaves its kind's drops where it fell, each by its chance, booked
+// as a creature's drop; one that goes without dying leaves nothing.
+@(test)
+test_a_creature_leaves_its_drops :: proc(t: ^testing.T) {
+	config := harness_world()
+	config.game = harness_creatures()
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	s := &h.srv
+	w := s.home
+	quarry, _ := game.registry_kind(s.registry, "creatures:quarry")
+	wheat, _ := game.registry_item(s.registry, "voxiverse:wheat")
+	seeds, _ := game.registry_item(s.registry, "voxiverse:seeds")
+	lying :: proc(w: ^World, item: game.Item) -> (n: int) {
+		it := entities_each(w)
+		for e in entities_next(&it) {
+			if entity_kind(w, e) != w.server.registry.engine.item {continue}
+			if st := entity_stack(w, e)^; st.item == item {n += st.count}
+		}
+		return
+	}
+	gone := entity_spawn(w, quarry, {-3.5, 1, 0.5}, false)
+	entity_gone(w, gone)
+	harness_step(h)
+	testing.expect_value(t, lying(w, wheat), 0)
+
+	e := entity_spawn(w, quarry, {3.5, 1, 0.5}, false)
+	if !testing.expect(t, e != 0) {return}
+	testing.expect(t, entity_harm(w, e, {amount = 5, kind = .Game}), "it lived")
+	harness_step(h)
+	testing.expect_value(t, lying(w, wheat), 2)
+	testing.expect_value(t, lying(w, seeds), 0)
+	testing.expect_value(t, s.ledger.entries[wheat][.Drop_Mob], 2)
+}

@@ -418,8 +418,9 @@ Dead_Entity :: struct {
 
 // entity_harm takes harm.amount from an entity's health. Alive, everyone who knows it
 // sees it flinch and the game's entity_hurt hook is told; at nought it dies (everyone
-// who knew it sees it die) and the game's entity_died hook is told. True: it died. The
-// one way an entity is hurt: a player's hit or shot, a blast, a game's tower.
+// who knew it sees it die), leaves its kind's drops (entity_drops) and the game's
+// entity_died hook is told. True: it died. The one way an entity is hurt: a player's hit
+// or shot, a blast, a game's tower.
 entity_harm :: proc(w: ^World, h: game.Entity_Handle, harm: Entity_Harm) -> (died: bool) {
 	if !entity_listed(w, h) || harm.amount <= 0 {return false}
 	hp := entity_health(w, h)
@@ -450,8 +451,35 @@ entity_harm :: proc(w: ^World, h: game.Entity_Handle, harm: Entity_Harm) -> (die
 	hp.health = 0
 	dead := Dead_Entity{entity_id(w, h), entity_kind(w, h), entity_pos(w, h)}
 	entity_died(w, h)
+	entity_drops(w, dead)
 	if g.entity_died != nil {g.entity_died(s, w, dead, harm)}
 	return true
+}
+
+// entity_drops: what a creature that died leaves where it fell, by its kind's drops: of
+// each, on a draw of its chance, a count drawn between its least and its most, from the
+// world's entities' randomness (so the same in every run), booked as a creature's drop.
+// One gone without dying (entity_gone, despawned, a command's kill) leaves nothing.
+entity_drops :: proc(w: ^World, dead: Dead_Entity) {
+	s := w.server
+	info := game.kind_info(s.registry, dead.kind)
+	if info == nil {return}
+	r := &w.entities.rng
+	at := dead.position + {0, f64(info.box[1]) * 0.5, 0}
+	for d in info.drops {
+		if base.rng_f32(r) >= d.chance {continue}
+		n := base.rng_int_range(r, d.count[0], d.count[1] + 1)
+		for n > 0 {
+			st := game.Stack {
+				item  = d.item,
+				count = min(n, game.item_stack_size(s.registry, d.item)),
+				ammo  = game.new_ammo(s.registry, d.item),
+			}
+			n -= st.count
+			ledger_stack(s, w, .Drop_Mob, st)
+			spawn_item(w, at, st, {0, 3, 0}, -1)
+		}
+	}
 }
 
 // The door: what the store says of an entity (nil when it has no such part).

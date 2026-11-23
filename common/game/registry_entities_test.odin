@@ -287,6 +287,21 @@ testpack/data/entities/k.json:1:49: spawn needs "group"; add it`,
 			`testpack/data/entities/k.json:1:121: not one of the kind's looks (its "looks")`,
 		},
 		{
+			"a drop of an item no pack has",
+			`{"k": {"box": [1, 1], "model": "item", "drops": [{"item": "voxiverse:gold"}]}}`,
+			`testpack/data/entities/k.json:1:59: a drop's item is an item id that exists`,
+		},
+		{
+			"a drop more than certain",
+			`{"k": {"box": [1, 1], "model": "item", "drops": [{"item": "voxiverse:wheat", "chance": 2}]}}`,
+			`testpack/data/entities/k.json:1:88: a drop's chance is a number 0..1`,
+		},
+		{
+			"a drop of nothing",
+			`{"k": {"box": [1, 1], "model": "item", "drops": [{"count": [1, 2]}]}}`,
+			`testpack/data/entities/k.json:1:50: a drop needs an "item"`,
+		},
+		{
 			"an unknown field",
 			`{"k": {"box": [1, 1], "model": "item", "helth": 3}}`,
 			`testpack/data/entities/k.json:1:40: "helth" is not a kind field; did you mean "health"?`,
@@ -313,6 +328,7 @@ test_entity_kind_shape_and_attack :: proc(t: ^testing.T) {
 		        "walker": {"walk_speed": 2, "run_speed": 2, "jump": 1, "step": 0}, "brain": "steered",
 		        "attack": {"damage": 3, "reach": 1.2, "cooldown": 0.8, "shot": "testpack:spit"},
 		        "looks": ["striking"],
+		        "drops": [{"item": "voxiverse:wheat", "count": [1, 3], "chance": 0.5}, {"item": "voxiverse:seeds"}],
 		        "model": {"parts": [
 		            {"box": [-0.3, 0.8, -0.2, 0.3, 1.5, 0.2], "color": [80, 120, 60]},
 		            {"box": [-0.3, 0, -0.1, -0.05, 0.8, 0.1], "color": [40, 40, 40], "skin": "legs", "swing": "walk"},
@@ -339,6 +355,16 @@ test_entity_kind_shape_and_attack :: proc(t: ^testing.T) {
 	testing.expect(t, fights)
 	testing.expect_value(t, a.shot, spit)
 	testing.expect_value(t, a.reach, 1.2)
+	wheat, _ := registry_item(reg, "voxiverse:wheat")
+	seeds, _ := registry_item(reg, "voxiverse:seeds")
+	if !testing.expect_value(t, len(info.drops), 2) {return}
+	testing.expect_value(t, info.drops[0].item, wheat)
+	testing.expect_value(t, info.drops[0].count, [2]int{1, 3})
+	testing.expect_value(t, info.drops[0].chance, 0.5)
+	testing.expect_value(t, info.drops[1].item, seeds)
+	testing.expect_value(t, info.drops[1].count, [2]int{1, 1})
+	testing.expect_value(t, info.drops[1].chance, 1)
+	testing.expect_value(t, len(kind_info(reg, spit).drops), 0)
 }
 
 // How a fighter hunts, as its attack says or by default: the band it keeps, where a
