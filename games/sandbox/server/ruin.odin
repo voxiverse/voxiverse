@@ -428,7 +428,8 @@ ruin_hold_creatures :: proc(s: ^core.Server, w: ^core.World) {
 	}
 }
 
-// ruin_put: each player in the home world is told the fight, or that there is none.
+// ruin_put: each player is told the fight, or that there is none, and in the home world
+// where the site is once it is built (their journal's place).
 ruin_put :: proc(s: ^core.Server) {
 	r := ruin_of(s)
 	shown := sandbox.Ruin_Fight {
@@ -445,9 +446,12 @@ ruin_put :: proc(s: ^core.Server) {
 		shown.left = play.phase_left(s, &r.phase, RUIN_BREAK)
 	}
 	none := sandbox.Ruin_Fight{}
+	altar := ruin_altar(r.site)
 	for &c in s.clients {
 		if c.state != .Playing {continue}
-		if ruin_fighting(s, &c) {core.game_put(s, &c, &shown)} else {core.game_put(s, &c, &none)}
+		put := shown if ruin_fighting(s, &c) else none
+		if r.built && c.world == s.home {put.found, put.site = true, {altar.x, altar.y, altar.z}}
+		core.game_put(s, &c, &put)
 	}
 }
 

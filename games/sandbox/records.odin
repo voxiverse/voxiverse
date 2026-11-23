@@ -67,7 +67,8 @@ Ruin_Phase :: enum u8 {
 }
 
 // Ruin_Fight: the fight a player is locked in at the ruined site (one per player; phase
-// Asleep: it fights none).
+// Asleep: it fights none), and where the site is once it has been found (built: a player
+// came near it) in the world the player is in (the journal's place: found false, none).
 Ruin_Fight :: struct {
 	phase:   Ruin_Phase,
 	wave:    u8, // on now, or the last held
@@ -75,6 +76,8 @@ Ruin_Fight :: struct {
 	alive:   u16, // creatures out
 	to_come: u16, // ... still to come out of the lairs
 	left:    u16, // seconds left of the countdown or the break
+	found:   bool,
+	site:    [3]i32, // the altar's block
 }
 
 // Outpost_Line: an outpost as a player is shown it: where its beacon stands, whether the

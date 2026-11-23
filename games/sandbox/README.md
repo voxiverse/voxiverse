@@ -251,7 +251,9 @@ pillars, cracked ground in the other corners and a dais in the middle with the a
 (`sandbox:ruin_altar`) on it. It is built when a player first comes within 160 blocks of it in
 a session (its ground is kept loaded while one is near, or while it is awake), whole, over
 what stood there, so what a blast or a crash left is gone; its blocks are not the players' to
-change.
+change. Once it is built every player in the home world is told where it is
+(`sandbox.Ruin_Fight`'s `site`): it goes in their journal, the compass marks it and the map
+shows it.
 
 Using the altar (the right button) wakes it, for everyone inside its walls who can be hurt
 (not in creative, not watching; one who has things set aside already cannot wake it). Each of
