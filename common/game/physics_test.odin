@@ -323,7 +323,18 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 		return abs(s.position.z - 0.5)
 	}
 	plain, fast :=
-		walk(&w, &rules, MODS_NONE), walk(&w, &rules, {1.1, 1, 0, BASE_HEALTH, {.Fly}, {}})
+		walk(&w, &rules, MODS_NONE),
+		walk(
+			&w,
+			&rules,
+			Mods {
+				speed = 1.1,
+				jump = 1,
+				air_jumps = 0,
+				max_health = BASE_HEALTH,
+				abilities = {.Fly},
+			},
+		)
 	testing.expectf(
 		t,
 		fast / plain > 1.09 && fast / plain < 1.11,
@@ -345,7 +356,11 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 		}
 		return peak - 1
 	}
-	high := apex(&w, &rules, {1, 1.2, 0, BASE_HEALTH, {.Fly}, {}})
+	high := apex(
+		&w,
+		&rules,
+		Mods{speed = 1, jump = 1.2, air_jumps = 0, max_health = BASE_HEALTH, abilities = {.Fly}},
+	)
 	testing.expectf(
 		t,
 		high > 1.25 * 1.2 - 0.03 && high < 1.25 * 1.2 + 0.01,
@@ -355,7 +370,13 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 	)
 
 	// Air jumps: one charm, one more jump in the air, on a new press only.
-	mods := Mods{1, 1, 1, BASE_HEALTH, {.Fly}, {}}
+	mods := Mods {
+		speed      = 1,
+		jump       = 1,
+		air_jumps  = 1,
+		max_health = BASE_HEALTH,
+		abilities  = {.Fly},
+	}
 	s := Player_State {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,

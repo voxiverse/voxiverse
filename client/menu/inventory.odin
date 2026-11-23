@@ -93,6 +93,10 @@ modifier_text :: proc(m: game.Modifier) -> string {
 		return fmt.tprintf("Air jumps %+.0f", m.amount)
 	case .Max_Health:
 		return fmt.tprintf("Max health %+.0f", m.amount)
+	case .Defence:
+		return fmt.tprintf("Defence %+.0f%%", m.amount * 100)
+	case .Fall_Guard:
+		return fmt.tprintf("Fall harm %+.0f%%", -m.amount * 100)
 	case .Grant_Ability, .Revoke_Ability:
 		if at := int(m.amount); at >= 0 && at < len(game.Ability) {
 			verb := "Grants" if m.kind == .Grant_Ability else "Removes"

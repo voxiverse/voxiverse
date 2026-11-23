@@ -1,5 +1,6 @@
 package core
 
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:slice"
@@ -179,6 +180,13 @@ apply_edit_cells :: proc(
 	switch {
 	case kind == .Break:
 		ok = game.can_break(t, current)
+		held := game.inventory_held(&c.inventory)
+		if ok &&
+		   !has_ability(s, c, .Instant_Break) &&
+		   !game.can_gather(s.registry, current, held) {
+			notice(s, c, tier_text(game.block_tier(s.registry, current)))
+			return
+		}
 		// (a half whose other half is not there breaks alone)
 		there, _ := chunks_block(&w.chunks, cell)
 		if two && there == cell_to {moves_other, other_to = true, .Air}
@@ -428,4 +436,10 @@ farmland_wet :: proc(w: ^World, p: game.Block_Pos) -> bool {
 		}
 	}
 	return false
+}
+
+// tier_text: what a player is told who breaks a block its tool cannot gather.
+@(private = "file")
+tier_text :: proc(tier: u8) -> string {
+	return fmt.tprintf("That needs a tier %d tool", tier)
 }

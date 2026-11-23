@@ -149,6 +149,7 @@ BLOCK_FIELDS := []string {
 	"connect",
 	"use",
 	"entity",
+	"tier",
 	"override",
 }
 @(private)
@@ -164,6 +165,9 @@ ITEM_FIELDS := []string {
 	"grapple",
 	"melee",
 	"model",
+	"rarity",
+	"gather",
+	"consume",
 	"override",
 }
 @(private)

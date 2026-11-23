@@ -87,6 +87,7 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 			world = target.world,
 		},
 	)
+	taken *= 1 - guarded(s, target, source.kind)
 	if !(taken > 0) {return .Blocked}
 	target.health = max(target.health - taken, 0)
 	target.last_damage = s.tick
@@ -119,6 +120,17 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 	return .Hurt
 }
 
+// guarded: the fraction of a harm of this kind c's gear and consumables take off: what it
+// wears (its defence, and its fall guard against a fall) and what it used up (its effect's
+// defence), at most all of a fall and MAX_DEFENCE of the rest.
+@(private = "file")
+guarded :: proc(s: ^Server, c: ^Client, kind: game.Source_Kind) -> f32 {
+	m := character_mods(s, c)
+	defence := min(m.defence + effect_defence(s, c), game.MAX_DEFENCE)
+	if kind != .Fall {return defence}
+	return 1 - (1 - defence) * (1 - m.fall_guard)
+}
+
 // attacker: the playing client the source names (nil for none).
 @(private = "file")
 attacker :: proc(s: ^Server, source: Damage_Source) -> ^Client {
@@ -143,6 +155,7 @@ die :: proc(s: ^Server, c: ^Client, source: Damage_Source) {
 	cause := game.damage_source_name(source.kind)
 	killer := attacker_name(s, source)
 	record(s, c, .Death, cause)
+	c.effect = {}
 	stat_add(c, "deaths", 1)
 	if id, ok := source.attacker.?; ok && killer != "" && int(id) != int(player_id(s, c)) {
 		stat_add(&s.clients[id], "kills", 1)
@@ -194,7 +207,7 @@ respawn_ask :: proc(s: ^Server, c: ^Client) -> bool {
 }
 
 // seconds_ticks: seconds of a rule as whole ticks, rounded.
-@(private = "file")
+@(private)
 seconds_ticks :: proc(seconds: f32) -> u64 {
 	return u64(math.round(f64(max(seconds, 0)) * f64(game.TICK_RATE)))
 }

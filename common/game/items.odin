@@ -85,6 +85,55 @@ Item_Info :: struct {
 	grapple:     Maybe(Grapple_Info), // a grappling hook (data: items/tools.json)
 	melee:       Maybe(Melee_Info), // a weapon swung by hand (its `melee`)
 	model:       Maybe(u16), // the voxel model it is held as (an index into Registry.models)
+	rarity:      Rarity, // how rare it is (its `rarity`; common unless it says)
+	gather:      Gather_Info, // what it gathers in the hand (its `gather`; zero: what hands do)
+	consume:     Maybe(Consume_Info), // what it does used up (its `consume`: item_consume)
+}
+
+// Rarity: how rare an item is, a tooltip's colour (the item's `rarity`).
+Rarity :: enum u8 {
+	Common,
+	Uncommon,
+	Rare,
+	Epic,
+	Legendary,
+}
+
+// MAX_TIER: the highest tier a block asks of the tool that breaks it (a block's `tier`).
+MAX_TIER :: 3
+
+// Gather_Info: what a tool held in the hand gathers (the item's `gather`): the blocks of
+// its `tier` and below (hands are tier 0, as is every block that names none), and `yield`
+// more of what a block of tier 1 or above leaves (an ore, a stone).
+Gather_Info :: struct {
+	tier:  u8,
+	yield: u8,
+}
+
+// Consume_Info: what a consumable does when its player uses one up (the item's `consume`;
+// server/core's item_consume): `heal` health at once, then for `seconds` `regen` health a
+// second and `defence` (a fraction) taken off every harm.
+Consume_Info :: struct {
+	heal, regen, defence, seconds: f32,
+}
+
+// can_gather: a player holding `held` (with no instant_break) may break b: b asks no
+// higher a tier than the held item gathers.
+can_gather :: proc(reg: ^Registry, b: Block, held: Stack) -> bool {
+	return block_tier(reg, b) <= gather_of(reg, held).tier
+}
+
+// block_tier: the tier of tool b asks for (0: hands do).
+block_tier :: proc(reg: ^Registry, b: Block) -> u8 {
+	if !block_valid(&reg.blocks, u16(b)) {return 0}
+	return reg.blocks.defs[b].tier
+}
+
+// gather_of: what the stack held in the hand gathers (zero: what hands do).
+gather_of :: proc(reg: ^Registry, held: Stack) -> Gather_Info {
+	if stack_empty(held) {return {}}
+	info, _ := item_info(reg, held.item)
+	return info.gather
 }
 
 // Weapon_Info: what a hitscan weapon does, all of it data (the item's

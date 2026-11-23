@@ -97,6 +97,31 @@ family:
 - **fantasy and dungeon** (7): `dark_bricks`, `mossy_bricks`, `rune_stone`, `bone`, `crystal`, `magma`, `obsidian`
 <!-- end of materials -->
 
+## Items
+
+An item is a `data/items/*.json` entry (`read_item` in `common/game/registry_resolve.odin`);
+a block players may place has its item made for it. Every field is optional:
+
+- `stack` (1..999, 64), `places` (the block it puts down), `description` (its tooltip's
+  line), `model` (the voxel model it is drawn and held as), `rarity` (`common`,
+  `uncommon`, `rare`, `epic`, `legendary`; `common`: the colour its tooltip names it in).
+- `equip` (`head`, `chest`, `legs`, `feet`, `offhand`) and `modifiers`, at most two
+  `{"stat": ..., "amount": n}` that count while it is worn there (`derive_mods`, the server
+  and the client's prediction alike): `speed` and `jump` (fractions added), `air_jumps`,
+  `max_health` (points), `defence` (a fraction of every harm taken off; all that is worn
+  together, and a consumable's, take off at most `MAX_DEFENCE`, 0.8) and `fall_guard` (a
+  fraction of a fall's harm taken off after that; 1: none).
+- `weapon`, `melee`, `grapple` (a gun, a blade, a hook: [games.md](games.md#walkers)).
+- `gather`: `{"tier": 1..3, "yield": 0..4}`: held in the hand, it breaks the blocks of its
+  tier and below (a block's `tier`, 0..3; 0, every block that names none, hands break),
+  and each block of tier 1 or above it breaks leaves `yield` more of its drop. A player
+  whose mode has `instant_break` breaks every tier; one that does not is told what tier a
+  block needs and keeps it (`can_gather`, asked by the server).
+- `consume`: `{"heal": n, "regen": n, "defence": f, "seconds": s}`: what one does used up
+  (its game calls `core.item_consume` when its player uses the stack in its hand): `heal`
+  health at once, then for `seconds` `regen` health a second and `defence` taken off every
+  harm, in place of what one used before still did; a death ends it, and it is not saved.
+
 ## Entity kinds
 
 Entity kinds are `data/entities/*.json` entries (`common/game/registry_entities.odin`); the base

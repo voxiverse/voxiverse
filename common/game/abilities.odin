@@ -16,7 +16,7 @@ import "core:strings"
 Ability :: enum u8 {
 	Fly, // may fly (with the world's allow_flying rule on)
 	Invulnerable, // damage does nothing
-	Instant_Break, // blocks break at once (read when break times exist)
+	Instant_Break, // blocks break at once, whatever tier of tool they ask (edit.odin's can_gather)
 	Infinite_Items, // placing and breaking use nothing up and leave nothing
 	Catalog, // may take any item from the catalog
 	Health, // has health (a bar; damage applies)

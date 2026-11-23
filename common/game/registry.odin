@@ -377,6 +377,7 @@ Block_Def :: struct {
 	support:   i32, // a block tag index (what a plant stands on), or NO_TAG
 	back:      i32, // a block tag index: what a facing block's back is against, or NO_TAG
 	back_full: bool, // its back must be against a full face
+	tier:      u8, // the tier of tool that breaks it (its `tier`, 0..MAX_TIER; 0: hands do)
 	tags:      []u16, // the block tags it is in, ascending
 }
 
@@ -944,6 +945,9 @@ registry_text_of :: proc(
 			info.model,
 		)
 		if m, has := info.melee.?; has {fmt.sbprintf(b, " melee=%v", m)}
+		if info.rarity != .Common {fmt.sbprintf(b, " rarity=%v", info.rarity)}
+		if info.gather != {} {fmt.sbprintf(b, " gather=%v", info.gather)}
+		if c, has := info.consume.?; has {fmt.sbprintf(b, " consume=%v", c)}
 		strings.write_byte(b, '\n')
 	}
 	for info, i in reg.items.blocks {if info.name != "" {item_line(&b, u32(i + 1), info)}}

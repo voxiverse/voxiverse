@@ -75,15 +75,19 @@ used_to_place :: proc(s: ^Server, c: ^Client, slot: int) {
 @(private)
 broken_drop :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Block) {
 	if has_ability(s, c, .Infinite_Items) {return}
-	block_drop(c.world, pos, block)
+	more := 0
+	if game.block_tier(s.registry, block) >= 1 {
+		more = int(game.gather_of(s.registry, game.inventory_held(&c.inventory)).yield)
+	}
+	block_drop(c.world, pos, block, more)
 }
 
 // block_drop: what block, gone from pos (broken by hand, or losing its
 // support), leaves: its item, hopping out; nothing if the world has no
 // drops. Tall grass gives seeds 1 time in 8; wheat gives seeds, and once ripe
-// wheat as well.
+// wheat as well. `more`: that many more of a block's own drop (a tool's yield).
 @(private)
-block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
+block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block, more := 0) {
 	if !w.rules.drops {return}
 	r := &w.entities.rng
 	seeds, wheat := game.item_of_material(.Seeds), game.item_of_material(.Wheat)
@@ -104,7 +108,7 @@ block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 		t := &w.server.registry.blocks
 		double :=
 			t.types[t.type_of[block]].place == .Slab && game.state_is(t, block, "type", "double")
-		append(&drops, game.Stack{item, 2 if double else 1, 0, 0}) // (a double slab leaves two)
+		append(&drops, game.Stack{item, (2 if double else 1) + more, 0, 0}) // (a double slab leaves two)
 	}
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
 	for st in drops {

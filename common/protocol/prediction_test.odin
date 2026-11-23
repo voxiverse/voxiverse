@@ -293,7 +293,13 @@ test_prediction_agrees_with_mods :: proc(t: ^testing.T) {
 	defer delete(w.solid)
 	game.floor(&w, 0, 40)
 	rules := game.RULES_DEFAULTS
-	mods := game.Mods{1.1, 1.1, 1, game.BASE_HEALTH + 4, {.Fly}, {}}
+	mods := game.Mods {
+		speed      = 1.1,
+		jump       = 1.1,
+		air_jumps  = 1,
+		max_health = game.BASE_HEALTH + 4,
+		abilities  = {.Fly},
+	}
 	start := game.Player_State {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,

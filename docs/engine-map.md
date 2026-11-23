@@ -139,6 +139,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 - `head_in_water :: proc(s: ^Server, c: ^Client) -> bool`: c's eyes are in water (where a game drowns a player: the engine does not).
 - `player_health_bonus :: proc(s: ^Server, c: ^Client, bonus: f32)`: the game adds bonus health points to c's most (a level's, a blessing's; 0: none): from the next tick its health tops out there, a lower most cuts what it has.
 - `heal_player :: proc(c: ^Client, amount: f32)`: c recovers amount health points (not past its most; not a dead one).
+- `item_consume :: proc(s: ^Server, c: ^Client) -> string`: c uses up one of the stack in its hand if it is a consumable (its item's `consume`): healed at once, then what it does for its seconds, in place of any effect still running.
 - `game_rule :: proc(s: ^Server, w: ^World, name, value: string) -> base.Var_Error`: the game the server runs sets w's rule called name (as the rule command names it: explosion_size) to value, as text: rule_change, with the game (by its id) as who asked.
 - `sim_speed_set :: proc(s: ^Server, speed: int) -> bool`: the world's life (its time, its block updates and random ticks, its entities) steps speed times a tick from the next one: 0 pauses it, 2 and 4 run it fast; false (and nothing changes) past MAX_SIM_SPEED.
 - `MAX_SIM_SPEED :: 4`: the most steps a tick a game may run its world at.

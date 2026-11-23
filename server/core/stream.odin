@@ -112,6 +112,7 @@ Client :: struct {
 	last_damage:     u64, // the tick it was last hurt (regeneration waits after it)
 	died_at:         u64, // the tick it last died (respawn_delay counts from it)
 	protected_until: u64, // it cannot be hurt before this tick (spawn_protection, from its respawn)
+	effect:          Effect, // what a consumable it used up still does (item_consume)
 	airborne:        bool,
 	fall_peak:       f64, // the highest y of the present fall
 	report_window:   u64, // the tick the current window of telemetry reports began

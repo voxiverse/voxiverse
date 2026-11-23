@@ -342,7 +342,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 					},
 				},
 			),
-			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "material", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "connect", "use", "entity", "override"`,
+			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "material", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "connect", "use", "entity", "tier", "override"`,
 		},
 		{
 			"light out of range",
@@ -565,7 +565,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 		{
 			"unknown modifier stat",
 			one({{"data/items/a.json", `{"x": {"modifiers": [{"stat": "spede", "amount": 1}]}}`}}),
-			`testpack/data/items/a.json:1:31: stat is one of "speed", "jump", "air_jumps", "max_health"; got "spede"; did you mean "speed"?`,
+			`testpack/data/items/a.json:1:31: stat is one of "speed", "jump", "air_jumps", "max_health", "defence", "fall_guard"; got "spede"; did you mean "speed"?`,
 		},
 		{
 			"unknown generator",
@@ -1032,6 +1032,83 @@ test_mode_weapons :: proc(t: ^testing.T) {
 			"%q: %s",
 			c[1],
 			errors_text(bad),
+		)
+	}
+}
+
+// An item's rarity, what it gathers and what it does used up, a block's tier and the
+// gear's defence and fall guard are data: read, judged where they are wrong, and asked by
+// can_gather and derive_mods.
+@(test)
+test_gear_and_tiers :: proc(t: ^testing.T) {
+	blocks := `{"ore": {"material": "stone", "tier": 2}}`
+	items := `{
+		"pick": {"stack": 1, "rarity": "rare", "gather": {"tier": 2, "yield": 1}},
+		"salve": {"rarity": "uncommon", "consume": {"heal": 4, "regen": 1, "defence": 0.2, "seconds": 10}},
+		"vest": {"stack": 1, "equip": "chest", "modifiers": [{"stat": "defence", "amount": 0.5}, {"stat": "fall_guard", "amount": 0.25}]},
+		"plate": {"stack": 1, "equip": "head", "modifiers": [{"stat": "defence", "amount": 0.5}]}
+	}`
+	reg, errs := build_with(
+		pack_of("gear", {{"data/blocks/gear.json", blocks}, {"data/items/gear.json", items}}),
+	)
+	if !testing.expect(t, reg != nil, errors_text(errs)) {return}
+	ore, _ := registry_block(reg, "gear:ore")
+	pick, _ := registry_item(reg, "gear:pick")
+	salve, _ := registry_item(reg, "gear:salve")
+	vest, _ := registry_item(reg, "gear:vest")
+	plate, _ := registry_item(reg, "gear:plate")
+	testing.expect_value(t, block_tier(reg, ore), 2)
+	testing.expect_value(t, block_tier(reg, .Stone), 0)
+	info, _ := item_info(reg, pick)
+	testing.expect_value(t, info.rarity, Rarity.Rare)
+	testing.expect_value(t, info.gather, Gather_Info{2, 1})
+	info, _ = item_info(reg, salve)
+	testing.expect_value(t, info.consume.?, Consume_Info{4, 1, 0.2, 10})
+	stone_info, _ := item_info(reg, item_of_block(reg, .Stone))
+	testing.expect_value(t, stone_info.rarity, Rarity.Common)
+
+	// Hands gather tier 0; the pick its own tier and below.
+	testing.expect(t, !can_gather(reg, ore, {}), "bare hands broke a tier 2 block")
+	testing.expect(t, can_gather(reg, .Stone, {}))
+	testing.expect(t, can_gather(reg, ore, {pick, 1, 0, 0}))
+	testing.expect(t, !can_gather(reg, ore, {salve, 1, 0, 0}), "a salve gathered")
+
+	// Worn defence adds up to MAX_DEFENCE at most; the fall guard is the vest's.
+	inv: Inventory
+	inv.equipment[Equip_Slot.Chest] = {vest, 1, 0, 0}
+	m := derive_mods(reg, &inv)
+	testing.expect_value(t, m.defence, 0.5)
+	testing.expect_value(t, m.fall_guard, 0.25)
+	inv.equipment[Equip_Slot.Head] = {plate, 1, 0, 0}
+	m = derive_mods(reg, &inv)
+	testing.expect_value(t, m.defence, f32(MAX_DEFENCE))
+
+	// What is wrong is said where it is.
+	bad := []struct {
+		file, text, want: string,
+	} {
+		{"data/items/x.json", `{"a": {"rarity": "mythic"}}`, "rarity"},
+		{
+			"data/items/x.json",
+			`{"a": {"gather": {"tier": 4, "yield": 0}}}`,
+			"gather tier is a number 1..3",
+		},
+		{"data/items/x.json", `{"a": {"gather": {"tier": 1}}}`, "gather needs \"yield\""},
+		{
+			"data/items/x.json",
+			`{"a": {"consume": {"heal": 1, "regen": 0, "defence": 1, "seconds": 0}}}`,
+			"consume defence is a number 0..0.9",
+		},
+		{"data/blocks/x.json", `{"a": {"material": "stone", "tier": 9}}`, "tier"},
+	}
+	for c in bad {
+		_, errs = build_with(pack_of("gear", {{c.file, c.text}}))
+		testing.expectf(
+			t,
+			strings.contains(errors_text(errs), c.want),
+			"%s: %s",
+			c.text,
+			errors_text(errs),
 		)
 	}
 }

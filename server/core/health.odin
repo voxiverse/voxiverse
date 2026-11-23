@@ -37,6 +37,7 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 		return
 	}
 	regenerate(s, c)
+	effect_tick(s, c)
 	// A fall: from where the player left the ground to where they land.
 	p := c.player
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
@@ -75,6 +76,50 @@ head_in_water :: proc(s: ^Server, c: ^Client) -> bool {
 heal_player :: proc(c: ^Client, amount: f32) {
 	if c.dead || !(amount > 0) {return}
 	c.health = min(c.health + amount, c.max_health)
+}
+
+// Effect: what a consumable a player used up still does (item_consume): health a second
+// and a fraction of harm taken off, until a tick. Not saved: it ends with its time, a
+// death or the session.
+Effect :: struct {
+	regen, defence: f32,
+	until:          u64,
+}
+
+// item_consume: c uses up one of the stack in its hand if it is a consumable (its item's
+// `consume`): healed at once, then what it does for its seconds, in place of any effect
+// still running. "" or why not.
+item_consume :: proc(s: ^Server, c: ^Client) -> string {
+	if c.dead || c.state != .Playing {return "You cannot use anything now"}
+	held := game.inventory_held(&c.inventory)
+	info, _ := game.item_info(s.registry, held.item)
+	use, ok := info.consume.?
+	if game.stack_empty(held) || !ok {return "That is nothing to use up"}
+	if !item_spend(s, c, held.item, 1) {return "That is nothing to use up"}
+	heal_player(c, use.heal)
+	c.effect = {}
+	if use.seconds > 0 {
+		c.effect = {use.regen, use.defence, s.tick + seconds_ticks(use.seconds)}
+	}
+	record(s, c, .Item_Used, game.item_name(s.registry, held.item))
+	return ""
+}
+
+// effect_tick: a running effect's health for this tick; one whose time is up ends.
+@(private)
+effect_tick :: proc(s: ^Server, c: ^Client) {
+	if c.effect == {} {return}
+	if s.tick >= c.effect.until {
+		c.effect = {}
+		return
+	}
+	heal_player(c, c.effect.regen / f32(game.TICK_RATE))
+}
+
+// effect_defence: the fraction of harm c's running effect takes off.
+@(private)
+effect_defence :: proc(s: ^Server, c: ^Client) -> f32 {
+	return c.effect.defence if s.tick < c.effect.until else 0
 }
 
 // most_health: c's most health: its character's (BASE_HEALTH and what it wears) and

@@ -108,7 +108,13 @@ ref_index :: proc(
 }
 
 @(private)
-MODIFIER_STATS := []string{"speed", "jump", "air_jumps", "max_health"}
+MODIFIER_STATS := []string{"speed", "jump", "air_jumps", "max_health", "defence", "fall_guard"}
+@(private)
+RARITY_NAMES := []string{"common", "uncommon", "rare", "epic", "legendary"}
+@(private)
+GATHER_KEYS := []string{"tier", "yield"}
+@(private)
+CONSUME_KEYS := []string{"heal", "regen", "defence", "seconds"}
 @(private)
 EQUIP_NAMES := []string{"head", "chest", "legs", "feet", "offhand"}
 @(private)
@@ -832,6 +838,7 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 	t.flags[n] = flags
 	t.light[n] = u8(rd_int(b, m, "light", int(made_of.light), 0, 15))
 	d := &t.defs[n]
+	d.tier = u8(rd_int(b, m, "tier", 0, 0, MAX_TIER))
 	d.id = m.id
 	d.render = render
 	d.layer = layer
@@ -1194,6 +1201,19 @@ read_item :: proc(
 		o: [4]f64
 		read_numbers(b, f, f.value, "melee", MELEE_KEYS, {0, 0.5, 1, 0.05}, {1000, 8, 360, 60}, &o)
 		info.melee = Melee_Info{f32(o[0]), f32(o[1]), f32(o[2]), f32(o[3])}
+	}
+	if f := field_of(m, "rarity"); f != nil {
+		info.rarity = Rarity(choice_of(b, f, f.value, "rarity", RARITY_NAMES, 0))
+	}
+	if f := field_of(m, "gather"); f != nil {
+		o: [2]f64
+		read_numbers(b, f, f.value, "gather", GATHER_KEYS, {1, 0}, {MAX_TIER, 4}, &o)
+		info.gather = {u8(o[0]), u8(o[1])}
+	}
+	if f := field_of(m, "consume"); f != nil {
+		o: [4]f64
+		read_numbers(b, f, f.value, "consume", CONSUME_KEYS, {0, 0, 0, 0}, {100, 10, 0.9, 600}, &o)
+		info.consume = Consume_Info{f32(o[0]), f32(o[1]), f32(o[2]), f32(o[3])}
 	}
 	if f := field_of(m, "model"); f != nil {
 		if f.value.kind != .String {
