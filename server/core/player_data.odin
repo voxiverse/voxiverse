@@ -116,6 +116,7 @@ PLACE_KIND_NAMES := [game.Logbook_Place_Kind]string {
 	.Remains    = "remains",
 	.Settlement = "settlement",
 	.Landmark   = "landmark",
+	.Delve      = "delve",
 }
 
 @(private = "file")

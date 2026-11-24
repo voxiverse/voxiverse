@@ -26,6 +26,7 @@ Logbook_Place_Kind :: enum u8 {
 	Remains, // what is left of an older place (the sandbox's round its home gate)
 	Settlement, // where people live (the sandbox's survivors' camps)
 	Landmark, // a world's own great place (the sandbox's on the gate worlds)
+	Delve, // works under the ground with a way down (the sandbox's delves: a stair head, a depth)
 }
 
 // Logbook_Place: a place in a logbook (name_len 0: the kind's own name).

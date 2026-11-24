@@ -249,7 +249,7 @@ The types these name:
 - `game.Item :: distinct u16`
 - `game.Kind_Id :: distinct u16`: an entity kind, the registry index + 1; 0 is none (and "any" in a filter).
 - `game.Lane_Item :: struct {...}`
-- `game.Logbook_Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon, Remains, Settlement, Landmark}`: what kind of place a logbook's place is (its name when it has none of its own).
+- `game.Logbook_Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon, Remains, Settlement, Landmark, Delve}`: what kind of place a logbook's place is (its name when it has none of its own).
 - `game.Pack_Source :: struct {...}`
 - `game.Quest_Event :: struct {...}`: something a player did that a step may count: its goal and what (as the Objective's fields), and how many.
 - `game.Skill_Effect :: enum u8 {...}`: the rule a skill changes, and how its amount adds (SKILL_EFFECTS).

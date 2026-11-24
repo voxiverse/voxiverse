@@ -43,6 +43,7 @@ PLACE_TEXT := [game.Logbook_Place_Kind]engine.Text {
 	.Remains    = .Place_Remains,
 	.Settlement = .Place_Settlement,
 	.Landmark   = .Place_Landmark,
+	.Delve      = .Place_Delve,
 }
 
 // place_title: a place as the journal names it: its own name, else its kind's.

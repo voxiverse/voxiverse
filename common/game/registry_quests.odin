@@ -56,6 +56,7 @@ PLACE_NAMES := []string {
 	"remains",
 	"settlement",
 	"landmark",
+	"delve",
 } // (by Logbook_Place_Kind)
 
 // read_quests: the quests (after every kind they may name), and that none comes after
