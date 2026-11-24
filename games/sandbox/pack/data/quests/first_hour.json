@@ -99,6 +99,16 @@
 		"reward": [{"item": "voxiverse:lamp", "count": 4}],
 		"xp": 160
 	},
+	"smoke_on_the_horizon": {
+		"title": "Smoke on the Horizon",
+		"text": "Your beacon has picked up a call: other survivors, a camp some way off. Whoever they are, they kept a fire burning.",
+		"after": ["sandbox:a_light_to_return_to"],
+		"steps": [
+			{"text": "Find the camp and speak with its elder", "goal": "talk", "name": "sandbox:elder", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:trail_ration", "count": 2}],
+		"xp": 150
+	},
 	"what_the_keepers_left": {
 		"title": "What the Keepers Left",
 		"text": "The old keepers built with an alloy no seam yields. Their pylons and towers still hold it, and scrap worth working.",

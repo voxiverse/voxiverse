@@ -1,0 +1,39 @@
+// The medic: healing for silver, dressings, and two errands. (games/sandbox/server/talk.odin does a reply's game actions.)
+{
+	"medic": {
+		"title": "Medic",
+		"start": [
+			{"if": [{"quest": "sandbox:hides_for_the_healer", "step": 3}], "go": "hides_back"},
+			{"go": "hello"}
+		],
+		"nodes": {
+			"hello": {"text": "Sit down and let me look at you. Out here a scratch turns bad overnight.", "replies": [
+				{"text": "Patch me up. (3 silver)", "if": [{"hurt": true}], "do": [{"cost": 3}, {"game": "heal"}], "go": "healed"},
+				{"text": "A field dressing for the road. (2 silver)", "do": [{"cost": 2}, {"give": "sandbox:field_dressing", "count": 1}], "go": "hello"},
+				{"text": "Need any help?", "go": "work"},
+				{"text": "Goodbye."}
+			]},
+			"healed": {"text": "There. Keep it clean and keep out of the dark.", "replies": [
+				{"text": "Thank you.", "go": "hello"}
+			]},
+			"work": {"text": "Always. We are short of everything but trouble.", "replies": [
+				{"text": "I can bring you hides.", "if": [{"quest": "sandbox:hides_for_the_healer", "step": 1}], "do": [{"talk": "sandbox:medic_hides"}], "go": "hides_given"},
+				{"text": "I'll carry medicine to the mechanic.", "if": [{"quest": "sandbox:medicine_run", "step": 1}], "do": [{"give": "sandbox:med_gel", "count": 2}, {"talk": "sandbox:medicine_taken"}, {"game": "mark_mechanic"}], "go": "run_given"},
+				{"text": "Not now.", "go": "hello"}
+			]},
+			"hides_given": {"text": "Four hides, scraped if you can. Lopers carry the best.", "replies": [
+				{"text": "I'll be back."}
+			]},
+			"run_given": {"text": "Two gels for the mechanic's crew. Their camp is marked in your journal; go by day.", "replies": [
+				{"text": "I'm on my way."}
+			]},
+			"hides_back": {"text": "Did you bring the hides?", "replies": [
+				{"text": "Here, four hides.", "do": [{"take": "sandbox:hide", "count": 4}, {"talk": "sandbox:medic_hides_done"}, {"pay": 6}], "go": "thanks"},
+				{"text": "Not yet."}
+			]},
+			"thanks": {"text": "Good. The next one who comes in torn up owes you a little.", "replies": [
+				{"text": "Goodbye."}
+			]}
+		}
+	}
+}

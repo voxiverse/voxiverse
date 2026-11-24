@@ -147,9 +147,11 @@ being made and how far, the world's outposts) and the event `sandbox.made`; what
 
 ## Quests
 
-A new survivor has a first hour with a direction: twelve quests that walk it through the loop
-above, from bare hands at the dead gate to the ruin's altar and back to the gate's board
-(`pack/data/quests/first_hour.json`, the engine's quests: [docs/packs.md](../../docs/packs.md#quests)).
+A new survivor has a first hour with a direction: thirteen quests that walk it through the loop
+above, from bare hands at the dead gate to the nearest camp's elder, the ruin's altar and back to
+the gate's board (`pack/data/quests/first_hour.json`, the engine's quests:
+[docs/packs.md](../../docs/packs.md#quests)), and the camps' people give seven more (below,
+"Its camps and their people").
 Each opens when those it comes after are done; the journal (J) lists those under way and done
 with their steps and rewards, and the HUD's tracker (top right) shows the step of the first
 under way, or of the one picked there with Track. A step done chimes and says so in gold, as a
@@ -167,6 +169,7 @@ Nothing counts in creative.
 | Patch and Mend | A Workshop | make a field dressing; use one | 2 field dressings | 80 |
 | Meat and Hide | Patch and Mend | kill a loper; make a trail ration; eat one | padded vest | 120 |
 | A Light to Return To | Meat and Hide | make a copper pick; carry 3 raw iron; make an outpost beacon; place it | 4 lamps | 160 |
+| Smoke on the Horizon | A Light | speak with the elder of a camp (the beacon hears the nearest camp's call: it goes into the logbook, and the compass points at it) | 2 trail rations | 150 |
 | What the Keepers Left | A Light, The Court | carry 2 salvage, 3 ancient alloy; make a circuit board, 3 alloy plate | charge cell | 200 |
 | The Sealed Vault | What the Keepers Left | find a sealed vault; make an alloy drill; kill a sentry; break the relic vault | 2 med gel | 300 |
 | The Ruin Wakes | The Sealed Vault | find the ruin; win its fight (`sandbox:ruin`) | regen ampoule | 400 |
@@ -174,10 +177,12 @@ Nothing counts in creative.
 
 The engine sees most of it (what a player carries, places, breaks, finds, kills, uses up, an
 address written on a gate); the sandbox tells it what its crafting made
-(`server/survival.odin`) and who won the ruin's fight (`server/ruin.odin`, `RUIN_ENCOUNTER`),
-by `core.quest_note`. `server/quests_test.odin` holds the chain to the world: every step can be
-done from real ids with what the steps before gave (a tool of a block's tier, a fabricator
-standing), every quest opens in turn, and progress is kept with the character.
+(`server/survival.odin`), who won the ruin's fight (`server/ruin.odin`, `RUIN_ENCOUNTER`) and
+what was said in a conversation (`server/talk.odin`: a dialogue's id as it begins, a reply's
+`talk`), by `core.quest_note`. `server/quests_test.odin` holds the chain to the world: every
+step can be done from real ids with what the steps before gave (a tool of a block's tier, a
+fabricator standing, a talk step said by a reply a dialogue offers on that very step), every
+quest opens in turn (none left waiting for ever), and progress is kept with the character.
 
 ## Levels and skills
 
@@ -461,6 +466,121 @@ What it tells its players: `sandbox.market` (the market of the town a player sta
 none), the events `sandbox.trade_refused` (why) and `sandbox.market_open`; what they ask:
 `sandbox.trade`.
 
+## Its camps and their people
+
+The home world has three survivors' camps (`server/settlement.odin` places and keeps them,
+`server/settlement_build.odin` draws them), a journey from the spawn, all from the world's
+seed: on 14 rings round the spawn from 300 blocks out, 40 apart, 24 spots on each starting in
+a direction of the seed's, the first spots whose ground is dry and level (the land under the
+camp and its apron within 6 blocks of even), at least 24 blocks clear of the ruin's apron, the
+remains (but the road) and the generator's structures, and 200 blocks from each other; when
+fewer are found the land may be more uneven, then wet. They are numbered nearest first, each
+one of four layouts (no two alike in a world), named by the seed ("Ember Hollow", "Salt
+Crossing"), and built whole on levelled ground, over what stood there, when a player comes
+within 192 blocks and its ground is loaded, but never over an outpost's beacon. Over 40 seeds
+every camp stood on dry ground, 108 of 120 on level land and the rest at most 11 blocks uneven
+before levelling, none nearer the spawn than 300 blocks and the farthest 820; planning one world's
+camps samples the land's columns 6 000 times on average (14 150 at most), once, as the remains
+are planned (`server/settlement_seeds_test.odin`); a development build's profile on this box put
+that at 37 ms, in one tick as the world opens. A player standing in a camp with its four people
+thinking every tick moved the game's part of the server's tick from 0.071 to 0.079 ms on average
+over 5 200 ticks (`build trace`, its `game` scope); away from players they think once in eight.
+
+| Layout | What it is |
+|---|---|
+| Ring camp | a fence round two wool tents and a thatched hut of weathered planks, a fire in the middle, four lamp posts |
+| Walled yard | a low cobblestone wall round two plank huts under clay roofs, a fire, two lamp posts |
+| Scrap hamlet | a grating fence round two shelters of rusted and riveted iron, a lamp mast of dark steel |
+| Longhouse | a fence round a long hall of oak logs and planks under slate, a tent and a fire |
+
+Every camp has a fabricator (which hums, `core.world_hum`) with two chests beside it, a market
+stall under a wool awning and gaps in its fence or wall on each side. A player who comes within
+40 blocks of a built camp has it in its logbook by its name (`core.logbook_place`, a
+`settlement`: the journal lists it, the compass marks it, the map shows it, and a quest's
+`find` step may ask for one). No creature that fights comes by itself within 48 blocks of a
+camp, as round an outpost's beacon (the spawned hook). The world's `sandbox.settlements.txt`
+remembers which are built; a world saved before there were camps gets none.
+
+**Its people** (`server/folk.odin`, `pack/data/entities/folk.json`): four to a camp, each an
+entity of its role's kind with a mind of the sandbox's, a name made from the camp's seed by a
+small generator of our own (two halves of twenty each: "Penna", "Kesh", "Jory") and a look of
+its role's (the trader's hat and pack, the mechanic's goggles and tool belt, the medic's white
+and red band, the scout's hood, the elder's staff and white beard, the guard's helmet and
+spear), and a threat for the target frame (1; the guard 3). By day each keeps to its spot of the layout, standing and now and then walking a few
+blocks round it, watching a player who comes within 5 blocks and facing one it talks with; at
+night (a fifth of the day either side of midnight) and in the rain it goes into its shelter (a
+hut or a tent), and the guard keeps the gate whatever the hour. A guard fights a creature that
+fights which comes into the camp. Nobody can hurt them: any harm to one is none (the harming
+hook). A camp sets its people down as it is built and again whenever one is missing while a
+player is near; they are kept with the world. Where creatures do not come by themselves (the
+image scenes, the benchmarks) they stand still at their spots.
+
+| Camp | Its people |
+|---|---|
+| the nearest | elder, trader, medic, guard |
+| the next | mechanic, trader, scout, guard |
+| the third | elder, trader, scout, guard |
+
+**Talking** (`server/talk.odin`, `client/talk.odin`): using a person (the right button) opens a
+conversation in the game's screen: a name plate ("Penna, Trader of Copper Fold"), the line it
+says and the replies the player is offered, numbered; a click, the number's key or the arrows
+and Enter answer, Leave or Escape leaves, and the screen shrinks to fit a small window. What
+each says is its role's dialogue, pack data (`pack/data/dialogues/<role>.json`, the engine's
+dialogues: [docs/packs.md](../../docs/packs.md#dialogues)): a small graph whose replies are
+offered by conditions (a quest under way or on a step, a quest done, what the player carries,
+a place it found, being hurt, its level, what it can pay) and do their effects (items given and taken
+through the item ledger, silver paid either way from the trader's purse, something said that a
+quest counts, the sandbox's own actions). The server is the authority: the client sends the
+index of the reply chosen, and the server does it only when the dialogue offers it to that
+player now; anything else is refused ("You cannot say that now") and nothing of it is done. A
+conversation ends with a reply that goes nowhere, when the player leaves it, walks more than 6
+blocks off, dies, or the person is gone.
+
+| Role | Services | Gives |
+|---|---|---|
+| Trader | opens the camp's market (below) | |
+| Mechanic | sells wire (3 silver for 4), a charge cell (6), a circuit board (12); trades a flint pick and 8 silver up for a copper pick (there is no durability to repair) | Parts for the Workshop; ends Medicine Run |
+| Medic | heals whole for 3 silver (offered while hurt); sells a field dressing (2) | Hides for the Healer, Medicine Run |
+| Scout | sells where the nearest remains site not yet found is (5), the ruin (8), the nearest camp not yet found (4), each marked in the logbook (refused, and not paid, when there is none left) | Quiet the Sentries, Eyes on the Ruin |
+| Elder | welcomes the survivor the first hour sends; the camp's story | Keep the Fires; ends Smoke on the Horizon |
+| Guard | | Duskrunner Trouble |
+
+A place a scout sells is in the logbook as one found is (a `find` step that asks for it is
+done, and it earns what finding it earns: a camp found 80 experience, `pack/data/levels`). The sandbox's actions a dialogue may name (`TALK_ACTIONS`): `market`, `heal`,
+`mark_remains`, `mark_ruin`, `mark_settlement` and `mark_mechanic` (the mechanic's camp, for
+the errand there).
+
+**Their quests** (`pack/data/quests/folk.json`), all opened by Smoke on the Horizon; each is
+taken in a conversation (its first step, a `talk` said by the reply that agrees) and handed in
+in another (a reply the dialogue opens on while the quest is on its last step, taking what it
+asks), its reward the quest's, and silver from the one who asked:
+
+| Quest | Kind | Given by | Steps | Reward | XP |
+|---|---|---|---|---|---|
+| Hides for the Healer | fetch | medic | agree; carry 4 hides; hand them in | 2 med gel, 6 silver | 120 |
+| Medicine Run | deliver | medic, to the mechanic of the next camp | take 2 med gel; hand them to the mechanic | 3 copper ingots | 180 |
+| Parts for the Workshop | fetch | mechanic | agree; carry 3 scrap; hand it in | 2 charge cells, 5 silver | 150 |
+| Duskrunner Trouble | hunt | guard | agree; kill 3 duskrunners; report | 2 stim patches, 8 silver | 200 |
+| Quiet the Sentries | clear | scout | agree; disable 2 sentries (the ruin's posts are kept); report | 2 optics, 8 silver | 250 |
+| Eyes on the Ruin | find | scout | agree; find the ruin; report | climbing spikes, 4 silver | 150 |
+| Keep the Fires | fetch | elder | agree; carry 8 coal; hand it in | 3 trail rations, 6 silver | 120 |
+
+**Its market.** Each camp's trader keeps a market of its own: five of the goods, each priced
+within a quarter of its base price and 6 to 20 units in stock, from the camp's seed, so the
+camps differ. It is the towns' market screen (below, "Its peoples and markets"), opened by the
+trader's first reply and by the market's action while the player stays in the camp; a unit
+bought or sold moves its price by 3% (between the base price's half and four times it). It
+works on any world, Earth or not, and is not saved: a session opens with every camp stocked.
+
+`/settlement` says where the camps are; `/settlement <ring|yard|hamlet|longhouse> [1|2|3]`
+sets a camp of that layout down at the player's feet with the people of that camp of the plan
+(the bulk edit permission, `world.edit.bulk`), for a picture or a test: it is kept for the
+session (after a restart its blocks stay and its people stand still).
+
+What it tells its players: `sandbox.talk` (the conversation a player is in: the person, its
+name and camp, the dialogue, the node and the replies offered); what they ask: `sandbox.say`
+(the reply chosen, or leave).
+
 ## Its materials
 
 The sandbox has a block of every material of the kit (`sandbox:basalt_bricks`, ...: its pack's
@@ -520,6 +640,11 @@ A character's quests are the engine's (its file's `quests`, [docs/saves.md](../.
   keeps is moved aside (`.bad`) and the world keeps none (its beacons stand, dark, until
   placed again).
 
+- `sandbox.settlements.txt`: the home world's camps built, as text: `before` alone (a world
+  saved before there were camps: none is built in it), or a line `built <x> <z>` for each camp
+  built, naming its middle column. A line it does not know moves the file aside, and nothing
+  more is built. A world without one is new (its file is written at its first save).
+
 A character's respawn at an outpost is its record's `home` (`home.set`, `home.world` (the
 world's address), `home.at`): absent in older files, so read as none.
 
@@ -533,7 +658,8 @@ world's address), `home.at`): absent in older files, so read as none.
 `pack/data/entities/hostile.json`, the nights' spawn rules; `pack/data/blocks/kit.json`, a
 block of every material; `pack/data/quests/first_hour.json`, the first hour's quests;
 `pack/data/levels/survivor.json` and `pack/data/skills/survivor.json`, a survivor's levels
-and skills),
+and skills; `pack/data/entities/folk.json`, `dialogues/*.json` and `quests/folk.json`, the
+camps' people, what they say and the quests they give),
 the markets' model (above), `records.odin` (what it replicates) and `text.odin`
 (what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
 and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and
@@ -545,8 +671,11 @@ market on the wire; `interventions.odin`), lets the night's creatures hunt
 (`danger.odin`) and keeps the ruined site and its fight (`ruin.odin`: the site from the seed,
 its template, the altar's use, the lock, the waves, the reward and the giving back), builds
 the remains round the home gate (`remains.odin`, `remains_build.odin`) on what the ruin and they
-share (`site.odin`: the land under a site, its levelling); `client/`
-draws the market's line and screen (`market.odin`) and the fight's bar (`ruin.odin`). The pack's
+share (`site.odin`: the land under a site, its levelling), places, builds and keeps the camps
+(`settlement.odin`, `settlement_build.odin`) with their people (`folk.odin`) and talks with
+them (`talk.odin`: the conversations, their actions and the camps' markets); `client/`
+draws the market's line and screen (`market.odin`), the fight's bar (`ruin.odin`) and the
+conversation's screen (`talk.odin`). The pack's
 `pack/data/blocks/ruin.json`, `items/ruin.json`, `models/ruin.json` and
 `game_modes/encounter.json` are the ruin's altar and ward, its rounds and the fighters' mode.
 Everything else the sandbox does (worlds and gates, climate, farming) is the engine's, chosen

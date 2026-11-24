@@ -8,10 +8,12 @@ import "games:sandbox"
 import "server:core"
 import "server:playtest"
 
-// The first hour's quests (pack/data/quests/first_hour.json, README.md "Quests"): every one
-// can be done in the world the sandbox makes, from real ids, in an order that never asks for
-// what an earlier step did not give the means to; and on a stepped server, what a survivor
-// does moves them on, gives their rewards and is kept with the character.
+// The quests (pack/data/quests: the first hour's, first_hour.json, and the camps' people's,
+// folk.json; README.md "Quests"): every one can be done in the world the sandbox makes, from
+// real ids, in an order that never asks for what an earlier step did not give the means to,
+// a talk step said in a conversation a dialogue offers on that step; and on a stepped
+// server, what a survivor does moves them on, gives their rewards and is kept with the
+// character.
 
 // quest_of: a quest's index in the session's registry by id.
 quest_of :: proc(t: ^testing.T, s: ^core.Server, id: string) -> int {
@@ -63,7 +65,34 @@ least_tier :: proc(reg: ^game.Registry, item: game.Item) -> u8 {
 	return 0 if least == 255 else least
 }
 
-// The chain: 10 to 14 quests, one open at the start, each opened in turn as the ones before
+// talk_said: a reply of a dialogue says name, offered on step k of quest q (its conditions
+// name no other step of q), taking only what can be come by; or a dialogue of the camps'
+// people's roles is named so (a conversation with one begun says it).
+@(private = "file")
+talk_said :: proc(reg: ^game.Registry, had: map[game.Item]bool, name: string, q, k: int) -> bool {
+	kinds := FOLK_KINDS
+	for kind in kinds {if kind == name {return true}}
+	for &d in reg.dialogues {
+		for &n in d.nodes {
+			for &r in n.replies {
+				says := false
+				for e in r.effects {says ||= e.kind == .Talk && e.name == name}
+				if !says {continue}
+				fits := true
+				for c in r.conditions {
+					if (c.kind == .Step || c.kind == .Quest) && c.quest == q {
+						fits &&= c.kind == .Quest || c.step == k
+					}
+				}
+				for e in r.effects {fits &&= e.kind != .Take || had[e.item]}
+				if fits {return true}
+			}
+		}
+	}
+	return false
+}
+
+// The chain: 18 to 24 quests (the first hour's and the camps'), one open at the start, each opened in turn as the ones before
 // are done (none left waiting for ever), and every step one a survivor can do with what it
 // has by then: an item it can come by (made by a recipe of the sandbox's, at a fabricator
 // only once one stands), a block of the world broken with a tool of its tier made before, a
@@ -79,7 +108,7 @@ test_quests_chain :: proc(t: ^testing.T) {
 	reg := s.registry
 	testing.expectf(
 		t,
-		len(reg.quests) >= 10 && len(reg.quests) <= 14,
+		len(reg.quests) >= 18 && len(reg.quests) <= 24,
 		"%d quests",
 		len(reg.quests),
 	)
@@ -166,13 +195,22 @@ test_quests_chain :: proc(t: ^testing.T) {
 				for name in REMAIN_NAMES {named ||= name != "" && name == o.name}
 				testing.expectf(
 					t,
-					(o.place == .Ruin && o.name == "") || (o.place == .Remains && named),
+					(o.place == .Ruin && o.name == "") ||
+					(o.place == .Settlement && o.name == "") ||
+					(o.place == .Remains && named),
 					"%s: no place the sandbox notes",
 					where_,
 				)
 			case .Win:
 				testing.expect_value(t, o.name, RUIN_ENCOUNTER)
-			case .Address, .Talk:
+			case .Address:
+			case .Talk:
+				testing.expectf(
+					t,
+					talk_said(reg, had, o.name, q, k),
+					"%s: no conversation says it on this step",
+					where_,
+				)
 			}
 			if way, has := st.way.?; has {
 				named := way.name == ""

@@ -1,10 +1,12 @@
 package sandbox
 
+import "common:game"
 import "common:protocol"
 
 // What the sandbox tells its players besides the engine's kinds (docs/games.md), and what
 // they ask of it: the market of the town a player stands in, a trade there, why a trade
-// was refused, and the market's screen opened by the player's action.
+// was refused, and the market's screen opened by the player's action; the conversation a
+// player is in with one of the camps' people, and what it says.
 
 MAX_TOWN_NAME :: 32
 
@@ -108,18 +110,47 @@ Craft :: struct {
 	recipe: u16,
 }
 
+MAX_PERSON_NAME :: 16
+MAX_CAMP_NAME :: 32
+TALK_LEAVE :: 255 // a Say that leaves the conversation
+
+// Talk: the conversation a player is in with one of the camps' people (one per player;
+// person 0: none): who it is (the entity, its name and its camp), the dialogue (an index in
+// the registry's dialogues, the same on both sides), the node it is at and the replies the
+// player is offered there (the server's: game.dialogue_offered). Put when it begins, after
+// each answer, as what is offered changes and when it ends.
+Talk :: struct {
+	person:   u32,
+	name:     string `net:"max=16"`,
+	camp:     string `net:"max=32"`,
+	dialogue: u8,
+	node:     u8,
+	offered:  game.Reply_Set,
+}
+
+// Say (a request): the player answers with the reply of this index at the node it is at
+// (TALK_LEAVE: it leaves). The server does it only when it is a reply it is offered.
+Say :: struct {
+	reply: u8,
+}
+
 KINDS :: protocol.Game_Kinds {
 	states   = {
 		{name = "sandbox.market", value = Town_Market},
 		{name = "sandbox.ruin", value = Ruin_Fight},
 		{name = "sandbox.survival", value = Survival},
+		{name = "sandbox.talk", value = Talk},
 	},
 	events   = {
 		{name = "sandbox.trade_refused", value = Trade_Refused},
 		{name = "sandbox.market_open", value = Market_Open},
 		{name = "sandbox.made", value = Made},
 	},
-	requests = {{name = "sandbox.trade", value = Trade}, {name = "sandbox.craft", value = Craft}},
+	requests = {
+		{name = "sandbox.trade", value = Trade},
+		{name = "sandbox.craft", value = Craft},
+		{name = "sandbox.say", value = Say},
+	},
 }
 
 // MAX_TRADE_QUANTITY: the most units one trade may move.

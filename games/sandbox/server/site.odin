@@ -23,19 +23,21 @@ Site :: struct {
 }
 
 // Land: what the sandbox asks of a world's generator about its land, with the seed its land
-// is made from (terrain_seed).
+// is made from (terrain_seed), and how many columns it was asked of (what planning costs).
 Land :: struct {
 	generator: worldgen.Kind,
 	seed:      i64,
 	params:    worldgen.Params,
+	samples:   int,
 }
 
-land_of :: proc(w: ^core.World) -> Land {return {w.generator, terrain_seed(w), w.params}}
+land_of :: proc(w: ^core.World) -> Land {return {w.generator, terrain_seed(w), w.params, 0}}
 
 // land_at: the top block of the land at column (x, z) as the generator makes it (before its
 // trees and anything built), and whether it is dry ground to build on: no sea, beach, river,
 // lake, mountain, ice or overhang.
 land_at :: proc(l: ^Land, x, z: i32) -> (top: i32, dry: bool) {
+	l.samples += 1
 	switch l.generator {
 	case .Flat:
 		return worldgen.FLAT_TOP, true

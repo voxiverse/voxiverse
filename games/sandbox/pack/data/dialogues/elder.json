@@ -1,0 +1,39 @@
+// An elder: the welcome the first hour leads to, the camp's story, and an errand. (games/sandbox/server/talk.odin does a reply's game actions.)
+{
+	"elder": {
+		"title": "Elder",
+		"start": [
+			{"if": [{"quest": "sandbox:smoke_on_the_horizon"}], "go": "welcome"},
+			{"if": [{"quest": "sandbox:keep_the_fires", "step": 3}], "go": "fires_back"},
+			{"go": "hello"}
+		],
+		"nodes": {
+			"welcome": {"text": "So our call reached someone. Welcome to {camp}. We are few, and we trade what we can.", "replies": [
+				{"text": "Who are you?", "go": "hello"},
+				{"text": "Goodbye."}
+			]},
+			"hello": {"text": "I am {name}. I keep the fire, and the count of who comes back.", "replies": [
+				{"text": "What is this place?", "go": "lore"},
+				{"text": "Can I help?", "go": "work"},
+				{"text": "Goodbye."}
+			]},
+			"lore": {"text": "We came through the gate while it still answered. Then it went dark, and we stayed. The keepers' remains feed us scrap; the night feeds on us.", "replies": [
+				{"text": "Back.", "go": "hello"}
+			]},
+			"work": {"text": "The fire wants coal, and nobody can be spared for the seams.", "replies": [
+				{"text": "I'll bring coal.", "if": [{"quest": "sandbox:keep_the_fires", "step": 1}], "do": [{"talk": "sandbox:fires_accept"}], "go": "fires_given"},
+				{"text": "Back.", "go": "hello"}
+			]},
+			"fires_given": {"text": "Eight lumps will see us through the cold nights.", "replies": [
+				{"text": "I'll be back."}
+			]},
+			"fires_back": {"text": "Do you have the coal?", "replies": [
+				{"text": "Eight lumps, here.", "do": [{"take": "sandbox:coal", "count": 8}, {"talk": "sandbox:fires_done"}, {"pay": 6}], "go": "thanks"},
+				{"text": "Not yet."}
+			]},
+			"thanks": {"text": "The fire thanks you, and so do I.", "replies": [
+				{"text": "Goodbye."}
+			]}
+		}
+	}
+}

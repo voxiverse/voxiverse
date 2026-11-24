@@ -1,0 +1,41 @@
+// A scout: the places it knows, sold, and two errands. (games/sandbox/server/talk.odin does a reply's game actions.)
+{
+	"scout": {
+		"title": "Scout",
+		"start": [
+			{"if": [{"quest": "sandbox:quiet_the_sentries", "step": 3}], "go": "sentries_back"},
+			{"if": [{"quest": "sandbox:eyes_on_the_ruin", "step": 3}], "go": "eyes_back"},
+			{"go": "hello"}
+		],
+		"nodes": {
+			"hello": {"text": "I walk the far ground so the others don't have to. What I know, I sell.", "replies": [
+				{"text": "Where are the old remains? (5 silver)", "do": [{"cost": 5}, {"game": "mark_remains"}], "go": "hello"},
+				{"text": "Where is the walled ruin? (8 silver)", "do": [{"cost": 8}, {"game": "mark_ruin"}], "go": "hello"},
+				{"text": "Are there other camps? (4 silver)", "do": [{"cost": 4}, {"game": "mark_settlement"}], "go": "hello"},
+				{"text": "Anything I can do for you?", "go": "work"}
+			]},
+			"work": {"text": "Two jobs, if you have the nerve and the legs.", "replies": [
+				{"text": "The sentries on the road.", "if": [{"quest": "sandbox:quiet_the_sentries", "step": 1}], "do": [{"talk": "sandbox:sentries_accept"}], "go": "sentries_given"},
+				{"text": "Scout the ruin for you.", "if": [{"quest": "sandbox:eyes_on_the_ruin", "step": 1}], "do": [{"talk": "sandbox:eyes_accept"}], "go": "eyes_given"},
+				{"text": "Back.", "go": "hello"}
+			]},
+			"sentries_given": {"text": "Sentries keep the ruin's corners and shoot at anything that walks. Put two of them down.", "replies": [
+				{"text": "Consider it done."}
+			]},
+			"eyes_given": {"text": "The old road ends at a walled ruin. Find it, and come back to tell me you did.", "replies": [
+				{"text": "I'll find it."}
+			]},
+			"sentries_back": {"text": "Well? Is the road any quieter?", "replies": [
+				{"text": "Two sentries are down.", "do": [{"talk": "sandbox:sentries_done"}, {"pay": 8}], "go": "thanks"},
+				{"text": "Not yet."}
+			]},
+			"eyes_back": {"text": "You look like someone who has seen the ruin.", "replies": [
+				{"text": "I found it.", "do": [{"talk": "sandbox:eyes_done"}, {"pay": 4}], "go": "thanks"},
+				{"text": "Not yet."}
+			]},
+			"thanks": {"text": "Good. Stay off the open ground at night.", "replies": [
+				{"text": "Goodbye."}
+			]}
+		}
+	}
+}

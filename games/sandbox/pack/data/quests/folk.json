@@ -1,0 +1,88 @@
+{
+	// What the camps' people ask of a survivor (README.md, "Its camps"): each quest is given
+	// in a conversation (data/dialogues: its first step is said there) and handed in in
+	// another, and opens once the camps are found (Smoke on the Horizon, the first hour's).
+	"hides_for_the_healer": {
+		"title": "Hides for the Healer",
+		"text": "The medic makes dressings and splints from scraped hide, and the camp has run out.",
+		"after": ["sandbox:smoke_on_the_horizon"],
+		"steps": [
+			{"text": "Ask the medic what the camp needs", "goal": "talk", "name": "sandbox:medic_hides"},
+			{"text": "Bring back hides", "goal": "have", "item": "sandbox:hide", "count": 4},
+			{"text": "Hand the hides to the medic", "goal": "talk", "name": "sandbox:medic_hides_done", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:med_gel", "count": 2}],
+		"xp": 120
+	},
+	"medicine_run": {
+		"title": "Medicine Run",
+		"text": "The mechanic's crew at another camp burned their hands on a cell that split. The medic has gel to spare and nobody to carry it.",
+		"after": ["sandbox:smoke_on_the_horizon"],
+		"steps": [
+			{"text": "Take the medic's gel", "goal": "talk", "name": "sandbox:medicine_taken"},
+			{"text": "Carry the gel to the mechanic's camp", "goal": "talk", "name": "sandbox:medicine_delivered", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:copper_ingot", "count": 3}],
+		"xp": 180
+	},
+	"parts_for_the_workshop": {
+		"title": "Parts for the Workshop",
+		"text": "The mechanic keeps the camps' lamps and fabricators running on whatever the old machines leave behind.",
+		"after": ["sandbox:smoke_on_the_horizon"],
+		"steps": [
+			{"text": "Ask the mechanic about parts", "goal": "talk", "name": "sandbox:parts_accept"},
+			{"text": "Bring scrap from the remains' machines", "goal": "have", "item": "sandbox:scrap", "count": 3},
+			{"text": "Hand the scrap to the mechanic", "goal": "talk", "name": "sandbox:parts_done", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:charge_cell", "count": 2}],
+		"xp": 150
+	},
+	"duskrunner_trouble": {
+		"title": "Duskrunner Trouble",
+		"text": "Packs come out of the woods at night and test the fence. The guard wants them fewer.",
+		"after": ["sandbox:smoke_on_the_horizon"],
+		"steps": [
+			{"text": "Ask the guard about the night", "goal": "talk", "name": "sandbox:dusk_accept"},
+			{"text": "Bring down duskrunners", "goal": "kill", "creature": "sandbox:duskrunner", "count": 3},
+			{"text": "Tell the guard", "goal": "talk", "name": "sandbox:dusk_done", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:stim_patch", "count": 2}],
+		"xp": 200
+	},
+	"quiet_the_sentries": {
+		"title": "Quiet the Sentries",
+		"text": "The old machines at the ruin's corners shoot at anything on the road. The scout wants the way clear.",
+		"after": ["sandbox:smoke_on_the_horizon"],
+		"steps": [
+			{"text": "Ask the scout about the road", "goal": "talk", "name": "sandbox:sentries_accept"},
+			{"text": "Disable sentries", "goal": "kill", "creature": "sandbox:sentry", "count": 2, "way": {"place": "ruin"}},
+			{"text": "Tell the scout the road is clear", "goal": "talk", "name": "sandbox:sentries_done", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:optic", "count": 2}],
+		"xp": 250
+	},
+	"eyes_on_the_ruin": {
+		"title": "Eyes on the Ruin",
+		"text": "The scout has heard of a walled ruin at the end of the old road and wants it seen by someone who came back.",
+		"after": ["sandbox:smoke_on_the_horizon"],
+		"steps": [
+			{"text": "Ask the scout what is out there", "goal": "talk", "name": "sandbox:eyes_accept"},
+			{"text": "Find the ruin", "goal": "find", "place": "ruin"},
+			{"text": "Tell the scout what you saw", "goal": "talk", "name": "sandbox:eyes_done", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:climbing_spikes", "count": 1}],
+		"xp": 150
+	},
+	"keep_the_fires": {
+		"title": "Keep the Fires",
+		"text": "The elder keeps the fire, and the fire keeps the camp. Nobody can be spared for the coal seams.",
+		"after": ["sandbox:smoke_on_the_horizon"],
+		"steps": [
+			{"text": "Ask the elder what the fire needs", "goal": "talk", "name": "sandbox:fires_accept"},
+			{"text": "Mine coal", "goal": "have", "item": "sandbox:coal", "count": 8},
+			{"text": "Bring the coal to the elder", "goal": "talk", "name": "sandbox:fires_done", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:trail_ration", "count": 3}],
+		"xp": 120
+	}
+}

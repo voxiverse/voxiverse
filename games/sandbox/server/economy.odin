@@ -48,6 +48,7 @@ Sandbox_World :: struct {
 	interventions_dirty: bool, // changed since its file was staged
 	remains:             Remains, // (remains.odin)
 	outposts:            Outposts, // its beacons (outposts.odin)
+	settlements:         Settlements, // (the home world's) its camps (settlement.odin)
 }
 
 world_of :: proc(w: ^core.World) -> ^Sandbox_World {return core.world_state(w, Sandbox_World)}

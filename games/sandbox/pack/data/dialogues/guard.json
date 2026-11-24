@@ -1,0 +1,30 @@
+// A guard: the night's trouble, and a hunt. (games/sandbox/server/talk.odin does a reply's game actions.)
+{
+	"guard": {
+		"title": "Guard",
+		"start": [
+			{"if": [{"quest": "sandbox:duskrunner_trouble", "step": 3}], "go": "dusk_back"},
+			{"go": "hello"}
+		],
+		"nodes": {
+			"hello": {"text": "Keep your weapon low inside the fence.", "replies": [
+				{"text": "Seen any trouble?", "go": "work"},
+				{"text": "Goodbye."}
+			]},
+			"work": {"text": "Duskrunners. Packs of them come out of the woods at night and test the fence.", "replies": [
+				{"text": "I'll thin them out.", "if": [{"quest": "sandbox:duskrunner_trouble", "step": 1}], "do": [{"talk": "sandbox:dusk_accept"}], "go": "dusk_given"},
+				{"text": "Back.", "go": "hello"}
+			]},
+			"dusk_given": {"text": "Three of them. Go at dusk, and come back alive.", "replies": [
+				{"text": "I will."}
+			]},
+			"dusk_back": {"text": "Well?", "replies": [
+				{"text": "Three duskrunners are down.", "do": [{"talk": "sandbox:dusk_done"}, {"pay": 8}], "go": "thanks"},
+				{"text": "Not yet."}
+			]},
+			"thanks": {"text": "Good hunting. The fence sleeps easier.", "replies": [
+				{"text": "Goodbye."}
+			]}
+		}
+	}
+}

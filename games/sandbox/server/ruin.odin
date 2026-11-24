@@ -90,6 +90,9 @@ Ruin :: struct {
 // Ruin_Seat: a player's part in the ruin's fight (the game's client_state).
 Ruin_Seat :: struct {
 	fighting: u32, // the fight it is locked in (Ruin.fight while it is on; 0: none)
+	// Not the ruin's: the conversation it is in (talk.odin). It is here because a game keeps
+	// one state on a seat.
+	talk:     Talk_Seat,
 }
 
 ruin_of :: proc(s: ^core.Server) -> ^Ruin {return &state(s).ruin}

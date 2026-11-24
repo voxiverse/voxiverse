@@ -1,0 +1,20 @@
+// A camp's trader: its market, opened from here. (games/sandbox/server/talk.odin does a reply's game actions.)
+{
+	"trader": {
+		"title": "Trader",
+		"start": [
+			{"go": "hello"}
+		],
+		"nodes": {
+			"hello": {"text": "Goods from three camps and the road between them. Silver talks here, {name} listens.", "replies": [
+				{"text": "Show me what you have.", "do": [{"game": "market"}]},
+				{"text": "Why do prices differ between camps?", "go": "prices"},
+				{"text": "Goodbye."}
+			]},
+			"prices": {"text": "Each camp is short of something different. Carry what one has plenty of to one that wants it, and you come out ahead. So do we.", "replies": [
+				{"text": "Show me what you have.", "do": [{"game": "market"}]},
+				{"text": "Back.", "go": "hello"}
+			]}
+		}
+	}
+}

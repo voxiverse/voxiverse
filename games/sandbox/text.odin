@@ -57,6 +57,9 @@ Text :: enum u8 {
 	Craft_Outpost_Home,
 	Craft_Hud, // {0}: the item, {1}: percent
 	Craft_Made, // {0}: how many, {1}: the item
+	Talk_Title, // {0}: the person's name, {1}: what it does, {2}: its camp
+	Talk_Leave,
+	Talk_Hint, // {0}: the key that leaves
 }
 
 TEXT_EN := [Text]string {
@@ -110,6 +113,9 @@ TEXT_EN := [Text]string {
 	.Craft_Outpost_Home          = "respawn",
 	.Craft_Hud                   = "Making {0}  {1}%",
 	.Craft_Made                  = "+{0} {1}",
+	.Talk_Title                  = "{0}, {1} of {2}",
+	.Talk_Leave                  = "Leave",
+	.Talk_Hint                   = "1-4 or click to answer   {0} to leave",
 }
 
 tr :: proc(key: Text, args: ..any) -> string {return base.text_format(TEXT_EN[key], ..args)}

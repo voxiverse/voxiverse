@@ -249,17 +249,32 @@ market_town_name :: proc(t: sandbox.Town) -> string {
 	)
 }
 
-// market_update (once a second, for a playing client): the market of the town it stands in,
-// or none; a record put again unchanged sends nothing.
+// market_update (once a second, for a playing client): the market of the camp whose trader
+// it asked (talk.odin) while it stands in that camp, else of the town it stands in, or
+// none; a record put again unchanged sends nothing.
 market_update :: proc(s: ^core.Server, c: ^core.Client) {
 	v: sandbox.Town_Market
-	if town, ok := trader_where(c.world, c); ok {v = market_view(s, c.world, c, town)}
+	if camp := camp_market_here(s, c); camp >= 0 {
+		v = camp_market_view(s, c, camp)
+	} else if town, ok := trader_where(c.world, c); ok {
+		v = market_view(s, c.world, c, town)
+	}
 	core.game_put(s, c, &v)
 }
 
 // market_trade answers a trade: the market as it is after it, or why it was refused.
 market_trade :: proc(s: ^core.Server, c: ^core.Client, m: sandbox.Trade) {
 	w := c.world
+	if camp := camp_market_here(s, c); camp >= 0 {
+		if result := camp_trade(s, c, camp, m); result != .None {
+			refused := sandbox.Trade_Refused{result}
+			core.game_event(s, c, &refused)
+			return
+		}
+		v := camp_market_view(s, c, camp)
+		core.game_put(s, c, &v)
+		return
+	}
 	town, ok := trader_where(w, c)
 	if !ok {
 		refused := sandbox.Trade_Refused{.Away}
@@ -284,9 +299,17 @@ market_trade :: proc(s: ^core.Server, c: ^core.Client, m: sandbox.Trade) {
 	core.game_put(s, c, &v)
 }
 
-// market_ask: the player's market action. In a town its client part is told to open the
-// market's screen; elsewhere nothing happens (its HUD says when there is a market).
+// market_ask: the player's market action (and a camp's trader's, talk.odin). In a camp whose
+// trader it asked, or in a town, its client part is told to open the market's screen;
+// elsewhere nothing happens (its HUD says when there is a market).
 market_ask :: proc(s: ^core.Server, c: ^core.Client) {
+	if camp := camp_market_here(s, c); camp >= 0 {
+		v := camp_market_view(s, c, camp)
+		core.game_put(s, c, &v)
+		open := sandbox.Market_Open{v.town}
+		core.game_event(s, c, &open)
+		return
+	}
 	town, ok := trader_where(c.world, c)
 	if !ok {return}
 	v := market_view(s, c.world, c, town)

@@ -1,0 +1,46 @@
+// The mechanic: tools and parts for silver, a pick traded up, and two errands' ends. (games/sandbox/server/talk.odin does a reply's game actions.)
+{
+	"mechanic": {
+		"title": "Mechanic",
+		"start": [
+			{"if": [{"quest": "sandbox:medicine_run", "step": 2}], "go": "delivery"},
+			{"if": [{"quest": "sandbox:parts_for_the_workshop", "step": 3}], "go": "parts_back"},
+			{"go": "hello"}
+		],
+		"nodes": {
+			"hello": {"text": "Mind the bench. If it has a motor I can fix it, and if it hasn't I can sell you one.", "replies": [
+				{"text": "What do you sell?", "go": "wares"},
+				{"text": "Trade up my flint pick for copper. (8 silver)", "do": [{"take": "sandbox:flint_pick", "count": 1}, {"cost": 8}, {"give": "sandbox:copper_pick", "count": 1}], "go": "hello"},
+				{"text": "Do you need parts?", "go": "work"},
+				{"text": "Goodbye."}
+			]},
+			"wares": {"text": "Wire, cells and boards. The prices are fair; the road here is not.", "replies": [
+				{"text": "Wire, four lengths. (3 silver)", "do": [{"cost": 3}, {"give": "sandbox:wire", "count": 4}], "go": "wares"},
+				{"text": "A charge cell. (6 silver)", "do": [{"cost": 6}, {"give": "sandbox:charge_cell", "count": 1}], "go": "wares"},
+				{"text": "A circuit board. (12 silver)", "do": [{"cost": 12}, {"give": "sandbox:circuit_board", "count": 1}], "go": "wares"},
+				{"text": "Back.", "go": "hello"}
+			]},
+			"work": {"text": "The old machines out by the remains drop scrap when you bring them down. I can always use it.", "replies": [
+				{"text": "I'll bring you scrap.", "if": [{"quest": "sandbox:parts_for_the_workshop", "step": 1}], "do": [{"talk": "sandbox:parts_accept"}], "go": "parts_given"},
+				{"text": "Not now.", "go": "hello"}
+			]},
+			"parts_given": {"text": "Three pieces. Sentries and watchers carry the good stuff.", "replies": [
+				{"text": "I'll be back."}
+			]},
+			"parts_back": {"text": "Got that scrap?", "replies": [
+				{"text": "Three pieces, here.", "do": [{"take": "sandbox:scrap", "count": 3}, {"talk": "sandbox:parts_done"}, {"pay": 5}], "go": "thanks"},
+				{"text": "Not yet."}
+			]},
+			"delivery": {"text": "That smells like the medic's gel. Is that for us?", "replies": [
+				{"text": "From the medic, for your crew.", "do": [{"take": "sandbox:med_gel", "count": 2}, {"talk": "sandbox:medicine_delivered"}], "go": "delivered"},
+				{"text": "Not yet."}
+			]},
+			"delivered": {"text": "Tell the medic we owe them one. Here, take some ingots for your trouble.", "replies": [
+				{"text": "Goodbye."}
+			]},
+			"thanks": {"text": "Good metal. Come back when you have more.", "replies": [
+				{"text": "Goodbye."}
+			]}
+		}
+	}
+}

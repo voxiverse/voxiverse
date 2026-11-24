@@ -30,6 +30,7 @@ GAME :: core.Game {
 		{name = INTERVENTIONS_FILE, check = interventions_check},
 		{name = REMAINS_FILE, check = remains_check},
 		{name = OUTPOSTS_FILE, check = outposts_check},
+		{name = SETTLEMENTS_FILE, check = settlements_check},
 	},
 	stats          = {
 		{name = "sheep.sheared", kind = .Count, xp = 5},
@@ -52,7 +53,7 @@ GAME :: core.Game {
 	entity_use     = entity_use,
 	entity_hurt    = entity_hurt,
 	entity_died    = entity_died,
-	harming        = wild_harming,
+	harming        = harming,
 	editing        = editing,
 	block_changed  = block_changed,
 	picking        = ruin_picking,
@@ -80,6 +81,9 @@ Sandbox :: struct {
 	ruin:             Ruin, // (ruin.odin)
 	remains_kit:      Remains_Kit, // (remains.odin)
 	survival:         Survival_State, // crafting, the Use action, the remains' loot (survival.odin)
+	folk:             [Role]game.Kind_Id, // the camps' people's kinds (folk.odin)
+	dialogues:        [Role]int, // ... and their dialogues (talk.odin)
+	camp_kit:         Camp_Kit, // what the camps are built of (settlement_build.odin)
 }
 
 state :: proc(s: ^core.Server) -> ^Sandbox {return core.game_state(s, Sandbox)}
@@ -98,6 +102,9 @@ start :: proc(s: ^core.Server) -> bool {
 	g.black_wool = game.item_of_block(reg, game.registry_block(reg, "black_wool") or_return)
 	wild_start(s) or_return
 	survival_start(s) or_return
+	folk_start(s) or_return
+	talk_start(s) or_return
+	camp_kit_start(s) or_return
 	return ruin_start(s) && remains_start(s)
 }
 
@@ -105,19 +112,23 @@ start :: proc(s: ^core.Server) -> bool {
 stop :: proc(s: ^core.Server) {survival_stop(s)}
 
 // tick: the economy (economy.odin), the night's creatures (danger.odin), the ruined site
-// (ruin.odin), the remains (remains.odin: planned once the ruin is placed) and the players'
-// crafting (survival.odin).
+// (ruin.odin), the remains (remains.odin: planned once the ruin is placed), the camps
+// (settlement.odin: planned once the remains are), the conversations with their people
+// (talk.odin) and the players' crafting (survival.odin).
 tick :: proc(s: ^core.Server) {
 	economy_tick(s)
 	danger_tick(s)
 	ruin_tick(s)
 	remains_tick(s)
+	settlements_tick(s)
+	talk_tick(s)
 	survival_tick(s)
 }
 
 // left: one fighting at the ruin is out (ruin.odin); what it was making is given back
-// (survival.odin).
+// (survival.odin); its conversation ends (talk.odin).
 left :: proc(s: ^core.Server, c: ^core.Client) {
+	talk_seat(s, c)^ = {}
 	ruin_left(s, c)
 	craft_left(s, c)
 }
@@ -211,6 +222,7 @@ world_opened :: proc(s: ^core.Server, w: ^core.World) {
 	interventions_load(w)
 	economy_load(w)
 	remains_load(s, w)
+	settlements_load(s, w)
 	outposts_load(w)
 }
 
@@ -226,6 +238,7 @@ world_save :: proc(s: ^core.Server, w: ^core.World) {
 	interventions_write(w)
 	economy_write(w)
 	remains_write(s, w)
+	settlements_write(s, w)
 	outposts_write(w)
 }
 
@@ -240,23 +253,27 @@ action :: proc(s: ^core.Server, c: ^core.Client, index: int) {
 	}
 }
 
-// request: a trade in the town the player stands in; a recipe to make (survival.odin).
+// request: a trade in the town (or camp) the player stands in; a recipe to make
+// (survival.odin); an answer in a conversation (talk.odin).
 request :: proc(s: ^core.Server, c: ^core.Client, r: core.Request) {
 	if t, ok := core.request_value(s, r, sandbox.Trade); ok {market_trade(s, c, t^)}
 	if v, ok := core.request_value(s, r, sandbox.Craft); ok {craft_ask(s, c, v^)}
+	if v, ok := core.request_value(s, r, sandbox.Say); ok {talk_say(s, c, v^)}
 }
 
 // command: `/sheep [lamb] [shorn] [black] [spotted]` sets a sheep of those looks down in
 // front of the player (north of it, each further along; the summoning permission);
 // `/interventions [radius]` lists the world's interventions (interventions.odin); `/town`
 // takes the player to the nearest town with a market (trader.odin); `/showroom <family>`
-// sets every material of a family up to look at (showroom.odin).
+// sets every material of a family up to look at (showroom.odin); `/settlement` says where
+// the camps are or sets one down (settlement.odin).
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
 	if name == "interventions" {return interventions_command(s, c, args)}
 	if name == "showroom" {return showroom_command(s, c, args)}
 	if name == "creatures" {return creatures_command(s, c, args)}
 	if name == "town" && len(args) == 0 {return town_command(s, c)}
 	if name == "outposts" && len(args) == 0 {return outposts_command(s, c)}
+	if name == "settlement" {return settlement_command(s, c, args)}
 	if name != "sheep" {return false}
 	if !core.allowed(s, c, "world.summon") {
 		core.notice(s, c, "You may not summon here")
@@ -289,4 +306,11 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 	sheep(s, c.world, h)^ = d
 	show(c.world, h, sheep(s, c.world, h))
 	return true
+}
+
+// harming: a creature of the roster's shell or sleep (wild.odin); nobody hurts the camps'
+// people (folk.odin).
+harming :: proc(s: ^core.Server, hm: ^core.Harming) {
+	wild_harming(s, hm)
+	folk_harming(s, hm)
 }

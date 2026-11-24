@@ -7,7 +7,8 @@ import "games:sandbox"
 // Sandbox's client part (the game: games/sandbox): the engine's HUD is the game's, and its
 // own is the market of a town on a planet world (market.odin): a line while the player
 // stands in a town and the market's screen, which its action (MARKET_ACTION) opens there;
-// and the ruined site's fight while the player is locked in it (ruin.odin).
+// the ruined site's fight while the player is locked in it (ruin.odin); and a conversation
+// with one of the camps' people (talk.odin).
 
 GAME :: engine.Game {
 	info     = sandbox.INFO,
@@ -25,6 +26,7 @@ View :: struct {
 	market: Market_Screen,
 	ruin:   sandbox.Ruin_Fight,
 	craft:  Craft_Screen,
+	talk:   Talk_Screen,
 	screen: Screen, // which the game's screen shows while open
 }
 
@@ -32,15 +34,19 @@ View :: struct {
 Screen :: enum u8 {
 	Market,
 	Craft,
+	Talk,
 }
 
-// screen: the game's screen (engine.Game.screen): the market or the crafting screen.
+// screen: the game's screen (engine.Game.screen): the market, the crafting screen or a
+// conversation (talk.odin).
 screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	switch view(s).screen {
 	case .Market:
 		market_screen(s, ctx, top)
 	case .Craft:
 		craft_screen(s, ctx, top)
+	case .Talk:
+		talk_screen(s, ctx, top)
 	}
 }
 

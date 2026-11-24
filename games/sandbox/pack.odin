@@ -6,8 +6,9 @@ import "common:game"
 // world's other creatures (its wildlife, predators and the remains' machines, with the
 // grounds they come on and what they leave), the hours the base pack's hostile creatures
 // come out, a block of every material of the kit, the ruined site's altar, ward, rounds
-// and the mode its fighters are in, the first hour's quests, and a survivor's levels and
-// skills. Loaded only where the sandbox is played.
+// and the mode its fighters are in, the first hour's quests, a survivor's levels and skills,
+// and the camps' people with their dialogues and the quests they give. Loaded only where the
+// sandbox is played.
 PACK :: game.Pack_Source {
 	namespace = "sandbox",
 	files     = {
@@ -33,6 +34,14 @@ PACK :: game.Pack_Source {
 		{"data/quests/first_hour.json", #load("pack/data/quests/first_hour.json")},
 		{"data/levels/survivor.json", #load("pack/data/levels/survivor.json")},
 		{"data/skills/survivor.json", #load("pack/data/skills/survivor.json")},
+		{"data/quests/folk.json", #load("pack/data/quests/folk.json")},
+		{"data/entities/folk.json", #load("pack/data/entities/folk.json")},
+		{"data/dialogues/trader.json", #load("pack/data/dialogues/trader.json")},
+		{"data/dialogues/mechanic.json", #load("pack/data/dialogues/mechanic.json")},
+		{"data/dialogues/medic.json", #load("pack/data/dialogues/medic.json")},
+		{"data/dialogues/scout.json", #load("pack/data/dialogues/scout.json")},
+		{"data/dialogues/elder.json", #load("pack/data/dialogues/elder.json")},
+		{"data/dialogues/guard.json", #load("pack/data/dialogues/guard.json")},
 	},
 }
 

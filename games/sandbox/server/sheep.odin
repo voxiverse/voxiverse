@@ -44,6 +44,7 @@ Creature :: struct {
 	winding: bool, // ... and whether it shows "winding"
 	showing: bool, // it shows them
 	still:   bool, // it stands still for a picture (/creatures ... still)
+	folk:    Folk_Tag, // one of the camps' people's (folk.odin)
 }
 
 GRAZE_EAT_TICKS :: 10 // ticks left of a graze when the head is down and the grass goes
@@ -63,8 +64,8 @@ sheep :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> ^Creatu
 // adult: the sheep has grown up.
 adult :: proc(d: ^Creature) -> bool {return d.grows <= 0}
 
-// think: the game's brain for its kinds (Game.think): every sheep of the world, and every
-// creature of the roster (wild.odin), each tick.
+// think: the game's brain for its kinds (Game.think): every sheep of the world, every
+// creature of the roster (wild.odin) and the camps' people (folk.odin), each tick.
 think :: proc(
 	s: ^core.Server,
 	w: ^core.World,
@@ -75,6 +76,8 @@ think :: proc(
 		for h in entities {sheep_think(s, w, h)}
 	} else if which, ours := wild_of(s, kind); ours {
 		for h in entities {wild_think(s, w, which, h)}
+	} else if role, folk := folk_of(s, kind); folk {
+		for h in entities {folk_think(s, w, role, h)}
 	}
 }
 
@@ -260,7 +263,8 @@ graze_eat :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) {
 	d.shorn = false
 }
 
-// entity_use: a player uses a sheep (Game.entity_use). Wheat feeds it: a lamb grows up a
+// entity_use: a player uses one of the camps' people: a conversation (talk.odin); or a sheep
+// (Game.entity_use). Wheat feeds it: a lamb grows up a
 // tenth sooner, an adult not waiting becomes ready to breed. Anything else shears an
 // adult by hand: 1 to 3 wool fall (black by its genes), and it is shorn until it eats
 // grass.
@@ -270,6 +274,7 @@ entity_use :: proc(
 	h: game.Entity_Handle,
 	stack: game.Stack,
 ) -> string {
+	if why, ours := talk_begin(s, c, h); ours {return why} 	// (one of the camps' people: talk.odin)
 	g := state(s)
 	w := c.world
 	d := sheep(s, w, h)
@@ -300,10 +305,12 @@ entity_use :: proc(
 	return ""
 }
 
-// spawned: a sheep that came by itself has wild genes; a creature of the roster begins, or
-// is refused (wild_spawned) (Game.spawned).
+// spawned: a creature that fights is refused near a beacon or a camp; a sheep that came by
+// itself has wild genes; a creature of the roster begins, or is refused (wild_spawned)
+// (Game.spawned).
 spawned :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> bool {
 	if !outpost_spawned(s, w, h) {return false} 	// (outposts.odin)
+	if !settlement_spawned(s, w, h) {return false} 	// (settlement.odin)
 	if d := sheep(s, w, h); d != nil {
 		d.genes = sandbox.genes_wild(&state(s).rng)
 		show(w, h, d)

@@ -58,11 +58,14 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	   ok && v != nil {view(s).craft.shown = v^}
 	if v, ok := engine.game_value(s, r, sandbox.Made); ok && v != nil {craft_made(s, v^)}
 	if v, ok := engine.game_value(s, r, sandbox.Ruin_Fight); ok && v != nil {ruin_received(s, v)}
+	if v, ok := engine.game_value(s, r, sandbox.Talk); ok && v != nil {talk_received(s, v)}
 }
 
-// hud: the ruin's fight while the player is in one (ruin.odin); `Market of <town>` and the
+// hud: a conversation whose screen was closed left (talk.odin); the ruin's fight while the
+// player is in one (ruin.odin); `Market of <town>` and the
 // key that opens it, near the top, while in a town and the screen is closed.
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
+	talk_hud(s)
 	ruin_hud(s, ctx)
 	craft_hud(s, ctx)
 	m := &view(s).market
@@ -169,7 +172,7 @@ market_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 	carried := menu.pane(ctx, both, sandbox.tr(.Market_Carried))
 
 	// The market: name (a button: it selects), price, stock, the news's age.
-	left := [4]f32{0.3, 0.2, 0.2, 0.3}
+	left := [4]f32{0.26, 0.16, 0.16, 0.42} // (the news's age is the longest)
 	right := [3]f32{0.4, 0.3, 0.3}
 	muted := t.text_muted
 	cells(
