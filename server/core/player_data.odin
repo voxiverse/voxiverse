@@ -100,12 +100,13 @@ File_Place :: struct {
 
 @(rodata)
 PLACE_KIND_NAMES := [game.Logbook_Place_Kind]string {
-	.Gate    = "gate",
-	.Ruin    = "ruin",
-	.Town    = "town",
-	.Outpost = "outpost",
-	.Beacon  = "beacon",
-	.Remains = "remains",
+	.Gate       = "gate",
+	.Ruin       = "ruin",
+	.Town       = "town",
+	.Outpost    = "outpost",
+	.Beacon     = "beacon",
+	.Remains    = "remains",
+	.Settlement = "settlement",
 }
 
 @(private = "file")
@@ -661,8 +662,8 @@ quests_read :: proc(reg: ^game.Registry, f: []File_Quest, ql: ^game.Quest_Log) {
 }
 
 // quest_note: c did something a quest's step may count (a game's: a recipe made, an
-// encounter won; the engine notes the rest itself: what it carries, places, breaks, finds,
-// kills, uses up and an address written on a gate). Each step it finishes moves on, and a
+// encounter won, something said in a conversation; the engine notes the rest itself: what
+// it carries, places, breaks, finds, kills, uses up and an address written on a gate). Each step it finishes moves on, and a
 // quest finished gives c its reward. Nothing counts for a player who cannot be hurt
 // (creative, a watcher): the quests are a survivor's.
 quest_note :: proc(s: ^Server, c: ^Client, e: game.Quest_Event) {

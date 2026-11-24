@@ -575,6 +575,10 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	read_progression(b, reg)
 	if len(b.errs) > 0 {return}
 
+	// --- Dialogues (they name items and quests). ---
+	read_dialogues(b, reg)
+	if len(b.errs) > 0 {return}
+
 	// --- Renamed ids (every id is known now). ---
 	renames_check(b, reg)
 	if len(b.errs) > 0 {return}

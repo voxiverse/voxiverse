@@ -18,9 +18,11 @@ QUEST_PACK :: `{
 		{"text": "Make planks", "goal": "make", "item": "voxiverse:planks", "count": 8},
 		{"text": "Use dirt", "goal": "use", "item": "voxiverse:dirt"},
 		{"text": "Win the trial", "goal": "win", "name": "testpack:trial"},
-		{"text": "Write an address", "goal": "address"}
+		{"text": "Write an address", "goal": "address"},
+		{"text": "Tell the keeper", "goal": "talk", "name": "testpack:keeper"}
 	]},
-	"aside": {"title": "Aside", "steps": [{"text": "Find the old wall", "goal": "find", "place": "remains", "name": "Old wall"}]}
+	"aside": {"title": "Aside", "steps": [{"text": "Find the old wall", "goal": "find", "place": "remains", "name": "Old wall"}]},
+	"camp": {"title": "Camp", "after": ["testpack:aside"], "steps": [{"text": "Find a camp", "goal": "find", "place": "settlement"}]}
 }`
 
 quest_registry :: proc(t: ^testing.T, quests: string) -> (^Registry, string) {
@@ -39,7 +41,7 @@ test_quests_read :: proc(t: ^testing.T) {
 	testing.expect_value(t, errs, "")
 	if reg == nil {return}
 	defer registry_destroy(reg)
-	testing.expect_value(t, len(reg.quests), 3)
+	testing.expect_value(t, len(reg.quests), 4)
 	first, _ := quest_by_id(reg, "testpack:first")
 	second, _ := quest_by_id(reg, "testpack:second")
 	aside, _ := quest_by_id(reg, "testpack:aside")
@@ -47,7 +49,7 @@ test_quests_read :: proc(t: ^testing.T) {
 	testing.expect_value(t, q.title, "Second")
 	testing.expect_value(t, len(q.after), 1)
 	testing.expect_value(t, q.after[0], first)
-	testing.expect_value(t, len(q.steps), 6)
+	testing.expect_value(t, len(q.steps), 7)
 	dummy, _ := registry_kind(reg, "voxiverse:dummy")
 	testing.expect_value(t, q.steps[0].objective.goal, Goal.Kill)
 	testing.expect_value(t, q.steps[0].objective.creature, dummy)
@@ -56,6 +58,10 @@ test_quests_read :: proc(t: ^testing.T) {
 	testing.expect_value(t, q.steps[1].objective.block, block_type_of(&reg.blocks, stone))
 	testing.expect_value(t, q.steps[2].objective.count, 8)
 	testing.expect_value(t, q.steps[4].objective.name, "testpack:trial")
+	testing.expect_value(t, q.steps[6].objective.goal, Goal.Talk)
+	testing.expect_value(t, q.steps[6].objective.name, "testpack:keeper")
+	camp, _ := quest_by_id(reg, "testpack:camp")
+	testing.expect(t, way_is(reg.quests[camp].steps[0].way, {.Settlement, ""}))
 	// A find step points at the place it asks for.
 	testing.expect(t, way_is(reg.quests[aside].steps[0].way, {.Remains, "Old wall"}))
 	testing.expect(t, way_is(reg.quests[first].steps[2].way, {.Ruin, ""}))
@@ -101,6 +107,14 @@ test_quests_refused :: proc(t: ^testing.T) {
 		{
 			`{"a": {"title": "A", "steps": [{"text": "x", "goal": "address", "colour": 1}]}}`,
 			"\"colour\" is not a step field",
+		},
+		{
+			`{"a": {"title": "A", "steps": [{"text": "x", "goal": "talk", "name": "a:b", "count": 2}]}}`,
+			"a talk step counts once",
+		},
+		{
+			`{"a": {"title": "A", "steps": [{"text": "x", "goal": "talk"}]}}`,
+			"a talk step names what is said",
 		},
 		{`{"a": {"title": "A", "steps": []}}`, "a quest has \"steps\""},
 		{`{"a": {"steps": [{"text": "x", "goal": "address"}]}}`, "a quest has a \"title\""},
@@ -226,13 +240,33 @@ test_quest_conditions :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		quest_note(reg, &log, {goal = .Address, count = 1}, &inv, &book),
+		Quest_Changes{steps = 1},
+	)
+	// Something said counts by what it was.
+	testing.expect_value(
+		t,
+		quest_note(reg, &log, {goal = .Talk, name = "testpack:stranger", count = 1}, &inv, &book),
+		Quest_Changes{},
+	)
+	testing.expect_value(
+		t,
+		quest_note(reg, &log, {goal = .Talk, name = "testpack:keeper", count = 1}, &inv, &book),
 		Quest_Changes{steps = 1, done = {second}},
+	)
+	// A camp found: the quest after the one aside, open now, settles.
+	camp, _ := quest_by_id(reg, "testpack:camp")
+	testing.expect(t, quest_open(reg, &log, camp))
+	logbook_place(&book, .Settlement, {}, {400, 0, 0}, "Ember Hollow")
+	testing.expect_value(
+		t,
+		quest_settle(reg, &log, &inv, &book),
+		Quest_Changes{steps = 1, done = {camp}},
 	)
 	for q in 0 ..< len(reg.quests) {testing.expect(t, quest_done(reg, &log, q))}
 	// Done is done: nothing counts any more.
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Address, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Talk, name = "testpack:keeper", count = 1}, &inv, &book),
 		Quest_Changes{},
 	)
 	testing.expect(t, quest_log_valid(reg, &log))
@@ -253,9 +287,9 @@ test_quest_log_valid :: proc(t: ^testing.T) {
 	testing.expect(t, quest_log_valid(reg, &log))
 	log.quests[second] = {2, 8}
 	testing.expect(t, !quest_log_valid(reg, &log), "a count as big as its step's")
-	log.quests[second] = {6, 0}
-	testing.expect(t, quest_log_valid(reg, &log))
 	log.quests[second] = {7, 0}
+	testing.expect(t, quest_log_valid(reg, &log))
+	log.quests[second] = {8, 0}
 	testing.expect(t, !quest_log_valid(reg, &log), "past the last step")
 	log.quests[second] = {}
 	log.quests[len(reg.quests)] = {1, 0}

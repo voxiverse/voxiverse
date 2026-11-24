@@ -137,7 +137,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 - `inventory_give_back :: proc(s: ^Server, c: ^Client) -> bool`: the inventory set aside (inventory_set_aside) is c's again, in the slots it was in; what c holds now is gone, booked in the item ledger as the game's (what comes back was neither made nor lost).
 - `item_drop :: proc(s: ^Server, w: ^World, position: [3]f64, stack: game.Stack) -> game.Entity_Handle`: the game drops a stack into the world at position (loot, a chest's spill), with its game data (Stack.data: a rolled stat, a rarity); it hops up a little, lies there for its kind's life, and the first player to walk over it picks it up (the game's picking hook may decide).
 - `logbook_place :: proc(s: ^Server, c: ^Client, kind: game.Logbook_Place_Kind, at: [3]i32, name := "")`: logbook_place notes a place in c's logbook (a gate it opened; a game's places, such as the sandbox's ruin once found): kept with its character and sent to it, its journal lists it, the compass marks it and the map shows it.
-- `quest_note :: proc(s: ^Server, c: ^Client, e: game.Quest_Event)`: c did something a quest's step may count (a game's: a recipe made, an encounter won; the engine notes the rest itself: what it carries, places, breaks, finds, kills, uses up and an address written on a gate).
+- `quest_note :: proc(s: ^Server, c: ^Client, e: game.Quest_Event)`: c did something a quest's step may count (a game's: a recipe made, an encounter won, something said in a conversation; the engine notes the rest itself: what it carries, places, breaks, finds, kills, uses up and an address written on a gate).
 - `skill_value :: proc(s: ^Server, c: ^Client, effect: game.Skill_Effect, base: f32) -> f32`: a rule's value as c's skills make it (game.skill_value): what a game's own rule a skill changes reads (a recipe's time, `.Craft_Time`, and its yield).
 - `head_in_water :: proc(s: ^Server, c: ^Client) -> bool`: c's eyes are in water (where a game drowns a player: the engine does not).
 - `player_health_bonus :: proc(s: ^Server, c: ^Client, bonus: f32)`: the game adds bonus health points to c's most (a level's, a blessing's; 0: none): from the next tick its health tops out there, a lower most cuts what it has.
@@ -246,7 +246,7 @@ The types these name:
 - `game.Item :: distinct u16`
 - `game.Kind_Id :: distinct u16`: an entity kind, the registry index + 1; 0 is none (and "any" in a filter).
 - `game.Lane_Item :: struct {...}`
-- `game.Logbook_Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon, Remains}`: what kind of place a logbook's place is (its name when it has none of its own).
+- `game.Logbook_Place_Kind :: enum u8 {Gate, Ruin, Town, Outpost, Beacon, Remains, Settlement}`: what kind of place a logbook's place is (its name when it has none of its own).
 - `game.Pack_Source :: struct {...}`
 - `game.Quest_Event :: struct {...}`: something a player did that a step may count: its goal and what (as the Objective's fields), and how many.
 - `game.Skill_Effect :: enum u8 {...}`: the rule a skill changes, and how its amount adds (SKILL_EFFECTS).

@@ -1,7 +1,7 @@
 # Packs and the trust boundary
 
 A pack is a directory of JSON and asset files that adds content (blocks, items, textures,
-sounds, recipes, models, game modes, channels, simulation rules, quests, structures) without
+sounds, recipes, models, game modes, channels, simulation rules, quests, dialogues, structures) without
 code. The
 base game is itself a pack (`assets/packs/voxiverse`, namespace `voxiverse`). This page says how
 packs are laid out, loaded and sent, what a pack's rule language can do, and what the engine
@@ -15,7 +15,7 @@ every change in [journal.md](journal.md).
   pack.json        format, namespace, version, title, description, requires, renamed
   assets/          client-only: textures (PNG), sounds (Ogg)
   data/            both sides: blocks, items, tags, recipes, shapes, models, game modes,
-                   channels, simulation rules, quests, skills, a level curve
+                   channels, simulation rules, quests, skills, a level curve, dialogues
   server/          server-only: structures (.vxs)
 ```
 
@@ -35,6 +35,7 @@ Each registry kind has one directory and one JSON object of named definitions pe
 | Shape, Model, Game mode | `data/shapes`, `data/models`, `data/game_modes` |
 | Channel, Sim rule, Entity, Quest | `data/channels`, `data/sim`, `data/entities`, `data/quests` |
 | Skill, Level curve | `data/skills`, `data/levels` |
+| Dialogue | `data/dialogues` |
 | Structure | `server/structures` |
 
 A file elsewhere in a pack is refused with the layout above in the message. Pack JSON is RFC 8259
@@ -270,16 +271,17 @@ player, and counts only while it is the step:
 | `have` | `item` | the player carries `count` of it at once (slots, what it wears, the cursor) |
 | `make` | `item` | it made `count` of it: the game tells (`core.quest_note`; the sandbox's crafting) |
 | `place`, `break` | `block` | it placed or broke `count` blocks of the type |
-| `find` | `place` (`gate`, `ruin`, `town`, `outpost`, `beacon`, `remains`), maybe `name` | its logbook has such a place (in any world) |
+| `find` | `place` (`gate`, `ruin`, `town`, `outpost`, `beacon`, `remains`, `settlement`), maybe `name` | its logbook has such a place (in any world) |
 | `kill` | `creature` | it killed `count` creatures of the kind (its blow, shot or blast) |
 | `use` | `item` | it used up `count` of the consumable |
 | `win` | `name` | it won the game's encounter of that name (`core.quest_note`; the sandbox's ruin is `sandbox:ruin`) |
 | `address` | | it wrote an address on a gate within reach, whatever answered |
+| `talk` | `name` | it said something of that name to someone: the game tells (`core.quest_note`; the sandbox's conversations note a dialogue's id as one begins and a reply's `talk`) |
 
 Quests are read after every other kind, so each id a step or reward names is checked
 (`"sandbox:nothing" is not an item`), and a quest that comes after itself by any way round is
 refused, as is a field its goal does not take or a `count` on a step that counts once (`find`,
-`win`, `address`). Where it is played, the server keeps each character's progress (`quests` in its
+`win`, `address`, `talk`). Where it is played, the server keeps each character's progress (`quests` in its
 file, [saves.md](saves.md)) and sends it to its player (the `quests` record), and nothing
 counts for a player who cannot be hurt (creative, a watcher); the journal (J) lists the quests
 under way and done, and the HUD's tracker shows the step of the one followed.
@@ -349,6 +351,52 @@ the skills learnt are kept in its file ([saves.md](saves.md)). A player learns a
 `/skill <id or name>`, sees its points with `/skill`, and unlearns them all with `/skill
 reset` within the curve's `respec_reach` of its `respec` block; `/xp <player> <amount>` (the
 `player.xp` permission) gives experience.
+## Dialogues
+
+A dialogue is a `data/dialogues/*.json` entry (`common/game/dialogue.odin`, read by
+`registry_dialogues.odin`): what a person says and what a player may answer, as a small graph.
+Its `title` (who speaks, as a player reads it where the game gives no name of its own), its
+`start` (the openings in order, each an `if` and the node it goes to; the last has no `if`, so
+a conversation always opens) and its `nodes` by name, each a line (`text`, at most 320 bytes)
+and 1 to 4 `replies`. A reply is its `text` (at most 80 bytes), maybe an `if` (conditions, all
+of which must hold for it to be offered), a `do` (effects, done in order) and a `go` (the node
+it goes on to; none: the conversation ends). Every node has one reply always offered (no `if`,
+nothing taken, nothing costed), so a player can always answer. A registry holds at most 32
+dialogues of at most 32 nodes; the base pack has none (the sandbox's folk:
+`games/sandbox/pack/data/dialogues`).
+
+```json
+"medic": {"title": "Medic",
+          "start": [{"if": [{"quest": "sandbox:hides_for_the_healer", "step": 3}], "go": "hides"}, {"go": "hello"}],
+          "nodes": {"hello": {"text": "Sit down. Where does it hurt?", "replies": [
+              {"text": "Patch me up (3 silver)", "if": [{"hurt": true}], "do": [{"cost": 3}, {"game": "heal"}], "go": "hello"},
+              {"text": "Goodbye"}]}}}
+```
+
+| Condition | Holds when |
+|---|---|
+| `{"quest": <id>}`, with `"step": n` | the quest is under way (open, not done); on its step n (1 its first) |
+| `{"done": <id>}` | the quest is done |
+| `{"have": <item>, "count": n}` | the player carries n of it (1 when no count) |
+| `{"found": <place kind>, "name": <name>}` | its logbook has such a place (of the name, when one is given) |
+| `{"hurt": true}` | its health is below its most |
+| `{"level": n}` | its level is n or more (`game.level_of` its experience; the levels: [above](#levels-and-skills)) |
+
+| Effect | Does |
+|---|---|
+| `{"give": <item>, "count": n}`, `{"take": ...}` | n of the item into the player's slots, or out of them (a reply that takes is offered only while it carries them) |
+| `{"cost": n}`, `{"pay": n}` | n of the game's money from the player (offered only while it has it), or to it |
+| `{"talk": <name>}` | the player said it: a quest's `talk` step of that name counts it |
+| `{"game": <name>}` | the game's own action of that name (the sandbox's: open the market, heal, mark a place) |
+
+Dialogues are read after the quests, so every id they name is checked; a node a `go` names
+that the dialogue lacks, a field a condition or an effect does not take, or a node no reply
+of which is always offered is refused with where and why. What a dialogue offers and what a
+reply does are pure functions of it and of what the server knows of the player
+(`dialogue_opening`, `dialogue_offered`, `dialogue_answer`): the server is the authority, and
+a reply a client sends that it is not offered is refused before anything is done; the client
+only shows the lines (its registry holds the same dialogues). What the money is and what a
+`game` effect does are the game's.
 
 ## Simulation rules
 

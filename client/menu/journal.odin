@@ -34,12 +34,13 @@ MAP_LIST_WIDTH :: 220
 
 @(rodata)
 PLACE_TEXT := [game.Logbook_Place_Kind]engine.Text {
-	.Gate    = .Place_Gate,
-	.Ruin    = .Place_Ruin,
-	.Town    = .Place_Town,
-	.Outpost = .Place_Outpost,
-	.Beacon  = .Place_Beacon,
-	.Remains = .Place_Remains,
+	.Gate       = .Place_Gate,
+	.Ruin       = .Place_Ruin,
+	.Town       = .Place_Town,
+	.Outpost    = .Place_Outpost,
+	.Beacon     = .Place_Beacon,
+	.Remains    = .Place_Remains,
+	.Settlement = .Place_Settlement,
 }
 
 // place_title: a place as the journal names it: its own name, else its kind's.

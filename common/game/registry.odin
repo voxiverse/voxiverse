@@ -236,6 +236,7 @@ Content_Kind :: enum u8 {
 	Quest,
 	Skill,
 	Level,
+	Dialogue,
 }
 
 Block_Flag :: enum u8 {
@@ -555,6 +556,7 @@ Registry :: struct {
 	quests:      []Quest_Def, // at most MAX_QUESTS (quest.odin)
 	skills:      []Skill_Def, // the skill sheet, at most MAX_SKILLS (skill.odin)
 	progression: Progression, // the level curve and what earns experience (none: no levels)
+	dialogues:   []Dialogue_Def, // at most MAX_DIALOGUES (dialogue.odin)
 	engine:      Engine_Kinds, // the kinds the engine's code names (0: this registry has none)
 	packs:       []Pack_Info,
 	ids:         [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
@@ -1027,6 +1029,11 @@ registry_text_of :: proc(
 			s.cost,
 			s.needs,
 		)
+	}
+	for d in reg.dialogues {
+		fmt.sbprintf(&b, "dialogue %s title=%q openings=%v", d.id, d.title, d.openings)
+		for n in d.nodes {fmt.sbprintf(&b, " node=%s line=%q replies=%v", n.id, n.line, n.replies)}
+		strings.write_byte(&b, '\n')
 	}
 	for p in reg.packs {for r in p.renamed {fmt.sbprintf(&b, "renamed %s %s\n", r.from, r.to)}}
 	if all {

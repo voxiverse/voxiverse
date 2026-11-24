@@ -172,7 +172,7 @@ test_quests_chain :: proc(t: ^testing.T) {
 				)
 			case .Win:
 				testing.expect_value(t, o.name, RUIN_ENCOUNTER)
-			case .Address:
+			case .Address, .Talk:
 			}
 			if way, has := st.way.?; has {
 				named := way.name == ""

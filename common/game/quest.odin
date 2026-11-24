@@ -3,8 +3,8 @@ package game
 // Quests (the Journal's Quests page, the HUD's tracker): a pack's chains of objectives
 // (data/quests, registry_quests.odin), each quest a few steps done in order, each step a
 // condition over what the server already knows of a player: what it carries, makes,
-// places, breaks, finds (its logbook), kills, uses up, wins, and an address written on a
-// gate. A quest opens when the quests it comes after are done, and gives its reward when
+// places, breaks, finds (its logbook), kills, uses up, wins, says to someone, and an address
+// written on a gate. A quest opens when the quests it comes after are done, and gives its reward when
 // its last step is.
 //
 // What a character has done of them is its Quest_Log, kept with it (the server's player
@@ -31,6 +31,7 @@ Goal :: enum u8 {
 	Use, // use up `count` of a consumable
 	Win, // win a game's encounter, by its name (core.quest_note)
 	Address, // write an address on a gate (whether or not it opens)
+	Talk, // say something to someone, by its name (a game's conversation: core.quest_note)
 }
 
 // Objective: a step's condition; which of its fields count is its goal's.
@@ -40,7 +41,7 @@ Objective :: struct {
 	block:    Block_Type, // Place, Break
 	creature: Kind_Id, // Kill
 	place:    Logbook_Place_Kind, // Find
-	name:     string, // Find: the place's own name ("": any of its kind); Win: the encounter's
+	name:     string, // Find: the place's own name ("": any of its kind); Win: the encounter's; Talk: what was said
 	count:    int, // 1 ..= MAX_QUEST_COUNT
 }
 
@@ -130,7 +131,7 @@ quest_counts :: proc(reg: ^Registry, o: ^Objective, e: Quest_Event) -> bool {
 		return block_type_of(&reg.blocks, e.block) == o.block
 	case .Kill:
 		return o.creature == e.creature
-	case .Win:
+	case .Win, .Talk:
 		return o.name == e.name
 	case .Address:
 		return true

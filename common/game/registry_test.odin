@@ -514,12 +514,12 @@ test_broken_packs :: proc(t: ^testing.T) {
 		{
 			"stray directory",
 			one({{"data/blocks/sub/a.json", "{}"}}),
-			`testpack/data/blocks/sub/a.json: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/, data/models/, data/channels/, data/sim/, data/entities/, data/quests/, data/skills/, data/levels/ (both sides) and server/structures/ (server only)`,
+			`testpack/data/blocks/sub/a.json: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/, data/models/, data/channels/, data/sim/, data/entities/, data/quests/, data/skills/, data/levels/, data/dialogues/ (both sides) and server/structures/ (server only)`,
 		},
 		{
 			"stray top-level file",
 			one({{"readme.md", "hello"}}),
-			`testpack/readme.md: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/, data/models/, data/channels/, data/sim/, data/entities/, data/quests/, data/skills/, data/levels/ (both sides) and server/structures/ (server only)`,
+			`testpack/readme.md: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/, data/models/, data/channels/, data/sim/, data/entities/, data/quests/, data/skills/, data/levels/, data/dialogues/ (both sides) and server/structures/ (server only)`,
 		},
 		{
 			"loot tables",

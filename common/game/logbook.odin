@@ -22,6 +22,7 @@ Logbook_Place_Kind :: enum u8 {
 	Outpost,
 	Beacon,
 	Remains, // what is left of an older place (the sandbox's round its home gate)
+	Settlement, // where people live (the sandbox's survivors' camps)
 }
 
 // Logbook_Place: a place in a logbook (name_len 0: the kind's own name).
