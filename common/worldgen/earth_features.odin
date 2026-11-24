@@ -19,7 +19,7 @@ Tree_Kind :: enum u8 {
 	Evergreen_Shrub, // the same in spruce blocks
 	// The classes' (classes.odin).
 	Palm, // a bare trunk under a crown of drooping fronds: an ocean world's shores
-	Jungle, // tall, its broad crown in two tiers: a jungle world's
+	Jungle, // tall on buttress roots, a flat crown with vines and a tier below: a jungle world's
 	Charred, // a dead trunk, no crown: a volcanic world's
 	Fungus, // a pale stem under a broad cap (one in six glowing): a fungal world's
 	Toadstool, // a small one
@@ -213,7 +213,7 @@ class_tree :: proc(
 	case .Jungle:
 		if top != .Grass {return}
 		t =
-			{kind = .Shrub, height = 1} if odd else {kind = .Jungle, height = 10 + size + i32(h >> 16 & 3)}
+			{kind = .Shrub, height = 1} if odd else {kind = .Jungle, height = 14 + size + i32(h >> 16 & 3)}
 	case:
 		return
 	}
@@ -371,25 +371,42 @@ tree_shape :: proc(gen: ^Generator, t: Tree, data: rawptr, put: Put) {
 		}
 		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Log)}
 	case .Jungle:
-		// A broad, ragged crown, and a lower tier round the trunk.
+		// A tall bare trunk on buttress roots, a broad flat crown in two
+		// layers, a sparser tier lower down, and leaves hanging from the
+		// crown's rim like vines.
 		top := g.y + t.height
-		for y in top - 2 ..= top + 1 {
-			r: i32 = 3 if y < top else (2 if y == top else 1)
+		for d in ([4][2]i32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+			put(data, {g.x + d.x, g.y + 1, g.z + d.y}, .Log)
+			if hash(seed, g.x + d.x, g.y, g.z + d.y) & 1 == 0 {
+				put(data, {g.x + d.x, g.y + 2, g.z + d.y}, .Log)
+			}
+		}
+		for y in top - 1 ..= top + 1 {
+			r: i32 = 3 if y < top + 1 else 2
 			for dz in -r ..= r {
 				for dx in -r ..= r {
-					if abs(dx) + abs(dz) > r + r / 2 + 1 {continue}
-					if abs(dx) == r &&
-					   abs(dz) >= r - 1 &&
-					   base.unit_f32(hash(seed, g.x + dx, y, g.z + dz)) < 0.6 {continue}
+					if dx * dx + dz * dz > r * r + 1 {continue}
+					if y == top - 1 &&
+					   dx * dx + dz * dz >= r * r - 1 &&
+					   base.unit_f32(hash(seed, g.x + dx, y, g.z + dz)) < 0.35 {continue}
 					put(data, {g.x + dx, y, g.z + dz}, .Leaves)
 				}
 			}
 		}
-		tier := g.y + t.height / 2 + 1
+		// Vines: strands down from the lower layer's rim.
+		for d in ([8][2]i32{{3, 0}, {-3, 0}, {0, 3}, {0, -3}, {2, 2}, {-2, 2}, {2, -2}, {-2, -2}}) {
+			k := hash(seed ~ 0x51, g.x + d.x, g.y, g.z + d.y)
+			if k & 3 == 0 {continue}
+			for y in top - 2 - i32(k >> 2 % 4) ..< top - 1 {
+				put(data, {g.x + d.x, y, g.z + d.y}, .Spruce_Leaves)
+			}
+		}
+		tier := g.y + t.height * 3 / 5
 		for dz in i32(-2) ..= 2 {
 			for dx in i32(-2) ..= 2 {
-				if abs(dx) + abs(dz) > 2 {continue}
-				put(data, {g.x + dx, tier, g.z + dz}, .Leaves)
+				if abs(dx) + abs(dz) > 2 || (dx == 0 && dz == 0) {continue}
+				if base.unit_f32(hash(seed, g.x + dx, tier, g.z + dz)) < 0.3 {continue}
+				put(data, {g.x + dx, tier, g.z + dz}, .Spruce_Leaves)
 			}
 		}
 		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Log)}

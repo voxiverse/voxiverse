@@ -138,10 +138,10 @@ generated with the class's authored rules (`common/worldgen/classes.odin`, `CLAS
 | Canyon | red sand on terraced mesas of banded red rock and sandstone, dry canyons, a warm dusty sky | water, far down (sea -40..-30) | cacti, a shrub here and there | `opal_ore` (in red rock) | 26-34, 1500-2400 s |
 | Frozen | snow over packed ice over slate, high icy peaks, a cold pale sky | frozen over | a few short spruces and evergreen shrubs | `cryolite_ore` (in slate) | 30-38, 1800-2400 s |
 | Ocean | a wide sea of small islands, limestone, beaches | water (sea 2..10) | palms on the shores and islands, oaks | `nacre` (beds on the sea floor) | 28-34, 900-1500 s |
-| Volcanic | ash over basalt, obsidian shores, cones with magma-floored craters, a smoky red sky | magma | charred trunks | `sulfur_ore` (in basalt, shallow) | 36-44, 600-1200 s |
-| Fungal | violet mycelium, a violet haze | water | giant fungi (pale stems, teal caps), toadstools, spore sprouts | `glow_cap` (one giant fungus in six) | 24-32, 1200-2100 s |
-| Moon | grey regolith pitted with craters of two sizes, a black sky without clouds | none: the basins are dry | none | `ilmenite_ore` | 8-13, 2400-3600 s |
-| Jungle | grass over mud, wide rivers, very dense | water | tall two-tier canopy trees, shrubs, dense grass | `jade_ore` (deep) | 30-36, 900-1500 s |
+| Volcanic | ash over basalt, obsidian shores, cones with magma-floored craters, a smoky red sky and dark clouds | magma (it burns: `harm` 4, [packs.md](packs.md#harm-on-touch)) | charred trunks | `sulfur_ore` (in basalt, shallow) | 36-44, 600-1200 s |
+| Fungal | violet mycelium (no snow, no ice), a violet sky | water, never frozen | giant fungi (pale stems, teal caps), toadstools, spore sprouts | `glow_cap` (one giant fungus in six) | 24-32, 1200-2100 s |
+| Moon | grey regolith pitted with craters of two sizes, each floored with dark basalt under a raised rim; a near-black sky with stars by day, no clouds | none: the basins are dry | none | `ilmenite_ore` | 8-13, 2400-3600 s |
+| Jungle | grass over mud, wide rivers, very dense, a green haze | water | tall trees on buttress roots, flat crowns with hanging vines and a tier below, shrubs, dense grass | `jade_ore` (deep) | 30-36, 900-1500 s |
 
 - **Choice.** `world_class(address)` follows what lives there (`world_life`): a roll from the
   address's hash in the row of `CLASS_SHARE` for its life, so a lifeless world is a moon (67
@@ -161,7 +161,9 @@ generated with the class's authored rules (`common/worldgen/classes.odin`, `CLAS
   swapped in, a canyon's rock in beds), its sea (`Class_Blocks.liquid`: water, magma as still
   solid blocks, or nothing), its ores (`class_ore`: the class's list at their shares, the rare
   resource among them; an ore no pack defines is left out, the hook for ores added later),
-  its trees (`class_tree`) and its plants. Class none takes none of these paths: the home
+  its trees (`class_tree`) and its plants. A class may keep its water from freezing
+  (`no_ice`) and stand no towers, ruins, wells or dungeons (`no_buildings`: the moon and the
+  volcanic world; their gates still stand). Class none takes none of these paths: the home
   world and Earth generate exactly as before (the golden hashes and image baselines).
 - **What lives there.** A game says which creatures live on each class: the sandbox's
   `CLASS_CREATURES` (`games/sandbox/worlds.odin`), by kind id, which its `spawned` hook

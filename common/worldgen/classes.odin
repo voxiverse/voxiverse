@@ -128,10 +128,14 @@ Class_Def :: struct {
 	plant_on:                                                              string, // the ground its small plants grow on ("": none)
 	plants:                                                                [2]string, // its grass and its flower ("": Earth's)
 	parts:                                                                 [4]string, // its own: a canyon's rock bands, a fungus's stem, cap and glowing cap
-	// The sky: the time of day's zenith and horizon times these (zero: as
-	// they are), and whether clouds are drawn.
-	zenith, horizon:                                                       [3]f32,
+	// The sky by day (linear rgb; at night the time of day's own): its zenith,
+	// its horizon and its clouds (zero: the time of day's), how bright its
+	// stars stay by day (0: none), and whether clouds are drawn.
+	zenith, horizon, cloud:                                                [3]f32,
+	stars:                                                                 f32,
 	no_clouds:                                                             bool,
+	no_ice:                                                                bool, // its water never freezes over
+	no_buildings:                                                          bool, // no towers, ruins, wells or dungeons stand (only its gates)
 }
 
 // The engine's ores, as Earth places them (ore_at).
@@ -192,8 +196,10 @@ CLASSES := [World_Class]Class_Def {
 		ores = {COPPER, IRON, {"voxiverse:opal_ore", 0.003, -60, 120}},
 		unique = "voxiverse:opal_ore",
 		parts = {"voxiverse:red_rock", "voxiverse:sandstone", "voxiverse:red_sand", ""},
-		zenith = {1.05, 0.9, 0.78},
-		horizon = {1.2, 0.95, 0.72},
+		zenith = {0.16, 0.25, 0.50},
+		horizon = {0.75, 0.45, 0.25},
+		cloud = {0.95, 0.80, 0.66},
+		no_ice = true,
 	},
 	.Frozen = {
 		sea_level = {-6, 4},
@@ -220,8 +226,8 @@ CLASSES := [World_Class]Class_Def {
 		liquid = "voxiverse:water",
 		ores = {COAL, IRON, {"voxiverse:cryolite_ore", 0.003, -60, 100}},
 		unique = "voxiverse:cryolite_ore",
-		zenith = {0.88, 0.97, 1.1},
-		horizon = {0.95, 1.02, 1.1},
+		zenith = {0.14, 0.32, 0.75},
+		horizon = {0.62, 0.75, 0.90},
 	},
 	.Ocean = {
 		sea_level = {2, 10},
@@ -244,8 +250,9 @@ CLASSES := [World_Class]Class_Def {
 		ores = {COAL, COPPER},
 		unique = "voxiverse:nacre",
 		plant_on = "voxiverse:grass",
-		zenith = {0.92, 1.0, 1.08},
-		horizon = {0.95, 1.02, 1.06},
+		zenith = {0.06, 0.24, 0.80},
+		horizon = {0.38, 0.62, 0.92},
+		no_ice = true,
 	},
 	.Volcanic = {
 		sea_level = {-8, 2},
@@ -277,8 +284,10 @@ CLASSES := [World_Class]Class_Def {
 		ores = {IRON, COPPER, {"voxiverse:sulfur_ore", 0.004, -30, 120}},
 		unique = "voxiverse:sulfur_ore",
 		parts = {"voxiverse:magma", "", "", ""},
-		zenith = {0.72, 0.55, 0.5},
-		horizon = {1.15, 0.72, 0.5},
+		zenith = {0.10, 0.035, 0.02},
+		horizon = {0.40, 0.14, 0.05},
+		cloud = {0.10, 0.07, 0.06},
+		no_buildings = true,
 	},
 	.Fungal = {
 		sea_level = {-4, 4},
@@ -302,8 +311,10 @@ CLASSES := [World_Class]Class_Def {
 		plant_on = "voxiverse:mycelium",
 		plants = {"voxiverse:spore_sprout", "voxiverse:spore_sprout"},
 		parts = {"voxiverse:fungus_stem", "voxiverse:fungus_cap", "voxiverse:glow_cap", ""},
-		zenith = {0.9, 0.78, 1.05},
-		horizon = {1.02, 0.86, 1.0},
+		zenith = {0.18, 0.08, 0.40},
+		horizon = {0.50, 0.32, 0.55},
+		cloud = {0.72, 0.60, 0.80},
+		no_ice = true,
 	},
 	.Moon = {
 		sea_level = {-64, -64},
@@ -333,9 +344,12 @@ CLASSES := [World_Class]Class_Def {
 		},
 		ores = {IRON, {"voxiverse:ilmenite_ore", 0.004, game.WORLD_MIN_Y, 80}},
 		unique = "voxiverse:ilmenite_ore",
-		zenith = {0.05, 0.05, 0.07},
-		horizon = {0.16, 0.16, 0.18},
+		parts = {"voxiverse:basalt", "voxiverse:basalt", "", ""},
+		zenith = {0.002, 0.002, 0.003},
+		horizon = {0.03, 0.03, 0.034},
+		stars = 0.9,
 		no_clouds = true,
+		no_buildings = true,
 	},
 	.Jungle = {
 		sea_level = {-2, 6},
@@ -358,8 +372,10 @@ CLASSES := [World_Class]Class_Def {
 		ores = {COAL, COPPER, IRON, {"voxiverse:jade_ore", 0.002, game.WORLD_MIN_Y, 10}},
 		unique = "voxiverse:jade_ore",
 		plant_on = "voxiverse:grass",
-		zenith = {0.95, 1.02, 0.94},
-		horizon = {0.96, 1.05, 0.92},
+		zenith = {0.10, 0.30, 0.55},
+		horizon = {0.48, 0.65, 0.50},
+		cloud = {0.85, 0.92, 0.85},
+		no_ice = true,
 	},
 }
 
@@ -396,17 +412,19 @@ class_params :: proc(c: World_Class, a: starmap.Address) -> (p: Params, gravity,
 // Class_Blocks: a class's blocks as the registry numbers them, found once
 // when the generator is made (generator_make).
 Class_Blocks :: struct {
-	class:     World_Class,
-	remap:     [game.Block]game.Block, // Earth's surface block to the class's
-	stone:     game.Block, // its rock (where ores are)
-	liquid:    game.Block, // its sea (Air: none)
-	plant_on:  game.Block, // what its small plants grow on (Air: none)
-	plants:    [2]game.Block,
-	parts:     [4]game.Block,
-	unique:    game.Block,
-	ores:      [MAX_CLASS_ORES]Class_Ore_Block,
-	ore_count: int,
-	ore_total: f32, // the shares summed
+	class:        World_Class,
+	remap:        [game.Block]game.Block, // Earth's surface block to the class's
+	stone:        game.Block, // its rock (where ores are)
+	liquid:       game.Block, // its sea (Air: none)
+	plant_on:     game.Block, // what its small plants grow on (Air: none)
+	plants:       [2]game.Block,
+	parts:        [4]game.Block,
+	unique:       game.Block,
+	ores:         [MAX_CLASS_ORES]Class_Ore_Block,
+	ore_count:    int,
+	ore_total:    f32, // the shares summed
+	no_ice:       bool, // (Class_Def's)
+	no_buildings: bool,
 }
 
 Class_Ore_Block :: struct {
@@ -437,6 +455,7 @@ class_blocks :: proc(reg: ^game.Registry, c: World_Class) -> (b: Class_Blocks) {
 	b.plants = {find(reg, d.plants[0], .Tall_Grass), find(reg, d.plants[1], .Air)}
 	for part, i in d.parts {b.parts[i] = find(reg, part, .Air)}
 	b.unique = find(reg, d.unique, .Air)
+	b.no_ice, b.no_buildings = d.no_ice, d.no_buildings
 	for o in d.ores[:min(len(d.ores), MAX_CLASS_ORES)] {
 		blk, ok := game.registry_block(reg, o.block)
 		if !ok {continue}
@@ -449,7 +468,8 @@ class_blocks :: proc(reg: ^game.Registry, c: World_Class) -> (b: Class_Blocks) {
 
 // class_surface: what a solid block depth blocks under open air is on a
 // class's world (Earth's surface rules, its blocks swapped; a canyon's rock
-// in bands; a volcano's crater floored with magma).
+// in bands; a volcano's crater floored with magma; a moon's craters floored
+// with darker rock).
 @(private)
 class_surface :: proc(gen: ^Generator, c: ^Column, depth, y: i32) -> game.Block {
 	cb := &gen.blocks
@@ -463,6 +483,9 @@ class_surface :: proc(gen: ^Generator, c: ^Column, depth, y: i32) -> game.Block 
 		}
 	case .Volcanic:
 		if c.mark != 0 && depth < 2 {return cb.parts[0]} 	// a crater's floor
+	case .Moon:
+		// A crater's floor is dark basalt, the dust on its rims pale.
+		if c.mark != 0 && depth == 0 {return cb.parts[c.mark - 1]}
 	}
 	return b
 }
@@ -562,8 +585,9 @@ class_shape :: proc(p: ^Params, c: ^Column, seed: i64, x, z: i32, river: f32) {
 		}
 		c.rough *= d // (the cone's flanks smooth)
 	case .Moon:
-		// Craters of two sizes, each wholly in its own cell: a bowl, then a
-		// raised rim.
+		// Craters of two sizes, each wholly in its own cell: a bowl floored
+		// with dark rock (Column.mark: 1 a great crater's, 2 a small one's),
+		// then a raised rim. Most cells hold one, so one is in view anywhere.
 		crater :: proc(
 			c: ^Column,
 			seed: i64,
@@ -571,6 +595,7 @@ class_shape :: proc(p: ^Params, c: ^Column, seed: i64, x, z: i32, river: f32) {
 			cell_size: i32,
 			r_lo, r_span: f32,
 			chance: f32,
+			mark: u8,
 		) {
 			cell := [2]i32{base.floor_div(x, cell_size), base.floor_div(z, cell_size)}
 			h := hash(seed, cell.x, cell.y)
@@ -583,14 +608,15 @@ class_shape :: proc(p: ^Params, c: ^Column, seed: i64, x, z: i32, river: f32) {
 			dx, dz := f32(x - centre.x), f32(z - centre.y)
 			d := math.sqrt(dx * dx + dz * dz) / r
 			if d >= 1.5 {return}
-			depth := r * 0.45
+			depth := r * 0.4
 			if d < 1 {
 				c.height -= depth * (1 - d * d)
+				if d < 0.75 && (c.mark == 0 || mark < c.mark) {c.mark = mark}
 			}
-			rim := 1 - abs(d - 1.05) / 0.45
-			if rim > 0 {c.height += depth * 0.35 * smooth(0, 1, rim)}
+			rim := 1 - abs(d - 1.05) / 0.4
+			if rim > 0 {c.height += depth * 0.6 * smooth(0, 1, rim)}
 		}
-		crater(c, seed ~ i64(Class_Layer.Crater), x, z, 360, 40, 70, 0.6)
-		crater(c, seed ~ i64(Class_Layer.Crater2), x, z, 72, 5, 16, 0.55)
+		crater(c, seed ~ i64(Class_Layer.Crater), x, z, 240, 34, 56, 0.85, 1)
+		crater(c, seed ~ i64(Class_Layer.Crater2), x, z, 60, 5, 12, 0.7, 2)
 	}
 }

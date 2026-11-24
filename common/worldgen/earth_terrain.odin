@@ -316,7 +316,8 @@ earth_generate :: proc(
 				} else if y <= p.sea_level + col.lift {
 					liquid := gen.blocks.liquid
 					if liquid == .Water {
-						b = .Ice if y == p.sea_level + col.lift && frozen(col.biome) else .Water
+						b =
+							.Ice if y == p.sea_level + col.lift && frozen(col.biome) && !gen.blocks.no_ice else .Water
 					} else {
 						b = liquid
 					}
