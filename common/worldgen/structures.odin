@@ -112,6 +112,7 @@ Piece_Kind :: enum u8 {
 	Corridor,
 	Shaft, // a dungeon's way in: a spiral stair up to the land
 	Gate, // (gates.odin)
+	Apron, // the arrival platform before a class's world's gate (gates.odin)
 }
 
 Piece :: struct {
@@ -149,6 +150,25 @@ structure_in_cell :: proc(gen: ^Generator, k: int, cell: [2]i32) -> (s: Structur
 		   i64(x) * i64(x) + i64(z) * i64(z) < i64(p.gate_distance) * i64(p.gate_distance) {return}
 		size = gate_size(s.rotation)
 	}
+	if set.kind == .Gate && gen.blocks.class != .None {
+		// On a class's world travellers arrive at its gates: they stand on
+		// any dry land that is near level (within CLASS_GATE_SLOPE of the
+		// ground under the gate's middle, so the cleared air over the platform
+		// leaves it open), the whole of their platform's ground looked at.
+		s.lo = {x, 0, z}
+		s.hi = s.lo + size - 1
+		lo, hi := structure_reach(gen, s)
+		ground := column_at(p, gen.seed, x + size.x / 2, z + size.z / 2).height
+		for i in 0 ..< 25 {
+			at := [2]i32 {
+				lo.x + (hi.x - lo.x) * i32(i % 5) / 4,
+				lo.z + (hi.z - lo.z) * i32(i / 5) / 4,
+			}
+			col := column_at(p, gen.seed, at.x, at.y)
+			if col.rough > 0 || col.height < f32(p.sea_level) + 2 || col.biome in WET {return}
+			if abs(col.height - ground) > CLASS_GATE_SLOPE {return}
+		}
+	}
 	// The land under it: its biome, and (on the surface) flat and dry.
 	corners := [5][2]i32 {
 		{x, z},
@@ -157,10 +177,11 @@ structure_in_cell :: proc(gen: ^Generator, k: int, cell: [2]i32) -> (s: Structur
 		{x + size.x - 1, z + size.z - 1},
 		{x + size.x / 2, z + size.z / 2},
 	}
+	class_gate := set.kind == .Gate && gen.blocks.class != .None
 	lowest := f32(math.F32_MAX)
 	for c, i in corners {
 		col := column_at(p, gen.seed, c.x, c.y)
-		if i == 4 && col.biome not_in set.biomes {return}
+		if i == 4 && col.biome not_in set.biomes && !class_gate {return}
 		if set.kind != .Dungeon && col.rough > 0 {return}
 		if col.height < f32(p.sea_level) + 2 {return}
 		lowest = min(lowest, col.height)
@@ -197,11 +218,12 @@ structures_near :: proc(gen: ^Generator, lo, hi: [2]i32, out: ^[dynamic]Structur
 		for cz in c0.y ..= c1.y {
 			for cx in c0.x ..= c1.x {
 				s, ok := structure_in_cell(gen, k, {cx, cz})
-				if !ok ||
-				   s.hi.x < lo.x ||
-				   s.lo.x > hi.x ||
-				   s.hi.z < lo.y ||
-				   s.lo.z > hi.y {continue}
+				if !ok {continue}
+				reach_lo, reach_hi := structure_reach(gen, s)
+				if reach_hi.x < lo.x ||
+				   reach_lo.x > hi.x ||
+				   reach_hi.z < lo.y ||
+				   reach_lo.z > hi.y {continue}
 				if !overlaps_earlier(gen, k, s) {append(out, s)}
 			}
 		}
@@ -211,23 +233,24 @@ structures_near :: proc(gen: ^Generator, lo, hi: [2]i32, out: ^[dynamic]Structur
 // overlaps_earlier: s (of set k) would overlap a structure of an earlier set.
 @(private = "file")
 overlaps_earlier :: proc(gen: ^Generator, k: int, s: Structure) -> bool {
+	lo, hi := structure_reach(gen, s) // (its box, and a class gate's platform)
 	for j in 0 ..< k {
 		set := SETS[j]
 		c0 := [2]i32 {
-			base.floor_div(s.lo.x - MAX_STRUCTURE, set.spacing),
-			base.floor_div(s.lo.z - MAX_STRUCTURE, set.spacing),
+			base.floor_div(lo.x - MAX_STRUCTURE, set.spacing),
+			base.floor_div(lo.z - MAX_STRUCTURE, set.spacing),
 		}
-		c1 := [2]i32{base.floor_div(s.hi.x, set.spacing), base.floor_div(s.hi.z, set.spacing)}
+		c1 := [2]i32{base.floor_div(hi.x, set.spacing), base.floor_div(hi.z, set.spacing)}
 		for cz in c0.y ..= c1.y {
 			for cx in c0.x ..= c1.x {
 				o, ok := structure_in_cell(gen, j, {cx, cz})
 				if !ok {continue}
-				if o.hi.x >= s.lo.x &&
-				   o.lo.x <= s.hi.x &&
-				   o.hi.y >= s.lo.y &&
-				   o.lo.y <= s.hi.y &&
-				   o.hi.z >= s.lo.z &&
-				   o.lo.z <= s.hi.z {
+				if o.hi.x >= lo.x &&
+				   o.lo.x <= hi.x &&
+				   o.hi.y >= lo.y &&
+				   o.lo.y <= hi.y &&
+				   o.hi.z >= lo.z &&
+				   o.lo.z <= hi.z {
 					if !overlaps_earlier(gen, j, o) {return true}
 				}
 			}
@@ -264,7 +287,31 @@ structure_pieces :: proc(gen: ^Generator, s: Structure, out: ^[dynamic]Piece) {
 			out,
 			Piece{kind = .Gate, lo = s.lo, hi = s.hi, rotation = s.rotation, foundation = true},
 		)
+		if gen.blocks.class != .None {
+			lo, hi := gate_apron(s)
+			append(out, Piece{kind = .Apron, lo = lo, hi = hi, foundation = true})
+		}
 	}
+}
+
+// CLASS_GATE_SLOPE: how far above or below the ground under its middle the land
+// under a class's gate and its platform may lie, blocks.
+CLASS_GATE_SLOPE :: 2.5
+
+// WET: the biomes of water and its shores, where no class's gate stands.
+@(private = "file")
+WET :: bit_set[Biome]{.Ocean, .Frozen_Ocean, .River, .Beach, .Ice_Sheet}
+
+// structure_reach: the blocks s takes, its box and, for a gate on a class's
+// world, the platform before it (gate_apron).
+structure_reach :: proc(gen: ^Generator, s: Structure) -> (lo, hi: game.Block_Pos) {
+	lo, hi = s.lo, s.hi
+	if s.kind == .Gate && gen.blocks.class != .None {
+		a, b := gate_apron(s)
+		lo = {min(lo.x, a.x), lo.y, min(lo.z, a.z)}
+		hi = {max(hi.x, b.x), hi.y, max(hi.z, b.z)}
+	}
+	return
 }
 
 // dungeon_pieces: three to six rooms on one level, joined in turn by
@@ -341,6 +388,9 @@ piece_block :: proc(piece: ^Piece, p: game.Block_Pos) -> (b: game.Block, weight:
 		return shaft_block(l, size)
 	case .Gate:
 		return gate_block(piece, l, size)
+	case .Apron:
+		if l.y == 0 {return .Stone_Bricks, 1}
+		return .Air, 2
 	}
 	return .Air, 0
 }

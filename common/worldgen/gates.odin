@@ -107,6 +107,22 @@ gate_containing :: proc(gen: ^Generator, p: game.Block_Pos) -> (s: Structure, ok
 	return
 }
 
+// APRON_DEPTH: how far the arrival platform before a class's world's gate
+// reaches out from its box; APRON_CLEAR: how high the air above it is
+// cleared, so the land never buries the way out.
+APRON_DEPTH :: 6
+APRON_CLEAR :: 4
+
+// gate_apron: the arrival platform before gate s on a class's world (its
+// box): paved, as wide as the gate, on the side travellers step out to
+// (gate_front), the air above it cleared.
+gate_apron :: proc(s: Structure) -> (lo, hi: game.Block_Pos) {
+	if s.rotation & 1 == 1 {
+		return {s.hi.x + 1, s.lo.y, s.lo.z}, {s.hi.x + APRON_DEPTH, s.lo.y + APRON_CLEAR, s.hi.z}
+	}
+	return {s.lo.x, s.lo.y, s.hi.z + 1}, {s.hi.x, s.lo.y + APRON_CLEAR, s.hi.z + APRON_DEPTH}
+}
+
 // ARRIVAL_SEARCH: how far from the world's middle arrival_gate looks.
 ARRIVAL_SEARCH :: 16384
 

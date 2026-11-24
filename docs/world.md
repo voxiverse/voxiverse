@@ -23,9 +23,9 @@ as nothing. It is written in one of three forms:
 - as Latin letters, `abcdefg-hijklmno` (`a`-`z` for symbols 0-25, `A`-`N` for 26-39; world, a
   `-`, then galaxy), in place codes shared outside the game.
 
-The address alone determines the world's kind (generator parameters, palette, gravity, day
-length), so it is the same kind of world in any universe; the universe seed determines its
-terrain. The address also says what lives there (`worldgen.world_life`: life, how many peoples,
+The address alone determines the world's kind (its class, generator parameters, gravity, day
+length: [World classes](#world-classes)), so it is the same kind of world in any universe; the
+universe seed determines its terrain. The address also says what lives there (`worldgen.world_life`: life, how many peoples,
 how old their history; about 1 world in 8 with animals has peoples; the home world, Earth, has
 none): the gate's address shows it for the world written (or one symbol short, for the symbol
 under the pointer), the creation screen for the
@@ -103,6 +103,16 @@ it, and the rim brightens as it comes (the scene's `gate`: the nearest gathering
 the gate sounds a low rising swell (`sfx.Gate_Sound.Open`). A closed gate's opening, and a
 dead gate's, is empty. Refusals are returned as notices. The server logs `gate opened`.
 
+On a world of a class, a gate stands only on near-level dry land (every point of a 5 x 5
+grid over it and its platform within `CLASS_GATE_SLOPE` (2.5) blocks of the ground under its
+middle, none in water, on a shore or on overhangs), and an arrival platform lies before it
+(`gate_apron`): stone bricks as wide as the gate, `APRON_DEPTH` (6) deep on the side
+travellers step out to, on a foundation, the air above it cleared `APRON_CLEAR` (4) high;
+trees stand `CLASS_TREE_MARGIN` (4) blocks clear of it and of every structure. So a
+traveller never arrives underwater, in magma or buried (`classes_test.odin`'s
+`test_class_arrival`, 16 worlds of each class). A world of no class keeps its gates as they
+were.
+
 A world may have a home gate (`worldgen.home_gate`): a gate standing in front of its spawn,
 its frame 8 blocks north of it (where a newcomer looks), or up to 16 where the land there is
 not dry and smooth or another structure stands (`home_gate_place`). The generator finds the
@@ -115,6 +125,40 @@ starts dead; `core.gate_wake` (a game's, when what wakes it is done) or `/gate w
 (`world.gate`: the nearest gate within 256 blocks) brings it to life, after which it is any
 gate; `/gate kill` makes a gate at rest dead again. Dead gates are saved in `world.cfg`; a
 world saved before them has none.
+
+### World classes
+
+A gate world (any world but the home world and Earth's address) is one of eight classes,
+generated with the class's authored rules (`common/worldgen/classes.odin`, `CLASSES`):
+
+| Class | Look | Sea | Flora | Rare resource | Gravity, day |
+|---|---|---|---|---|---|
+| Temperate | grass, forests, hills, Earth's palette | water | oaks, spruces, grass and flowers | `amber_ore` (in stone, y -40..70) | 28-36, 1200-1800 s |
+| Canyon | red sand on terraced mesas of banded red rock and sandstone, dry canyons, a warm dusty sky | water, far down (sea -40..-30) | cacti, a shrub here and there | `opal_ore` (in red rock) | 26-34, 1500-2400 s |
+| Frozen | snow over packed ice over slate, high icy peaks, a cold pale sky | frozen over | a few short spruces and evergreen shrubs | `cryolite_ore` (in slate) | 30-38, 1800-2400 s |
+| Ocean | a wide sea of small islands, limestone, beaches | water (sea 2..10) | palms on the shores and islands, oaks | `nacre` (beds on the sea floor) | 28-34, 900-1500 s |
+| Volcanic | ash over basalt, obsidian shores, cones with magma-floored craters, a smoky red sky | magma | charred trunks | `sulfur_ore` (in basalt, shallow) | 36-44, 600-1200 s |
+| Fungal | violet mycelium, a violet haze | water | giant fungi (pale stems, teal caps), toadstools, spore sprouts | `glow_cap` (one giant fungus in six) | 24-32, 1200-2100 s |
+| Moon | grey regolith pitted with craters of two sizes, a black sky without clouds | none: the basins are dry | none | `ilmenite_ore` | 8-13, 2400-3600 s |
+| Jungle | grass over mud, wide rivers, very dense | water | tall two-tier canopy trees, shrubs, dense grass | `jade_ore` (deep) | 30-36, 900-1500 s |
+
+- **Choice.** `world_class(address)` follows what lives there (`world_life`): a roll from the
+  address's hash in the row of `CLASS_SHARE` for its life, so a lifeless world is a moon (67
+  in 100) or a volcano, one with animals temperate, jungle, ocean, fungal, canyon or frozen,
+  never airless. Every class has 9 to 15 addresses in 100. Earth's address is no class.
+- **Parameters.** `class_params` draws each generator parameter, the gravity and the day
+  within the class's spans from the address (`base.lcg64`, like the rest of a world's kind),
+  so two worlds of a class differ while staying recognisable. The world's class is the
+  generator parameter `worldgen.class` (0: none), saved in `world.cfg`: a saved world keeps
+  its class, and one saved before classes loads with none and generates as before.
+- **Generation.** The Earth generator with the class's parameters, then: `continent_bias`
+  (more sea or land), `class_shape` (a canyon's terraces and canyons, a volcano's cones and
+  craters, a moon's craters), `class_surface` (Earth's surface rules with the class's blocks
+  swapped in, a canyon's rock in beds), its sea (`Class_Blocks.liquid`: water, magma as still
+  solid blocks, or nothing), its ores (`class_ore`: the class's list at their shares, the rare
+  resource among them; an ore no pack defines is left out, the hook for ores added later),
+  its trees (`class_tree`) and its plants. Class none takes none of these paths: the home
+  world and Earth generate exactly as before (the golden hashes and image baselines).
 
 ## Items
 

@@ -123,6 +123,13 @@ PARAMS_VARS := [?]base.Var {
 		step = 0.005,
 	},
 	{field = "cave_size", help = "how wide caves are, 0..0.3", min = 0, max = 0.3, step = 0.01},
+	{
+		field = "class",
+		help = "the world's class: 0 none (Earth's generator as it was), 1 temperate, 2 canyon, 3 frozen, 4 ocean, 5 volcanic, 6 fungal, 7 moon, 8 jungle",
+		min = 0,
+		max = 8,
+		step = 1,
+	},
 	{field = "tree_density", help = "trees: 1 as designed, 0 none", min = 0, max = 4, step = 0.1},
 	{
 		field = "plant_density",

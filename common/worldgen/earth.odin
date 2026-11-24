@@ -42,6 +42,7 @@ Params :: struct {
 	spawn_lon:       f32, // and longitude (degrees east); Marseille by default
 	planet:          f32, // 1: built on common/planet, the height Earth's real relief (earth_planet.odin); 0: noise (worlds made before it)
 	home_gate:       f32, // 1: a gate stands by the spawn (home_gate_place); 0: none (every world but a new sandbox universe's home)
+	class:           f32, // the world's class (World_Class, classes.odin); 0: none, the Earth generator as it was (the home world, worlds saved before classes)
 }
 
 @(rodata)
@@ -137,12 +138,14 @@ Column :: struct {
 	river:       f32, // 0..1: how much of a river's bed this is
 	lift:        i32, // how far above sea level the water stands here (a river inland)
 	biome:       Biome,
+	mark:        u8, // a class's own mark on the column (a volcano's crater floor); 0: none
 }
 
 // column_at: the climate and shape of the block column at (x, z).
 column_at :: proc(p: ^Params, seed: i64, x, z: i32) -> (c: Column) {
 	at := [2]f64{f64(x), f64(z)}
 	continent := fbm2(seed ~ i64(Earth_Layer.Continent), at / f64(p.continent_scale), 5)
+	if p.class != 0 {continent += CLASSES[world_class_of(p)].continent_bias}
 	rugged := fbm2(seed ~ i64(Earth_Layer.Rugged), at / f64(p.continent_scale * 0.45), 3)
 	ridge := 1 - abs(fbm2(seed ~ i64(Earth_Layer.Ridge), at / 420, 4))
 	hills := fbm2(seed ~ i64(Earth_Layer.Hills), at / 96, 4)
@@ -185,6 +188,10 @@ column_at :: proc(p: ^Params, seed: i64, x, z: i32) -> (c: Column) {
 	}
 	c.height = height
 	c.rough = p.overhang * mountainous * smooth(0.35, 0.85, ridge)
+	if p.class != 0 {
+		class_shape(p, &c, seed, x, z, river)
+		height = c.height
+	}
 	if p.planet != 0 {
 		planet_shape(p, &c, x, z, hills, ridge)
 		height = c.height
@@ -259,6 +266,14 @@ surface_block :: proc(p: ^Params, b: Biome, depth, y: i32) -> game.Block {
 	return block
 }
 
+// column_surface: surface_block for column c, on a class's world its own
+// (class_surface).
+@(private)
+column_surface :: #force_inline proc(gen: ^Generator, c: ^Column, depth, y: i32) -> game.Block {
+	if gen.blocks.class != .None {return class_surface(gen, c, depth, y)}
+	return surface_block(&gen.params, c.biome, depth, y)
+}
+
 // PALETTES: what another world's surface is made of instead of Earth's
 // (grass, dirt, sand): palette 0 is Earth's; trees grow on grass only, so
 // a palette without it is barren.
@@ -288,7 +303,7 @@ palette_block :: proc(p: ^Params, b: game.Block) -> game.Block {
 // PLANET_ICE_DEPTH: how many blocks of snow and ice an ice sheet has in a planet world.
 PLANET_ICE_DEPTH :: 40
 
-@(private = "file")
+@(private)
 earth_surface :: proc(p: ^Params, b: Biome, depth, y: i32) -> game.Block {
 	sea := p.sea_level
 	underwater := y < sea

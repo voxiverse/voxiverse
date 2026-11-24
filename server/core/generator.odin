@@ -38,6 +38,7 @@ set_worldgen :: proc(s: ^Server, c: ^Client, name, value: string) {
 	switch err := base.var_set(worldgen.params_table(), &w.params, name, value); err {
 	case .None, .Out_Of_Range:
 		w.chunks.gen.params = w.params
+		w.chunks.gen.blocks = worldgen.class_blocks(s.registry, worldgen.world_class_of(&w.params))
 		for &slot in w.natural {slot.valid = false} 	// the land's tops moved
 		log.infof("server worldgen changed name=%s value=%s by=%s", name, value, client_name(c))
 		if m, ok := worldgen_variables(w); ok {

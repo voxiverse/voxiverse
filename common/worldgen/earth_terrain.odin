@@ -154,7 +154,7 @@ tops_middle :: proc(gen: ^Generator, column: [2]i32, cols: ^Columns, out: ^Tops)
 		for x in i32(0) ..< game.CHUNK_SIZE {
 			c := &cols[z][x]
 			top := terrain_top(c, grid, x, z)
-			top = max(top, p.sea_level) // the sea (or its ice) shades what is under it
+			if gen.blocks.liquid != .Air {top = max(top, p.sea_level)} 	// the sea (or its ice) shades what is under it
 			out[x + z * game.CHUNK_SIZE] = top
 		}
 	}
@@ -181,7 +181,7 @@ tops_finish :: proc(
 	pieces_in(gen, origin, &pieces)
 	if len(pieces) > 0 {pieces_tops(p, &gen.reg.blocks, pieces[:], cols, origin, out)}
 	for t in trees {
-		tree_shape(gen.seed, t, &put, proc(data: rawptr, p: game.Block_Pos, b: game.Block) {
+		tree_shape(gen, t, &put, proc(data: rawptr, p: game.Block_Pos, b: game.Block) {
 			tp := (^Tops_Put)(data)
 			x, z := p.x - tp.origin.x, p.z - tp.origin.y
 			if x < 0 ||
@@ -299,26 +299,36 @@ earth_generate :: proc(
 				b := game.Block.Air
 				if is_solid {
 					d := min(depth, 999)
-					b = surface_block(p, col.biome, d, y)
+					b = column_surface(gen, col, d, y)
 					if has_caves && d >= 5 && y > game.WORLD_MIN_Y + 4 {
 						l := [3]i32{x, y - origin.y, z}
 						cell := l / CAVE_STEP
 						if cave_cells[cell.y][cell.z][cell.x] &&
 						   in_cave(caves, l, p.cave_size) {b = .Air}
 					}
-					if b == .Stone {b = ore_at(seed, wx, y, wz)}
+					if gen.blocks.class == .None {
+						if b == .Stone {b = ore_at(seed, wx, y, wz)}
+					} else if b == gen.blocks.stone {
+						b = class_ore(gen, wx, y, wz)
+					} else if d == 0 {
+						b = class_floor(gen, b, col, wx, y, wz)
+					}
 				} else if y <= p.sea_level + col.lift {
-					b = .Ice if y == p.sea_level + col.lift && frozen(col.biome) else .Water
+					liquid := gen.blocks.liquid
+					if liquid == .Water {
+						b = .Ice if y == p.sea_level + col.lift && frozen(col.biome) else .Water
+					} else {
+						b = liquid
+					}
 				}
 				if y < game.WORLD_MIN_Y + 3 && is_bedrock(seed, wx, wz, y) {b = .Bedrock}
 				dst[game.local_index({x, y - origin.y, z})] = b
 			}
-			if col.rough == 0 &&
-			   plain >= p.sea_level {plant(p, seed, col, origin, dst, x, plain, z)}
+			if col.rough == 0 && plain >= p.sea_level {plant(gen, col, origin, dst, x, plain, z)}
 		}
 	}
 	if len(pieces) > 0 {pieces_write(&gen.reg.blocks, pieces[:], cols, origin, dst)}
-	for t in trees {tree_write(seed, t, origin, dst)}
+	for t in trees {tree_write(gen, t, origin, dst)}
 	if len(pieces) > 0 {clear_unsupported_plants(&gen.reg.blocks, dst)}
 
 	first := dst[0]

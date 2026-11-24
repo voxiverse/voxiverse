@@ -221,7 +221,8 @@ World_Kind :: struct {
 // and rules, from the address alone (so it is the same kind of world in any
 // universe), each within its range; the terrain's seed mixes in the
 // universe's. The game may claim an address (Game.world_kind: a flat
-// encounter world), else it is an Earth of its own. The home world is
+// encounter world), else it is an Earth of its own: one of the world classes
+// (worldgen.world_class; Earth's own address, which is none, as before). The home world is
 // Earth's, unchanged. A saved world keeps the kind it was made with.
 world_kind :: proc(w: ^World) {
 	s := w.server
@@ -239,6 +240,15 @@ world_kind :: proc(w: ^World) {
 		}
 	}
 	w.generator = .Earth
+	if class := worldgen.world_class(a); class != .None {
+		// A world of a class (common/worldgen/classes.odin): its parameters and
+		// its gravity and day drawn within the class's ranges.
+		gravity, day: f32
+		w.params, gravity, day = worldgen.class_params(class, a)
+		w.rules = game.RULES_DEFAULTS
+		w.rules.gravity, w.rules.day_length = gravity, day
+		return
+	}
 	n := h
 	// pick draws from base.lcg64, not an Rng (docs/determinism.md, rule 3): a
 	// gate world works out its kind from its address each time it loads, so

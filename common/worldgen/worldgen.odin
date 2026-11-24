@@ -34,6 +34,7 @@ Generator :: struct {
 	shipped: [Structure_Kind]i32, // the registry's structure of each kind (-1: none)
 	home:    Maybe(Structure), // the gate by the spawn (Params.home_gate; home_gate_place)
 	spawn:   [3]f64, // with a home gate: the spawn, found before the gate stood beside it
+	blocks:  Class_Blocks, // its class's blocks (Params.class; classes.odin)
 }
 
 // generator_make: a generator with the default parameters. One with a home
@@ -50,6 +51,7 @@ generator_make :: proc(
 		params = params,
 		reg    = reg,
 	}
+	g.blocks = class_blocks(reg, world_class_of(&g.params) if kind == .Earth else .None)
 	for k in Structure_Kind {
 		index, found :=
 			reg.ids[.Structure][fmt.tprintf("%s:%s", game.BASE_NAMESPACE, STRUCTURE_NAMES[k])]

@@ -725,6 +725,9 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 	if !strings.contains(text, "worldgen.biome_blend") {w.params.biome_blend = 0}
 	// One made before gates has none (its spawn's chunks may be saved).
 	if !strings.contains(text, "worldgen.gates") {w.params.gates = 0}
+	// One made before world classes is none: Earth's generator as it was (its
+	// chunks may be saved; the new ones must meet them).
+	if !strings.contains(text, "worldgen.class") {w.params.class = 0}
 	for p in base.vars_read(worldgen.params_table(), &w.params, strings.to_string(rules_text)) {
 		if p.error == .Unknown_Name && strings.has_prefix(p.text, "rules.") {continue}
 		log.warnf(

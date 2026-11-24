@@ -41,7 +41,56 @@ test_world_kinds :: proc(t: ^testing.T) {
 	}
 	world_kind(&other)
 	testing.expect(t, other.params != w1.params, "two addresses, one kind")
-	testing.expect(t, w1.rules.gravity >= 16 && w1.rules.gravity <= 48)
+	// Its class is the address's, and its gravity within the class's.
+	class := worldgen.world_class(a)
+	gravity := worldgen.CLASSES[class].gravity
+	testing.expect(t, class != .None && worldgen.world_class_of(&w1.params) == class)
+	testing.expect(t, w1.rules.gravity >= gravity[0] && w1.rules.gravity <= gravity[1])
+}
+
+// A world keeps the class it was saved with, and one saved before world classes (its
+// world.cfg without worldgen.class) is none: Earth's generator as it was, so the chunks
+// made from now on meet those it saved.
+@(test)
+test_world_keeps_its_class :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "world_class"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	os.make_directory_all(dir)
+	s: Server
+	s.config.seed = 3
+	s.store.dir = dir
+	a := starmap.address_derive(31)
+	open :: proc(s: ^Server, a: starmap.Address) -> (params: worldgen.Params, ok: bool) {
+		w := World {
+			server  = s,
+			address = a,
+		}
+		world_kind(&w)
+		ok = world_dir_open(&w)
+		delete(w.dir)
+		return w.params, ok
+	}
+	made, made_ok := open(&s, a) // (new: world.cfg written)
+	testing.expect(t, made_ok && made.class != 0)
+	again, again_ok := open(&s, a)
+	testing.expect(t, again_ok && again == made, "the saved world's class changed")
+	// Written before classes: the class line gone.
+	path :=
+		filepath.join(
+			{dir, store.WORLDS_DIR, starmap.address_dir(a), store.WORLD_FILE},
+			context.temp_allocator,
+		) or_else ""
+	text, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if !testing.expect(t, err == nil) {return}
+	lines := make([dynamic]string, context.temp_allocator)
+	for l in strings.split_lines(string(text), context.temp_allocator) {
+		if !strings.has_prefix(l, "worldgen.class") {append(&lines, l)}
+	}
+	old := strings.join(lines[:], "\n", context.temp_allocator)
+	testing.expect(t, os.write_entire_file(path, transmute([]u8)old) == nil)
+	before, before_ok := open(&s, a)
+	testing.expect(t, before_ok && before.class == 0, "a world saved before classes has one")
 }
 
 // The exit check over UDP: an admin travels to another world with her

@@ -17,6 +17,12 @@ Tree_Kind :: enum u8 {
 	Acacia, // flat-topped: the savanna's tree
 	Shrub, // a leaf blob on a 1-block stem
 	Evergreen_Shrub, // the same in spruce blocks
+	// The classes' (classes.odin).
+	Palm, // a bare trunk under a crown of drooping fronds: an ocean world's shores
+	Jungle, // tall, its broad crown in two tiers: a jungle world's
+	Charred, // a dead trunk, no crown: a volcanic world's
+	Fungus, // a pale stem under a broad cap (one in six glowing): a fungal world's
+	Toadstool, // a small one
 }
 
 Tree :: struct {
@@ -46,6 +52,11 @@ TREE_TRIES := #partial [Biome]i32 {
 }
 @(private)
 MOST_TREE_TRIES :: 12 // TREE_TRIES' largest
+
+// CLASS_TREE_MARGIN: how far a class's world's trees stand from a structure (their
+// crowns reach three blocks).
+@(private)
+CLASS_TREE_MARGIN :: 4
 
 @(private = "file", rodata)
 TREE_ODDS := #partial [Biome]f32 {
@@ -90,7 +101,16 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 	tries := i32(MOST_TREE_TRIES)
 	if !blend {tries = TREE_TRIES[column_at(p, gen.seed, origin.x + 8, origin.y + 8).biome]}
 	pieces := make([dynamic]Piece, context.temp_allocator)
-	if tries > 0 {pieces_in(gen, origin, &pieces)}
+	margin: i32 = 3
+	if tries > 0 && gen.blocks.class == .None {pieces_in(gen, origin, &pieces)}
+	if tries > 0 && gen.blocks.class != .None {
+		// A class's crowns reach three blocks: they keep clear of the pieces of
+		// the columns around too (a gate's platform beside the column).
+		margin = CLASS_TREE_MARGIN
+		near := make([dynamic]Structure, context.temp_allocator)
+		structures_near(gen, origin - margin, origin + game.CHUNK_SIZE - 1 + margin, &near)
+		for st in near {structure_pieces(gen, st, &pieces)}
+	}
 	for k in 0 ..< tries {
 		h := hash(gen.seed ~ i64(Earth_Layer.Tree), column.x, column.y, k)
 		x, z := origin.x + i32(h & 15), origin.y + i32(h >> 4 & 15)
@@ -98,11 +118,16 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 		odds := TREE_ODDS[c.biome] * p.tree_density
 		if blend {odds *= f32(TREE_TRIES[c.biome]) / MOST_TREE_TRIES}
 		if p.planet != 0 && c.biome == .Desert {odds *= 0.25} 	// rare shrubs
+		if gen.blocks.class == .Ocean && c.biome == .Beach {odds = 0.2 * p.tree_density} 	// palms
 		if base.unit_f32(hash(gen.seed ~ i64(Earth_Layer.Tree) + 1, x, z)) >= odds {continue}
 		if c.rough > 0 {continue}
 		ground := i32(math.floor(c.height))
 		if ground <= p.sea_level {continue}
-		if near_piece(pieces[:], x, ground, z, 3) {continue} 	// clear of structures
+		if near_piece(pieces[:], x, ground, z, margin) {continue} 	// clear of structures
+		if gen.blocks.class != .None {
+			class_tree(gen, &c, {x, ground, z}, i32(h >> 12 & 3), h, out)
+			continue
+		}
 		top := surface_block(p, c.biome, 0, ground)
 		size := i32(h >> 12 & 3)
 		if p.planet != 0 {
@@ -118,6 +143,82 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 			append(out, Tree{{x, ground, z}, .Spruce, 6 + size})
 		}
 	}
+}
+
+// class_tree appends the tree a class's world grows at ground (column c), if
+// it grows one there.
+@(private = "file")
+class_tree :: proc(
+	gen: ^Generator,
+	c: ^Column,
+	ground: game.Block_Pos,
+	size: i32,
+	h: u32,
+	out: ^[dynamic]Tree,
+) {
+	cb := &gen.blocks
+	top := column_surface(gen, c, 0, ground.y)
+	odd := h >> 14 & 3 == 0 // one in four
+	t: Tree
+	#partial switch cb.class {
+	case .Temperate:
+		switch {
+		case c.biome == .Desert && top == .Sand:
+			t = {
+				kind   = .Cactus,
+				height = 1 + size % 3,
+			}
+		case top == .Grass && c.biome in OAK_LAND:
+			t = {
+				kind   = .Oak,
+				height = 4 + size % 3,
+			}
+		case top == .Grass || top == .Snow:
+			t = {
+				kind   = .Spruce,
+				height = 6 + size,
+			}
+		case:
+			return
+		}
+	case .Canyon:
+		if top != cb.remap[.Sand] {return}
+		t = {kind = .Shrub, height = 1} if odd else {kind = .Cactus, height = 1 + size % 3}
+	case .Frozen:
+		if top != .Snow {return}
+		t = {kind = .Spruce, height = 4 + size} if odd else {kind = .Evergreen_Shrub, height = 1}
+	case .Ocean:
+		switch {
+		case c.biome == .Beach && top == .Sand:
+			t = {
+				kind   = .Palm,
+				height = 5 + size % 3,
+			}
+		case top == .Grass:
+			t =
+				{kind = .Oak, height = 4 + size % 3} if odd else {kind = .Palm, height = 5 + size % 3}
+		case:
+			return
+		}
+	case .Volcanic:
+		if c.mark != 0 || top != cb.remap[.Grass] {return}
+		t = {
+			kind   = .Charred,
+			height = 2 + size % 3,
+		}
+	case .Fungal:
+		if top != cb.plant_on {return}
+		t =
+			{kind = .Toadstool, height = 2} if odd else {kind = .Fungus, height = 4 + size + i32(h >> 16 & 3)}
+	case .Jungle:
+		if top != .Grass {return}
+		t =
+			{kind = .Shrub, height = 1} if odd else {kind = .Jungle, height = 10 + size + i32(h >> 16 & 3)}
+	case:
+		return
+	}
+	t.ground = ground
+	append(out, t)
 }
 
 // planet_vegetation appends the plant of planet world biome b standing on `top`
@@ -220,13 +321,14 @@ Put :: proc(data: rawptr, p: game.Block_Pos, b: game.Block)
 
 // tree_write writes the parts of t inside the chunk at origin: trunks over
 // anything but the land, leaves only into air (and over plants).
-tree_write :: proc(seed: i64, t: Tree, origin: game.Block_Pos, dst: ^game.Block_Array) {
+tree_write :: proc(gen: ^Generator, t: Tree, origin: game.Block_Pos, dst: ^game.Block_Array) {
 	Chunk :: struct {
 		origin: game.Block_Pos,
 		dst:    ^game.Block_Array,
+		blocks: ^Class_Blocks,
 	}
-	chunk := Chunk{origin, dst}
-	tree_shape(seed, t, &chunk, proc(data: rawptr, p: game.Block_Pos, b: game.Block) {
+	chunk := Chunk{origin, dst, &gen.blocks}
+	tree_shape(gen, t, &chunk, proc(data: rawptr, p: game.Block_Pos, b: game.Block) {
 		c := (^Chunk)(data)
 		l := p - c.origin
 		if l.x < 0 ||
@@ -239,6 +341,12 @@ tree_write :: proc(seed: i64, t: Tree, origin: game.Block_Pos, dst: ^game.Block_
 		current := c.dst[i]
 		ok :=
 			current == .Air || current == .Tall_Grass || current == .Poppy || current == .Dandelion
+		cb := c.blocks
+		if cb.class != .None {
+			ok ||= current == cb.plants[0] || current == cb.plants[1]
+			if b == cb.parts[0] &&
+			   cb.class == .Fungal {ok ||= current == cb.parts[1] || current == cb.parts[2]}
+		}
 		if b == .Log ||
 		   b == .Spruce_Log ||
 		   b == .Cactus {ok ||= current == .Leaves || current == .Spruce_Leaves}
@@ -247,9 +355,64 @@ tree_write :: proc(seed: i64, t: Tree, origin: game.Block_Pos, dst: ^game.Block_
 }
 
 // tree_shape gives every block of t to put.
-tree_shape :: proc(seed: i64, t: Tree, data: rawptr, put: Put) {
+tree_shape :: proc(gen: ^Generator, t: Tree, data: rawptr, put: Put) {
+	seed := gen.seed
 	g := t.ground
 	switch t.kind {
+	case .Palm:
+		// Fronds from the top, each reaching out three blocks and drooping.
+		top := g.y + t.height
+		put(data, {g.x, top + 1, g.z}, .Leaves)
+		for d in ([8][2]i32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}}) {
+			reach: i32 = 2 if d.x != 0 && d.y != 0 else 3
+			for k in i32(1) ..= reach {
+				put(data, {g.x + d.x * k, top + 1 - k / 2, g.z + d.y * k}, .Leaves)
+			}
+		}
+		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Log)}
+	case .Jungle:
+		// A broad, ragged crown, and a lower tier round the trunk.
+		top := g.y + t.height
+		for y in top - 2 ..= top + 1 {
+			r: i32 = 3 if y < top else (2 if y == top else 1)
+			for dz in -r ..= r {
+				for dx in -r ..= r {
+					if abs(dx) + abs(dz) > r + r / 2 + 1 {continue}
+					if abs(dx) == r &&
+					   abs(dz) >= r - 1 &&
+					   base.unit_f32(hash(seed, g.x + dx, y, g.z + dz)) < 0.6 {continue}
+					put(data, {g.x + dx, y, g.z + dz}, .Leaves)
+				}
+			}
+		}
+		tier := g.y + t.height / 2 + 1
+		for dz in i32(-2) ..= 2 {
+			for dx in i32(-2) ..= 2 {
+				if abs(dx) + abs(dz) > 2 {continue}
+				put(data, {g.x + dx, tier, g.z + dz}, .Leaves)
+			}
+		}
+		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Log)}
+	case .Charred:
+		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Spruce_Log)}
+	case .Fungus, .Toadstool:
+		// A stem, then a broad cap over it and a narrower one on top.
+		cb := &gen.blocks
+		top := g.y + t.height
+		cap := cb.parts[1]
+		if t.kind == .Fungus &&
+		   hash(seed ~ i64(Earth_Layer.Tree) + 3, g.x, g.z) % 6 == 0 {cap = cb.parts[2]}
+		r: i32 = 1 if t.kind == .Toadstool else (2 if t.height < 6 else 3)
+		for y in top ..= top + 1 {
+			ry := r if y == top else r - 1
+			for dz in -ry ..= ry {
+				for dx in -ry ..= ry {
+					if ry > 0 && abs(dx) == ry && abs(dz) == ry {continue}
+					put(data, {g.x + dx, y, g.z + dz}, cap)
+				}
+			}
+		}
+		for y in 1 ..< t.height {put(data, g + {0, y, 0}, cb.parts[0])}
 	case .Cactus:
 		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Cactus)}
 	case .Acacia:
@@ -323,19 +486,22 @@ shrub_leaves :: proc(g: game.Block_Pos, leaves: game.Block, put: Put, data: rawp
 }
 
 // plant: tall grass or a flower on a grassy top (the block above it, if in
-// this chunk and empty).
+// this chunk and empty); on a class's world, its own plants on its own ground.
 plant :: proc(
-	p: ^Params,
-	seed: i64,
+	gen: ^Generator,
 	c: ^Column,
 	origin: game.Block_Pos,
 	dst: ^game.Block_Array,
 	x, top, z: i32,
 ) {
+	p := &gen.params
+	seed := gen.seed
+	cb := &gen.blocks
 	y := top + 1 - origin.y
 	if y < 0 || y >= game.CHUNK_SIZE || p.plant_density <= 0 {return}
-	if surface_block(p, c.biome, 0, top) != .Grass {return}
-	if top - origin.y >= 0 && dst[game.local_index({x, top - origin.y, z})] != .Grass {return} 	// a cave mouth
+	ground := game.Block.Grass if cb.class == .None else cb.plant_on
+	if ground == .Air || column_surface(gen, c, 0, top) != ground {return}
+	if top - origin.y >= 0 && dst[game.local_index({x, top - origin.y, z})] != ground {return} 	// a cave mouth
 	grass, flowers: f32
 	#partial switch c.biome {
 	case .Plains:
@@ -364,8 +530,9 @@ plant :: proc(
 	switch {
 	case r < flowers:
 		b = .Poppy if r < flowers / 2 else .Dandelion
+		if cb.class != .None && cb.plants[1] != .Air {b = cb.plants[1]}
 	case r < flowers + grass:
-		b = .Tall_Grass
+		b = .Tall_Grass if cb.class == .None else cb.plants[0]
 	case:
 		return
 	}
