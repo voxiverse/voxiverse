@@ -233,6 +233,7 @@ Content_Kind :: enum u8 {
 	Channel,
 	Sim_Rule,
 	Entity,
+	Quest,
 }
 
 Block_Flag :: enum u8 {
@@ -549,6 +550,7 @@ Registry :: struct {
 	channels:   []Channel_Info, // by channel id; 0 is voxiverse:light
 	sim:        Sim_Rules,
 	kinds:      []Kind_Info, // entity kinds: a Kind_Id is the index + 1
+	quests:     []Quest_Def, // at most MAX_QUESTS (quest.odin)
 	engine:     Engine_Kinds, // the kinds the engine's code names (0: this registry has none)
 	packs:      []Pack_Info,
 	ids:        [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
@@ -990,6 +992,11 @@ registry_text_of :: proc(
 	}
 	registry_sim_text(reg, &b)
 	entity_kinds_text(reg, &b)
+	for q in reg.quests {
+		fmt.sbprintf(&b, "quest %s after=%v reward=%v", q.id, q.after, q.reward)
+		for st in q.steps {fmt.sbprintf(&b, " step=%v way=%v", st.objective, st.way)}
+		strings.write_byte(&b, '\n')
+	}
 	for p in reg.packs {for r in p.renamed {fmt.sbprintf(&b, "renamed %s %s\n", r.from, r.to)}}
 	if all {
 		for s in reg.structures {
