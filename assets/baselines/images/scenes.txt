@@ -86,3 +86,17 @@ weather_rain_noon: /weather rain; /time set noon; look 30 0
 weather_storm_dusk: /weather storm; /time set 0.74; look 30 0
 weather_fog_dawn: /weather fog; /time set 0.27; look 30 0
 weather_clear_night: /time set midnight; look 180 55
+# Levels, skills and a fight's feel (games/sandbox: pack/data/levels, pack/data/skills;
+# client/hud/experience.odin, client/menu/skills.odin, client/overlay/death.odin), at
+# 1280x720 in survival with the health not coming back by itself: the HUD's experience bar
+# at level 3 with two points to spend, low on health under Reduce motion (the bar framed
+# red, "Low health" over it, no beat), hurt once the spawn's protection is over, `ticks`
+# letting the feed's experience and the hurt's arc go (the benchmarks' settings have the
+# bar off: `set` turns it on); the Character section (C) at level 6 with four ranks learnt and a point left, and the same in a small
+# window (640x360); and the death screen of a survivor hurt past its health: how it died,
+# the world's spawn (it has no outpost), what it carried kept (the scratch world's
+# keep_inventory).
+xp_bar: @1280x720 set experience_bar 1; set reduce_motion 1; /gamemode survival; /rule natural_regeneration false; /xp @s 220; ticks 150; /damage @s 16; ticks 150; wait_world; look 90 -10
+skills: @1280x720 /gamemode survival; /xp @s 700; /skill quick_hands; /skill quick_hands; /skill hardy; /skill heavy_blows; ticks 150; wait_world; key c down; wait 2; key c up; pointer 1240 700
+skills_small: @640x360 /gamemode survival; /xp @s 700; /skill quick_hands; /skill quick_hands; /skill hardy; /skill heavy_blows; ticks 150; wait_world; key c down; wait 2; key c up
+death: @1280x720 /gamemode survival; /give @s sandbox:fibre 6; ticks 150; /damage @s 100; ticks 30; wait_world
