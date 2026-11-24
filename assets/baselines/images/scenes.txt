@@ -67,13 +67,15 @@ journal: @1280x720 /gate wake; /locate gate; sleep 1; wait_world; ticks 60; wait
 # The player menu in a small window (640x360): the UI is scaled down while it is open so
 # all of it fits.
 inventory_small: @640x360 /gamemode survival; /give @s boots; ticks 150; wait_world; key e down; wait 2; key e up; wait 3
-# The quests (games/sandbox: pack/data/quests), at 1280x720 in survival, the pointer off
-# the panels: the journal's Quests page once the planks are made at the crafting screen's
-# Make (X), Waking at the Gate done (its fibre, flint and logs carried) and Edge
+# The quests and the crafting screen (games/sandbox: pack/data/quests, client/craft.odin),
+# at 1280x720 in survival, the pointer off the panels: the crafting screen (X) with fibre,
+# flint and logs carried, the planks picked first; the journal's Quests page once the planks
+# are made at its Make, Waking at the Gate done (its fibre, flint and logs carried) and Edge
 # and Point on its second step; the HUD's tracker with Waking at the Gate's second step
 # under way (3 of 5 flint), `ticks` letting the pickup feed's lines go, and the same in a
 # small window (640x360), where it sits under the compass (the benchmarks' settings have
 # the tracker off: `set` turns it on).
+craft: @1280x720 /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 5; /give @s log 4; ticks 150; wait_world; key x down; wait 2; key x up; pointer 1240 700
 quests: @1280x720 /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 5; /give @s log 4; ticks 150; wait_world; key x down; wait 2; key x up; pointer 851 269; wait 2; key mouse_left down; wait 2; key mouse_left up; ticks 30; key x down; wait 2; key x up; key j down; wait 2; key j up; pointer 1240 700
 tracker: @1280x720 set quest_tracker 1; /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 3; ticks 150; wait_world; look 90 -10
 tracker_small: @640x360 set quest_tracker 1; /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 3; ticks 150; wait_world; look 90 -10
