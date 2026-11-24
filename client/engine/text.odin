@@ -278,6 +278,20 @@ Text :: enum u16 {
 	Map_You,
 	Map_Places,
 	Map_Across,
+	Journal_Quests_Page,
+	Journal_Log_Page,
+	Quests_Open,
+	Quests_Done,
+	Quests_None,
+	Quest_Steps,
+	Quest_Reward,
+	Quest_No_Reward,
+	Quest_Count, // {0}: how many so far, {1}: how many the step asks
+	Quest_Track,
+	Quest_Tracked,
+	Quest_Finished,
+	Quest_Complete, // {0}: the quest's title
+	Quest_Step_Done, // {0}: the step's text
 }
 
 @(rodata)
@@ -549,6 +563,20 @@ TEXT_EN := [Text]string {
 	.Map_You                                = "You",
 	.Map_Places                             = "Places",
 	.Map_Across                             = "{0} m across",
+	.Journal_Quests_Page                    = "Quests",
+	.Journal_Log_Page                       = "Places and creatures",
+	.Quests_Open                            = "Under way",
+	.Quests_Done                            = "Done",
+	.Quests_None                            = "No quest under way",
+	.Quest_Steps                            = "Steps",
+	.Quest_Reward                           = "Reward",
+	.Quest_No_Reward                        = "None",
+	.Quest_Count                            = "{0}/{1}",
+	.Quest_Track                            = "Track",
+	.Quest_Tracked                          = "Tracked",
+	.Quest_Finished                         = "Done",
+	.Quest_Complete                         = "Quest done: {0}",
+	.Quest_Step_Done                        = "Done: {0}",
 }
 
 // tr: the string for key with {n} replaced by args[n] (temp allocator; base.text_format).

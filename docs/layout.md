@@ -144,8 +144,8 @@ package** is enforced by the `layout` lint (see above).
 | `client/autopilot` | The modes that drive the game with nobody at the keys: exit checks (`--check`), benchmarks (`--benchmark`), visual scenes (`--scene`) | `*.odin` |
 | `client/console` | The developer console: its view, its command line, its world primitives, startup scripts | `*.odin` |
 | `client/dev` | Developer overlays and panels: the audio recorder and inspector, the F3 panels | `*.odin` |
-| `client/hud` | The in-game HUD: crosshair, compass, health bar, effects, target frame, pickup feed, hotbar, player list, item popup | `*.odin` |
-| `client/menu` | The game menu, the player menu and its sections (the map, the journal, the inventory with the character, the statistics), and how every screen shows items (slots, tooltips, panes) | `*.odin` |
+| `client/hud` | The in-game HUD: crosshair, compass, health bar, effects, target frame, quest tracker, pickup feed, hotbar, player list, item popup | `*.odin` |
+| `client/menu` | The game menu, the player menu and its sections (the map, the journal with its quests, the inventory with the character, the statistics), and how every screen shows items (slots, tooltips, panes) | `*.odin` |
 | `client/overlay` | The overlay stack's drawing and the dialogs: chat, death, the gate's address, LAN, quit, toasts | `*.odin` |
 | `client/prompt` | Button prompts: an action's glyph and the prompt bar | `*.odin` |
 | `client/screen` | The title, options, credits, universes, creation, ignite, multiplayer and loading screens | `*.odin` |

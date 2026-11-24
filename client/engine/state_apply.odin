@@ -42,6 +42,7 @@ APPLY := [protocol.State_Kind]Apply_Proc {
 	.Machine       = apply_machine,
 	.Belt          = apply_belt,
 	.Logbook       = apply_logbook,
+	.Quests        = apply_quests,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -149,6 +150,34 @@ apply_logbook :: proc(s: ^Session, g: protocol.Received) {
 		return
 	}
 	s.logbook = (^protocol.Logbook_State)(g.value)^
+}
+
+// apply_quests: the player's quests (the journal's Quests, the tracker). A step or a quest
+// done since the last value says so as a craft does (made: the chime and the gold words
+// in front of the eyes), and the tracker eases its new step in; what the first value holds
+// is no news.
+@(private)
+apply_quests :: proc(s: ^Session, g: protocol.Received) {
+	if g.op == .Remove {
+		s.quests, s.quests_heard = {}, false
+		return
+	}
+	was := s.quests.log
+	s.quests = (^protocol.Quest_State)(g.value)^
+	heard := s.quests_heard
+	s.quests_heard = true
+	if !heard {return}
+	for q in 0 ..< min(len(s.reg.quests), game.MAX_QUESTS) {
+		before, now := int(was.quests[q].step), int(s.quests.log.quests[q].step)
+		def := &s.reg.quests[q]
+		if now <= before || now > len(def.steps) {continue}
+		if now == len(def.steps) {
+			made(s, tr(.Quest_Complete, def.title))
+		} else {
+			made(s, tr(.Quest_Step_Done, def.steps[now - 1].text))
+		}
+		tween_start(&s.hud.quest_news, s)
+	}
 }
 
 @(private)

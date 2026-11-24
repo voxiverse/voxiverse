@@ -242,6 +242,16 @@ the creature kinds it met (`met`: their ids). The server keeps it with the chara
 sends it to the player (the `logbook` record); a place of a kind or world it cannot read, or
 a kind the registry no longer has, is skipped (and logged). A file before has none.
 
+### The quests
+
+A character file may have `quests`: each quest the character began, by its `id` (the
+registry's, [packs.md](packs.md#quests)), the `step` it is on (its steps' count: done) and the
+`count` it has of that step (absent: 0). It came with format 7 still: the member is optional
+and a reader of format 7 from before skips members it does not know, so nothing it reads
+changes and an older build loses only the progress. A file before has none: no quest is
+begun. A quest the registry no longer has is skipped (and logged), a step past a quest's last
+reads as done and a count past its step's as one short of it.
+
 ### The edit journal
 
 The edit journal stores block numbers, which are fixed for a universe. A universe's packs are

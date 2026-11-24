@@ -452,6 +452,7 @@ entity_harm :: proc(w: ^World, h: game.Entity_Handle, harm: Entity_Harm) -> (die
 	dead := Dead_Entity{entity_id(w, h), entity_kind(w, h), entity_pos(w, h)}
 	entity_died(w, h)
 	entity_drops(w, dead)
+	if harm.by != nil {quest_note(s, harm.by, {goal = .Kill, creature = dead.kind, count = 1})}
 	if g.entity_died != nil {g.entity_died(s, w, dead, harm)}
 	return true
 }

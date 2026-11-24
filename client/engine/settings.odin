@@ -72,6 +72,7 @@ Settings :: struct {
 	screen_shake:      f32, // 0 ..= 1: how much a game's shakes and kicks move the view (Reduce motion: none)
 	chat_text_size:    f32, // times the UI's text size
 	prompt_bar:        bool, // the bar of button prompts along the bottom of menus (off by default)
+	quest_tracker:     bool, // the tracked quest's step at the top right of the HUD
 }
 
 @(rodata)
@@ -102,6 +103,7 @@ SETTINGS_DEFAULTS := Settings {
 	sprint_fov_kick   = true,
 	view_bobbing      = true,
 	screen_shake      = 1,
+	quest_tracker     = true,
 }
 
 @(rodata)
@@ -386,6 +388,12 @@ SETTINGS_VARS := [?]base.Var {
 		field = "prompt_bar",
 		label = "Button prompt bar",
 		help = "Shows a bar of button hints (A Select, B Back) along the bottom of menus.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "quest_tracker",
+		label = "Quest tracker",
+		help = "Shows the step of the quest you follow at the top right of the screen.",
 		choices = {{0, "Off"}, {1, "On"}},
 	},
 	{

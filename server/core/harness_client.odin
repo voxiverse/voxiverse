@@ -55,6 +55,7 @@ Mirror :: struct {
 	first_fix:     u64, // the server tick of the first
 	inventory:     game.Inventory, // as the server last said
 	logbook:       game.Logbook, // as the server last said (its places in every world)
+	quests:        game.Quest_Log, // as the server last said
 	mode:          int, // the game mode it said (when mode_known)
 	mode_known:    bool,
 	sent:          ^[dynamic][]u8, // when set, every message sent is also kept here (a copy, heap)
@@ -281,6 +282,8 @@ mirror_apply :: proc(sess: ^Session, got: []protocol.Received) {
 			m.inventory = (^protocol.Inventory_State)(g.value).inventory
 		case .Logbook:
 			m.logbook = (^protocol.Logbook_State)(g.value).logbook
+		case .Quests:
+			m.quests = (^protocol.Quest_State)(g.value).log
 		case .Belt:
 			if m.belts == nil {m.belts = make(type_of(m.belts), runtime.heap_allocator())}
 			m.belts[protocol.key_block(g.key)] = (^protocol.Belt_Record)(g.value).lane

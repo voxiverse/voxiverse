@@ -108,6 +108,7 @@ item_consume :: proc(s: ^Server, c: ^Client) -> string {
 		c.effect = {use.regen, use.defence, s.tick + seconds_ticks(use.seconds), held.item}
 	}
 	record(s, c, .Item_Used, game.item_name(s.registry, held.item))
+	quest_note(s, c, {goal = .Use, item = held.item, count = 1})
 	return ""
 }
 

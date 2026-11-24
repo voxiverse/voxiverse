@@ -43,4 +43,5 @@ Hud_State :: struct {
 	aimed:        Maybe(u32), // the creature under the crosshair within TARGET_RANGE, nearer than any block (aim_update)
 	target:       Maybe(u32), // the creature the target frame shows
 	target_seen:  f64, // the feel clock's tick it was last under the crosshair
+	quest_news:   Tween, // a step of a quest done: the tracker eases its new step in
 }

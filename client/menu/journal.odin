@@ -14,13 +14,15 @@ import "common:game"
 // with their character by the server and sent to them: game.Logbook; the gates they
 // opened, a game's places such as the sandbox's ruin, the creatures that came into view).
 //
-// The journal is two panes: the places, those in this world nearest first, each with how
-// far and which way it lies ("120 m NE"), then those in other worlds; and the creatures
-// met, in the order met. The map is the ground
+// The journal is two pages where the registry has quests (else the second alone), chosen by
+// the row under its tab: the quests (quests.odin), shown first; and the places and
+// creatures, two panes: the places, those in this world nearest first, each with how far
+// and which way it lies ("120 m NE"), then those in other worlds; and the creatures met, in
+// the order met. The map is the ground
 // round the player seen from above (engine.Minimap, the minimap's ground read from the
 // world as the session holds it, re-centred when the player walks off its middle), the
-// player an arrow at their place and heading, each place a dot with its name; the places
-// listed beside it.
+// player an arrow at their place and heading, each place a dot with its name (the tracked
+// quest's, engine.quest_way, larger and gold); the places listed beside it.
 
 JOURNAL_ROW :: 26
 MAP_BLOCKS :: 256 // blocks the map spans each way
@@ -130,6 +132,14 @@ journal_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	defer ui.end_layer(ctx, prev)
 	content, shown := section_frame(app, ctx)
 	if !shown {return}
+	if len(s.reg.quests) > 0 {
+		journal_pages(app, ctx, ui.cut_top(&content, t.row_height))
+		ui.cut_top(&content, t.spacing)
+		if app.player_menu.journal_page == .Quests {
+			quests_page(app, ctx, content)
+			return
+		}
+	}
 	half := (content.w - 2 * t.spacing) / 2
 	left := ui.cut_left(&content, half)
 	ui.cut_left(&content, 2 * t.spacing)
@@ -158,6 +168,32 @@ journal_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	)
 }
 
+@(rodata)
+JOURNAL_PAGE_TEXT := [engine.Journal_Page]engine.Text {
+	.Quests = .Journal_Quests_Page,
+	.Log    = .Journal_Log_Page,
+}
+
+// journal_pages: the row of the journal's pages in r, the one shown lit, the others
+// buttons that show theirs.
+@(private = "file")
+journal_pages :: proc(app: ^engine.App, ctx: ^ui.Context, r: ui.Rect) {
+	t := &ctx.theme
+	row := r
+	for page in engine.Journal_Page {
+		name := engine.tr(JOURNAL_PAGE_TEXT[page])
+		b := ui.cut_left(&row, ui.measure_text(ctx, name, t.font_size) + 4 * t.padding)
+		ui.cut_left(&row, t.spacing)
+		if page == app.player_menu.journal_page {
+			ui.fill_rect(ctx, b, t.hover)
+			ui.stroke_rect(ctx, b, t.border_width, t.border)
+			ui.draw_text(ctx, b, name, t.font_size, t.hover_text, .Center)
+		} else if ui.button(ctx, name, b) {
+			app.player_menu.journal_page = page
+		}
+	}
+}
+
 // map_ui: the map's section.
 map_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	s := app.session
@@ -181,6 +217,10 @@ map_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		if !engine.logbook_here(s, &p) {continue}
 		at := engine.logbook_place_at(&p)
 		append(&marks, overview.Mark{{at.x, at.z}, t.meter_fill, 8})
+	}
+	if way := engine.quest_way(s, engine.quest_tracked(s)); way != nil { 	// (the tracked quest's place: larger, in the quests' gold)
+		at := engine.logbook_place_at(way)
+		append(&marks, overview.Mark{{at.x, at.z}, engine.MADE_COLOR, 12})
 	}
 	overview.minimap_draw(m, s, ctx, r, nil, marks[:], t.list_fill, t.list_fill)
 	ui.push_clip_rect(ctx, r)

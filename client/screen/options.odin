@@ -61,6 +61,7 @@ OPTIONS_TABS := [engine.Options_Tab][]string {
 		"view_bobbing",
 		"screen_shake",
 		"prompt_bar",
+		"quest_tracker",
 		"chat_text_size",
 	},
 	.Profile       = PROFILE_ROWS,

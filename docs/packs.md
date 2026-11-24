@@ -1,7 +1,8 @@
 # Packs and the trust boundary
 
 A pack is a directory of JSON and asset files that adds content (blocks, items, textures,
-sounds, recipes, models, game modes, channels, simulation rules, structures) without code. The
+sounds, recipes, models, game modes, channels, simulation rules, quests, structures) without
+code. The
 base game is itself a pack (`assets/packs/voxiverse`, namespace `voxiverse`). This page says how
 packs are laid out, loaded and sent, what a pack's rule language can do, and what the engine
 treats as untrusted. The script language is in [script.md](script.md); the journal that records
@@ -14,7 +15,7 @@ every change in [journal.md](journal.md).
   pack.json        format, namespace, version, title, description, requires, renamed
   assets/          client-only: textures (PNG), sounds (Ogg)
   data/            both sides: blocks, items, tags, recipes, shapes, models, game modes,
-                   channels, simulation rules
+                   channels, simulation rules, quests
   server/          server-only: structures (.vxs)
 ```
 
@@ -32,7 +33,7 @@ Each registry kind has one directory and one JSON object of named definitions pe
 | Texture, Sound | `assets/textures`, `assets/sounds` (each with a `blocks.json` naming the files or generators) |
 | Block, Item, Block tag, Item tag, Recipe | `data/blocks`, `data/items`, `data/block_tags`, `data/item_tags`, `data/recipes` |
 | Shape, Model, Game mode | `data/shapes`, `data/models`, `data/game_modes` |
-| Channel, Sim rule, Entity | `data/channels`, `data/sim`, `data/entities` |
+| Channel, Sim rule, Entity, Quest | `data/channels`, `data/sim`, `data/entities`, `data/quests` |
 | Structure | `server/structures` |
 
 A file elsewhere in a pack is refused with the layout above in the message. Pack JSON is RFC 8259
@@ -234,6 +235,48 @@ has their data, in this fixed order:
 6. explosions: the blasts the rockets made go off.
 
 A kind in a pack that is a walker with no brain falls and stands still; nothing in the code names it.
+
+## Quests
+
+A quest is a `data/quests/*.json` entry (`common/game/quest.odin`, read by
+`registry_quests.odin`): a `title`, a line or two of `text` (why, in the world's voice), its
+`steps` in order (1 to 8), a `reward` (at most 4 `{"item", "count"}`, given when its last step
+is done) and `after`, the quests (by id, at most 4) done before it opens. A registry holds at
+most 32 (`MAX_QUESTS`); the base pack has none, a game's pack brings them (the sandbox's first
+hour: `games/sandbox/pack/data/quests`).
+
+```json
+"edge_and_point": {"title": "Edge and Point", "text": "A blade for the brush, a point for the rock.",
+                   "after": ["sandbox:waking"],
+                   "steps": [{"text": "Make a flint pick", "goal": "make", "item": "sandbox:flint_pick"}],
+                   "reward": [{"item": "sandbox:field_dressing", "count": 1}]}
+```
+
+A step is its `text`, its `goal` and what the goal names, a `count` (1 when none) and maybe a
+`way`, `{"place": <kind>, "name": <its name>}`: while it is the step, the compass and the map
+point at the nearest place of that kind (and name) in the player's logbook in the world it is
+in, and at nothing while the logbook has none (a way reveals nothing; a `find` step points at
+the place it asks for). Each goal is a condition over what the server already knows of the
+player, and counts only while it is the step:
+
+| Goal | Names | Done when |
+|---|---|---|
+| `have` | `item` | the player carries `count` of it at once (slots, what it wears, the cursor) |
+| `make` | `item` | it made `count` of it: the game tells (`core.quest_note`; the sandbox's crafting) |
+| `place`, `break` | `block` | it placed or broke `count` blocks of the type |
+| `find` | `place` (`gate`, `ruin`, `town`, `outpost`, `beacon`, `remains`), maybe `name` | its logbook has such a place (in any world) |
+| `kill` | `creature` | it killed `count` creatures of the kind (its blow, shot or blast) |
+| `use` | `item` | it used up `count` of the consumable |
+| `win` | `name` | it won the game's encounter of that name (`core.quest_note`; the sandbox's ruin is `sandbox:ruin`) |
+| `address` | | it wrote an address on a gate within reach, whatever answered |
+
+Quests are read after every other kind, so each id a step or reward names is checked
+(`"sandbox:nothing" is not an item`), and a quest that comes after itself by any way round is
+refused, as is a field its goal does not take or a `count` on a step that counts once (`find`,
+`win`, `address`). Where it is played, the server keeps each character's progress (`quests` in its
+file, [saves.md](saves.md)) and sends it to its player (the `quests` record), and nothing
+counts for a player who cannot be hurt (creative, a watcher); the journal (J) lists the quests
+under way and done, and the HUD's tracker shows the step of the one followed.
 
 ## Simulation rules
 

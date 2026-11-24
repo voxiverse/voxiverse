@@ -41,6 +41,7 @@ Player_Record :: struct {
 	aside:          Maybe(game.Inventory), // the inventory set aside (inventory_set_aside; none: nothing is)
 	character_data: game.Character_Data, // the game's record on the character (Game.character_data)
 	logbook:        game.Logbook, // the places it found and the creatures it met (logbook_place)
+	quests:         game.Quest_Log, // how far it is in each quest (quest_note)
 	dirty:          bool, // changed since its file was written
 	stats:          Counters, // its counters (heap; stats.odin)
 	overflow:       [MAX_OVERFLOW]game.Stack, // read but with no room (an older, bigger inventory): dropped at their feet on joining
@@ -63,6 +64,15 @@ Player_File :: struct {
 	aside:    Maybe([]File_Stack) `json:"aside,omitempty"`, // format 6: the inventory set aside (inventory_set_aside), its stacks numbered as items'
 	game:     json.Value `json:"game,omitempty"`, // format 5: the game's record, a field by its path (written by hand: player_json)
 	logbook:  Maybe(File_Logbook) `json:"logbook,omitempty"`, // format 7: the places found (each in its world) and the creatures met, by name
+	quests:   Maybe([]File_Quest) `json:"quests,omitempty"`, // the quests begun, by id (a member a reader of format 7 from before skips: the format stays 7)
+}
+
+// File_Quest: how far a character is in a quest, as its file keeps it (by id: a quest's
+// number is the registry's of the day).
+File_Quest :: struct {
+	id:    string,
+	step:  int, // the step it is on (its steps' count: done)
+	count: int `json:"count,omitempty"`, // how much of that step's count it has
 }
 
 // File_Logbook: a logbook as a player file keeps it (kinds by name: their numbers are the
@@ -223,6 +233,7 @@ player_parse :: proc(
 		character_data_read(character, &r.character_data, record)
 	}
 	if lb, has := f.logbook.?; has {logbook_read(reg, lb, &r.logbook)}
+	if qs, has := f.quests.?; has {quests_read(reg, qs, &r.quests)}
 	n := stacks_read(reg, f.format, f.items, &r.inventory, r.overflow[:])
 	if stacks, set_aside := f.aside.?; set_aside {
 		aside: game.Inventory
@@ -297,6 +308,7 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record, character: typeid) -
 	if aside, set_aside := r.aside.?; set_aside {f.aside = file_stacks(reg, &aside)}
 	if r.logbook.place_count > 0 ||
 	   r.logbook.met_count > 0 {f.logbook = logbook_file(reg, &r.logbook)}
+	if qs := quests_file(reg, &r.quests); len(qs) > 0 {f.quests = qs}
 	data, _ := json.marshal(
 		f,
 		{pretty = true, use_spaces = true, spaces = 2},
@@ -451,6 +463,7 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 		aside          = c.aside,
 		character_data = c.character_data,
 		logbook        = c.logbook,
+		quests         = c.quests,
 		mode           = mode_record_text(s, c),
 		dirty          = true,
 		stats          = counters_clone(c.stats),
@@ -575,5 +588,91 @@ logbook_place :: proc(
 	at: [3]i32,
 	name := "",
 ) {
-	game.logbook_place(&c.logbook, kind, c.world.address, at, name)
+	if game.logbook_place(&c.logbook, kind, c.world.address, at, name) {quests_settle(s, c)}
+}
+
+// quests_file: the quests begun as a player file keeps them (temporary memory).
+@(private = "file")
+quests_file :: proc(reg: ^game.Registry, ql: ^game.Quest_Log) -> []File_Quest {
+	out := make([dynamic]File_Quest, context.temp_allocator)
+	for q in 0 ..< min(len(reg.quests), game.MAX_QUESTS) {
+		p := ql.quests[q]
+		if p != {} {append(&out, File_Quest{reg.quests[q].id, int(p.step), int(p.count)})}
+	}
+	return out[:]
+}
+
+// quests_read: a player file's quests into ql. A quest the registry no longer has is left
+// out (and logged); a step past a quest's last is its last (done), a count past its step's
+// is short of it (the next one finishes it).
+@(private = "file")
+quests_read :: proc(reg: ^game.Registry, f: []File_Quest, ql: ^game.Quest_Log) {
+	for fq in f {
+		q, found := game.quest_by_id(reg, fq.id)
+		if !found || q >= game.MAX_QUESTS {
+			log.warnf("server player file quest skipped quest=%q", fq.id)
+			continue
+		}
+		steps := reg.quests[q].steps
+		step := clamp(fq.step, 0, len(steps))
+		count := 0
+		if step < len(steps) {count = clamp(fq.count, 0, steps[step].objective.count - 1)}
+		ql.quests[q] = {u8(step), u16(count)}
+	}
+}
+
+// quest_note: c did something a quest's step may count (a game's: a recipe made, an
+// encounter won; the engine notes the rest itself: what it carries, places, breaks, finds,
+// kills, uses up and an address written on a gate). Each step it finishes moves on, and a
+// quest finished gives c its reward. Nothing counts for a player who cannot be hurt
+// (creative, a watcher): the quests are a survivor's.
+quest_note :: proc(s: ^Server, c: ^Client, e: game.Quest_Event) {
+	if !quests_count(s, c) || !game.quest_wants(s.registry, &c.quests, e.goal) {return}
+	quests_moved(s, c, game.quest_note(s.registry, &c.quests, e, &c.inventory, &c.logbook))
+}
+
+// quests_settle: what c carries or its logbook changed, or it joined: the steps that hold
+// now (game.quest_settle) move on.
+@(private)
+quests_settle :: proc(s: ^Server, c: ^Client) {
+	if !quests_count(s, c) {return}
+	quests_moved(s, c, game.quest_settle(s.registry, &c.quests, &c.inventory, &c.logbook))
+}
+
+// quests_count: whether c's deeds count for its quests (playing, alive, able to be hurt).
+@(private = "file")
+quests_count :: proc(s: ^Server, c: ^Client) -> bool {
+	if c.state != .Playing || c.dead || len(s.registry.quests) == 0 {return false}
+	a := game.derive_abilities(s.registry, c.mode, &c.inventory)
+	return .Health in a && .Invulnerable not_in a && .Bodiless not_in a && .Spectate not_in a
+}
+
+// quests_moved: steps moved on: each quest finished gives its reward (into c's slots, the
+// rest at its feet), booked as a quest's. Its player hears of it from the quests record.
+@(private = "file")
+quests_moved :: proc(s: ^Server, c: ^Client, changes: game.Quest_Changes) {
+	for q in changes.done {
+		def := &s.registry.quests[q]
+		log.infof("server quest done name=%s quest=%s", client_name(c), def.id)
+		for st in def.reward {
+			size := game.item_stack_size(s.registry, st.item)
+			for left := st.count; left > 0 && size > 0; {
+				want := min(left, size)
+				rest := game.inventory_add(
+					s.registry,
+					&c.inventory,
+					{st.item, want, game.new_ammo(s.registry, st.item, c.mode), 0},
+				)
+				ledger(s, c.world, .Quest, st.item, want - rest.count)
+				if rest.count > 0 {
+					ledger_stack(s, c.world, .Quest, rest)
+					spawn_item(c.world, c.player.position + {0, 0.5, 0}, rest, {}, -1)
+				}
+				left -= want
+			}
+			c.inv_changed = true
+		}
+	}
+	// A reward may be what the next step asks to carry.
+	if changes.done != {} {quests_settle(s, c)}
 }

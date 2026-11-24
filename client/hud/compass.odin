@@ -8,7 +8,8 @@ import "client:ui"
 // The compass: a strip along the top of the screen, the way the eyes face in its middle,
 // half the horizon each side of it: a tick every 15 degrees, the eight points named, and a
 // mark for each place of the player's logbook in this world (the server's: a gate it
-// opened, a game's places such as the ruin), at the strip's end when it lies behind.
+// opened, a game's places such as the ruin), at the strip's end when it lies behind; the
+// place the tracked quest's step points at (engine.quest_way) taller, in the quests' gold.
 
 COMPASS_WIDTH :: 480
 COMPASS_HEIGHT :: 28
@@ -45,17 +46,22 @@ compass_offset :: proc(bearing, heading: f32) -> f32 {
 	return f32(math.mod(f64(bearing - heading) + 540, 360)) - 180
 }
 
-// compass: the strip, under top (F3's bottom; 0: the screen's); where its bottom is, which
-// the game's HUD and the target frame go under.
-compass :: proc(ctx: ^ui.Context, s: ^engine.Session, top: f32) -> (bottom: f32) {
-	t := &ctx.theme
-	w := min(f32(COMPASS_WIDTH), ctx.screen.w - 2 * t.spacing)
-	r := ui.Rect {
+// compass_rect: where the strip is, under top (F3's bottom; 0: the screen's).
+compass_rect :: proc(ctx: ^ui.Context, top: f32) -> ui.Rect {
+	w := min(f32(COMPASS_WIDTH), ctx.screen.w - 2 * ctx.theme.spacing)
+	return {
 		ctx.screen.x + (ctx.screen.w - w) / 2,
 		max(top, ctx.screen.y) + COMPASS_MARGIN,
 		w,
 		COMPASS_HEIGHT,
 	}
+}
+
+// compass: the strip, under top (F3's bottom; 0: the screen's); where its bottom is, which
+// the game's HUD and the target frame go under.
+compass :: proc(ctx: ^ui.Context, s: ^engine.Session, top: f32) -> (bottom: f32) {
+	t := &ctx.theme
+	r := compass_rect(ctx, top)
 	bottom = r.y + r.h
 	ui.fill_rect(ctx, r, t.hud_fill)
 	ui.stroke_rect(ctx, r, 1, t.faint_border)
@@ -102,6 +108,19 @@ compass :: proc(ctx: ^ui.Context, s: ^engine.Session, top: f32) -> (bottom: f32)
 		)
 		x := clamp(x_of(r, off), r.x + 4, r.x + r.w - 4)
 		ui.fill_rect(ctx, {x - 3, r.y + 2, 6, 6}, t.meter_fill)
+	}
+	// The tracked quest's way (engine.quest_way): a taller mark in the quests' gold, over
+	// the place's own.
+	if way := engine.quest_way(s, engine.quest_tracked(s)); way != nil {
+		p := engine.logbook_place_at(way)
+		off := clamp(
+			compass_offset(compass_bearing(s.camera.position, p), heading),
+			-COMPASS_SPAN / 2,
+			COMPASS_SPAN / 2,
+		)
+		x := clamp(x_of(r, off), r.x + 5, r.x + r.w - 5)
+		ui.fill_rect(ctx, {x - 4, r.y + 1, 8, 8}, engine.MADE_COLOR)
+		ui.fill_rect(ctx, {x - 1, r.y + 9, 2, r.h - 14}, engine.MADE_COLOR)
 	}
 	// The heading's mark.
 	c := r.x + r.w / 2

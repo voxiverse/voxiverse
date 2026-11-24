@@ -256,12 +256,14 @@ apply_edit_cells :: proc(
 	switch {
 	case kind == .Break:
 		record(s, c, .Block_Mined, game.block_name(s.registry, current), at = e.pos)
+		quest_note(s, c, {goal = .Break, block = current, count = 1})
 	case kind == .Toggle:
 		record(s, c, .Item_Used, game.block_name(s.registry, e.block), at = e.pos)
 	case tilling:
 		record(s, c, .Item_Used, "hoe", at = e.pos)
 	case:
 		record(s, c, .Block_Placed, game.block_name(s.registry, e.block), at = e.pos)
+		quest_note(s, c, {goal = .Place, block = e.block, count = 1})
 	}
 	if kind == .Break {
 		broken_drop(s, c, e.pos, current)

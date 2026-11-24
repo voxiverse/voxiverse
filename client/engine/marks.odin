@@ -327,6 +327,49 @@ logbook_here :: proc(s: ^Session, p: ^game.Logbook_Place) -> bool {return(
 		s.logbook.here \
 	)}
 
+// The quests as the HUD and the player menu show them (the server keeps them: game.Quest_Log,
+// Session.quests; their steps are the registry's).
+
+// quest_tracked: the quest the HUD's tracker follows and the compass and the map point for:
+// the one the player picked in the journal while it is under way, else the first under way
+// in the registry's order; -1 when none is, or the player's quests do not count (it cannot
+// be hurt: creative, a watcher; as the server judges it, core.quest_note).
+quest_tracked :: proc(s: ^Session) -> int {
+	if len(s.reg.quests) == 0 ||
+	   !session_ability(s, .Health) ||
+	   session_ability(s, .Invulnerable) ||
+	   session_ability(s, .Spectate) ||
+	   session_ability(s, .Bodiless) {return -1}
+	log := &s.quests.log
+	n := min(len(s.reg.quests), game.MAX_QUESTS)
+	if pick := s.quest_pick - 1; pick >= 0 && pick < n && game.quest_open(s.reg, log, pick) {
+		return pick
+	}
+	for q in 0 ..< n {if game.quest_open(s.reg, log, q) {return q}}
+	return -1
+}
+
+// quest_way: the place in the world the player is in, of its logbook, nearest to it, that
+// quest q's step points at (its game.Quest_Way); nil when it points nowhere or the logbook
+// has no such place here (a way reveals nothing the player has not found).
+quest_way :: proc(s: ^Session, q: int) -> ^game.Logbook_Place {
+	if q < 0 || q >= min(len(s.reg.quests), game.MAX_QUESTS) {return nil}
+	step := game.quest_step(s.reg, &s.quests.log, q)
+	if step == nil {return nil}
+	way, has := step.way.?
+	if !has {return nil}
+	best: ^game.Logbook_Place
+	best_d := f64(1e30)
+	j := &s.logbook.logbook
+	for &p in j.places[:j.place_count] {
+		if p.kind != way.kind || !logbook_here(s, &p) {continue}
+		if way.name != "" && game.place_name(&p) != way.name {continue}
+		d := logbook_place_at(&p) - s.feet
+		if far := d.x * d.x + d.z * d.z; far < best_d {best, best_d = &p, far}
+	}
+	return best
+}
+
 // The minimap's ground (client/overview draws it; the player menu's map too): a map seen
 // from above, each cell the colour of its top block, read a few rows a frame.
 

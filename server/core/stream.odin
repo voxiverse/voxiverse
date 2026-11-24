@@ -95,6 +95,7 @@ Client :: struct {
 	aside:           Maybe(game.Inventory), // its inventory set aside (inventory_set_aside): its slots, equipment and cursor, kept with its character
 	character_data:  game.Character_Data, // the game's record on its character (character_data; player_data.odin)
 	logbook:         game.Logbook, // its character's places found and creatures met (logbook_place; player_data.odin)
+	quests:          game.Quest_Log, // its character's progress in the registry's quests (quest_note; player_data.odin)
 	stats:           Counters, // its character's counters (stats.odin; heap, keys owned)
 	joined_tick:     u64, // when it joined (session length)
 	last_position:   [3]f64, // for distance counters

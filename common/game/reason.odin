@@ -21,6 +21,7 @@ Reason :: enum u8 {
 	Scope_Out, // left memory: a player left, a world unloaded
 	Orphaned, // held by a block entity whose block no longer has one (dropped on load)
 	Game, // given or taken by the game's rules (a currency, a purchase: core.item_give)
+	Quest, // a quest's reward (core.quest_note)
 }
 
 // reason_name: in the log and in reports.
@@ -58,6 +59,8 @@ reason_name :: proc(r: Reason) -> string {
 		return "orphaned"
 	case .Game:
 		return "game"
+	case .Quest:
+		return "quest"
 	}
 	return ""
 }

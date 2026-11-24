@@ -41,6 +41,7 @@ State_Kind :: enum u8 {
 	Machine,
 	Belt,
 	Logbook,
+	Quests,
 }
 
 Event_Kind :: enum u8 {
@@ -180,6 +181,13 @@ Logbook_State :: struct {
 	logbook: game.Logbook,
 }
 
+// Quest_State: the player's quests (game.Quest_Log: how far it is in each quest of the
+// registry; kept with the character), from which the Journal's Quests page, the HUD's
+// tracker and the compass's quest mark read.
+Quest_State :: struct {
+	log: game.Quest_Log,
+}
+
 // Player_Died: the player died, of cause (sent before they land at the spawn).
 Player_Died :: struct {
 	cause:    string `net:"max=32"`, // a Source_Kind's name
@@ -301,6 +309,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		check = check_belt_record,
 	},
 	.Logbook = {name = "logbook", value = Logbook_State, check = check_logbook},
+	.Quests = {name = "quests", value = Quest_State, check = check_quests},
 }
 
 @(rodata)
@@ -399,6 +408,11 @@ check_inventory :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 @(private = "file")
 check_logbook :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	return game.logbook_valid(reg, &(^Logbook_State)(v).logbook)
+}
+
+@(private = "file")
+check_quests :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	return game.quest_log_valid(reg, &(^Quest_State)(v).log)
 }
 
 @(private = "file")

@@ -62,6 +62,7 @@ game_event :: proc(s: ^Server, c: ^Client, value: ^$T) {
 replicate_tick :: proc(s: ^Server, c: ^Client) {
 	players_put(s, c)
 	entities_put(s, c)
+	if c.inv_changed {quests_settle(s, c)} 	// (what it carries may finish a step; a reward adds to it)
 	inv := protocol.Inventory_State{c.inv_acked, c.inventory}
 	state_put(s, c, .Inventory, &inv)
 	c.inv_changed = false
@@ -70,6 +71,8 @@ replicate_tick :: proc(s: ^Server, c: ^Client) {
 	island_put(s, c)
 	logbook := protocol.Logbook_State{c.world.address, c.logbook}
 	state_put(s, c, .Logbook, &logbook)
+	quests := protocol.Quest_State{c.quests}
+	state_put(s, c, .Quests, &quests)
 	if c.clock_pending || s.time_stopped {
 		c.clock_pending = false
 		clock := protocol.Clock{c.world.clock, u32(s.tick)}

@@ -236,7 +236,7 @@ net_apply :: proc(c: ^Net_Client, got: []protocol.Received) {
 		case .Mode:
 			delete(c.mode)
 			c.mode = strings.clone((^protocol.Mode_Record)(g.value).mode)
-		case .Rules, .Clock, .Variables, .Selection, .Machine, .Belt, .Logbook:
+		case .Rules, .Clock, .Variables, .Selection, .Machine, .Belt, .Logbook, .Quests:
 		case .Island:
 			c.island = (^protocol.Island)(g.value)^
 		case .Tally:

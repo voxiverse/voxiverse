@@ -57,12 +57,13 @@ gate_open :: proc(s: ^Server, c: ^Client, d: protocol.Open_Gate) -> string {
 	gs, is_gate := worldgen.gate_containing(&w.chunks.gen, d.gate)
 	if !is_gate {return "that is not a gate"}
 	here := gate_find(w, gs)
-	if here != nil && here.phase == .Dead {return "the gate is dark"}
 	if !starmap.address_valid(d.address) {return "that is not an address"}
 	centre := worldgen.gate_at(gs, 5, 5)
 	dx := c.player.position - {f64(centre.x), f64(centre.y), f64(centre.z)}
 	if dx.x * dx.x + dx.y * dx.y + dx.z * dx.z >
 	   GATE_REACH * GATE_REACH {return "the gate is too far"}
+	quest_note(s, c, {goal = .Address, count = 1}) // (an address written on it, whatever answers)
+	if here != nil && here.phase == .Dead {return "the gate is dark"}
 	if here != nil {return "the gate is busy"}
 	if d.address.galaxy != w.address.galaxy {return "this gate reaches only its own galaxy"}
 	if d.address == w.address {return "a gate cannot open onto its own world"}
