@@ -245,3 +245,16 @@ Each creation reports its time and whether the cache supplied it (Vulkan 1.3's p
 creation feedback): per pipeline at debug level (`gpu pipeline built`), in total at exit
 (`gpu pipelines built=N from_cache=N ms=X`), and as `create pipeline` scopes in a trace.
 
+
+## Block textures
+
+The block textures are drawn by code at build time (`client/texture`, run by `tools/atlas`),
+16 x 16 each, from a material's ramp of five shades. They follow one style rule, taken from the
+gate's slab (written out in `client/texture/generator.odin`): the body two neighbouring steps of
+the ramp in broad soft patches, a third step for lit edges and a fourth for grooves; neighbours
+a step apart, two only at the structure; features of three pixels and more, one clear structure
+a material; structure drawn by light (a lit top-left edge, a step of shade beneath), never a
+dark outline round each piece; and almost no per-pixel variation. `test_textures_have_no_speckle`
+holds the last: at most 5% of a tiling texture's pixels may be unlike all eight round them.
+`./build.sh sheet` draws them all to look at (`build/sheets/`), tiled 3 x 3 so repetition shows,
+and the `textures_wall` scene shows the common ones side by side at play distance.

@@ -79,19 +79,19 @@ RUNE := [10]string {
 	"...##...",
 }
 
-// mossy_bricks: stone bricks overgrown: moss along the tops of the bricks and in their
-// joints, hanging down a pixel or two here and there.
+// mossy_bricks: stone bricks overgrown: cushions of moss over them, lit along each
+// brick's top and dark in the joints, creeping along the bricks' tops at their edges.
 @(private)
 mossy_bricks :: proc(seed: u32, x, y: int) -> Rgba {
 	course := wrap(y) / 4
 	b := brick(x + (course % 2) * 4, y, 8, 4)
-	growth := noise(seed ~ 1, x, y, 4, 4)
-	if growth > 0.42 {
-		if b.joint && b.v == 3 {return MOSS[1] if growth > 0.5 else MOSS[0]}
-		if b.v == 0 {return MOSS[3] if growth > 0.55 else MOSS[2]}
-		// Strands hanging from the moss above.
-		if b.v == 1 && hash01(seed ~ 2, x, course) > 0.6 {return MOSS[1]}
+	growth := noise(seed ~ 0x3, x, y, 4, 4)
+	if growth > 0.55 {
+		// A cushion over the bricks: lit along each brick's top, dark in the joints.
+		if b.joint {return MOSS[1]}
+		return MOSS[3] if b.v == 0 else MOSS[2]
 	}
+	if growth > 0.45 && b.v == 0 && !b.joint {return MOSS[2]} 	// its creeping edge
 	return bricks(STONE_ROCK, seed, x, y, 8, 4)
 }
 
@@ -127,7 +127,6 @@ bone :: proc(seed: u32, x, y: int) -> Rgba {
 	if v == 0 || (v == 1 && !knob) {s = 4}
 	if v == 3 || (v == 2 && !knob) {s = 1}
 	if knob && v == 1 {s = 3}
-	if hash01(seed ~ 2, x, y) > 0.94 {s -= 1}
 	return step(BONE, s)
 }
 
@@ -141,7 +140,7 @@ crystal :: proc(seed: u32, x, y: int) -> Rgba {
 	s := 1 + int(hash01(c.id, 0, 0) * 1.99)
 	if lean > 0.3 {s += 1}
 	if lean < -0.4 {s -= 1}
-	if hash01(seed ~ 1, x, y) > 0.97 {s = 4}
+	if hash01(seed ~ 1, x, y) > 0.985 {s = 4}
 	return step(CRYSTAL, s)
 }
 
@@ -151,13 +150,11 @@ crystal :: proc(seed: u32, x, y: int) -> Rgba {
 magma :: proc(seed: u32, x, y: int) -> Rgba {
 	c := cells(seed, x, y, 3)
 	gap := c.d2 - c.d1
-	if gap < 0.5 {return LAVA[4]}
-	if gap < 1.0 {return LAVA[2]}
-	if gap < 1.4 {return LAVA[0]}
+	if gap < 0.8 {return LAVA[3]}
+	if gap < 1.4 {return LAVA[1]}
 	lean := -(c.dx + c.dy) / 3
 	s := 1 + int(hash01(c.id, 0, 0) > 0.5)
 	if lean > 0.4 {s += 1}
-	if hash01(seed ~ 1, x, y) > 0.95 {return LAVA[0]} 	// a glow through a pore
 	return step(CRUST, s)
 }
 

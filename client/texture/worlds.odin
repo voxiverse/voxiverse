@@ -132,36 +132,37 @@ worlds_pixel :: proc(g: Generator, seed: u32, x, y: int) -> (Rgba, bool) {
 		return rough(RED_ROCK_ROCK, seed, x, y), true
 	case .Ash:
 		// Fine dark powder in soft drifts, a pale fleck of pumice here and there.
-		v := 0.2 + 0.5 * fbm(seed, x, y, 4, 2) + 0.3 * (fine - 0.5)
-		if fine > 0.96 {v = 0.95}
-		return pick(ASH, v), true
+		if fine > 0.985 {return ASH[4], true}
+		return step(ASH, 1 + int(fbm(seed, x, y, 3, 2) > 0.58)), true
 	case .Regolith:
 		// Grey dust, fine and even, pitted by small craters: a dark rim lit on its
 		// lower right, where the light falls in.
 		c := cells(seed, x, y, 5)
-		if hash01(c.id, 4, 0) < 0.3 && c.d1 < 1.3 {
-			return step(REGOLITH, 3 if c.dx + c.dy > 0 else 0), true
+		if hash01(c.id, 4, 0) < 0.2 && c.d1 < 1.7 {
+			return step(REGOLITH, 3 if c.dx + c.dy > 0.3 else 1), true
 		}
-		return pick(REGOLITH, 0.35 + 0.3 * fbm(seed ~ 1, x, y, 4, 2) + 0.25 * (fine - 0.5)), true
+		return step(REGOLITH, 2 + int(fbm(seed ~ 1, x, y, 2, 2) > 0.55)), true
 	case .Mycelium_Top:
 		return mycelium(seed, x, y), true
 	case .Mycelium_Side:
 		// The fuzz hanging over the earth, threads further down here and there.
-		edge := 2 + int(hash01(seed ~ 3, x, 0) * 2.99)
-		if hash01(seed ~ 4, x, 0) > 0.75 {edge += 3}
+		edge := 3 + int(noise(seed ~ 3, x, 0, 6, 1) > 0.5)
+		if hash01(seed ~ 4, x, 0) > 0.8 {edge += 2}
 		v := wrap(y)
 		switch {
-		case v < edge:
+		case v < edge - 1:
 			return mycelium(seed, x, y), true
+		case v == edge - 1:
+			return MYCELIUM[1], true
 		case v == edge:
-			return MYCELIUM[0], true
+			return DIRT[1], true
 		}
 		return dirt(seed_of(.Dirt), x, y), true
 	case .Fungus_Stem:
 		// Pale fibres running up the stem, a darker one here and there.
-		v := 0.45 + 0.35 * (noise(seed, x, y, 16, 2) - 0.5) + 0.2 * (fine - 0.5)
-		if hash01(seed ~ 1, x, 0) > 0.85 {v -= 0.3}
-		return pick(STEM, v), true
+		s := 2 + int(noise(seed, x, y, 8, 2) > 0.6)
+		if hash01(seed ~ 1, x, 0) > 0.85 {s = 1}
+		return step(STEM, s), true
 	case .Fungus_Cap:
 		return cap_of(CAP, STEM, seed, x, y), true
 	case .Glow_Cap:
@@ -203,7 +204,7 @@ worlds_pixel :: proc(g: Generator, seed: u32, x, y: int) -> (Rgba, bool) {
 		dx, dy := f32(x) + 4, f32(y) + 12
 		band := int((dx * dx + dy * dy) / 40 + 2 * noise(seed, x, y, 4, 4))
 		TINTS := [3][3]i32{{10, -6, 4}, {-6, 8, 0}, {-4, 2, 12}}
-		c := pick(NACRE, 0.35 + 0.3 * f32(band % 3) / 2 + 0.2 * (fine - 0.5))
+		c := step(NACRE, 2 + int(band % 3 == 1))
 		if band % 4 == 0 {c = NACRE[1]}
 		t := TINTS[band % 3]
 		return {
@@ -224,7 +225,7 @@ mycelium :: proc(seed: u32, x, y: int) -> Rgba {
 	c := cells(seed, x, y, 4)
 	s := 2 + int(fbm(seed ~ 2, x, y, 2, 2) > 0.55)
 	if c.d2 - c.d1 < 0.6 {s = 1}
-	if hash01(seed ~ 5, x, y) > 0.94 {s = 4}
+	if c.d1 < 0.8 && hash01(c.id, 5, 0) > 0.7 {s = 4} 	// a pale strand's knot
 	return step(MYCELIUM, s)
 }
 
@@ -237,7 +238,7 @@ cap_of :: proc(ramp, spots: Ramp, seed: u32, x, y: int) -> Rgba {
 		if c.d1 < 1.2 {return spots[4] if c.dx + c.dy < 0 else spots[3]}
 		if c.d1 < 1.7 {return ramp[0]}
 	}
-	return pick(ramp, 0.35 + 0.35 * fbm(seed, x, y, 2, 2) + 0.15 * (hash01(seed ~ 1, x, y) - 0.5))
+	return step(ramp, 2 + int(fbm(seed, x, y, 2, 2) > 0.5))
 }
 
 // sprout: a few thin violet stalks from the bottom edge, each with a round pale head.
@@ -254,30 +255,4 @@ sprout :: proc(seed: u32, x, y: int) -> Rgba {
 		if x == sx && y > head {return step(MYCELIUM, 1 + int(y > SIZE - 4))}
 	}
 	return {}
-}
-
-// ore_in: ore as `ore` draws it, set in another rock (host, drawn by its own generator's
-// seed so ore and rock meet without a seam).
-@(private = "file")
-ore_in :: proc(
-	host: Rock,
-	host_generator: Generator,
-	ramp: Ramp,
-	seed: u32,
-	x, y, n: int,
-	radius, chance: f32,
-) -> (
-	c: Rgba,
-	inside: bool,
-) {
-	cell := cells(seed ~ 9, x, y, n)
-	r := radius * (0.75 + 0.5 * hash01(cell.id, 2, 0))
-	d := cell.d1 + 0.9 * (noise(seed ~ 11, x, y, 8, 8) - 0.5)
-	present := hash01(cell.id, 3, 0) < chance
-	if present && d < r {
-		v := 0.5 + 0.4 * clamp(-(cell.dx + cell.dy) / (r + 0.5), -1, 1)
-		return pick(ramp, v + 0.15 * (hash01(seed, x, y) - 0.5)), true
-	}
-	if present && d < r + 0.6 {return host.ramp[0], false}
-	return rough(host, seed_of(host_generator), x, y), false
 }

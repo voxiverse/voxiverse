@@ -158,9 +158,9 @@ thatch :: proc(seed: u32, x, y: int) -> Rgba {
 	v := wrap(y) % 8
 	column := wrap(x + course * 5)
 	length := 6 + int(hash01(seed ~ 1, column, course) * 2.99) // where this strand ends
-	if v >= length {return THATCH[0]} 	// between strands' ends, the shadow under them
-	s := 1 + int(hash01(seed ~ 2, column, course) * 2.99)
-	if v <= 1 {s -= 1} 	// under the course above
+	if v >= length {return THATCH[1]} 	// between strands' ends, the shadow under them
+	s := 2 + int(hash01(seed ~ 2, column / 2, course) > 0.6)
+	if v == 0 {s -= 1} 	// under the course above
 	if v == length - 1 {s += 1} 	// a strand's lit end
 	return step(THATCH, s)
 }
@@ -191,7 +191,6 @@ roof :: proc(ramp: Ramp, seed: u32, x, y: int, round: bool) -> Rgba {
 		s = 1 + int(hash01(seed ~ 1, b.index, course) * 2.99)
 		if b.v == 1 {s += 1}
 	}
-	if hash01(seed ~ 2, x, y) > 0.95 {s -= 1}
 	return step(ramp, s)
 }
 
@@ -202,9 +201,7 @@ woven :: proc(ramp: Ramp, seed: u32, x, y: int) -> Rgba {
 	u, v := wrap(x), wrap(y)
 	across := (u / 4 + v / 4) % 2 == 0
 	along := v % 2 if across else u % 2
-	s := 3 if along == 0 else 2
-	if hash01(seed ~ 1, x, y) > 0.94 {s -= 1}
-	return step(ramp, s)
+	return step(ramp, 3 if along == 0 else 2)
 }
 
 // carpet: a woven rug's pattern, a block across: a dark border with a gold line, a red
@@ -249,10 +246,10 @@ bookshelf :: proc(seed: u32, x, y: int) -> Rgba {
 mud :: proc(seed: u32, x, y: int) -> Rgba {
 	if fbm(seed ~ 1, x, y, 2, 2) > 0.6 {
 		// A puddle: flat and dark, its far edge catching the sky.
-		return MUD[4] if hash01(seed ~ 2, x, y) > 0.8 else MUD[3]
+		return MUD[4] if hash01(seed ~ 2, x, y) > 0.92 else MUD[3]
 	}
 	c := cells(seed, x, y, 4)
-	if c.d2 - c.d1 < 0.7 {return MUD[0]}
+	if c.d2 - c.d1 < 0.7 {return MUD[1]}
 	lean := -(c.dx + c.dy) / 2.5
 	s := 1 + int(hash01(c.id, 0, 0) > 0.5)
 	if lean > 0.45 {s += 1}
@@ -263,41 +260,42 @@ mud :: proc(seed: u32, x, y: int) -> Rgba {
 // top left, the cracks dark between.
 @(private)
 dry_earth :: proc(seed: u32, x, y: int) -> Rgba {
-	c := cells(seed, x, y, 4)
+	c := cells(seed, x, y, 3)
 	gap := c.d2 - c.d1
-	if gap < 0.8 {return DRY_EARTH[0]}
+	if gap < 0.8 {return DRY_EARTH[1]}
 	lean := -(c.dx + c.dy)
 	s := 2 + int(hash01(c.id, 0, 0) > 0.6)
 	if gap < 1.7 {s += 1 if lean > 0 else -1}
 	return step(DRY_EARTH, s)
 }
 
-// turf: short blades seen from above, a stroke two pixels long each, lit at its tip, over
-// patches of darker and lighter growth.
+// turf: a turf seen from above: broad soft patches of two greens, with short blades
+// scattered over them, each a stroke two pixels long lit at its tip.
 @(private)
 turf :: proc(ramp: Ramp, seed: u32, x, y: int) -> Rgba {
-	shift := int(hash01(seed ~ 1, x, 0) * 16)
-	row := wrap(y + shift)
-	blade := hash01(seed, x, row / 2)
-	s := 1 + int(fbm(seed ~ 2, x, y, 2, 2) > 0.5) + int(blade > 0.55)
-	if row % 2 == 0 && blade > 0.55 {s += 1}
+	s := 2 + int(fbm(seed ~ 2, x, y, 3, 2) > 0.55)
+	c := cells(seed ~ 9, x, y, 6)
+	if hash01(c.id, 1, 0) > 0.35 && abs(c.dx) < 0.5 && c.dy > -1 && c.dy < 1 {
+		return step(ramp, s + 1 + int(c.dy < 0 && s == 3)) // a blade, its tip the lighter
+	}
 	return step(ramp, s)
 }
 
-// turf_side: a side under turf: the grass hanging two to four pixels over the earth, a
-// blade further here and there, its shadow under it.
+// turf_side: a side under turf: the turf three or four pixels deep over the earth, its
+// edge clean, a blade or two hanging a little further, its lowest row a step darker and a
+// row of the earth in its shadow under it.
 @(private)
 turf_side :: proc(top: Ramp, seed: u32, x, y: int) -> Rgba {
-	edge := 2 + int(hash01(seed ~ 3, x, 0) * 2.99)
-	if hash01(seed ~ 4, x, 0) > 0.8 {edge += 2}
+	edge := 3 + int(noise(seed ~ 3, x, 0, 6, 1) > 0.5)
+	if hash01(seed ~ 4, x, 0) > 0.85 {edge += 1 + int(hash01(seed ~ 5, x, 0) > 0.5)}
 	v := wrap(y)
 	switch {
-	case v < edge:
+	case v < edge - 1:
 		return turf(top, seed, x, y)
+	case v == edge - 1:
+		return top[1]
 	case v == edge:
-		return top[0]
-	case v == edge + 1:
-		return DIRT[0]
+		return DIRT[1]
 	}
 	return dirt(seed_of(.Dirt), x, y)
 }
@@ -312,9 +310,9 @@ snow_side :: proc(seed: u32, x, y: int) -> Rgba {
 	case v < edge:
 		return SNOW[4] if v == 0 else SNOW[3]
 	case v == edge:
-		return SNOW[0]
+		return SNOW[1]
 	case v == edge + 1:
-		return DIRT[0]
+		return DIRT[1]
 	}
 	return dirt(seed_of(.Dirt), x, y)
 }
@@ -327,8 +325,7 @@ dunes :: proc(ramp: Ramp, seed: u32, x, y: int) -> Rgba {
 	s := 2 + int(band > 0.55)
 	if band < 0.25 {s = 1}
 	h := hash01(seed ~ 2, x, y)
-	if h > 0.9 {s -= 1}
-	if h < 0.07 {s += 1}
+	if h > 0.98 {s -= 1}
 	return step(ramp, s)
 }
 
@@ -337,12 +334,12 @@ dunes :: proc(ramp: Ramp, seed: u32, x, y: int) -> Rgba {
 @(private)
 moss :: proc(seed: u32, x, y: int) -> Rgba {
 	c := cells(seed, x, y, 4)
-	if c.d2 - c.d1 < 0.7 {return MOSS[0]}
+	if c.d2 - c.d1 < 0.7 {return MOSS[1]}
 	lean := -(c.dx + c.dy) / 2.5
 	s := 2
 	if lean > 0.4 {s = 3}
 	if lean < -0.5 {s = 1}
-	if hash01(seed ~ 1, x, y) > 0.93 {s = 4}
+	if lean > 0.4 && c.d1 < 0.9 && hash01(c.id, 1, 0) > 0.6 {s = 4} 	// a bright tip
 	return step(MOSS, s)
 }
 
@@ -351,15 +348,13 @@ moss :: proc(seed: u32, x, y: int) -> Rgba {
 @(private)
 foliage :: proc(ramp: Ramp, seed: u32, x, y: int) -> Rgba {
 	c := cells(seed, x, y, 4)
-	if c.d1 > 2.7 && hash01(seed ~ 1, x, y) > 0.35 {return {}} 	// a gap
+	if c.d1 > 2.8 {return {}} 	// a gap
 	r := ramp
-	if c.d2 - c.d1 < 0.6 {return r[0]}
+	if c.d2 - c.d1 < 0.6 {return r[1]}
 	lean := -(c.dx + c.dy) / 2.5
 	s := 2
 	if lean > 0.35 {s = 3}
-	if lean > 0.9 {s = 4}
 	if lean < -0.5 {s = 1}
-	if hash01(seed ~ 2, x, y) > 0.9 {s -= 1}
 	return step(r, s)
 }
 
@@ -373,6 +368,6 @@ ice_of :: proc(ramp: Ramp, seed: u32, x, y, n: int) -> Rgba {
 	if gap < 0.8 {return ramp[4] if lean > -0.2 else ramp[0]}
 	s := 1 + int(hash01(c.id, 0, 0) * 1.99)
 	if lean > 0.5 {s += 1}
-	if hash01(seed ~ 1, x, y) > 0.97 {s = 4} 	// a bubble
+	if hash01(seed ~ 1, x, y) > 0.985 {s = 4} 	// a bubble
 	return step(ramp, s)
 }

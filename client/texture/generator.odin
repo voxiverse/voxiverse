@@ -176,6 +176,24 @@ Generator :: enum u32 {
 // toolkit (toolkit.odin) only says how light a pixel is, so pixels form
 // crisp clusters of a few tones. The materials with form, the rock, soil,
 // wood and masonry, are drawn in material.odin; the kit's, in kit_*.odin.
+//
+// The style rule, from the gate's slab (the reference: plain, calm, read at
+// once). Every texture follows it:
+//
+//   - Few tones: the body is two neighbouring steps of the ramp, in broad
+//     soft patches (noise of two to four points across, never per pixel); a
+//     third step lights edges, a fourth shades grooves. The ends of the ramp
+//     are for structure and for sparse accents only.
+//   - Low contrast between neighbours: next to each other, pixels differ by
+//     one step; a jump of two only where the structure is (a joint, a gap).
+//   - Features of three pixels and more; one clear structure per material
+//     (dirt a few soft clods, stone a few cracks that run and stop, grass
+//     short blades over two greens, bark furrows up the trunk).
+//   - Structure drawn with light, not outlined: a lit edge on the top left,
+//     a step of shade at the foot or in the groove, never a dark line drawn
+//     all round a piece.
+//   - Almost no per-pixel variation: a fleck here and there at most (a pixel
+//     unlike all eight round it is grit: test_textures_have_no_speckle).
 generate :: proc(t: Generator, pixels: []Rgba) {
 	assert(len(pixels) == SIZE * SIZE)
 	seed := u32(t) * 0x9e37_79b9
@@ -225,28 +243,16 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 	case .Dirt:
 		return dirt(seed, x, y)
 	case .Grass_Top:
-		return grass(seed, x, y)
+		return turf(GRASS, seed, x, y)
 	case .Grass_Side:
-		// Grass hangs 2-4 pixels over the dirt, a blade further here and
-		// there, with a shadow under it.
-		edge := 2 + int(hash01(seed ~ 3, x, 0) * 2.99)
-		if hash01(seed ~ 4, x, 0) > 0.8 {edge += 2}
-		switch {
-		case y < edge:
-			return grass(seed, x, y)
-		case y == edge:
-			return GRASS[0]
-		case y == edge + 1:
-			return DIRT[0] if fine > 0.5 else DIRT[1]
-		}
-		return dirt(seed, x, y)
+		return turf_side(GRASS, seed, x, y)
 	case .Farmland_Top, .Farmland_Moist_Top:
 		// Furrows: rows of tilled earth, lit on their tops, darker where wet.
 		ramp := FARMLAND_WET if t == .Farmland_Moist_Top else FARMLAND
-		v := 0.4 + 0.25 * coarse + 0.2 * (fine - 0.5)
-		if y % 4 == 0 {v -= 0.3}
-		if y % 4 == 1 {v += 0.2}
-		return pick(ramp, v)
+		s := 2 + int(coarse > 0.6)
+		if y % 4 == 0 {s = 1}
+		if y % 4 == 1 {s += 1}
+		return step(ramp, s)
 	case .Sand:
 		return dunes(SAND, seed, x, y)
 	case .Sandstone_Side:
@@ -265,7 +271,7 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 	case .Water:
 		// Ripples: soft horizontal bands; see-through (alpha).
 		band := noise(seed ~ 23, x + y / 3, y, 4, 4)
-		return pick(WATER, 0.25 + 0.5 * band + 0.25 * fine)
+		return step(WATER, 1 + int(band > 0.45) + int(band > 0.75))
 	case .Lamp:
 		// A framed panel: dark rim, a grid of warm cells, hot centres.
 		edge := x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1
@@ -284,9 +290,9 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 	case .Spruce_Log_Side:
 		return bark_of(SPRUCE, seed, x, y)
 	case .Log_Top:
-		return rings(seed, x, y)
+		return rings_of(OAK, seed, x, y)
 	case .Planks:
-		return plank(seed, x, y)
+		return planks_of(OAK, seed, x, y)
 	case .Leaves:
 		return foliage(LEAVES, seed, x, y)
 	case .Spruce_Leaves:
@@ -305,10 +311,10 @@ pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 		// Ribs with pale spines.
 		if x == 0 || x == SIZE - 1 {return CACTUS[0]}
 		if x % 4 == 3 && y % 4 == 1 {return SAND[4]}
-		return pick(CACTUS, 0.25 + 0.3 * f32(x % 4 == 1 ? 1 : 0) + 0.25 * fine)
+		return step(CACTUS, 2 + int(x % 4 == 1))
 	case .Cactus_Top:
 		if x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1 {return CACTUS[0]}
-		return pick(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
+		return step(CACTUS, 2 + int(coarse > 0.55))
 	case .Wheat_0, .Wheat_1, .Wheat_2, .Wheat_3, .Wheat_4, .Wheat_5, .Wheat_6, .Wheat_7:
 		return wheat_pixel(int(t) - int(Generator.Wheat_0), seed, x, y)
 	case .Glass:

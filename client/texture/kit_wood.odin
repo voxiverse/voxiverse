@@ -89,114 +89,113 @@ REDWOOD := Wood{REDWOOD_WOOD, REDWOOD_BARK, .Fibrous}
 @(private)
 WEATHERED := Wood{WEATHERED_WOOD, WEATHERED_BARK, .Split}
 
-// bark_of: a log's side: strips of bark running up the trunk, of widths of their own,
-// each broken into pieces down it; a strip's left edge lit, its right in shadow, a furrow
-// between strips. The species says how wide, how broken and how deep.
+// Furrows: how a species' bark is cut up its length. A furrow is a groove a pixel or two
+// wide that wanders across as it runs up the trunk and closes here and there, where the
+// ridges either side of it meet; count of them across, how far each may wander, how much
+// of its length is open and how often it is two pixels wide.
+@(private = "file")
+Furrows :: struct {
+	count:  int,
+	wander: f32, // pixels either way
+	open:   f32, // 0..1: the share of its length that is open, about
+	wide:   f32, // 0..1: the share of it two pixels wide, about
+	ridge:  int, // the ridges' tone, the step of the ramp most of the bark is
+}
+
+@(private = "file", rodata)
+FURROWS := [Bark_Style]Furrows {
+	.Plated = {count = 4, wander = 1.2, open = 0.7, wide = 0.35, ridge = 2},
+	.Papery = {ridge = 3}, // (birch_bark draws it)
+	.Scaly = {count = 6, wander = 1.0, open = 0.6, wide = 0.25, ridge = 2},
+	.Fibrous = {count = 6, wander = 0.6, open = 0.85, wide = 0.1, ridge = 2},
+	.Split = {count = 3, wander = 0.8, open = 0.6, wide = 0.15, ridge = 3},
+}
+
+// bark_of: a log's side: ridges of bark running up the trunk between furrows of widths
+// and lengths of their own, irregularly spaced, each wandering a little; a furrow's far
+// wall catches the light. The ridges are two close tones in long soft patches; nothing is
+// outlined and nothing repeats on a grid. The species says how many, how long, how straight.
 @(private)
 bark_of :: proc(w: Wood, seed: u32, x, y: int) -> Rgba {
 	if w.style == .Papery {return birch_bark(w, seed, x, y)}
-	// The strips across the texture: their widths sum to SIZE (a 0 ends the list).
-	widths: [8]int
-	switch w.style {
-	case .Plated, .Papery:
-		widths = {5, 3, 4, 4, 0, 0, 0, 0}
-	case .Scaly:
-		widths = {3, 3, 2, 3, 3, 2, 0, 0}
-	case .Fibrous:
-		widths = {2, 3, 2, 2, 3, 2, 2, 0}
-	case .Split:
-		widths = {6, 4, 6, 0, 0, 0, 0, 0}
+	f := FURROWS[w.style]
+	u := wrap(x)
+	// Long soft patches up the ridges: two tones.
+	s := f.ridge + int(noise(seed ~ 5, x, y, 3, 2) > 0.62)
+	spacing := f32(SIZE) / f32(f.count)
+	for k in 0 ..< f.count {
+		// Its place across: spaced about evenly, each pushed off its place.
+		at := f32(k) * spacing + 0.3 * spacing + 0.4 * spacing * hash01(seed ~ 1, k, 0)
+		at += f.wander * (2 * noise(seed ~ u32(16 + k), 0, y, 1, 3) - 1)
+		col := wrap(int(math.floor(at)))
+		open := noise(seed ~ u32(32 + k), 0, y, 1, 4) < f.open
+		if !open {continue}
+		width := 2 if noise(seed ~ u32(48 + k), 0, y, 1, 2) < f.wide else 1
+		d := wrap(u - col)
+		if d < width {return step(w.bark, f.ridge - 1)}
+		if d == width {s = max(s, f.ridge + 1)} 	// the furrow's far wall, lit
 	}
-	strip, u, left := 0, wrap(x), 0
-	for width, i in widths {
-		if u < left + width {
-			strip = i
-			break
-		}
-		left += width
-	}
-	width := widths[strip]
-	u -= left
-	if u == width - 1 && w.style != .Split {return w.bark[0]} 	// the furrow
-	// Breaks down the strip: its pieces, each its own tone.
-	pieces := 4 if w.style == .Scaly else 2
-	length := SIZE / pieces
-	shift := int(hash01(seed ~ 1, strip, 0) * f32(length))
-	row := wrap(y + shift)
-	piece := row / length
-	if row % length == 0 && w.style != .Fibrous {return w.bark[0 if w.style != .Split else 1]}
-	s := 1 + int(hash01(seed ~ 2, strip, piece) * 2.99)
-	if u == 0 {s += 1}
-	if u == width - 2 {s -= 1}
-	if row % length == 1 {s += 1} 	// the top of a piece, under the break
-	if w.style == .Split &&
-	   u ==
-		   width -
-			   1 {return w.bark[0] if hash01(seed ~ 3, strip, row / 3) > 0.4 else step(w.bark, s)}
-	if w.style == .Fibrous && hash01(seed ~ 4, x, row / 4) > 0.75 {s -= 1}
 	return step(w.bark, s)
 }
 
-// birch_bark: pale and smooth, with dark dashes across it (lenticels) and a black scar
-// where a branch was.
+// birch_bark: pale and smooth in broad soft patches, with short grey dashes across it
+// (lenticels) on rows of their own, and a dark scar here and there where a branch was.
 @(private)
 birch_bark :: proc(w: Wood, seed: u32, x, y: int) -> Rgba {
-	// Dashes: rows of them, two to five pixels long, at places of their own.
+	// Dashes: on some rows (never two together), two to four pixels long.
 	row := wrap(y)
-	if row % 4 == 1 {
-		dash := wrap(x + int(hash01(seed ~ 1, row / 4, 0) * 16)) / 4
-		u := wrap(x + int(hash01(seed ~ 1, row / 4, 0) * 16)) % 4
-		if hash01(seed ~ 2, dash, row / 4) > 0.35 && u < 3 {return w.bark[0]}
+	if hash01(seed ~ 1, row, 0) > 0.65 && hash01(seed ~ 1, wrap(row - 1), 0) <= 0.65 {
+		shift := int(hash01(seed ~ 7, row, 0) * 16)
+		dash := wrap(x + shift) / 5
+		u := wrap(x + shift) % 5
+		if hash01(seed ~ 2, dash, row) > 0.5 && u < 2 + int(hash01(seed ~ 8, dash, row) * 2.99) {
+			return w.bark[1]
+		}
 	}
-	// A scar: a dark eye with a pale rim.
+	// A scar: a dark eye, its lower lip pale grey.
 	c := cells(seed ~ 3, x, y, 2)
-	if hash01(c.id, 1, 0) < 0.4 {
+	if hash01(c.id, 1, 0) < 0.3 {
 		if abs(c.dx) < 1.6 && abs(c.dy) < 0.8 {return w.bark[0]}
-		if abs(c.dx) < 2.6 && abs(c.dy) < 1.6 && c.dy > 0 {return w.bark[1]}
+		if abs(c.dx) < 2.1 && abs(c.dy) < 1.6 && c.dy > 0 {return w.bark[1]}
 	}
 	s := 3
-	if noise(seed ~ 4, x, y, 2, 4) > 0.65 {s = 2}
+	if noise(seed ~ 4, x, y, 2, 3) > 0.68 {s = 4}
 	return step(w.bark, s)
 }
 
-// rings_of: a log's cut end: growth rings round the pith, wavering, a check (a crack)
-// out from the middle, a dark line of cambium, then the bark.
+// rings_of: a log's cut end: soft growth rings round the pith in two close tones,
+// wavering, a darker ring now and then, the sapwood's edge a step darker, then the bark.
 @(private)
 rings_of :: proc(w: Wood, seed: u32, x, y: int) -> Rgba {
 	dx, dy := f32(x) - 7.5, f32(y) - 7.5
 	r := math.sqrt(dx * dx + dy * dy)
-	if r >= 7.0 {return step(w.bark, 1 + int(hash01(seed ~ 1, x, y) * 2.99))}
-	if r >= 6.2 {return w.bark[0]}
-	if r < 1 {return w.wood[1]} 	// the pith
-	// The check: along one direction from the middle.
-	angle := math.atan2(dy, dx)
-	check := f32(hash01(seed ~ 2, 0, 0)) * 2 * math.PI - math.PI
-	if abs(angle - check) < 0.22 && r > 1.5 && r < 5.5 {return w.wood[0]}
-	ring := r + 0.8 * noise(seed, x, y, 4, 4)
-	s := 3 if int(ring) % 2 == 0 else 2
-	if int(ring) % 4 == 3 {s = 1}
-	return step(w.wood, s)
+	if r >=
+	   7.0 {return step(w.bark, FURROWS[w.style].ridge + int(noise(seed ~ 1, x, y, 4, 4) > 0.6))}
+	if r >= 6.2 {return w.wood[1]} 	// the cambium: the wood's edge
+	if r < 1 {return w.wood[2]} 	// the pith
+	ring := int(r + 0.9 * noise(seed, x, y, 4, 4))
+	if ring % 3 == 2 {return w.wood[2]} 	// the late wood of a year: a darker ring
+	return w.wood[3]
 }
 
-// planks_of: boards four pixels wide with a gap below each, one end joint each at a place
-// of its own; every board a tone of its own, its top edge lit and its foot shaded, a grain
-// line or two along it and a nail at each side of its joint.
+// planks_of: boards four pixels wide with a dark gap below each, one end joint each at a
+// place of its own; every board one of two tones, its top edge lit, a soft grain streak
+// along it here and there.
 @(private)
 planks_of :: proc(w: Wood, seed: u32, x, y: int) -> Rgba {
 	course := wrap(y) / 4
 	joint := int(hash01(seed ~ 1, course, 0) * 16)
 	u := wrap(x - joint)
 	v := wrap(y) % 4
-	if v == 3 || u == SIZE - 1 {return w.wood[0]} 	// the gap under the board, its end joint
-	s := 1 + int(hash01(seed ~ 2, course, 0) * 2.99)
+	if v == 3 {return w.wood[0]} 	// the gap under the board
+	if u == SIZE - 1 {return w.wood[1]} 	// its end joint
+	s := 2 + int(hash01(seed ~ 2, course, 0) > 0.6)
 	if v == 0 {s += 1}
-	if v == 2 {s -= 1}
-	// Grain: a streak along the board on one of its rows, broken.
+	// Grain: a streak along the board on one of its rows, broken in long pieces.
 	if v == 1 + int(hash01(seed ~ 3, course, 0) * 1.99) &&
-	   noise(seed ~ 4, x, course, 4, 4) > 0.45 {
+	   noise(seed ~ 4, x, course, 3, 4) > 0.55 {
 		s -= 1
 	}
-	if v == 1 && (u == 1 || u == SIZE - 3) {return w.wood[0]} 	// nails
 	return step(w.wood, s)
 }
 

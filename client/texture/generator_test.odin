@@ -94,6 +94,49 @@ TILING := [?]struct {
 	{.Obsidian, true, true},
 }
 
+// The style rule (generator.odin): no speckle. A pixel unlike all eight round it (its
+// brightness more than SPECKLE_STEP from each, the texture tiled) is grit, and at most
+// MAX_SPECKLE of a texture's pixels may be (the gate's slab, the rule's reference, has 1.6%;
+// the grass, dirt and log the owner found noisy had up to 14%).
+SPECKLE_STEP :: 12
+MAX_SPECKLE :: 0.05
+
+@(test)
+test_textures_have_no_speckle :: proc(t: ^testing.T) {
+	light :: proc(p: Rgba) -> f32 {return 0.3 * f32(p.r) + 0.59 * f32(p.g) + 0.11 * f32(p.b)}
+	speckle :: proc(g: Generator) -> f32 {
+		pixels: [SIZE * SIZE]Rgba
+		generate(g, pixels[:])
+		lone := 0
+		for y in 0 ..< SIZE {
+			for x in 0 ..< SIZE {
+				here := light(pixels[y * SIZE + x])
+				alike := false
+				for dy in -1 ..= 1 {
+					for dx in -1 ..= 1 {
+						if dx == 0 && dy == 0 {continue}
+						there := light(pixels[wrap(y + dy) * SIZE + wrap(x + dx)])
+						if abs(here - there) <= SPECKLE_STEP {alike = true}
+					}
+				}
+				if !alike {lone += 1}
+			}
+		}
+		return f32(lone) / (SIZE * SIZE)
+	}
+	testing.expect(t, speckle(.Gate_Ring) <= MAX_SPECKLE, "the reference itself")
+	for e in TILING {
+		share := speckle(e.g)
+		testing.expectf(
+			t,
+			share <= MAX_SPECKLE,
+			"%v is speckled: %.1f%% of its pixels are grit",
+			e.g,
+			100 * share,
+		)
+	}
+}
+
 // A texture that tiles shows no seam: the mean step in brightness from its
 // last column to its first is not much larger than the largest mean step
 // between two neighbouring columns inside it (and so for rows). The grit in

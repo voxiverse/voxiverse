@@ -58,24 +58,24 @@ LIMESTONE_ROCK := Rock{LIMESTONE, {124, 122, 116, 255}, .Fossil}
 @(private)
 SLATE_ROCK := Rock{SLATE, {32, 36, 44, 255}, .Laminated}
 
-// rough: a rock's natural face. Broken into facets, each a tone of its own, lit at its top
-// left and shaded at its foot, so the rims between them read as grooves; the grain on top.
+// rough: a rock's natural face: broad soft patches of two close tones, crossed by a few
+// cracks that run and stop (a groove a step darker, its lower lip lit), never closed into
+// cells; the grain sparse on top.
 @(private)
 rough :: proc(rock: Rock, seed: u32, x, y: int) -> Rgba {
 	if rock.grain == .Laminated {return laminae(rock, seed, x, y)}
 	if rock.grain == .Vesicular {return columns(rock, seed, x, y)}
-	soft := rock.grain == .Fossil // limestone weathers round: its rims are gentler
+	s := 2 + int(fbm(seed ~ 1, x, y, 2, 2) > 0.55)
+	if rock.grain == .Bedded {
+		// Beds across the face, wavering: alternate ones a step darker.
+		band := wrap(y + int(noise(seed ~ 5, x, 0, 2, 1) * 2.99)) / 4
+		s = 2 + int(hash01(seed ~ 6, band, 0) > 0.5)
+	}
+	// The cracks: the borders of large cells, drawn only where a slow noise lets them.
 	c := cells(seed, x, y, 3)
-	lean := clamp(-(c.dx + c.dy) / 3, -1, 1) // 1 at a facet's top left, -1 at its foot
-	tone := hash01(c.id, 0, 0)
-	s := 2
-	if tone < 0.3 {s = 1}
-	if tone > 0.75 && !soft {s = 3}
-	if lean < -0.55 {s -= 1}
-	if lean > 0.6 {s += 1}
-	if c.d2 - c.d1 < 1.0 {
-		// The rim: lit where it faces the light, dark at the foot.
-		s = 3 if lean > 0 else (1 if soft else 0)
+	if c.d2 - c.d1 < 0.9 && noise(seed ~ 2, x, y, 4, 4) > 0.5 {
+		lean := -(c.dx + c.dy)
+		return step(rock.ramp, s + 1 - int(rock.grain == .Fossil) if lean > 0 else s - 1)
 	}
 	return step(rock.ramp, clamp(s + grain_step(rock, seed, x, y), 0, 4))
 }
@@ -132,8 +132,8 @@ grain_step :: proc(rock: Rock, seed: u32, x, y: int) -> int {
 	h := hash01(seed ~ 0x2c1b_3c6d, x, y)
 	switch rock.grain {
 	case .Speckled:
-		if h > 0.95 {return -1}
-		if h < 0.04 {return 1}
+		if h > 0.98 {return -1}
+		if h < 0.015 {return 1}
 	case .Vesicular:
 		c := cells(seed ~ 0x51ed_270b, x, y, 5)
 		if hash01(c.id, 1, 0) < 0.25 {
@@ -141,17 +141,14 @@ grain_step :: proc(rock: Rock, seed: u32, x, y: int) -> int {
 			if c.d1 < 1.5 && c.dx + c.dy > 0.3 {return 1}
 		}
 	case .Bedded:
-		band := wrap(y + int(noise(seed ~ 5, x, 0, 2, 1) * 2.99)) / 2
-		if hash01(seed ~ 6, band, 0) > 0.7 {return -1}
-		if h > 0.97 {return 1}
+		if h > 0.985 {return 1}
 	case .Fossil:
 		c := cells(seed ~ 0x6a09_e667, x, y, 4)
-		if hash01(c.id, 1, 0) < 0.3 && c.d1 > 1.0 && c.d1 < 1.9 && c.dy < 0 {return -1}
-		if h > 0.97 {return -1}
+		if hash01(c.id, 1, 0) < 0.25 && c.d1 > 1.6 && c.d1 < 2.4 && c.dy < -0.9 {return -1}
 	case .Laminated:
-		if wrap(y) % 4 == 2 && h > 0.5 {return -1}
+		if wrap(y) % 4 == 2 && noise(seed ~ 7, x, y, 4, 4) > 0.6 {return -1}
 	case .Fired:
-		if h > 0.95 {return -1}
+		if h > 0.98 {return -1}
 	}
 	return 0
 }
@@ -166,17 +163,15 @@ cobble_of :: proc(rock: Rock, seed: u32, x, y: int) -> Rgba {
 	lean := clamp(-(c.dx + c.dy) / 3.5, -1, 1)
 	tone := hash01(c.id, 0, 0)
 	s := 2
-	if tone < 0.3 {s = 1}
+	if tone < 0.25 {s = 1}
 	if tone > 0.75 {s = 3}
-	if lean > 0.55 {s += 1}
-	if lean < -0.45 {s -= 1}
-	if gap < 1.9 {s += 1 if lean > 0 else -1}
-	return step(rock.ramp, clamp(s, 0, 4) + grain_step(rock, seed, x, y) / 2)
+	if gap < 1.9 || abs(lean) > 0.6 {s += 1 if lean > 0 else -1}
+	return step(rock.ramp, s)
 }
 
 // bricks: dressed blocks of a rock, w by h pixels with the joint, in a running bond: each
 // a tone of its own, its top and left edges lit, its bottom and right shaded, the rock's
-// grain on its face and a chip out of an edge here and there.
+// grain faint on its face.
 @(private)
 bricks :: proc(rock: Rock, seed: u32, x, y, w, h: int) -> Rgba {
 	course := wrap(y) / h
@@ -184,12 +179,11 @@ bricks :: proc(rock: Rock, seed: u32, x, y, w, h: int) -> Rgba {
 	if b.joint {return rock.mortar}
 	tone := hash01(seed ~ 1, b.index, course)
 	s := 2
-	if tone < 0.25 {s = 1}
-	if tone > 0.75 {s = 3}
+	if tone < 0.15 {s = 1}
+	if tone > 0.7 {s = 3}
 	edge := bevel(b.u, b.v, w - 1, h - 1)
 	if edge > 0 {s += 1}
 	if edge < 0 {s -= 1}
-	if edge != 0 && hash01(seed ~ 3, x, y) > 0.92 {return rock.ramp[0]} 	// a chip
 	return step(rock.ramp, s + max(grain_step(rock, seed, x, y), -1))
 }
 
@@ -222,8 +216,7 @@ polished :: proc(rock: Rock, seed: u32, x, y: int) -> Rgba {
 		if vein {s -= 1}
 	case .Speckled, .Vesicular, .Laminated, .Fired:
 		h := hash01(seed ~ 4, x, y)
-		if h > 0.94 {s -= 1}
-		if h < 0.03 {s += 1}
+		if h > 0.975 {s -= 1}
 	}
 	return step(rock.ramp, s)
 }

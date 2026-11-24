@@ -90,9 +90,7 @@ concrete :: proc(seed: u32, x, y: int) -> Rgba {
 	if (u == 5 || u == 13) && (v == 5 || v == 13) {return CONCRETE[3]}
 	s := 2 + int(fbm(seed, x, y, 2, 2) > 0.55)
 	if v == 15 && noise(seed ~ 1, x, 0, 4, 1) > 0.35 {s -= 1} 	// the pour line
-	h := hash01(seed ~ 2, x, y)
-	if h > 0.96 {s -= 1}
-	if h < 0.02 {s += 1}
+	if hash01(seed ~ 2, x, y) > 0.98 {s -= 1}
 	return step(CONCRETE, s)
 }
 
@@ -124,15 +122,14 @@ slabs :: proc(seed: u32, x, y: int) -> Rgba {
 	return step(CONCRETE, s)
 }
 
-// asphalt: dark binder full of small stones, pale and dark, and a crack wandering across.
+// asphalt: dark binder in two soft tones, a pale stone in it here and there, and a crack
+// wandering across.
 @(private)
 asphalt :: proc(seed: u32, x, y: int) -> Rgba {
 	if abs(noise(seed ~ 1, x, y, 3, 3) - 0.5) < 0.025 {return ASPHALT[0]} 	// the crack
 	s := 1 + int(fbm(seed, x, y, 2, 2) > 0.5)
 	h := hash01(seed ~ 2, x, y)
-	if h > 0.86 {s = 3}
-	if h > 0.97 {s = 4}
-	if h < 0.06 {s = 0}
+	if h > 0.93 {s += 1} 	// a pale stone
 	return step(ASPHALT, s)
 }
 
