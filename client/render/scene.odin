@@ -57,9 +57,11 @@ CLOUD_SPEED :: 1.2 // blocks/s, drifting +x
 Cloud_Map :: [CLOUD_MAP_SIZE * CLOUD_MAP_SIZE / 4]u32
 
 // CLOUD_CLEAR: the threshold of fair weather: the cells whose noise is over
-// CLOUD_FAIR (a byte of at least 128). CLOUD_OVERCAST: a whole cover's.
+// CLOUD_FAIR (a byte of at least 128). CLOUD_OVERCAST: a whole cover's, every
+// cell (the bytes of the clearest noise saturate at 0, so any higher
+// threshold would leave a sixth of the sky open under a full cover).
 CLOUD_CLEAR :: 128
-CLOUD_OVERCAST :: 4
+CLOUD_OVERCAST :: 0
 @(private = "file")
 CLOUD_FAIR :: 0.62
 @(private = "file")

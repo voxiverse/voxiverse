@@ -167,7 +167,7 @@ test_cloud_map :: proc(t: ^testing.T) {
 }
 
 // The weather's cover closes the clouds into a sheet: every cell cloud in fair weather
-// stays cloud, and nearly all are at a whole cover.
+// stays cloud, and every cell is cloud at a whole cover.
 @(test)
 test_cloud_cover :: proc(t: ^testing.T) {
 	m := new(Cloud_Map)
@@ -186,7 +186,7 @@ test_cloud_cover :: proc(t: ^testing.T) {
 	cells := CLOUD_MAP_SIZE * CLOUD_MAP_SIZE
 	testing.expect_value(t, lost, 0)
 	testing.expect_value(t, cloud_threshold(0), CLOUD_CLEAR)
-	testing.expectf(t, overcast > cells * 9 / 10, "overcast covers %d of %d", overcast, cells)
+	testing.expectf(t, overcast == cells, "overcast covers %d of %d", overcast, cells)
 	testing.expect(t, overcast > fair)
 }
 
@@ -212,7 +212,10 @@ test_sky_weathered :: proc(t: ^testing.T) {
 	testing.expect_value(t, clear_scene.cloud_origin.y, CLOUD_CLEAR)
 	testing.expect_value(t, clear_scene.axis.w, 0)
 	overcast_scene := scene_make(camera, sky_weathered(sky_at(0.5), {cover = 1}), 192, 0)
-	testing.expect(t, overcast_scene.axis.w == 1 && overcast_scene.cloud_origin.y < 10)
+	testing.expect(
+		t,
+		overcast_scene.axis.w == 1 && overcast_scene.cloud_origin.y == CLOUD_OVERCAST,
+	)
 }
 
 // sort_keys orders by the high 32 bits (distances' bits), equal ones kept
