@@ -108,19 +108,20 @@ void main() {
 	// Stars, then the sun and moon over them.
 	if (s.sun.w > 0.0) color += vec3(stars(s, dir) * s.sun.w * smoothstep(-0.02, 0.08, dir.y));
 	// Below the horizon the ground would hide the sun and moon, loaded or not;
-	// a game's look may have neither.
-	if (dir.y >= 0.0 && s.axis.w == 0.0) {
+	// a game's look may have neither, and cloud hides them (axis.w).
+	if (dir.y >= 0.0 && s.axis.w < 1.0) {
+		float shown = 1.0 - s.axis.w;
 		vec3 tint = mix(vec3(1.0), vec3(1.0, 0.62, 0.42), s.glow.w); // redder when low
 		vec2 t = body_texel(dir, s.sun.xyz, SUN_SIZE);
 		if (on_body(t)) {
-			color = sun_color(t, tint);
+			color = mix(color, sun_color(t, tint), shown);
 		} else {
 			// A halo of square rings, fading out texel by texel.
 			float r = ring(t);
-			if (r <= 6.0) color += vec3(1.0, 0.85, 0.55) * tint * (0.32 - 0.05 * r);
+			if (r <= 6.0) color += vec3(1.0, 0.85, 0.55) * tint * (0.32 - 0.05 * r) * shown;
 		}
 		t = body_texel(dir, -s.sun.xyz, MOON_SIZE);
-		if (on_body(t)) color = mix(color, moon_color(t), 0.4 + 0.6 * s.sun.w);
+		if (on_body(t)) color = mix(color, moon_color(t), (0.4 + 0.6 * s.sun.w) * shown);
 	}
 
 	color = with_clouds(s, dir, CLOUD_FAR, color);

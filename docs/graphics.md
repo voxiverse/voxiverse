@@ -21,6 +21,7 @@ A label names the pass in validation messages and GPU captures, and times it on 
 | `held` | The item in hand, in third person (`held_draw_world`) and first person (`held_draw_view`). |
 | `sky` | The sky, after the world, at the far plane. |
 | `water` | Translucent terrain, sorted, and the open surfaces of gates (`water.frag`'s `portal`: drawn there, not from their texture). |
+| `weather` | Rain streaks and snowflakes round the camera (`render/weather_pass.odin`), blended over everything, at most `MAX_DROPS`; client/atmosphere chooses them and leaves out those under a roof. |
 | `debug lines` | Developer overlays (chunk borders, boxes). |
 | `ui` | The HUD and menus. |
 | `present copy` | Benchmarks only: the offscreen image copied onto the window. |

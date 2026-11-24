@@ -166,6 +166,55 @@ test_cloud_map :: proc(t: ^testing.T) {
 	)
 }
 
+// The weather's cover closes the clouds into a sheet: every cell cloud in fair weather
+// stays cloud, and nearly all are at a whole cover.
+@(test)
+test_cloud_cover :: proc(t: ^testing.T) {
+	m := new(Cloud_Map)
+	defer free(m)
+	cloud_map_generate(m)
+	fair, overcast, lost := 0, 0, 0
+	for y in 0 ..< CLOUD_MAP_SIZE {
+		for x in 0 ..< CLOUD_MAP_SIZE {
+			a := cloud_map_get(m, x, y)
+			b := cloud_map_get(m, x, y, cloud_threshold(1))
+			if a {fair += 1}
+			if b {overcast += 1}
+			if a && !cloud_map_get(m, x, y, cloud_threshold(0.5)) {lost += 1}
+		}
+	}
+	cells := CLOUD_MAP_SIZE * CLOUD_MAP_SIZE
+	testing.expect_value(t, lost, 0)
+	testing.expect_value(t, cloud_threshold(0), CLOUD_CLEAR)
+	testing.expectf(t, overcast > cells * 9 / 10, "overcast covers %d of %d", overcast, cells)
+	testing.expect(t, overcast > fair)
+}
+
+// No weather leaves the sky as it was; cloud darkens it and hides the stars and the
+// glow; mist brings the fog in; a flash lights it.
+@(test)
+test_sky_weathered :: proc(t: ^testing.T) {
+	for f in ([]f64{0, 0.25, 0.5, 0.74}) {
+		sky := sky_at(f)
+		testing.expect_value(t, sky_weathered(sky, {}), sky)
+		grey := sky_weathered(sky, {cover = 1, rain = 1, storm = 1})
+		testing.expect(t, grey.sky_light.g < sky.sky_light.g && grey.stars <= sky.stars * 0.01)
+		testing.expect(t, grey.glow_k < sky.glow_k * 0.2 || sky.glow_k == 0)
+		testing.expect_value(t, grey.cover, 1)
+		lit := sky_weathered(sky, {cover = 1, flash = 1})
+		testing.expect(t, lit.sky_light.b > grey.sky_light.b + 0.5)
+	}
+	misty := sky_weathered(sky_at(0.27), {fog = 1})
+	camera: Camera
+	clear_scene := scene_make(camera, sky_at(0.27), 192, 0)
+	misty_scene := scene_make(camera, misty, 192, 0)
+	testing.expect(t, misty_scene.zenith.w <= MIST_FOG + 0.01 && clear_scene.zenith.w == 192)
+	testing.expect_value(t, clear_scene.cloud_origin.y, CLOUD_CLEAR)
+	testing.expect_value(t, clear_scene.axis.w, 0)
+	overcast_scene := scene_make(camera, sky_weathered(sky_at(0.5), {cover = 1}), 192, 0)
+	testing.expect(t, overcast_scene.axis.w == 1 && overcast_scene.cloud_origin.y < 10)
+}
+
 // sort_keys orders by the high 32 bits (distances' bits), equal ones kept
 // in order, as a comparison sort would.
 @(test)

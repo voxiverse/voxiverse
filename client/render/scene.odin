@@ -20,13 +20,13 @@ Scene :: struct {
 	inv_view_proj: matrix[4, 4]f32,
 	camera:        [4]f32, // xyz from the camera chunk's origin; w: absolute y
 	sun:           [4]f32, // xyz towards the sun; w: how visible the stars are (0..1)
-	axis:          [4]f32, // xyz the sky turns around (stars turn with the sun); w: 1 no sun or moon drawn
+	axis:          [4]f32, // xyz the sky turns around (stars turn with the sun); w: how hidden the sun and moon are (1: not drawn)
 	zenith:        [4]f32, // rgb (linear); w: fog distance in blocks (fully fogged)
 	horizon:       [4]f32, // rgb; w: the fog's span, a fraction of its distance (it begins at lamp.w)
 	glow:          [4]f32, // rgb sunrise/sunset glow towards the sun; w: its strength
 	sky_light:     [4]f32, // rgb: what sky light level 15 looks like now; w: brightness (0..1)
 	cloud:         [4]f32, // rgb cloud colour (lit side); w: 1 drawn, 0 not
-	cloud_origin:  [4]f32, // xz: the camera in the cloud pattern (wrapped; see CLOUD_PERIOD)
+	cloud_origin:  [4]f32, // xz: the camera in the cloud pattern (wrapped; see CLOUD_PERIOD); y: the cloud map's threshold (cloud_threshold)
 	water:         [4]f32, // rgb: the colour of water seen from inside it; w: 1 with the camera under water
 	lamp:          [4]f32, // rgb: what block light level 15 looks like; w: where the fog begins, a fraction of its distance
 	ambient:       [4]f32, // rgb: light added everywhere (a look's); w: 0
@@ -44,15 +44,31 @@ NO_CUT :: i32(1 << 20)
 
 // Clouds: a slab of CLOUD_CELL-block cells, cloud or clear by the
 // Cloud_Map, which repeats every CLOUD_PERIOD blocks (scene.glsl uses the
-// same numbers).
+// same numbers). Each cell has a density byte; a cell is cloud when its byte
+// is at least the scene's threshold: CLOUD_CLEAR in fair weather, lower as
+// the weather's cover grows (cloud_threshold), down to one grey sheet.
 CLOUD_CELL :: 12
 CLOUD_MAP_SIZE :: 256 // cells across
 CLOUD_PERIOD :: CLOUD_CELL * CLOUD_MAP_SIZE
 CLOUD_SPEED :: 1.2 // blocks/s, drifting +x
 
-// Cloud_Map: one bit per cell (row-major, x fastest; bit x & 31 of word
-// y * 8 + x >> 5).
-Cloud_Map :: [CLOUD_MAP_SIZE * CLOUD_MAP_SIZE / 32]u32
+// Cloud_Map: one density byte per cell (row-major, x fastest; byte i & 3 of
+// word i >> 2, i = y * CLOUD_MAP_SIZE + x).
+Cloud_Map :: [CLOUD_MAP_SIZE * CLOUD_MAP_SIZE / 4]u32
+
+// CLOUD_CLEAR: the threshold of fair weather: the cells whose noise is over
+// CLOUD_FAIR (a byte of at least 128). CLOUD_OVERCAST: a whole cover's.
+CLOUD_CLEAR :: 128
+CLOUD_OVERCAST :: 4
+@(private = "file")
+CLOUD_FAIR :: 0.62
+@(private = "file")
+CLOUD_STEP :: 400 // bytes per unit of noise away from CLOUD_FAIR
+
+// cloud_threshold: the cloud map's threshold under a cover (0 fair .. 1 overcast).
+cloud_threshold :: proc(cover: f32) -> f32 {
+	return math.lerp(f32(CLOUD_CLEAR), f32(CLOUD_OVERCAST), clamp(cover, 0, 1))
+}
 
 // cloud_map_generate: blobs of value noise, thresholded, with ragged edges;
 // it tiles seamlessly.
@@ -80,19 +96,25 @@ cloud_map_generate :: proc(m: ^Cloud_Map) {
 			v11 := hash01(u32((lx + 1) % N), u32((ly + 1) % N), 5)
 			v := math.lerp(math.lerp(v00, v10, fx), math.lerp(v01, v11, fx), fy)
 			v = 0.75 * v + 0.25 * hash01(u32(x), u32(y), 9)
-			if v > 0.62 {
-				i := y * CLOUD_MAP_SIZE + x
-				m[i >> 5] |= 1 << u32(i & 31)
+			// The byte is at least CLOUD_CLEAR exactly where fair weather has cloud.
+			b: u32
+			if v > CLOUD_FAIR {
+				b = CLOUD_CLEAR + u32(min(127, int((v - CLOUD_FAIR) * CLOUD_STEP)))
+			} else {
+				b = CLOUD_CLEAR - 1 - u32(min(127, int((CLOUD_FAIR - v) * CLOUD_STEP)))
 			}
+			i := y * CLOUD_MAP_SIZE + x
+			m[i >> 2] |= b << (u32(i & 3) * 8)
 		}
 	}
 }
 
-// cloud_map_get: whether cell (any integers: the map repeats) is cloud.
-cloud_map_get :: proc(m: ^Cloud_Map, x, y: int) -> bool {
+// cloud_map_get: whether cell (any integers: the map repeats) is cloud at a
+// threshold (scene.glsl's cloud_at).
+cloud_map_get :: proc(m: ^Cloud_Map, x, y: int, threshold: f32 = CLOUD_CLEAR) -> bool {
 	cx, cy := x & (CLOUD_MAP_SIZE - 1), y & (CLOUD_MAP_SIZE - 1)
 	i := cy * CLOUD_MAP_SIZE + cx
-	return m[i >> 5] & (1 << u32(i & 31)) != 0
+	return f32((m[i >> 2] >> (u32(i & 3) * 8)) & 0xff) >= threshold
 }
 
 // Sky is the look of the sky at a time of day, before any camera.
@@ -106,7 +128,22 @@ Sky :: struct {
 	glow_k:    f32,
 	sky_light: [3]f32,
 	cloud:     [3]f32,
+	cover:     f32, // the weather's cloud (sky_weathered): the cloud map's threshold, the sun and moon hidden
+	haze:      f32, // mist and rain: the fog closes in (0 the view's, 1 MIST_FOG)
 }
+
+// Sky_Weather: what the weather does to the sky (client/atmosphere works it out from
+// game.Weather): every field 0..1.
+Sky_Weather :: struct {
+	cover: f32, // cloud
+	rain:  f32, // falling (as rain or snow): darker, and the distance greys
+	storm: f32, // darker still
+	fog:   f32, // mist where the camera is
+	flash: f32, // lightning, now
+}
+
+// MIST_FOG: blocks away at which a whole mist hides everything.
+MIST_FOG :: 28
 
 // The sun's path leans this far south of overhead.
 SUN_TILT :: 0.35 // radians
@@ -150,6 +187,44 @@ sky_at :: proc(f: f64) -> (s: Sky) {
 	return
 }
 
+// sky_weathered: the sky under the weather. Overcast greys and flattens it (the sky's
+// light dims, the glow and the stars go behind the cloud), rain and storm darken it,
+// mist pales it towards a lit grey, lightning lights it all at once. No weather is the
+// sky as it was.
+sky_weathered :: proc(sky: Sky, w: Sky_Weather) -> Sky {
+	s := sky
+	if w == {} {return s}
+	luma :: proc(c: [3]f32) -> f32 {return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b}
+	cover := clamp(w.cover, 0, 1)
+	dark := 1 - 0.45 * clamp(w.rain, 0, 1) - 0.3 * clamp(w.storm, 0, 1)
+	grey := [3]f32{1, 1, 1.04} * luma(s.horizon) * 0.75 * dark
+	s.zenith = linalg.lerp(s.zenith, grey * 0.9, cover * 0.9)
+	s.horizon = linalg.lerp(s.horizon, grey, cover * 0.9)
+	s.glow_k *= 1 - 0.85 * cover
+	s.stars *= 1 - cover
+	light := luma(s.sky_light)
+	s.sky_light = linalg.lerp(s.sky_light, [3]f32{light, light, light * 1.05}, cover * 0.5)
+	s.sky_light *= 1 - 0.3 * cover * (2.2 - 1.2 * dark)
+	// The cloud a little darker than the grey it hangs in, darker in a storm.
+	s.cloud = linalg.lerp(s.cloud, grey * (0.95 - 0.3 * w.storm), cover)
+	fog := clamp(w.fog, 0, 1)
+	if fog > 0 {
+		pale := [3]f32{0.82, 0.85, 0.9} * max(luma(s.sky_light), 0.03)
+		s.horizon = linalg.lerp(s.horizon, pale, fog * 0.8)
+		s.zenith = linalg.lerp(s.zenith, pale * 0.9, fog * 0.6)
+	}
+	if w.flash > 0 {
+		f := clamp(w.flash, 0, 1)
+		s.sky_light += [3]f32{0.75, 0.8, 1.0} * f
+		s.zenith += [3]f32{0.3, 0.32, 0.4} * f
+		s.horizon += [3]f32{0.4, 0.42, 0.5} * f
+		s.cloud += [3]f32{0.5, 0.52, 0.6} * f
+	}
+	s.cover = cover
+	s.haze = max(fog, 0.45 * clamp(w.rain, 0, 1))
+	return s
+}
+
 // UNDERWATER: the colour of deep water around a camera in it, in daylight
 // (dimmed with the sky's light).
 UNDERWATER :: [3]f32{0.05, 0.14, 0.30}
@@ -183,6 +258,12 @@ scene_make :: proc(
 		fog_near = clamp(look.fog_near, 0, 0.95)
 		fog_span = 1 - fog_near
 	}
+	if sky.haze > 0 { 	// mist and rain: the fog comes in, and begins nearer
+		fog = math.lerp(fog, min(fog, f32(MIST_FOG)), sky.haze)
+		fog_near *= 1 - 0.8 * sky.haze
+		fog_span = 1 - fog_near
+	}
+	hidden := smoothstep(0.35, 0.85, sky.cover) // the sun and moon behind the cloud
 	lamp := look.lamp_light if look.lamp_light != {} else LAMP_LIGHT
 	figure := look.figure_light if look.figure_light != {} else FIGURE_LIGHT
 	g := look.grade
@@ -193,13 +274,13 @@ scene_make :: proc(
 		inv_view_proj = linalg.inverse(camera.view_proj),
 		camera = {camera.position.x, camera.position.y, camera.position.z, f32(absolute.y)},
 		sun = {sky.sun.x, sky.sun.y, sky.sun.z, sky.stars},
-		axis = {sky.axis.x, sky.axis.y, sky.axis.z, 1 if look.no_sun else 0},
+		axis = {sky.axis.x, sky.axis.y, sky.axis.z, 1 if look.no_sun else hidden},
 		zenith = {sky.zenith.r, sky.zenith.g, sky.zenith.b, fog},
 		horizon = {sky.horizon.r, sky.horizon.g, sky.horizon.b, fog_span},
 		glow = {sky.glow.r, sky.glow.g, sky.glow.b, sky.glow_k},
 		sky_light = {sky.sky_light.r, sky.sky_light.g, sky.sky_light.b, brightness},
 		cloud = {sky.cloud.r, sky.cloud.g, sky.cloud.b, 1 if clouds && !look.no_clouds else 0},
-		cloud_origin = {wrap(absolute.x + drift), 0, wrap(absolute.z), 0},
+		cloud_origin = {wrap(absolute.x + drift), cloud_threshold(sky.cover), wrap(absolute.z), 0},
 		water = {
 			UNDERWATER.r * sky.sky_light.r,
 			UNDERWATER.g * sky.sky_light.g,

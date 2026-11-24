@@ -3,7 +3,7 @@
 
 #extension GL_EXT_buffer_reference : require
 
-// One bit per cloud cell (render/scene.odin's Cloud_Map).
+// One density byte per cloud cell (render/scene.odin's Cloud_Map).
 layout(buffer_reference, std430) readonly buffer Cloud_Map {
 	uint bits[];
 };
@@ -13,13 +13,13 @@ layout(buffer_reference, std430) readonly buffer Scene {
 	mat4 inv_view_proj;
 	vec4 camera;        // xyz from the camera chunk's origin; w: absolute y
 	vec4 sun;           // xyz towards the sun; w: star visibility
-	vec4 axis;          // xyz the sky turns around; w: 1 no sun or moon drawn
+	vec4 axis;          // xyz the sky turns around; w: how hidden the sun and moon are (1: not drawn)
 	vec4 zenith;        // rgb; w: fog distance (blocks)
 	vec4 horizon;       // rgb; w: the fog's span (a fraction of its distance)
 	vec4 glow;          // rgb sunrise/sunset glow; w: its strength
 	vec4 sky_light;     // rgb: sky light level 15, now; w: brightness setting (0..1)
 	vec4 cloud;         // rgb: lit cloud colour; w: 1 drawn, 0 not (the setting)
-	vec4 cloud_origin;  // xz: the camera in the (wrapped) cloud pattern
+	vec4 cloud_origin;  // xz: the camera in the (wrapped) cloud pattern; y: the cloud map's threshold
 	vec4 water;         // rgb: water seen from inside; w: 1 with the camera under water
 	vec4 lamp;          // rgb: block light level 15; w: where the fog begins (a fraction of its distance)
 	vec4 ambient;       // rgb: light added everywhere (the game's look)
@@ -53,11 +53,13 @@ float fog_amount(Scene s, float d) {
 	return clamp((d - s.lamp.w * s.zenith.w) / (s.horizon.w * s.zenith.w), 0.0, 1.0);
 }
 
-// cloud_at: whether a cloud fills cell (the map repeats).
+// cloud_at: whether a cloud fills cell (the map repeats): its density byte is
+// at least the scene's threshold (lower under a greater cover).
 bool cloud_at(Scene s, ivec2 cell) {
 	ivec2 c = cell & ivec2(int(CLOUD_PERIOD_CELLS) - 1);
-	uint word = s.cloud_map.bits[c.y * (int(CLOUD_PERIOD_CELLS) / 32) + (c.x >> 5)];
-	return ((word >> uint(c.x & 31)) & 1u) != 0u;
+	int i = c.y * int(CLOUD_PERIOD_CELLS) + c.x;
+	uint word = s.cloud_map.bits[i >> 2];
+	return float((word >> (uint(i & 3) * 8u)) & 0xffu) >= s.cloud_origin.y;
 }
 
 // cloud_hit walks the slab's cells along the ray, up to far: distance and
