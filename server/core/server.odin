@@ -134,6 +134,7 @@ Game :: struct {
 	) -> (
 		refusal: string,
 	), // c would change the block at `at` (its rules and reach allow it): "" lets it, else the edit is refused and c is told why
+	blasting:       proc(s: ^Server, w: ^World, at: game.Block_Pos, old: game.Block) -> bool, // a blast would carve the block at `at` of w (old): false keeps it (as a protected region's)
 	entity_use:     proc(
 		s: ^Server,
 		c: ^Client,

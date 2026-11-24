@@ -204,6 +204,10 @@ edit_chunk :: proc(
 				new = .Air
 			}
 			if new == old {continue}
+			if act.how == .Explosion && !blast_admits(w, p, old) {
+				protected += 1
+				continue
+			}
 			if len(refused) > 0 {
 				blocked := false
 				for b in refused {if box_has(b, p) {blocked = true}}
@@ -227,6 +231,14 @@ edit_chunk :: proc(
 		}
 	}
 	return
+}
+
+// blast_admits: whether a blast may carve the block at p (old): the game's blasting hook
+// keeps its own (a structure not the players' to break), as a protected region keeps its.
+@(private = "file")
+blast_admits :: proc(w: ^World, p: game.Block_Pos, old: game.Block) -> bool {
+	s := w.server
+	return s.config.game.blasting == nil || s.config.game.blasting(s, w, p, old)
 }
 
 // shape_box: the blocks a shape can touch.
