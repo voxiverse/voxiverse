@@ -9,7 +9,6 @@ import "client:ui"
 import "common:game"
 import "common:protocol"
 import "common:starmap"
-import "common:worldgen"
 
 // The gate's address with the mouse: a symbol a click, none twice,
 // Backspace and Erase take the last back; once whole the board takes no
@@ -93,11 +92,12 @@ test_gate_address :: proc(t: ^testing.T) {
 	testing.expect(t, engine.overlay_is_open(&app.overlays, .Gate))
 	picks := [starmap.WORLD_LENGTH]u8{39, 0, 7, 21, 5, 33, 18}
 	for p in picks[:starmap.WORLD_LENGTH - 1] {click(app, l.symbols[p])}
-	// Six in, the pointer on a symbol: the line says what lives on that world.
+	// Six in, the pointer on a symbol: the line says what that world is and what lives
+	// there.
 	at := ui.Vec2{l.symbols[picks[6]].x + 2, l.symbols[picks[6]].y + 2}
 	frame(app, {mouse = at})
 	want_addr := starmap.Address{s.welcome.address.galaxy, picks}
-	want := engine.life_line(worldgen.world_life(want_addr))
+	want := engine.destination_line(want_addr)
 	testing.expectf(t, says(app, want), "the gate does not say %q", want)
 	// Seven: whole, still open, the board full, the life still shown.
 	click(app, l.symbols[picks[6]])

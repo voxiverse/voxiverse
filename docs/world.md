@@ -85,7 +85,8 @@ To use a gate, right-click its frame from within 8 blocks: the gate's address ov
 board of the 40 symbols below it, a row for each body and a column for each set of marks.
 Each symbol pressed is added to the address (none twice; Backspace or Erase takes the last
 back); once all seven are there the board takes no more, the line under the field says what
-lives on that world, and Open (or Enter) sends it (`protocol.Open_Gate`). The gate opens at
+lives on that world (`engine.destination_line`: its class and its life, "An ocean world of
+scattered islands. Plants and animals"), and Open (or Enter) sends it (`protocol.Open_Gate`). The gate opens at
 once, and the far world's gate, the one nearest its middle, with it; both ends stay open for
 30 s, and walking into the opening arrives at the other world's gate.
 

@@ -8,7 +8,6 @@ import "client:ui"
 import "common:game"
 import "common:protocol"
 import "common:starmap"
-import "common:worldgen"
 
 // The gate's address: Use on a gate's frame opens it. The player writes the
 // address of a world of this galaxy from the board of symbols, one a press
@@ -178,7 +177,7 @@ gate_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		t.text_muted,
 		.Right,
 	)
-	// What lives at the address: once whole, or one short with the pointer
+	// What the world at the address is and what lives there: once whole, or one short with the pointer
 	// on the symbol that would end it.
 	life_at: Maybe(starmap.Address)
 	if whole {
@@ -196,7 +195,7 @@ gate_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		}
 	}
 	if a, has := life_at.?; has {
-		ui.label(ctx, engine.life_line(worldgen.world_life(a)), l.life, .Center, t.text_muted)
+		ui.label(ctx, engine.destination_line(a), l.life, .Center, t.text_muted)
 	}
 	// A pad's focus starts on, and after a symbol is taken goes to, the next
 	// free one; on Open once the address is whole.

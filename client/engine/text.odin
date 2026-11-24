@@ -3,6 +3,7 @@ package engine
 import "core:fmt"
 
 import "common:base"
+import "common:starmap"
 import "common:worldgen"
 
 // The UI's strings: every string the player reads goes
@@ -67,6 +68,15 @@ Text :: enum u16 {
 	Life_Peoples, // {0}: the life, {1}: how many peoples (a word), {2}: years of history
 	Life_One_People,
 	Life_Peoples_Count, // {0}: the number of peoples as a word
+	Gate_Destination, // {0}: the world's class, {1}: what lives there
+	Class_Temperate, // the world classes (worldgen.World_Class, in order from Temperate)
+	Class_Canyon,
+	Class_Frozen,
+	Class_Ocean,
+	Class_Volcanic,
+	Class_Fungal,
+	Class_Moon,
+	Class_Jungle,
 	Crash_Title,
 	Crash_Saved,
 	Crash_Not_Sent,
@@ -394,6 +404,15 @@ TEXT_EN := [Text]string {
 	.Life_Peoples                           = "{0}; {1}, about {2} years of history",
 	.Life_One_People                        = "one people",
 	.Life_Peoples_Count                     = "{0} peoples",
+	.Gate_Destination                       = "{0}. {1}",
+	.Class_Temperate                        = "A temperate world of forests and seas",
+	.Class_Canyon                           = "A canyon world, dry red mesas",
+	.Class_Frozen                           = "A frozen world of snow and ice",
+	.Class_Ocean                            = "An ocean world of scattered islands",
+	.Class_Volcanic                         = "A volcanic world, basalt and magma",
+	.Class_Fungal                           = "A fungal world under giant fungi",
+	.Class_Moon                             = "A barren moon, airless dust and craters",
+	.Class_Jungle                           = "A jungle world under a tall canopy",
 	.Crash_Title                            = "Voxiverse closed unexpectedly last time",
 	.Crash_Saved                            = "A report was saved on this computer.",
 	.Crash_Not_Sent                         = "Nothing was sent anywhere.",
@@ -666,6 +685,16 @@ TEXT_EN := [Text]string {
 // tr: the string for key with {n} replaced by args[n] (temp allocator; base.text_format).
 tr :: proc(key: Text, args: ..any) -> string {
 	return base.text_format(TEXT_EN[key], ..args)
+}
+
+// destination_line: what the world at an address is, in one line, from the address alone:
+// its class (worldgen.world_class) and what lives there (life_line): "An ocean world of
+// scattered islands. Plants and animals". A world of no class (Earth) is its life alone.
+destination_line :: proc(a: starmap.Address) -> string {
+	life := life_line(worldgen.world_life(a))
+	class := worldgen.world_class(a)
+	if class == .None {return life}
+	return tr(.Gate_Destination, tr(Text(int(Text.Class_Temperate) + int(class) - 1)), life)
 }
 
 // life_line: what lives on a world, in one line: "Plants and animals; three
