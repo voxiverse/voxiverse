@@ -1,0 +1,30 @@
+title "Victory"
+tempo 108
+meter 4/4
+key c major
+mood stinger
+place any
+time any
+depth any
+worlds any
+loop no
+seed 47
+humanize timing 10 ms velocity 5
+reverb 2.4 s 0.4
+instrument strings font freepats_synthstrings preset 0:0
+instrument timp font freepats_timpani preset 0:0
+instrument harp font freepats_harp preset 0:0
+
+# A fight won: a rising fanfare stated twice, then its head once more up to the high C, a held C
+# major with a roll of timpani and a harp; played once.
+motif fanfare | mf c5:e d5:e e5:q d5:e e5:e g5:q | e5:h d5:h |
+
+part melody strings melody volume -2 dB pan 0.1
+  play fanfare
+  play fanfare
+  | f c5:e d5:e e5:q d5:e e5:e g5:q | c6:w |
+part roll timp volume -6 dB pan -0.2
+  | mf c2:q r:q c2:q r:q | g1:q r:q g1:q r:q | d2:q r:q d2:q r:q | a1:q r:q g1:q g1:e g1:e | f c2:w |
+  | r:w |
+part ring harp volume -8 dB pan 0.35
+  | r:w | r:w | r:w | r:w | mf [c4 e4 g4]:w | r:w |

@@ -55,7 +55,7 @@ music_decode :: proc(file: []byte) -> (pcm: []f32, rate: int) {
 // One test per piece, so the runner's threads decode them side by side: each
 // decodes to what its metadata says, at the loudness the mix expects, and
 // loops without a seam.
-#assert(len(MUSIC) == 8, "a new piece needs its test below")
+#assert(len(MUSIC) == 12, "a new piece needs its test below")
 
 @(test)
 test_music_title :: proc(t: ^testing.T) {music_check(t, "title")}
@@ -73,6 +73,14 @@ test_music_death :: proc(t: ^testing.T) {music_check(t, "death")}
 test_music_discovery :: proc(t: ^testing.T) {music_check(t, "discovery")}
 @(test)
 test_music_ignite :: proc(t: ^testing.T) {music_check(t, "ignite")}
+@(test)
+test_music_underground :: proc(t: ^testing.T) {music_check(t, "underground")}
+@(test)
+test_music_danger :: proc(t: ^testing.T) {music_check(t, "danger")}
+@(test)
+test_music_boss :: proc(t: ^testing.T) {music_check(t, "boss")}
+@(test)
+test_music_victory :: proc(t: ^testing.T) {music_check(t, "victory")}
 
 @(private = "file")
 music_check :: proc(t: ^testing.T, name: string) {

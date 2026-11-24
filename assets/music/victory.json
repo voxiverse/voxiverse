@@ -1,0 +1,22 @@
+{
+  "title": "Victory",
+  "source": "victory.score",
+  "source_sha256": "25d09b9345dcfcf4aa0a57d33343c4cdb000ec6d331ad8779519d9503a7cebd4",
+  "soundfont_sha256": "e402377d330065a3c1db59d32ddc341184b7b0e8f990e08aa9f3db35e7ab8f78",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 745919,
+  "seconds": 15.54,
+  "loop": false,
+  "loop_start": 0,
+  "loop_end": 0,
+  "lufs": -20.0,
+  "true_peak_db": -10.219,
+  "key": "c major",
+  "tempo": 108,
+  "mood": ["stinger"],
+  "place": ["any"],
+  "time": ["any"],
+  "depth": ["any"],
+  "worlds": ["any"]
+}

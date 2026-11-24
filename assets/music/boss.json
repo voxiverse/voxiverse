@@ -1,0 +1,22 @@
+{
+  "title": "Custodian",
+  "source": "boss.score",
+  "source_sha256": "58e6acf53464ca10b0661319bbc0bd98d55f40f568aa902113f9f895a517b334",
+  "soundfont_sha256": "e402377d330065a3c1db59d32ddc341184b7b0e8f990e08aa9f3db35e7ab8f78",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 2792727,
+  "seconds": 58.182,
+  "loop": true,
+  "loop_start": 0,
+  "loop_end": 2792727,
+  "lufs": -20.0,
+  "true_peak_db": -8.467,
+  "key": "d phrygian",
+  "tempo": 132,
+  "mood": ["boss"],
+  "place": ["any"],
+  "time": ["any"],
+  "depth": ["any"],
+  "worlds": ["any"]
+}

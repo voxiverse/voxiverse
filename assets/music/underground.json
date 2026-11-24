@@ -1,0 +1,22 @@
+{
+  "title": "Underground",
+  "source": "underground.score",
+  "source_sha256": "d4df37ff375104b01315bf971b050b788f77e4c371cea18ec139dedaa69754de",
+  "soundfont_sha256": "e402377d330065a3c1db59d32ddc341184b7b0e8f990e08aa9f3db35e7ab8f78",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 4608000,
+  "seconds": 96.0,
+  "loop": true,
+  "loop_start": 0,
+  "loop_end": 4608000,
+  "lufs": -20.0,
+  "true_peak_db": -4.952,
+  "key": "a aeolian",
+  "tempo": 60,
+  "mood": ["underground"],
+  "place": ["any"],
+  "time": ["any"],
+  "depth": ["any"],
+  "worlds": ["any"]
+}

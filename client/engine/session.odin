@@ -229,6 +229,7 @@ Session :: struct {
 	home:              starmap.Address, // the world we joined in (the music's "home")
 	died:              int, // Player_Died events seen (the music's death stinger)
 	arrivals:          int, // arrivals through a gate or travel (the music's discovery stinger)
+	music_mood:        Music_Mood, // what the game says is happening, for the music (music_mood)
 	player_stats:      Stats_Data, // the counters the server last sent (menu_statistics.odin)
 	game:              Game, // the game the server plays (game.odin; zero: none)
 	game_state:        []byte, // its state (game_state), in the arena

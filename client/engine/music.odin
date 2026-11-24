@@ -61,6 +61,17 @@ music_column_depth :: proc(s: ^Session) -> f32 {
 	return f32(f64(column.heights[i]) - f.y)
 }
 
+// Music_Mood: what a game says is happening, for the music (music_mood): Calm (the world's
+// own music), Underground, Danger, Boss, Victory (a fight just won: its stinger, once).
+Music_Mood :: music.Music_Mood
+
+// music_mood: the game's client part says what is happening now (each time it changes; a
+// session starts Calm). The music director cross-fades to the mood's piece once it has been
+// stated a moment, keeps to it a while after it is no longer stated, so a fight that comes
+// and goes does not flap, and plays a victory's stinger once (music.director_mood). The
+// music's volume and its options are the player's, as ever.
+music_mood :: proc(s: ^Session, mood: Music_Mood) {s.music_mood = mood}
+
 // music_input: what the director is told this frame.
 music_input :: proc(app: ^App) -> (in_: music.Music_Input) {
 	m := &app.music
@@ -80,6 +91,7 @@ music_input :: proc(app: ^App) -> (in_: music.Music_Input) {
 	in_.time_of_day = game.time_of_day(s.clock)
 	in_.depth = music_column_depth(s)
 	in_.world_home = s.welcome.address == s.home
+	in_.mood = s.music_mood
 	if !address_seen(m, s.home) {append(&m.seen, s.home)}
 	if s.died != m.died_seen {
 		m.died_seen = s.died

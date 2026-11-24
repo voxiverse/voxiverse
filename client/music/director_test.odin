@@ -83,6 +83,45 @@ TEST_TRACKS := [?]Music_Track {
 		depth = {"any"},
 		worlds = {"any"},
 	},
+	{
+		name = "underground",
+		role = .Underground,
+		loop = true,
+		seconds = 90,
+		place = {"any"},
+		time = {"any"},
+		depth = {"any"},
+		worlds = {"any"},
+	},
+	{
+		name = "danger",
+		role = .Danger,
+		loop = true,
+		seconds = 48,
+		place = {"any"},
+		time = {"any"},
+		depth = {"any"},
+		worlds = {"any"},
+	},
+	{
+		name = "boss",
+		role = .Boss,
+		loop = true,
+		seconds = 64,
+		place = {"any"},
+		time = {"any"},
+		depth = {"any"},
+		worlds = {"any"},
+	},
+	{
+		name = "victory",
+		role = .Victory,
+		seconds = 8,
+		place = {"any"},
+		time = {"any"},
+		depth = {"any"},
+		worlds = {"any"},
+	},
 }
 
 // Sim: the app's part. A voice is alive until its track's seconds (a loop:
@@ -360,6 +399,92 @@ test_stingers :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
+// A mood the game states: its piece cross-fades in for the world's once stated a second, and
+// the music keeps to it while the game's mood flaps (falling only after eight seconds of a
+// lower one); a higher mood cross-fades onto the other mood slot; back to Calm the piece
+// fades out and the world's music waits mood_return before it comes again; a victory plays
+// its stinger once, however long it is stated; a pause holds the hysteresis' clock.
+@(test)
+test_moods :: proc(t: ^testing.T) {
+	UNDERGROUND, DANGER, BOSS, VICTORY :: 7, 8, 9, 10
+	s: Sim
+	sim_init(&s, TEST_TRACKS[:], 3)
+	s.input.gap = 3
+	sim_in_world(&s)
+	for !s.d.on[MUSIC_SLOT_PIECE] {sim_step(&s, 0.5)}
+	plays := len(s.plays)
+	s.input.mood = .Danger
+	for _ in 0 ..< 3 {sim_step(&s, 0.25)}
+	testing.expect_value(t, len(s.plays), plays) // (not yet: stated under a second)
+	for _ in 0 ..< 2 {sim_step(&s, 0.25)}
+	testing.expect_value(t, len(s.plays), plays + 1)
+	last := s.plays[len(s.plays) - 1]
+	testing.expect_value(t, last.track, DANGER)
+	testing.expect_value(t, int(last.voice_slot), MUSIC_SLOT_MOOD)
+	testing.expect_value(t, last.seconds, MUSIC_DEFAULTS.mood_fade)
+	testing.expect(t, !s.d.on[MUSIC_SLOT_PIECE], "the world's piece plays on under the mood's")
+	// The fight comes and goes: nothing changes.
+	stops := s.stops
+	for _ in 0 ..< 5 {
+		s.input.mood = .Calm
+		sim_run(&s, 3)
+		s.input.mood = .Danger
+		sim_run(&s, 1.5)
+	}
+	testing.expect_value(t, len(s.plays), plays + 1)
+	testing.expect_value(t, s.stops, stops)
+	// A boss: onto the other slot, the danger's fading.
+	s.input.mood = .Boss
+	sim_run(&s, 1.3)
+	last = s.plays[len(s.plays) - 1]
+	testing.expect_value(t, last.track, BOSS)
+	testing.expect_value(t, int(last.voice_slot), MUSIC_SLOT_MOOD + 1)
+	testing.expect(t, !s.d.on[MUSIC_SLOT_MOOD] && s.d.on[MUSIC_SLOT_MOOD + 1])
+	// A pause holds the clock: a long one is not a fall.
+	s.input.mood = .Calm
+	s.input.paused = true
+	sim_run(&s, 30)
+	testing.expect_value(t, s.d.mood, Music_Mood.Boss)
+	s.input.paused = false
+	sim_run(&s, 8.3)
+	testing.expect_value(t, s.d.mood, Music_Mood.Calm)
+	testing.expect(t, !s.d.on[MUSIC_SLOT_MOOD + 1], "the boss's piece plays on")
+	plays = len(s.plays)
+	sim_run(&s, f64(MUSIC_DEFAULTS.mood_return) - 1)
+	testing.expect_value(t, len(s.plays), plays) // (quiet after the fight)
+	sim_run(&s, 2)
+	testing.expect_value(t, len(s.plays), plays + 1)
+	testing.expect_value(t, int(s.plays[len(s.plays) - 1].voice_slot), MUSIC_SLOT_PIECE)
+	// Down a delve, then a win: the stinger once, the mood's piece gone.
+	s.input.mood = .Underground
+	sim_run(&s, 1.3)
+	testing.expect_value(t, s.plays[len(s.plays) - 1].track, UNDERGROUND)
+	plays = len(s.plays)
+	s.input.mood = .Victory
+	sim_run(&s, 5)
+	testing.expect_value(t, len(s.plays), plays + 1)
+	testing.expect_value(t, s.plays[plays].track, VICTORY)
+	testing.expect_value(t, int(s.plays[plays].voice_slot), MUSIC_SLOT_STINGER)
+	testing.expect(t, !s.d.on[MUSIC_SLOT_MOOD] && !s.d.on[MUSIC_SLOT_MOOD + 1])
+	free_all(context.temp_allocator)
+}
+
+// A mood with no piece of its own leaves the world's music playing.
+@(test)
+test_mood_without_a_piece :: proc(t: ^testing.T) {
+	s: Sim
+	sim_init(&s, TEST_TRACKS[:7], 4)
+	s.input.gap = 3
+	sim_in_world(&s)
+	for !s.d.on[MUSIC_SLOT_PIECE] {sim_step(&s, 0.5)}
+	stops := s.stops
+	s.input.mood = .Boss
+	sim_run(&s, 5)
+	testing.expect(t, s.d.on[MUSIC_SLOT_PIECE], "a mood with no piece stopped the world's")
+	testing.expect_value(t, s.stops, stops)
+	free_all(context.temp_allocator)
+}
+
 @(test)
 test_layers :: proc(t: ^testing.T) {
 	d: Music_Director
@@ -493,7 +618,7 @@ test_music_hour_golden :: proc(t: ^testing.T) {
 @(private = "file")
 ignite_tracks :: proc() -> []Music_Track {
 	tracks := make([dynamic]Music_Track, context.temp_allocator)
-	append(&tracks, ..TEST_TRACKS[:])
+	append(&tracks, ..TEST_TRACKS[:7]) // (the ignite cue the eighth)
 	append(
 		&tracks,
 		Music_Track {

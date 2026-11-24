@@ -46,4 +46,20 @@ MUSIC := [?]Music_File {
 		#load("../../assets/music/ignite.ogg"),
 		#load("../../assets/music/ignite.json", string),
 	},
+	{
+		"underground",
+		#load("../../assets/music/underground.ogg"),
+		#load("../../assets/music/underground.json", string),
+	},
+	{
+		"danger",
+		#load("../../assets/music/danger.ogg"),
+		#load("../../assets/music/danger.json", string),
+	},
+	{"boss", #load("../../assets/music/boss.ogg"), #load("../../assets/music/boss.json", string)},
+	{
+		"victory",
+		#load("../../assets/music/victory.ogg"),
+		#load("../../assets/music/victory.json", string),
+	},
 }

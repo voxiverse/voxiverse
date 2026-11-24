@@ -1,0 +1,73 @@
+title "Custodian"
+tempo 132
+meter 4/4
+key d phrygian
+mood boss
+place any
+time any
+depth any
+worlds any
+loop yes
+seed 23
+humanize timing 10 ms velocity 5
+reverb 2.6 s 0.45
+instrument strings font freepats_synthstrings preset 0:0
+instrument timp font freepats_timpani preset 0:0
+instrument piano preset 0:0
+instrument harp font freepats_harp preset 0:0
+
+# The keeper of the deepest chamber: a heavy phrygian figure (doom) answered by a
+# grinding one (claw), on strings over a driving low piano and timpani, a low harp
+# tolling each phrase. Darker and faster than Danger. It loops.
+motif doom | f d4:q d#4:q f4:q d#4:q | d4:e d#4:e f4:e g4:e f4:h |
+motif claw | f a4:q g4:e f4:e g4:q f4:q | d#4:e f4:e d#4:q d4:h |
+
+part melody strings melody volume -3 dB pan 0.1
+  section A
+    play doom
+    play claw
+    play doom degrees 1
+    play claw vary 4
+  end
+  section B
+    play claw degrees 1
+    play doom
+    play claw retrograde
+    play doom
+  end
+  form A B A B'
+
+part drive piano volume -6 dB pan -0.2
+  section A
+    | mf d2:e d2:e d#2:e d2:e d2:e d2:e c2:e d2:e | d2:e d2:e d#2:e d2:e d2:e d2:e c2:e d2:e |
+    | a#1:e a#1:e c2:e a#1:e a#1:e a#1:e a1:e a#1:e | a#1:e a#1:e c2:e a#1:e a#1:e a#1:e a1:e a#1:e |
+    | c2:e c2:e d2:e c2:e c2:e c2:e a#1:e c2:e | c2:e c2:e d2:e c2:e c2:e c2:e a#1:e c2:e |
+    | d2:e d2:e d#2:e d2:e d2:e d2:e c2:e d2:e | d#2:e d#2:e d2:e d#2:e d2:e d2:e c2:e d2:e |
+  end
+  section B
+    | g1:e g1:e a1:e g1:e g1:e g1:e f1:e g1:e | g1:e g1:e a1:e g1:e g1:e g1:e f1:e g1:e |
+    | d2:e d2:e d#2:e d2:e d2:e d2:e c2:e d2:e | d2:e d2:e d#2:e d2:e d2:e d2:e c2:e d2:e |
+    | a#1:e a#1:e c2:e a#1:e a#1:e a#1:e a1:e a#1:e | c2:e c2:e d2:e c2:e c2:e c2:e a#1:e c2:e |
+    | d2:e d2:e d#2:e d2:e d2:e d2:e c2:e d2:e | d#2:e d#2:e d2:e d#2:e d2:e d2:e c2:e d2:e |
+  end
+  form A B A B
+
+part drums timp volume -6 dB pan 0.0
+  section A
+    | f d2:q d2:e d2:e d2:q a1:q | d2:q d2:e d2:e d2:q d2:q | a#1:q a#1:e a#1:e a#1:q f1:q | a#1:q a#1:e a#1:e a#1:q a#1:q |
+    | c2:q c2:e c2:e c2:q g1:q | c2:q c2:e c2:e c2:q c2:q | d2:q d2:e d2:e d2:q a1:q | d2:e d2:e d2:e d2:e d2:q d2:q |
+  end
+  section B
+    | g1:q g1:e g1:e g1:q d2:q | g1:q g1:e g1:e g1:q g1:q | d2:q d2:e d2:e d2:q a1:q | d2:q d2:e d2:e d2:q d2:q |
+    | a#1:q a#1:e a#1:e a#1:q f1:q | c2:q c2:e c2:e c2:q c2:q | d2:q d2:e d2:e d2:q a1:q | d2:e d2:e d2:e d2:e d2:q d2:q |
+  end
+  form A B A B
+
+part toll harp volume -10 dB pan 0.35
+  section A
+    | mp d4:w | r:w | a#3:w | r:w | c4:w | r:w | d4:w | r:w |
+  end
+  section B
+    | g3:w | r:w | d4:w | r:w | a#3:w | c4:w | d4:w | r:w |
+  end
+  form A B A B

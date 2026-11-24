@@ -1,0 +1,22 @@
+{
+  "title": "Danger",
+  "source": "danger.score",
+  "source_sha256": "7fc29802eb456567f24d112f41c77c11770189f378fd410849b462125cbbc088",
+  "soundfont_sha256": "e402377d330065a3c1db59d32ddc341184b7b0e8f990e08aa9f3db35e7ab8f78",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 3072000,
+  "seconds": 64.0,
+  "loop": true,
+  "loop_start": 0,
+  "loop_end": 3072000,
+  "lufs": -20.0,
+  "true_peak_db": -10.309,
+  "key": "e aeolian",
+  "tempo": 120,
+  "mood": ["danger"],
+  "place": ["any"],
+  "time": ["any"],
+  "depth": ["any"],
+  "worlds": ["any"]
+}

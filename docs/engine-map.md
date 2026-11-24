@@ -393,6 +393,8 @@ The types these name:
 - `Command_Spec :: struct {...}`: what console_register is given (the rest apart).
 - `Look :: render.Look`: a game's atmosphere (render.Look, docs/games.md): its sky, fog, light and the picture's colour, declared as data in its client part (Game.look); zero is the engine's own.
 - `Grade :: render.Grade`: the colour of a look's finished picture (render.Grade): tint, saturation, contrast and vignette; zero is none.
+- `music_mood :: proc(s: ^Session, mood: Music_Mood)`: the game's client part says what is happening now (each time it changes; a session starts Calm).
+- `Music_Mood :: music.Music_Mood`: what a game says is happening, for the music (music_mood): Calm (the world's own music), Underground, Danger, Boss, Victory (a fight just won: its stinger, once).
 - `Game_Camera :: struct {...}`: the camera a game wants this frame.
 - `Game_Camera_Kind :: enum u8 {Player, First, Third, Top_Down, Free}`: which camera a game's client part chooses (Game.camera).
 - `pointer_tool :: proc(s: ^Session) -> ^Pointer_Tool`: what the free pointer is over and its buttons this frame (all zero with any other camera).

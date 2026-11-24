@@ -13,8 +13,12 @@ import "common:worldgen"
 // carries out on the mixer (music_apply), so tests need no mixer. It plays the
 // title's piece on the menus (and the Ignite cue over the Ignite screen), lets the world's music come and go in
 // waits and tracks (one at a time, picked to fit where the player is), and
-// punctuates deaths and arrivals with stingers. The pieces and their tags are
-// the committed assets/music (music_data.odin).
+// punctuates deaths and arrivals with stingers. A game may state a mood (Music_Mood:
+// underground, danger, a boss, a victory): its own piece then plays in place of the
+// world's, cross-faded, and the director keeps to a mood a while after the game stops
+// stating it (hysteresis: a mood rises after mood_enter seconds stated and falls after
+// mood_leave), so a fight that comes and goes does not flap. The pieces and their tags are
+// the committed assets/music (data.odin).
 
 Music_Role :: enum u8 {
 	Piece, // played in a world
@@ -22,6 +26,31 @@ Music_Role :: enum u8 {
 	Death, // stinger
 	Discovery, // stinger
 	Ignite, // the cue of the Ignite screen, played once
+	Underground, // looped while the mood is Underground
+	Danger, // ... Danger
+	Boss, // ... Boss
+	Victory, // stinger: a fight won
+}
+
+// Music_Mood: what a game says is happening (engine.music_mood), in rising order: the
+// world's own music (Calm), then a deep place, a fight, a boss's fight; Victory is a fight
+// just won, whose stinger plays once as the mood rises to it.
+Music_Mood :: enum u8 {
+	Calm,
+	Underground,
+	Danger,
+	Boss,
+	Victory,
+}
+
+// MOOD_ROLE: the piece each mood plays (Calm: the world's, picked as ever).
+@(rodata)
+MOOD_ROLE := [Music_Mood]Music_Role {
+	.Calm        = .Piece,
+	.Underground = .Underground,
+	.Danger      = .Danger,
+	.Boss        = .Boss,
+	.Victory     = .Victory,
 }
 
 // Music_Track: a piece and what its metadata says about where it fits (a
@@ -69,6 +98,14 @@ music_tracks :: proc(arena: ^virtual.Arena) -> []Music_Track {
 			role = .Discovery
 		case f.name == "ignite":
 			role = .Ignite
+		case f.name == "underground":
+			role = .Underground
+		case f.name == "danger":
+			role = .Danger
+		case f.name == "boss":
+			role = .Boss
+		case f.name == "victory":
+			role = .Victory
 		}
 		tracks[i] = {
 			f.name,
@@ -106,6 +143,11 @@ Music_Tuning :: struct {
 	cave_fade:      f32,
 	stinger_fade:   f32, // the playing piece's fade-out before a stinger
 	leave_fade:     f32, // ... on leaving a world
+	mood_enter:     f32, // a higher mood stated this long before it plays
+	mood_leave:     f32, // a lower one this long before what plays falls to it
+	mood_fade:      f32, // the cross-fade from one mood's piece (or the world's) to the next
+	mood_out:       f32, // a mood's piece fading out as the mood falls to Calm
+	mood_return:    f32, // the wait after it before the world's music may come again
 }
 
 @(rodata)
@@ -129,6 +171,11 @@ MUSIC_DEFAULTS := Music_Tuning {
 	cave_fade      = 4,
 	stinger_fade   = 1,
 	leave_fade     = 2,
+	mood_enter     = 1,
+	mood_leave     = 8,
+	mood_fade      = 2,
+	mood_out       = 4,
+	mood_return    = 20,
 }
 
 @(rodata)
@@ -182,6 +229,31 @@ MUSIC_VARS := [?]base.Var {
 		min = 0,
 		max = 30,
 	},
+	{
+		field = "mood_enter",
+		help = "seconds a game states a higher mood before its piece plays",
+		min = 0,
+		max = 60,
+	},
+	{
+		field = "mood_leave",
+		help = "seconds a game states a lower mood before the music falls to it",
+		min = 0,
+		max = 120,
+	},
+	{field = "mood_fade", help = "seconds a mood's piece cross-fades in", min = 0, max = 30},
+	{
+		field = "mood_out",
+		help = "seconds a mood's piece fades out back to calm",
+		min = 0,
+		max = 30,
+	},
+	{
+		field = "mood_return",
+		help = "seconds of quiet after a mood before the world's music may come",
+		min = 0,
+		max = 7200,
+	},
 }
 
 music_table :: proc() -> base.Var_Table {
@@ -196,7 +268,8 @@ MUSIC_SLOT_STINGER :: 2
 MUSIC_SLOT_IGNITE :: 3
 MUSIC_SLOT_STEM :: 4
 MUSIC_STEMS :: 4
-MUSIC_SLOTS :: MUSIC_SLOT_STEM + MUSIC_STEMS
+MUSIC_SLOT_MOOD :: MUSIC_SLOT_STEM + MUSIC_STEMS // two: a mood's piece cross-fades into the other
+MUSIC_SLOTS :: MUSIC_SLOT_MOOD + 2
 
 Music_Input :: struct {
 	session:     bool, // a session exists (connecting, choosing, loading or playing)
@@ -212,6 +285,7 @@ Music_Input :: struct {
 	arrived:     bool, // this frame: arrival through a gate or travel into a world not seen before this run
 	explosion:   bool, // this frame: something blew up near (the mixer's duck answers it)
 	gap:         i32, // the gap option: 0 Rare .. 3 Constant
+	mood:        Music_Mood, // what the game says is happening now (engine.music_mood)
 }
 
 Music_Action_Kind :: enum u8 {
@@ -250,6 +324,10 @@ Music_Director :: struct {
 	leave_left: f32, // seconds until the title may start again
 	ignite_was: bool, // the Ignite screen was up last frame
 	layers:     Music_Layered,
+	mood:       Music_Mood, // the mood whose music plays (Calm: the world's)
+	mood_held:  f32, // seconds the game has stated another mood than it
+	mood_slot:  int, // the mood slot its piece plays on (MUSIC_SLOT_MOOD + 0 or 1)
+	won:        bool, // Victory was stated last frame (its stinger plays once a rise to it)
 }
 
 director_init :: proc(d: ^Music_Director, tracks: []Music_Track, seed: u64) {
@@ -393,6 +471,7 @@ director_update :: proc(
 			// Back from a world: what plays fades out, then the title comes.
 			d.in_session = false
 			d.first, d.waiting, d.cave = true, false, false
+			d.mood, d.mood_held, d.won = .Calm, 0, false
 			for slot in 1 ..< MUSIC_SLOTS {
 				if d.on[slot] {d.leave_left = t.leave_fade}
 				stop(d, out, slot, t.leave_fade)
@@ -423,18 +502,23 @@ director_update :: proc(
 	if !in_.playing || in_.loading {return}
 
 	// In a world.
+	won := in_.mood == .Victory
 	for role in ([?]struct {
 			role: Music_Role,
 			on:   bool,
-		}{{.Death, in_.died}, {.Discovery, in_.arrived}}) {
+		}{{.Death, in_.died}, {.Discovery, in_.arrived}, {.Victory, won && !d.won}}) {
 		if !role.on || d.on[MUSIC_SLOT_STINGER] {continue}
 		track := stinger_track(d, role.role)
 		if track < 0 {continue}
 		stop(d, out, MUSIC_SLOT_PIECE, t.stinger_fade)
+		for slot in MUSIC_SLOT_MOOD ..< MUSIC_SLOTS {stop(d, out, slot, t.stinger_fade)}
+		d.mood, d.mood_held = .Calm, 0 // (a mood still stated rises again after it)
 		d.on[MUSIC_SLOT_STINGER] = true
 		d.waiting = false
 		emit(out, {kind = .Play, track = track, voice_slot = MUSIC_SLOT_STINGER, gain = 1})
 	}
+	d.won = won
+	director_mood(d, in_, dt, out)
 	// In a cave a piece is quieter.
 	if d.on[MUSIC_SLOT_PIECE] {
 		cave := in_.depth >= t.cave_depth
@@ -454,6 +538,7 @@ director_update :: proc(
 	if !d.on[MUSIC_SLOT_PIECE] &&
 	   !d.on[MUSIC_SLOT_STINGER] &&
 	   !d.on[MUSIC_SLOT_IGNITE] &&
+	   d.mood == .Calm &&
 	   !d.waiting {
 		d.waiting = true
 		d.wait_left = director_wait(d, in_.gap)
@@ -479,6 +564,56 @@ director_update :: proc(
 			}
 		}
 	}
+}
+
+// director_mood: the mood whose music plays follows the one the game states, with
+// hysteresis: a higher mood once it has been stated mood_enter seconds on end, a lower one
+// once mood_leave (Victory counts as Calm here: its stinger is the rise to it). Rising or
+// falling to a mood with a piece, the world's piece (or the last mood's) fades out over
+// mood_fade as the mood's fades in on the other mood slot, looped; falling to Calm, the
+// mood's piece fades out over mood_out and the world's music comes again after a wait of
+// mood_return. A mood with no piece plays nothing of its own (the world's goes on).
+director_mood :: proc(d: ^Music_Director, in_: Music_Input, dt: f32, out: ^[dynamic]Music_Action) {
+	t := &d.tuning
+	stated := in_.mood if in_.mood != .Victory else .Calm
+	if stated == d.mood || d.on[MUSIC_SLOT_STINGER] {
+		d.mood_held = 0
+		return
+	}
+	if !in_.paused {d.mood_held += dt}
+	if d.mood_held < (t.mood_enter if stated > d.mood else t.mood_leave) {return}
+	d.mood, d.mood_held = stated, 0
+	track := stinger_track(d, MOOD_ROLE[stated]) if stated != .Calm else -1
+	if stated == .Calm || track < 0 {
+		for slot in MUSIC_SLOT_MOOD ..< MUSIC_SLOTS {
+			if !d.on[slot] {continue}
+			d.on[slot] = false
+			emit(out, {kind = .Stop, voice_slot = u8(slot), seconds = t.mood_out})
+		}
+		if stated == .Calm && !d.on[MUSIC_SLOT_PIECE] {
+			d.waiting, d.wait_left = true, t.mood_return
+		}
+		d.mood = stated if track >= 0 || stated == .Calm else .Calm
+		return
+	}
+	for slot in ([?]int{MUSIC_SLOT_PIECE, MUSIC_SLOT_MOOD, MUSIC_SLOT_MOOD + 1}) {
+		if !d.on[slot] {continue}
+		d.on[slot] = false
+		emit(out, {kind = .Stop, voice_slot = u8(slot), seconds = t.mood_fade})
+	}
+	d.waiting = false
+	d.mood_slot = MUSIC_SLOT_MOOD + 1 if d.mood_slot == MUSIC_SLOT_MOOD else MUSIC_SLOT_MOOD
+	d.on[d.mood_slot] = true
+	emit(
+		out,
+		{
+			kind = .Play,
+			track = track,
+			voice_slot = u8(d.mood_slot),
+			gain = 1,
+			seconds = t.mood_fade,
+		},
+	)
 }
 
 // director_set_layers moves the stems to their levels (over a second).

@@ -1,0 +1,58 @@
+title "Underground"
+tempo 60
+meter 4/4
+key a aeolian
+mood underground
+place any
+time any
+depth any
+worlds any
+loop yes
+seed 31
+humanize timing 10 ms velocity 5
+reverb 5.0 s 0.6
+instrument strings font freepats_synthstrings preset 0:0
+instrument felt font felt preset 0:0
+instrument harp font freepats_harp preset 0:0
+
+# The keepers' works: a slow string pad, a harp turning low, and a soft felt piano line
+# that falls and drips like water in the dark (echo, drip), coming back changed. Quiet and wide; it loops under a delve's corridors.
+motif echo | mp e4:h d4:q c4:q | b3:h. r:q |
+motif drip | c4:q d4:q e4:h | d4:w |
+
+part melody felt melody volume -6 dB pan 0.25
+  section A
+    play echo
+    play drip
+    play echo vary 1
+    play drip degrees -1
+  end
+  section B
+    play echo degrees 2
+    play drip
+    play echo invert
+    play drip
+  end
+  form A B A'
+
+part pad strings volume -12 dB pan -0.15
+  section A
+    | pp [a2 e3 c4]:w | [a2 e3 c4]:w | [f2 c3 a3]:w | [f2 c3 a3]:w |
+    | [g2 d3 b3]:w | [g2 d3 b3]:w | [e2 b2 g3]:w | [e2 b2 g3]:w |
+  end
+  section B
+    | [d3 f3 a3]:w | [d3 f3 a3]:w | [a2 e3 c4]:w | [a2 e3 c4]:w |
+    | [f2 c3 a3]:w | [g2 d3 b3]:w | [e2 b2 g3]:w | [e2 b2 g3]:w |
+  end
+  form A B A
+
+part turn harp volume -14 dB pan -0.35
+  section A
+    | p a2:q e3:q c4:q e3:q | a2:q e3:q c4:q e3:q | f2:q c3:q a3:q c3:q | f2:q c3:q a3:q c3:q |
+    | g2:q d3:q b3:q d3:q | g2:q d3:q b3:q d3:q | e2:q b2:q g3:q b2:q | e2:q b2:q g3:q b2:q |
+  end
+  section B
+    | d2:q a2:q f3:q a2:q | d2:q a2:q f3:q a2:q | a2:q e3:q c4:q e3:q | a2:q e3:q c4:q e3:q |
+    | f2:q c3:q a3:q c3:q | g2:q d3:q b3:q d3:q | e2:q b2:q g3:q b2:q | e2:q b2:q g3:q b2:q |
+  end
+  form A B A

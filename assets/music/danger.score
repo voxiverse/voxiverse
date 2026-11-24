@@ -1,0 +1,75 @@
+title "Danger"
+tempo 120
+meter 4/4
+key e aeolian
+mood danger
+place any
+time any
+depth any
+worlds any
+loop yes
+seed 11
+humanize timing 10 ms velocity 5
+reverb 1.8 s 0.35
+instrument strings font freepats_synthstrings preset 0:0
+instrument piano preset 0:0
+instrument timp font freepats_timpani preset 0:0
+instrument felt font felt preset 0:0
+
+# Something is coming for you: a low piano ostinato in eighths under a pulse of
+# timpani, and a short, pressing figure (threat) that climbs (rise) and keeps coming
+# back, a step at a time. It loops: the last bar leads into the first.
+motif threat | mf e4:q f#4:e g4:e f#4:q e4:q | d4:e e4:e f#4:q e4:h |
+motif rise | g4:q a4:e b4:e a4:q g4:q | f#4:e g4:e a4:q b4:h |
+
+part melody strings melody volume -4 dB pan 0.15
+  section A
+    play threat
+    play threat vary 2
+    play rise
+    play threat degrees -1
+  end
+  section B
+    play rise degrees 1
+    play threat invert
+    play rise
+    play threat
+  end
+  form A B A B'
+
+part ostinato piano volume -9 dB pan -0.2
+  section A
+    | mp e2:e e3:e e2:e e3:e e2:e e3:e e2:e e3:e | e2:e e3:e e2:e e3:e e2:e e3:e e2:e e3:e |
+    | c2:e c3:e c2:e c3:e c2:e c3:e c2:e c3:e | c2:e c3:e c2:e c3:e c2:e c3:e c2:e c3:e |
+    | d2:e d3:e d2:e d3:e d2:e d3:e d2:e d3:e | d2:e d3:e d2:e d3:e d2:e d3:e d2:e d3:e |
+    | e2:e e3:e e2:e e3:e e2:e e3:e e2:e e3:e | b1:e b2:e b1:e b2:e b1:e b2:e b1:e b2:e |
+  end
+  section B
+    | a1:e a2:e a1:e a2:e a1:e a2:e a1:e a2:e | a1:e a2:e a1:e a2:e a1:e a2:e a1:e a2:e |
+    | e2:e e3:e e2:e e3:e e2:e e3:e e2:e e3:e | e2:e e3:e e2:e e3:e e2:e e3:e e2:e e3:e |
+    | c2:e c3:e c2:e c3:e c2:e c3:e c2:e c3:e | c2:e c3:e c2:e c3:e c2:e c3:e c2:e c3:e |
+    | d2:e d3:e d2:e d3:e d2:e d3:e d2:e d3:e | b1:e b2:e b1:e b2:e b1:e b2:e b1:e b2:e |
+  end
+  form A B A B
+
+part pulse timp volume -8 dB pan -0.1
+  section A
+    | mp e2:q r:q e2:q e2:e e2:e | e2:q r:q e2:q r:q | c2:q r:q c2:q c2:e c2:e | c2:q r:q c2:q r:q |
+    | d2:q r:q d2:q d2:e d2:e | d2:q r:q d2:q r:q | e2:q r:q e2:q e2:e e2:e | b1:q b1:q b1:q b1:q |
+  end
+  section B
+    | a1:q r:q a1:q a1:e a1:e | a1:q r:q a1:q r:q | e2:q r:q e2:q e2:e e2:e | e2:q r:q e2:q r:q |
+    | c2:q r:q c2:q c2:e c2:e | c2:q r:q c2:q r:q | d2:q r:q d2:q d2:e d2:e | b1:q b1:q b1:q b1:q |
+  end
+  form A B A B
+
+part chords felt volume -12 dB pan 0.3
+  section A
+    | p [e3 g3 b3]:w | [e3 g3 b3]:w | [c3 e3 g3]:w | [c3 e3 g3]:w |
+    | [d3 f#3 a3]:w | [d3 f#3 a3]:w | [e3 g3 b3]:w | [b2 d3 f#3]:w |
+  end
+  section B
+    | [a2 c3 e3]:w | [a2 c3 e3]:w | [e3 g3 b3]:w | [e3 g3 b3]:w |
+    | [c3 e3 g3]:w | [c3 e3 g3]:w | [d3 f#3 a3]:w | [b2 d3 f#3]:w |
+  end
+  form A B A B

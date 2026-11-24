@@ -79,8 +79,18 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
   fades out (`music.ignite_fade`) and the `ignite` piece plays once from t = 0 of the screen's
   animation, so its peak lands on the planet reveal; it is left to finish (the title does not
   return and the world's first wait starts after it). With no `ignite` piece nothing happens.
-  Every number is a `music.*` console
-  variable.
+  A game states a mood with `engine.music_mood(s, mood)` (`music.Music_Mood`: Calm,
+  Underground, Danger, Boss, Victory, in rising order): a mood with a piece of its own
+  (`underground`, `danger`, `boss`, looped) cross-fades in over `music.mood_fade` for the
+  world's piece (or the last mood's, on the other of the two mood slots) once stated
+  `music.mood_enter` seconds on end; what plays falls to a lower mood only once that has been
+  stated `music.mood_leave` seconds on end (a pause holds that clock), so a fight that comes
+  and goes does not flap; back at Calm the mood's piece fades out over `music.mood_out` and
+  the world's music waits `music.mood_return` before it comes again. Victory plays the
+  `victory` stinger once as it is stated (the mood's piece fading as for a death's) and
+  counts as Calm after. A mood with no piece leaves the world's music as it is. Every number
+  is a `music.*` console variable; the Music volume and the gap option are the player's as
+  ever (the mood's pieces play on the Music bus).
 
 ## Music pipeline
 
