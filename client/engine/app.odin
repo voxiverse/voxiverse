@@ -58,6 +58,9 @@ App :: struct {
 	ui_pass:             render.Ui_Pass,
 	world_pass:          render.World_Pass,
 	sky_pass:            render.Sky_Pass,
+	weather_pass:        render.Weather_Pass, // what falls from the sky
+	weather_draw:        render.Weather_Draw, // ... this frame's drops (client/atmosphere chooses them)
+	atmosphere:          Atmosphere, // the weather's flash and thunder, the ambience's beds (sounds.odin)
 	scenes:              render.Scene_Buffers,
 	debug_pass:          render.Debug_Pass,
 	debug_draw:          render.Debug_Draw, // this frame's debug lines
@@ -435,6 +438,7 @@ start_session :: proc(app: ^App, config: Session_Config) {
 // leave_world ends the session and returns to the title screen.
 leave_world :: proc(app: ^App) {
 	if app.session == nil {return}
+	atmosphere_stop(app)
 	app.shown = nil // (its registry goes with it)
 	gpu.wait_idle(&app.g) // its meshes may be in use
 	if !session_end(app.session, &app.world_pass, &app.g) {

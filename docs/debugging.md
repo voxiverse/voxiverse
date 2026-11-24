@@ -353,7 +353,7 @@ They are part of the gate: `./build.sh test` with no package named (and no `-o:`
 `-sanitize:` or `-test-name:`) renders them beside the unit tests, `./build.sh images` as
 one of its jobs from the start, and fails if any scene does. On a machine of few cores the
 unit tests' last minutes are a few tests waiting on the disk (server/core's crash points
-sync every write), and the rendering fills them. On this 8-core machine the 42 scenes take
+sync every write), and the rendering fills them. On this 8-core machine the 46 scenes take
 about ten minutes (four at once; lavapipe draws on the CPU). A narrowed run
 (`test <package>`) does not render them, and on Windows and macOS `test` says they were not
 run.
@@ -370,6 +370,8 @@ next is fixed:
 - still clouds, no creatures, and still rules: the daylight cycle stopped at the benchmarks'
   time of day (a scene may set another with `/time set`), no random ticks, and no gravity,
   so a player teleported anywhere stays there;
+- clear weather (`/weather clear`; a scene may set another with `/weather`: the `weather_*`
+  scenes do), and with the clock stopped the rain's streaks stand where they are;
 - the water's animation stopped;
 - time itself: while the script runs (however long the world takes to load) every frame's
   step is 0, and after it the scene draws `SCENE_SETTLE_FRAMES` frames (2.5 s) of exactly

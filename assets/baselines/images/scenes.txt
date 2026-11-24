@@ -79,3 +79,10 @@ craft: @1280x720 /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:
 quests: @1280x720 /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 5; /give @s log 4; ticks 150; wait_world; key x down; wait 2; key x up; pointer 851 269; wait 2; key mouse_left down; wait 2; key mouse_left up; ticks 30; key x down; wait 2; key x up; key j down; wait 2; key j up; pointer 1240 700
 tracker: @1280x720 set quest_tracker 1; /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 3; ticks 150; wait_world; look 90 -10
 tracker_small: @640x360 set quest_tracker 1; /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 3; ticks 150; wait_world; look 90 -10
+# The weather (`/weather <kind>` stands it; every other scene's is clear): rain
+# at noon, a storm at dusk, a dawn's mist, and a clear night's stars and moon.
+# Time stands still in a scene, so the rain's streaks stand where they fell.
+weather_rain_noon: /weather rain; /time set noon; look 30 0
+weather_storm_dusk: /weather storm; /time set 0.74; look 30 0
+weather_fog_dawn: /weather fog; /time set 0.27; look 30 0
+weather_clear_night: /time set midnight; look 180 55

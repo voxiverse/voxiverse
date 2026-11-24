@@ -104,6 +104,7 @@ app_init :: proc(app: ^engine.App) -> bool {
 	if !prompt.prompt_icons_init(&app.prompt_icons, &app.ui) {return false}
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
+	render.weather_draw_init(&app.weather_draw)
 	render.held_draw_init(&app.held_draw)
 	if !render.scene_init(&app.scenes, g) {return false}
 	app.mixer = new(audio.Mixer)
@@ -161,6 +162,7 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
 	render.entity_draw_destroy(&app.entity_draw)
+	render.weather_draw_destroy(&app.weather_draw)
 	render.held_draw_destroy(&app.held_draw)
 	engine.held_cache_destroy(&app.held_cache)
 	engine.held_mesh_destroy(&app.held_arm)
@@ -369,6 +371,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		}
 		in_world :=
 			app.session != nil && app.session.state == .Playing && app.session.loading == nil
+		if !in_world {engine.atmosphere_stop(app)}
 		camera: render.Camera
 		scene, view_scene: u64
 		if in_world {
@@ -383,6 +386,8 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			)
 			fog := f32(s.welcome.view_radius * game.CHUNK_SIZE)
 			sky := render.look_sky(s.game.look, game.time_of_day(s.clock))
+			// The weather, unless the game's look holds its sky still (its own time of day).
+			if s.game.look.time == 0 {sky = atmosphere_frame(app, s, sky)}
 			made := render.scene_make(
 				camera,
 				sky,
@@ -415,6 +420,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			base.profile_scope("entity uploads")
 			render.debug_upload(&app.debug_pass, g, &app.debug_draw, camera)
 			render.entity_upload(&app.entity_pass, g, &app.entity_draw, camera)
+			render.weather_upload(&app.weather_pass, g, &app.weather_draw, camera)
 			render.held_upload(&app.held_pass, g, &app.held_draw, camera)
 		}
 		if in_world {
@@ -435,6 +441,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			render.held_draw_world(&app.held_pass, g, frame, scene, textures)
 			render.sky_draw(&app.sky_pass, g, frame, scene)
 			render.world_draw_translucent(&app.world_pass, g, frame, scene, app.seconds)
+			render.weather_draw(&app.weather_pass, g, frame, scene)
 			render.debug_draw(&app.debug_pass, g, frame, camera)
 			render.held_draw_view(&app.held_pass, g, frame, view_scene, textures)
 		}

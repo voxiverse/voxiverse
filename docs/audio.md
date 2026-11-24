@@ -20,7 +20,7 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
 | Loudness | Music is mastered to -20 LUFS integrated with a -1 dB true-peak ceiling (`tools/music/master.odin`). The master has a look-ahead limiter at -1 dBFS (a listener option can lower the ceiling to at most -0.1). A K-weighted loudness meter (BS.1770) is in the engine for tests and analysis. |
 | Real time | The audio thread never allocates, locks or logs. The game thread and the audio thread talk through two lock-free rings (commands in, voice-end events out); a full command ring drops the command and counts it. |
 | Cost | The mix of 64 real voices stays under 5% of one core: a 480-frame block (10 ms) is timed by the `audio` scenario of `build bench` in a release build (`BENCH_AUDIO_BUDGET`). |
-| Sound effects | Synthesized at start-up by `client/sfx` (no recordings): layers of filtered noise bursts and decaying tones at 16 kHz, crushed to 8 bits, three variants of each sound, resampled to the device rate when registered. |
+| Sound effects | Synthesized at start-up by `client/sfx` (no recordings): layers of filtered noise bursts and decaying tones at 16 kHz, crushed to 8 bits, three variants of each sound, resampled to the device rate when registered. The ambience's loops and thunder are made the same way, uncrushed. |
 
 ## The engine
 
@@ -57,6 +57,15 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
   world play where they happened, relative to the camera (`client/engine/sounds.odin`).
 - **Listener options** (applied to Master before the limiter): mono, swap channels, headphone
   cross-feed (the other ear gets the lows), the Night compressor, and the limiter ceiling.
+- **Ambience.** Seven loops (`sfx.Bed`: wind, rain, water, cave, insects, birds, hum), made
+  at start-up by `client/sfx/ambience.odin` (6 s each, their tails faded into their heads, not
+  crushed to 8 bits), play all the time in a world on the Ambience bus, each at the weight
+  where the listener is gives it (`atmosphere.bed_weights`: wind by height, weather and
+  shelter; rain on the ground, quieter under a roof, none under rock; water from the blocks
+  near; the cave's drone deep under cover; insects on warm calm nights, birds on fair days;
+  the hum near a game's hum sources), eased in and out over `BED_FADE` (1.5 s). Thunder
+  (three variants) is played on the same bus, delayed by the strike's distance, quieter and
+  duller far off or under cover. The Ambience slider is the bus's gain.
 - **Events.** The session records what happened (`Sound_Kind`: break, place, step, land, hurt,
   die, launch, explosion, weapon shots, hit markers) and the app plays each frame's events as
   voices with a random pitch drawn on the game thread. A pack's sound sets (`assets/sounds/`: Ogg files by action, up to

@@ -16,6 +16,7 @@ Pass :: enum u8 {
 	Entity,
 	Held,
 	World,
+	Weather,
 }
 
 Pass_Info :: struct {
@@ -121,6 +122,23 @@ PASSES := [Pass]Pass_Info {
 			return render.world_reload(&app.world_pass, &app.g, shaders)
 		},
 		destroy = proc(app: ^App) {render.world_destroy(&app.world_pass, &app.g)},
+	},
+	.Weather = {
+		shader = "weather",
+		includes = {"scene"},
+		init = proc(app: ^App, vert, frag: []u8) -> bool {return render.weather_init(
+				&app.weather_pass,
+				&app.g,
+				vert,
+				frag,
+			)},
+		reload = proc(app: ^App, vert, frag: []u8) -> bool {return render.weather_reload(
+				&app.weather_pass,
+				&app.g,
+				vert,
+				frag,
+			)},
+		destroy = proc(app: ^App) {render.weather_destroy(&app.weather_pass, &app.g)},
 	},
 }
 

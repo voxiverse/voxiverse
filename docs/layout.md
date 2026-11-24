@@ -163,6 +163,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/planet` | The planet palette for the title and creation backdrops | `*.odin` |
 | `client/platform` | Windows, input and pads per OS | `*.odin` |
 | `client/render` | Frame rendering | `*.odin` |
+| `client/atmosphere` | The air round the player: what the weather does to the sky, what falls and where, the ambience's beds and their weights | `*.odin` |
 | `client/sfx` | Sound-effect synthesis | `*.odin` |
 | `client/steam` | The client's Steam: one interface over the run-time-loaded Steamworks flat API and a fake, and the Workshop (subscribed packs, publishing) | `*.odin` |
 | `client/starfield` | The starfield backdrop | `*.odin` |

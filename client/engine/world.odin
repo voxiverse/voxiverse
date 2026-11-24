@@ -531,6 +531,15 @@ world_set_column :: proc(w: ^World, m: protocol.Column) {
 	column.heights = m.heights
 }
 
+// world_column_top: the top of block column (x, z) (the highest block the sky's light
+// stops at), false when its chunk column is not here.
+world_column_top :: proc(w: ^World, x, z: i32) -> (i32, bool) {
+	column, ok := w.columns[[2]i32{x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT}]
+	if !ok {return 0, false}
+	return column.heights[int(x & game.CHUNK_MASK) + int(z & game.CHUNK_MASK) * game.CHUNK_SIZE],
+		true
+}
+
 // predict_column_top updates p's column height for a predicted edit (the
 // server's Column has the last word).
 @(private = "file")

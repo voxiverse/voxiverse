@@ -29,6 +29,7 @@ OPTIONS_TABS := [engine.Options_Tab][]string {
 		"gui_scale",
 		"brightness",
 		"clouds",
+		"weather_effects",
 		"show_fps",
 	},
 	.Audio         = {

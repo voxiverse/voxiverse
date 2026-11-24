@@ -36,7 +36,8 @@ The game's scenarios run a release build with `--benchmark <scenario>` under fix
   size, 64 to 8192 a side; its results are kept as a scenario of their own
   (`views-2560x1440`), since numbers at different sizes never compare;
 - the scratch world and its fixed spawn;
-- the time of day stopped at late morning (0.45), still clouds, no creatures, no sound device.
+- the time of day stopped at late morning (0.45), clear weather, still clouds, no creatures, no
+  sound device.
 
 Each scenario runs three repetitions, each a separate session after a warm-up. It writes
 `build/benchmarks/<scenario>/<time>-<commit>.json` (every metric of every repetition, the

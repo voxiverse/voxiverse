@@ -19,7 +19,8 @@ import "server:collector"
 // is fixed: the benchmarks' settings (BENCHMARK_SETTINGS), the scratch world
 // at its fixed spawn with still clouds and no creatures, still rules (the time of
 // day stopped at BENCH_TIME_OF_DAY unless the scene sets another, no random
-// ticks, no gravity: a player put somewhere stays there), the water's
+// ticks, no gravity: a player put somewhere stays there), clear weather (unless
+// the scene sets another with /weather), the water's
 // animation stopped (App.seconds stays 0), no chat lines or toasts (they fade
 // with the clock: cleared before the picture), and the size: SCENE_SIZE (or
 // the scene's own @WxH), drawn offscreen whatever the window is. A menu scene
@@ -34,7 +35,7 @@ SCENE_SIZE :: [2]u32{640, 360}
 // from the server and the world round where it stands is loaded and meshed,
 // a few frames for the GPU before the picture.
 SCENE_STILL ::
-	"set rules.daylight_cycle 0; set rules.random_tick_speed 0; set rules.gravity 0; /time set " +
+	"set rules.daylight_cycle 0; set rules.random_tick_speed 0; set rules.gravity 0; /weather clear; /time set " +
 	BENCH_TIME_OF_DAY +
 	"; sleep 1"
 SCENE_BEFORE :: "wait_world; " + SCENE_STILL

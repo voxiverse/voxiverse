@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 
+import "client:atmosphere"
 import "client:audio"
 import "client:sfx"
 import "common:base"
@@ -60,6 +61,8 @@ Sound_Bank :: struct {
 	blast:        [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
 	gate:         [sfx.Gate_Sound][sfx.VARIANTS]audio.Sound_Id,
 	gun:          [sfx.Gun_Sound][sfx.VARIANTS]audio.Sound_Id,
+	bed:          [sfx.Bed]audio.Sound_Id, // the ambience's loops
+	thunder:      [sfx.VARIANTS]audio.Sound_Id,
 	samples:      [dynamic][]f32, // owned
 }
 
@@ -112,6 +115,34 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	for x in sfx.Gate_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.gate[x][v] = add(b, m, sfx.gate_sound(x, v), fmt.tprintf("gate.%v.%d", x, v))}
 	}
+	for x in sfx.Bed {b.bed[x] = add(b, m, sfx.bed_sound(x), fmt.tprintf("bed.%v", x))}
+	for v in 0 ..< sfx.VARIANTS {b.thunder[v] = add(b, m, sfx.thunder_sound(v), fmt.tprintf("thunder.%d", v))}
+}
+
+// Atmosphere: what the App keeps of the air round the player from frame to frame
+// (client/main/atmosphere.odin runs it): the ambience's loops and their weights, the
+// lightning strike last thundered, how much water is near.
+Atmosphere :: struct {
+	beds:       [sfx.Bed]audio.Voice_Id, // playing while in a world (0: not)
+	sent:       [sfx.Bed]f32, // the gain each was last given
+	mix:        atmosphere.Ambience,
+	strike:     i64, // the slot of the last strike thundered (game.Strike.slot)
+	water:      f32, // 0..1, sampled every WATER_EVERY
+	water_next: f64, // App.seconds at which to sample it again
+	flash:      f32, // the lightning's flash this frame (0..1), as drawn
+	weather:    game.Weather, // this frame's, where the player is
+	climate:    game.Climate,
+}
+
+// atmosphere_stop fades the ambience out (leaving a world).
+atmosphere_stop :: proc(app: ^App) {
+	a := &app.atmosphere
+	for &v in a.beds {
+		if v != {} && app.mixer != nil {audio.stop(app.mixer, v, 0.5)}
+		v = {}
+	}
+	a.mix = {}
+	a.sent = {}
 }
 
 // gun_cue: a weapon's `sound` cue as the sound of its shot.

@@ -357,6 +357,43 @@ at their day and place and change nothing before it.
   Sahel, New Guinea). The model's Köppen errors in Africa (central-African savanna as Csb) are why
   the bar is not higher.
 
+## Weather
+
+A world's weather is a pure function of its weather seed (`game.weather_seed`: its seed and its
+address, so every world of a universe has its own) and its clock (`common/game/weather.odin`).
+The server and every client work it out alike: the server sends only the seed, the kind a
+`/weather` command made it stand at, and the climate where the player stands (the `Weather`
+record, `server/core/weather.odin`). Stopping the daylight cycle stops the weather with it.
+
+- **Spells.** Time is cut into spells of a third of a day (`SPELL_DAYS`: 6 min 40 s in the
+  default day). Each spell is clear (45 in 100), overcast (25), rain (21) or a storm (9), drawn
+  from the seed; over the last quarter of a spell the weather eases into the next one's, so it
+  never jumps. A weather is five values 0..1 (`game.Weather`): cloud, rain, storm, fog, wind.
+  A world's first day is always clear.
+- **Mist.** Some dawns are misty (35 in 100, 80 after a night of rain): the mist gathers
+  before sunrise, is thickest just after and burns off by mid-morning. The client lays it
+  whole in low ground (up to 16 blocks above the sea) and thins it to nothing by 56.
+- **Climate.** What falls depends on where the player stands, from the generator's biome:
+  snow in the cold (tundra, frozen ocean, ice sheet, mountains, cold desert), nothing in a
+  desert (the cloud still comes), rain elsewhere. The server works it out again when the
+  player crosses a 32-block cell.
+- **Lightning.** In a storm, each 3-second slot of world time has a chance of a strike (30 in
+  100 in a full storm) at a moment, distance (150 to 3000 blocks) and bearing drawn from the
+  seed: the same strike on every machine. The client flashes the sky and the light (a soft
+  glow with Reduce motion) and plays its thunder after the time sound takes to come that far.
+- **What the player sees** (`client/atmosphere`, `render.sky_weathered`): cloud greys and
+  flattens the sky, hides the sun, moon and stars, lowers the cloud map's threshold until the
+  blocky clouds close into one sheet and dims the sky's light; rain and storm darken it more;
+  mist and rain bring the fog in. Rain falls as streaks and snow as flakes in the 14 blocks
+  round the camera (`MAX_DROPS`, 2400, at most): one column-top look-up a column keeps them
+  out from under roofs, trees and rock.
+- **Hum sources.** A game marks blocks as humming (`core.world_hum`); each player is told of
+  the nearest 16 within 96 blocks (the `Hum` records), heard as a low hum within 40.
+
+`/weather [kind|auto]` says or sets it; the visual baselines stand it at clear unless a scene
+sets another. Options' **Rain and snow** turns off the falling and the flashes (the sky still
+clouds over).
+
 ## Simulation islands
 
 The world is simulated in detail only around its observers (`common/island`; `server/core/worlds.odin`

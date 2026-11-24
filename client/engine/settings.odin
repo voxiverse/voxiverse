@@ -40,6 +40,7 @@ Settings :: struct {
 	gui_scale:         i32, // 0 = automatic
 	brightness:        f32, // 0..1: lifts the darkest light levels
 	clouds:            bool,
+	weather_effects:   bool, // rain and snow drawn falling, lightning flashing
 	show_fps:          bool, // the FPS counter in the corner
 	// Sound
 	volume:            f32, // 0..1, all sound (the Master bus)
@@ -87,6 +88,7 @@ SETTINGS_DEFAULTS := Settings {
 	render_distance   = 12,
 	gui_scale         = 0,
 	clouds            = true,
+	weather_effects   = true,
 	volume            = 0.8,
 	music_volume      = 0.25,
 	ambience_volume   = 1,
@@ -208,6 +210,12 @@ SETTINGS_VARS := [?]base.Var {
 		step = 0.05,
 	},
 	{field = "clouds", help = "Draw the clouds in the sky.", choices = {{0, "Off"}, {1, "On"}}},
+	{
+		field = "weather_effects",
+		label = "Rain and snow",
+		help = "Draw rain and snow falling and lightning flashing. Off, the sky still clouds over. Reduce motion softens the flashes.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
 	{
 		field = "show_fps",
 		label = "Show FPS",

@@ -121,6 +121,7 @@ BENCHMARK_SETTINGS := engine.Settings {
 	fov               = 70,
 	render_distance   = 12, // 12 x 6 chunks (view_size)
 	clouds            = true,
+	weather_effects   = true, // (the weather is clear in a benchmark: nothing falls)
 	vsync             = false,
 	volume            = 0,
 	music_volume      = 1,
@@ -261,9 +262,10 @@ bench_update :: proc(app: ^engine.App) {
 			bench_repetition_done(app)
 			return
 		}
-		// The conditions: the time of day stopped where it is set.
+		// The conditions: the time of day stopped where it is set, the weather clear.
 		engine.session_set_rule(s, "rules.daylight_cycle", "0")
 		engine.send_message(s, protocol.Command{"time " + BENCH_TIME_OF_DAY})
+		engine.send_message(s, protocol.Command{"weather clear"})
 		b.phase, b.frames, b.started = .Warming, 0, time.tick_now()
 	case .Warming:
 		if b.frames < (BENCH_SMOKE_WARMUP if b.smoke else BENCH_WARMUP_FRAMES) {return}
