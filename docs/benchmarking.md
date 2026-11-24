@@ -8,7 +8,7 @@ proportions from traces.
 
 | Scenario | Measures |
 |---|---|
-| `chunks` | Generating, lighting and meshing a fixed region on one thread, without the game (`tools/bench`). With `-check`, it also fails if the chunk, mesh or vertex counts changed or a stage's median over 5 runs exceeded a generous budget. Another region (`-seed`, `-radius`, `-x`, `-z`) is the scenario `chunks-custom`, never compared with `chunks`. |
+| `chunks` | Generating, lighting and meshing a fixed region on one thread, without the game (`tools/bench`). With `-check`, it also fails if the chunk, mesh or vertex counts changed or a stage's median over 5 runs exceeded a generous budget. Another region (`-seed`, `-radius`, `-x`, `-z`) is the scenario `chunks-custom`, never compared with `chunks`. `-class <name>` runs it on a world class's first world around its spawn (the scenario `chunks-<name>`; [world.md](world.md#world-classes)), its stages judged by the same budgets with `-check`, its counts not pinned. |
 | `load` | Joining the scratch world until everything around is loaded and meshed: load time, the pools' work, server ticks. |
 | `views` | Sixteen still views from the spawn: each GPU pass, triangles, the CPU's frame. |
 | `views-far` | The same views at view radius 24, height 12: what culling and recording cost as the view grows. A name of its own: it never compares with `views`. On a machine whose CPU and GPU share power (an integrated GPU), `frame_record` follows the GPU's load as much as the CPU's work: compare it with `views` drawn at a size that loads the GPU as much (`-size:2560x1440`). |

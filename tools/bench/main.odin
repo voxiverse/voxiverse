@@ -8,6 +8,7 @@ import "client:mesh"
 import "common:base"
 import "common:game"
 import platform "common:platform"
+import "common:starmap"
 import "common:worldgen"
 
 // The `chunks` benchmark scenario (`build bench chunks`):
@@ -19,7 +20,8 @@ import "common:worldgen"
 // scratch. Deterministic: the same chunks, faces and vertices every time
 // (the counts), so a change shows as time alone. The result goes where the
 // game's scenarios' do (common/base/bench_result.odin). Built optimized with line
-// tables, for perf (`build perf bench`).
+// tables, for perf (`build perf bench`). With -class, the same on a world
+// class's world (common/worldgen/classes.odin), around its spawn.
 
 Options :: struct {
 	seed:        i64 `usage:"world seed (default 1)"`,
@@ -28,6 +30,7 @@ Options :: struct {
 	z:           int `usage:"the centre, z (blocks)"`,
 	repetitions: int `usage:"times the whole is done from scratch (default 3, 5 with -check)"`,
 	check:       bool `usage:"fail unless the counts are CHECK's and every stage's mean is within its budget (CI)"`,
+	class:       string `usage:"a world class's world instead (temperate, canyon, frozen, ocean, volcanic, fungal, moon, jungle: common/worldgen/classes.odin), around its spawn; -check judges its stages by the same budgets (its counts are its own)"`,
 }
 
 // The default region is the scenario `chunks`; any other is `chunks-custom`
@@ -94,15 +97,22 @@ main :: proc() {
 		return
 	}
 	flags.parse_or_exit(&opts, os.args, .Odin)
-	default_region := opts.seed == 1 && opts.radius == 3 && opts.x == 0 && opts.z == 0
-	if opts.check && !default_region {
+	plain_region := opts.seed == 1 && opts.radius == 3 && opts.x == 0 && opts.z == 0
+	default_region := plain_region && opts.class == ""
+	if opts.check && !plain_region {
 		fmt.eprintln("bench: -check is for the default region (no -seed, -radius, -x, -z)")
+		os.exit(2)
+	}
+	if _, known := worldgen.class_by_name(opts.class);
+	   opts.class != "" && (!known || opts.class == "none") {
+		fmt.eprintfln("bench: no world class %q", opts.class)
 		os.exit(2)
 	}
 	result := base.Bench_Result {
 		scenario = "chunks" if default_region else "chunks-custom",
 		version  = SCENARIO_VERSION,
 	}
+	if opts.class != "" && plain_region {result.scenario = fmt.tprintf("chunks-%s", opts.class)}
 	counts: Counts
 	broken := make([dynamic]string, context.temp_allocator)
 	over := make([dynamic]string, context.temp_allocator)
@@ -131,6 +141,8 @@ main :: proc() {
 	}
 
 	side := 2 * opts.radius + 1
+	if opts.class !=
+	   "" {fmt.printfln("the %s class's first world (around its spawn unless -x, -z say)", opts.class)}
 	fmt.printfln(
 		"seed %d, %dx%d columns around (%d, %d): %d chunks generated (%d uniform); %d meshed, %d skipped; %d repetitions",
 		opts.seed,
@@ -220,7 +232,7 @@ main :: proc() {
 			}
 		}
 	}
-	if opts.check && len(broken) == 0 {
+	if opts.check && len(broken) == 0 && default_region {
 		for c in ([]struct {
 				name: string,
 				n:    int,
@@ -246,6 +258,20 @@ run :: proc(opts: Options) -> (counts: Counts) {
 	gen := worldgen.generator_make(.Earth, opts.seed, reg)
 	r := i32(opts.radius)
 	centre := [2]i32{i32(opts.x) >> game.CHUNK_SHIFT, i32(opts.z) >> game.CHUNK_SHIFT}
+	if class, _ := worldgen.class_by_name(opts.class); class != .None {
+		// The first address of the class, around its spawn (unless -x, -z say).
+		for i in u64(0) ..< 100_000 {
+			a := starmap.address_derive(i)
+			if worldgen.world_class(a) != class {continue}
+			params, _, _ := worldgen.class_params(class, a)
+			gen = worldgen.generator_make(.Earth, opts.seed, reg, params)
+			break
+		}
+		if opts.x == 0 && opts.z == 0 {
+			spawn := worldgen.spawn_point(&gen)
+			centre = {i32(spawn.x) >> game.CHUNK_SHIFT, i32(spawn.z) >> game.CHUNK_SHIFT}
+		}
+	}
 	base.metrics_start()
 
 	// Generate (a border of one more column all round: meshing needs its
