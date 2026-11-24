@@ -111,6 +111,49 @@ settlement_area :: proc(st: ^Settlement) -> core.Box {
 	}
 }
 
+// settlement_kept: a built camp's blocks as built (its foundation, its floor, its fences,
+// huts, tents and machines) are not to be changed by a player or a blast (game.odin's kept);
+// what a player set down in its air is its own.
+settlement_kept :: proc(
+	s: ^core.Server,
+	w: ^core.World,
+	at: game.Block_Pos,
+	old: game.Block,
+) -> string {
+	if w != s.home || old == .Air {return ""}
+	ss := settlements_of(s)
+	cells := &state(s).camp_cells
+	for i in 0 ..< ss.count {
+		if !ss.built[i] {continue}
+		st := &ss.list[i]
+		l := at - st.site.origin
+		if l.x < 0 ||
+		   l.y < 0 ||
+		   l.z < 0 ||
+		   l.x >= SETTLEMENT_SIDE ||
+		   l.y >= SETTLEMENT_HEIGHT ||
+		   l.z >= SETTLEMENT_SIDE {continue}
+		if len(cells[i]) == 0 {
+			t := camp_template(&state(s).camp_kit, st)
+			cells[i] = make([dynamic]u16, len(t.cells))
+			copy(cells[i][:], t.cells)
+		}
+		t := game.Template{{SETTLEMENT_SIDE, SETTLEMENT_HEIGHT, SETTLEMENT_SIDE}, cells[i][:]}
+		cell := game.template_cell(&t, l, 0)
+		if cell != game.VOID &&
+		   cell != u16(game.Block.Air) {return "The camp's people would not have it"}
+	}
+	return ""
+}
+
+// settlement_stop: what the camps keep for the session (their blocks as built).
+settlement_stop :: proc(s: ^core.Server) {
+	for &cells in state(s).camp_cells {
+		delete(cells)
+		cells = nil
+	}
+}
+
 // settlement_inside: p (feet) is within the camp's square.
 settlement_inside :: proc(st: ^Settlement, p: [3]f64) -> bool {
 	o := st.site.origin

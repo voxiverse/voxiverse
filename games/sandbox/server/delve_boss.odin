@@ -297,6 +297,16 @@ boss_fighting :: proc(s: ^core.Server, w: ^core.World, d: ^Delve, c: ^core.Clien
 	)
 }
 
+// boss_fighting_any: c fights a custodian in its hall (any delve's, the fight on).
+boss_fighting_any :: proc(s: ^core.Server, c: ^core.Client) -> bool {
+	if c.world != s.home {return false}
+	dv := delves_of(s)
+	for &d in dv.all[:dv.count] {
+		if d.built && d.fight.on && boss_fighting(s, s.home, &d, c) {return true}
+	}
+	return false
+}
+
 // boss_tell: every fighter is told.
 @(private = "file")
 boss_tell :: proc(s: ^core.Server, w: ^core.World, d: ^Delve, text: string) {
@@ -387,6 +397,7 @@ boss_end :: proc(s: ^core.Server, w: ^core.World, d: ^Delve, won: bool) {
 				}
 			}
 			core.quest_note(s, &c, {goal = .Win, name = BOSS_ENCOUNTER, count = 1})
+			mood_won(s, &c)
 		}
 		boss_ward(s, w, boss_ward_box(d), false)
 	}

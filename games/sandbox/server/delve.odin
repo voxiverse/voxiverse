@@ -27,7 +27,7 @@ import "server:play"
 // its ground is loaded (kept loaded while one is near), and the world's file (DELVE_FILE)
 // remembers which are built; a world saved before there were delves gets none. What it posts
 // as it is built (the machines asleep in its rooms: wild.odin's scuttlers, spires and
-// carapaces) is kept with the world. Its blocks are not the players' to break (delve_editing)
+// carapaces) is kept with the world. Its blocks are not the players' to break (delve_kept)
 // but its caches, which spill what their depth holds (survival.odin's DELVE_LOOT); its locked
 // doors open to a keeper's key (delve_door_use); its trip plates and charged gratings hurt who
 // steps on them (delve_traps). Each session, as a built delve is first loaded, it is made
@@ -50,8 +50,8 @@ DELVE_NOTED :: 24 // a player this near a built stair head has it in its logbook
 DELVE_EVERY :: 10 // ticks between two looks at what is to be built, noted and made ready
 DELVE_HUM :: 0.6 // how strongly a stair head hums
 DELVE_LEVELLED :: DELVE_HEAD + 2 // blocks round a stair head's middle levelled to its floor
-DELVE_STAIR :: "Sunken stair" // a stair head's name in a logbook (kind Remains)
-DELVE_DEEP :: "Deep works" // the third depth's (kind Ruin: an old place away from the stair)
+DELVE_STAIR :: "Sunken stair" // a stair head's name in a logbook (kind Delve)
+DELVE_DEEP :: "Deep works" // the third depth's (kind Delve: a place away from the stair)
 DELVE_KEY :: "sandbox:keeper_key"
 
 // The traps (the delve's blocks in its corridors' floors): a trip plate clicks under a foot
@@ -335,11 +335,11 @@ delve_noted :: proc(s: ^core.Server, w: ^core.World, d: ^Delve) {
 		if c.state != .Playing || c.world != w || c.dead {continue}
 		off := c.player.position.xz - {f64(m.x) + 0.5, f64(m.y) + 0.5}
 		if off.x * off.x + off.y * off.y <= DELVE_NOTED * DELVE_NOTED {
-			core.logbook_place(s, &c, .Remains, {m.x, d.site.floor + 1, m.y}, DELVE_STAIR)
+			core.logbook_place(s, &c, .Delve, {m.x, d.site.floor + 1, m.y}, DELVE_STAIR)
 		}
 		at := play.block_of(c.player.position)
 		if delve_within(d, at) && delve_depth_at(d, at) == DELVE_DEPTHS - 1 {
-			core.logbook_place(s, &c, .Ruin, {landing.x, landing.y, landing.z}, DELVE_DEEP)
+			core.logbook_place(s, &c, .Delve, {landing.x, landing.y, landing.z}, DELVE_DEEP)
 		}
 	}
 }
@@ -359,21 +359,25 @@ delve_holding :: proc(s: ^core.Server, w: ^core.World, at: game.Block_Pos) -> (^
 	return nil, false
 }
 
-// delve_editing: a delve's blocks are not the players' to break (nor its seal and ward), but
-// its caches; what is set down in its air, and taken up again, is.
-delve_editing :: proc(
+// delve_kept: a delve's blocks are not to be broken by a player or a blast (nor its doors,
+// its seal and its vault's ward, wherever they stand), but its caches by a hand (a blast
+// keeps them: game.odin's kept); what is set down in its air, and taken up again, is.
+delve_kept :: proc(
 	s: ^core.Server,
-	c: ^core.Client,
+	w: ^core.World,
 	at: game.Block_Pos,
-	old, new: game.Block,
+	old: game.Block,
+	blast := false,
 ) -> string {
 	k := &delves_of(s).kit
-	d, drawn := delve_holding(s, c.world, at)
+	d, drawn := delve_holding(s, w, at)
 	if d == nil {return ""}
 	switch {
 	case old == k.ward || old == k.door:
 		return "The keepers' work holds"
-	case old == k.cache || old == .Air:
+	case old == k.cache:
+		return "The keepers' work holds" if blast else ""
+	case old == .Air:
 		return ""
 	case drawn:
 		return "The keepers' work holds"
@@ -481,12 +485,24 @@ delve_plates :: proc(s: ^core.Server, w: ^core.World) {
 // delve_joined: one who joins standing in a boss's chamber with no fight on, or in a shut
 // vault, is set down outside the chamber's door (delve_boss.odin: boss_put_out).
 delve_joined :: proc(s: ^core.Server, c: ^core.Client) {
+	delve_logbook_mend(c)
 	if c.world != s.home {return}
 	dv := delves_of(s)
 	for &d in dv.all[:dv.count] {
 		if !d.built || d.fight.on {continue}
 		if boss_in_hall(&d, c.player.position) || boss_in_vault(&d, c.player.position) {
 			boss_put_out(s, &d, c)
+		}
+	}
+}
+
+// delve_logbook_mend: a logbook kept before delves had a place kind of their own (a stair
+// head noted as remains, the third depth as a ruin, each by its name) has them as delves.
+delve_logbook_mend :: proc(c: ^core.Client) {
+	for &p in c.logbook.places[:c.logbook.place_count] {
+		name := game.place_name(&p)
+		if p.kind == .Remains && name == DELVE_STAIR || p.kind == .Ruin && name == DELVE_DEEP {
+			p.kind = .Delve
 		}
 	}
 }
@@ -504,7 +520,7 @@ unknown_delve :: proc(s: ^core.Server, c: ^core.Client) -> (^Delve, bool) {
 		for &p in c.logbook.places[:c.logbook.place_count] {
 			off := p.at - at
 			known ||=
-				p.kind == .Remains &&
+				p.kind == .Delve &&
 				p.world == c.world.address &&
 				off.x * off.x + off.z * off.z <= game.PLACE_SAME * game.PLACE_SAME
 		}

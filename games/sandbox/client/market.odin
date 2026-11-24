@@ -60,6 +60,19 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	if v, ok := engine.game_value(s, r, sandbox.Ruin_Fight); ok && v != nil {ruin_received(s, v)}
 	if v, ok := engine.game_value(s, r, sandbox.Talk); ok && v != nil {talk_received(s, v)}
 	if v, ok := engine.game_value(s, r, sandbox.Delve_Fight); ok && v != nil {delve_received(s, v)}
+	if v, ok := engine.game_value(s, r, sandbox.Mood_Record); ok && v != nil {
+		engine.music_mood(s, MOODS[v.mood])
+	}
+}
+
+// MOODS: the sandbox's moods as the music's (the same, in the same order).
+@(rodata)
+MOODS := [sandbox.Mood]engine.Music_Mood {
+	.Calm        = .Calm,
+	.Underground = .Underground,
+	.Danger      = .Danger,
+	.Boss        = .Boss,
+	.Victory     = .Victory,
 }
 
 // hud: a conversation whose screen was closed left (talk.odin); the ruin's fight while the

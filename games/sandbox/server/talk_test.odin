@@ -208,11 +208,11 @@ test_talk_scout_marks :: proc(t: ^testing.T) {
 	testing.expect_value(t, has(h, .Settlement), before + 1)
 	testing.expect_value(t, trader(s, h).cash, 18)
 	// A delve's stair head: marked for 12 when one is planned that the logbook lacks.
-	stairs := has(h, .Remains)
+	stairs := has(h, .Delve)
 	_, unknown := unknown_delve(s, h)
 	say(rig, 1)
 	if unknown {
-		testing.expect_value(t, has(h, .Remains), stairs + 1)
+		testing.expect_value(t, has(h, .Delve), stairs + 1)
 		testing.expect_value(t, trader(s, h).cash, 6)
 	} else {
 		testing.expect(t, playtest.told(rig, "I know of no sunken stair you have not seen"))

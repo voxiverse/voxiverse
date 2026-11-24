@@ -63,6 +63,8 @@
 	"survey_scanner": {"model": "sandbox:survey_scanner", "description": "Use it: the nearest ore, salvage or relic within 32 blocks, and which way.", "stack": 1, "rarity": "uncommon"},
 	"tether_hook": {"model": "sandbox:tether_hook", "description": "Hold use: hook a block up to 18 blocks off. Short, quick to fire again.", "stack": 1, "rarity": "uncommon", "grapple": {"range": 18, "speed": 15, "cooldown": 0.8}},
 	"long_hook": {"model": "sandbox:long_hook", "description": "Hold use: hook a block up to 60 blocks off, pulled fast.", "stack": 1, "rarity": "rare", "grapple": {"range": 60, "speed": 28, "cooldown": 4}},
+	"hand_lamp": {"model": "sandbox:hand_lamp", "description": "A coal wick behind glass in a brass cage. It lights the way for whoever carries it, and for those near.", "stack": 1, "light": 12, "light_color": [255, 212, 150]},
+	"helmet_lamp": {"model": "sandbox:helmet_lamp", "description": "A lamp on a padded cap: both hands free, the light where you look.", "stack": 1, "rarity": "uncommon", "equip": "head", "modifiers": [{"stat": "defence", "amount": 0.02}], "light": 13, "light_color": [214, 232, 255]},
 	"recall_unit": {"model": "sandbox:recall_unit", "description": "Use it: you are taken to your outpost. Used up.", "stack": 4, "rarity": "rare"},
 	// The world classes' rare resources (common/worldgen/classes.odin: one each, on no other
 	// class of world) and what they make that nothing else does.

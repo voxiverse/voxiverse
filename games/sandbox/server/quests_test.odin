@@ -210,13 +210,14 @@ test_quests_chain :: proc(t: ^testing.T) {
 				}
 				testing.expectf(t, info.hittable && (comes || posted), "%s: never met", where_)
 			case .Find:
-				named := o.name == DELVE_STAIR
+				named := false
 				for name in REMAIN_NAMES {named ||= name != "" && name == o.name}
 				testing.expectf(
 					t,
-					(o.place == .Ruin && (o.name == "" || o.name == DELVE_DEEP)) ||
+					(o.place == .Ruin && o.name == "") ||
 					(o.place == .Settlement && o.name == "") ||
 					(o.place == .Landmark && o.name == "") ||
+					(o.place == .Delve && (o.name == DELVE_STAIR || o.name == DELVE_DEEP)) ||
 					(o.place == .Remains && named),
 					"%s: no place the sandbox notes",
 					where_,

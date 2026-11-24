@@ -49,6 +49,7 @@ GAME :: core.Game {
 	joined         = joined,
 	left           = left,
 	died           = ruin_died,
+	hurt           = mood_hurt,
 	respawned      = respawned,
 	respawn_where  = outpost_respawn_where,
 	action         = action,
@@ -58,6 +59,7 @@ GAME :: core.Game {
 	entity_died    = entity_died,
 	harming        = harming,
 	editing        = editing,
+	blasting       = blasting,
 	block_changed  = block_changed,
 	picking        = ruin_picking,
 	dropping       = ruin_dropping,
@@ -87,6 +89,7 @@ Sandbox :: struct {
 	folk:             [Role]game.Kind_Id, // the camps' people's kinds (folk.odin)
 	dialogues:        [Role]int, // ... and their dialogues (talk.odin)
 	camp_kit:         Camp_Kit, // what the camps are built of (settlement_build.odin)
+	camp_cells:       [MAX_SETTLEMENTS][dynamic]u16, // each home camp's blocks as built, once asked (settlement_kept)
 	delves:           Delves, // (delve.odin)
 	kept:             Kept, // the areas kept loaded (site.odin)
 }
@@ -117,6 +120,7 @@ start :: proc(s: ^core.Server) -> bool {
 stop :: proc(s: ^core.Server) {
 	survival_stop(s)
 	delve_stop(s)
+	settlement_stop(s)
 }
 
 // tick: the economy (economy.odin), the night's creatures (danger.odin), the ruined site
@@ -136,6 +140,7 @@ tick :: proc(s: ^core.Server) {
 	keeps_update(s)
 	talk_tick(s)
 	survival_tick(s)
+	mood_tick(s)
 }
 
 // left: one fighting at the ruin is out (ruin.odin); what it was making is given back
@@ -176,17 +181,44 @@ joined :: proc(s: ^core.Server, c: ^core.Client) {
 	delve_joined(s, c)
 }
 
-// editing: the ruin's blocks and a delve's are not the players' (ruin.odin, delve.odin); a
-// beacon is its placer's to take down (outposts.odin).
+// kept: why the block of w at `at` is not to be changed from old to new, by a player's hand
+// or a blast ("": it may be). The one rule for both (editing, blasting): the ruin's blocks
+// (ruin.odin), a built delve's as drawn but its caches, which a hand may break open and a
+// blast may not (delve.odin), and a camp's as built (settlement.odin); what a player set
+// down in a delve's or a camp's air is its own. And on any world a remains cache or a sealed
+// relic vault (the remains', a gate world's landmark's and site's) is broken open by a hand
+// with the tool it asks, never by a blast, which would open it past the drill and spill
+// nothing.
+kept :: proc(
+	s: ^core.Server,
+	w: ^core.World,
+	at: game.Block_Pos,
+	old, new: game.Block,
+	blast := false,
+) -> string {
+	k := &state(s).remains_kit
+	if blast && (old == k.remains_cache || old == k.relic_vault) {return "It is sealed"}
+	if why := ruin_kept(s, w, at); why != "" {return why}
+	if why := delve_kept(s, w, at, old, blast); why != "" {return why}
+	return settlement_kept(s, w, at, old)
+}
+
+// editing: what the sandbox keeps (kept) is not the players'; a beacon is its placer's to
+// take down (outposts.odin).
 editing :: proc(
 	s: ^core.Server,
 	c: ^core.Client,
 	at: game.Block_Pos,
 	old, new: game.Block,
 ) -> string {
-	if why := ruin_editing(s, c, at); why != "" {return why}
-	if why := delve_editing(s, c, at, old, new); why != "" {return why}
+	if why := kept(s, c.world, at, old, new); why != "" {return why}
 	return outpost_editing(s, c, at, old, new)
+}
+
+// blasting: no blast breaks what the sandbox keeps (kept): the ruin, its ward, a delve's
+// shells, seal and vault ward, a camp, a cache or a relic vault anywhere.
+blasting :: proc(s: ^core.Server, w: ^core.World, at: game.Block_Pos, old: game.Block) -> bool {
+	return kept(s, w, at, old, .Air, blast = true) == ""
 }
 
 // entity_died: a creature of the ruin's fight leaves its crowd (ruin.odin); a delve's

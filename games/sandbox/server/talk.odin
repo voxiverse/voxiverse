@@ -294,7 +294,7 @@ talk_do :: proc(s: ^core.Server, c: ^core.Client, action: string) {
 	case "mark_delve":
 		d, _ := unknown_delve(s, c)
 		at := [3]i32{d.site.middle.x, d.site.floor + 1, d.site.middle.y}
-		core.logbook_place(s, c, .Remains, at, DELVE_STAIR)
+		core.logbook_place(s, c, .Delve, at, DELVE_STAIR)
 		talk_marked(s, c, DELVE_STAIR, at)
 	}
 }

@@ -90,6 +90,21 @@ Delve_Fight :: struct {
 	open:   bool,
 }
 
+// Mood: what is happening to a player, for its music (games/sandbox/server/mood.odin; the
+// client part states it with engine.music_mood): as engine.Music_Mood, in its order.
+Mood :: enum u8 {
+	Calm,
+	Underground, // in a delve
+	Danger, // a fight: a creature goes for it, the ruin's waves
+	Boss, // a custodian's fight
+	Victory, // a fight just won
+}
+
+// Mood_Record: a player's mood (one per player), put when it changes.
+Mood_Record :: struct {
+	mood: Mood,
+}
+
 // Outpost_Line: an outpost as a player is shown it: where its beacon stands, whether the
 // player placed it and whether it stands there again after a death there (its respawn).
 Outpost_Line :: struct {
@@ -152,6 +167,7 @@ KINDS :: protocol.Game_Kinds {
 		{name = "sandbox.survival", value = Survival},
 		{name = "sandbox.talk", value = Talk},
 		{name = "sandbox.delve", value = Delve_Fight},
+		{name = "sandbox.mood", value = Mood_Record},
 	},
 	events   = {
 		{name = "sandbox.trade_refused", value = Trade_Refused},

@@ -5,7 +5,7 @@
 	// a drill past the alloy one; two trinkets found only below.
 	"servo_bundle": {"model": "sandbox:servo_bundle", "description": "Fine actuators pulled from a keepers' machine. They still twitch.", "stack": 64, "rarity": "uncommon"},
 	"keeper_coil": {"model": "sandbox:keeper_coil", "description": "A coil of the keepers' winding, warm to the touch. Found below.", "stack": 64, "rarity": "rare"},
-	"custodian_core": {"model": "sandbox:custodian_core", "description": "The heart of the deepest chamber's keeper. It hums against your palm.", "stack": 16, "rarity": "epic"},
+	"custodian_core": {"model": "sandbox:custodian_core", "description": "The heart of the deepest chamber's keeper. It hums against your palm, and glows.", "stack": 16, "rarity": "epic", "light": 7, "light_color": [120, 230, 240]},
 	"keeper_key": {"model": "sandbox:keeper_key", "description": "Opens one of the keepers' locked doors, and is spent in it.", "stack": 16, "rarity": "uncommon"},
 	"arc_lance": {"model": "sandbox:arc_lance", "description": "A long haft with the custodian's core in its head. Reaches far and bites deep.", "stack": 1, "rarity": "epic", "melee": {"damage": 18, "reach": 4, "arc": 60, "cooldown": 0.9}},
 	"keeper_helm": {"model": "sandbox:keeper_helm", "description": "Plate of the keepers' make, its visor driven by servos.", "stack": 1, "rarity": "rare", "equip": "head", "modifiers": [{"stat": "defence", "amount": 0.11}, {"stat": "max_health", "amount": 4}]},

@@ -12,7 +12,7 @@
 		"points": 1,
 		// kill: for each point of the creature's threat (its kind's `threat`).
 		"xp": {"kill": 4, "meet": 10, "make": 8, "win": 300},
-		"find": {"gate": 50, "ruin": 150, "remains": 40, "town": 60, "settlement": 80},
+		"find": {"gate": 50, "ruin": 150, "remains": 40, "town": 60, "settlement": 80, "delve": 100},
 		"respec": "sandbox:outpost_beacon",
 		"respec_reach": 6
 	}

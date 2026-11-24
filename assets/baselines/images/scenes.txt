@@ -142,6 +142,14 @@ world_jungle: /travel 151b0b27231e0c18-1725142119061f; wait_world; set rules.day
 delve_entrance: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /tp 9 11 -7 0 0; ticks 5; wait_world; camera at 7 18 11 30 -32
 delve_landing: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /delve go last landing; ticks 20; wait_world
 delve_boss: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7 still; ticks 90; wait_world; /gamemode survival; /delve go last hall; ticks 30; wait_world; /tp ~-3 ~1.8 ~-0.3 -40 -21; ticks 10; wait_world
+# A light carried (games/sandbox's hand lamp, the engine's item `light`: docs/graphics.md,
+# "Lights that move"), before and after: in a corridor of a delve's first depth, six blocks
+# out of its landing (the landing's lamp behind), with nothing in hand and with the lamp
+# held; and on a cleared field at midnight, the same. A light carried meshes nothing again.
+carried_delve_dark: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /delve go last landing; ticks 20; wait_world; /tp ~6 ~ ~1 -90 -5; ticks 10; wait_world
+carried_delve_lamp: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /delve go last landing; ticks 20; wait_world; /give @s sandbox:hand_lamp; ticks 5; key num_2 down; wait 2; key num_2 up; /tp ~6 ~ ~1 -90 -5; ticks 10; wait_world
+carried_night_dark: @1280x720 /time set midnight; /fill 12 10 2 36 10 26 grass; /fill 12 11 2 36 24 26 air; ticks 20; wait_world; /tp 24.5 11 22.5 0 -20; ticks 10; wait_world
+carried_night_lamp: @1280x720 /time set midnight; /fill 12 10 2 36 10 26 grass; /fill 12 11 2 36 24 26 air; ticks 20; wait_world; /give @s sandbox:hand_lamp; ticks 5; key num_2 down; wait 2; key num_2 up; /tp 24.5 11 22.5 0 -20; ticks 10; wait_world
 delve_boss_small: @640x360 set quest_tracker 1; /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7 still; ticks 90; wait_world; /gamemode survival; /delve go last hall; ticks 30; wait_world; /tp ~-3 ~1.8 ~-0.3 -40 -21; ticks 10; wait_world
 # Each world class's landmark (games/sandbox/server/beyond.odin, beyond_build.odin): the
 # class's first address, `/places view landmark` standing the player over it once planned,

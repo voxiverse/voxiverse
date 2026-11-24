@@ -89,10 +89,14 @@ Ruin :: struct {
 
 // Ruin_Seat: a player's part in the ruin's fight (the game's client_state).
 Ruin_Seat :: struct {
-	fighting: u32, // the fight it is locked in (Ruin.fight while it is on; 0: none)
-	// Not the ruin's: the conversation it is in (talk.odin). It is here because a game keeps
-	// one state on a seat.
-	talk:     Talk_Seat,
+	fighting:  u32, // the fight it is locked in (Ruin.fight while it is on; 0: none)
+	// Not the ruin's: the conversation it is in (talk.odin) and its music's mood (mood.odin).
+	// They are here because a game keeps one state on a seat.
+	talk:      Talk_Seat,
+	mood:      sandbox.Mood, // the mood last put
+	mood_put:  bool, // ... once put
+	hurt_tick: u64, // the tick a creature last hurt it (0: never)
+	won_tick:  u64, // the tick it last won a fight (0: never)
 }
 
 ruin_of :: proc(s: ^core.Server) -> ^Ruin {return &state(s).ruin}
@@ -284,6 +288,7 @@ ruin_end :: proc(s: ^core.Server, won: bool) {
 		above := ruin_point(r.site, {RUIN_MID, RUIN_MID}) + {0, 1.5, 0}
 		for item in r.reward {core.item_drop(s, w, above, {item = item, count = 1})}
 		core.quest_note(s, &c, {goal = .Win, name = RUIN_ENCOUNTER, count = 1})
+		mood_won(s, &c)
 	}
 	play.crowd_clear(&r.crowd, w)
 	ruin_ward(s, w, false)
@@ -322,10 +327,11 @@ ruin_joined :: proc(s: ^core.Server, c: ^core.Client) {
 	}
 }
 
-// ruin_editing: the ruin's blocks are not the players' to change.
-ruin_editing :: proc(s: ^core.Server, c: ^core.Client, at: game.Block_Pos) -> string {
+// ruin_kept: the ruin's blocks, and its ward while it stands, are not to be changed by a
+// player or a blast (game.odin's kept).
+ruin_kept :: proc(s: ^core.Server, w: ^core.World, at: game.Block_Pos) -> string {
 	r := ruin_of(s)
-	if !r.placed || c.world != s.home {return ""}
+	if !r.placed || w != s.home {return ""}
 	a := ruin_area(r.site)
 	if at.x < a.lo.x ||
 	   at.y < a.lo.y ||

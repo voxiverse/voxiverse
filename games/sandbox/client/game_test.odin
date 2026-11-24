@@ -6,6 +6,7 @@ import "core:testing"
 import "client:engine"
 import "client:menu"
 import "client:playtest"
+import "client:render"
 import "client:ui"
 import "common:game"
 import "games:sandbox"
@@ -98,6 +99,35 @@ test_sandbox_delve_boss_bar :: proc(t: ^testing.T) {
 	delve_received(s, &fight)
 	testing.expect(t, !playtest.drawn(rig, "THE CUSTODIAN"), "a bar after the fight")
 	testing.expect(t, playtest.drawn(rig, "200 / 360"), "no target frame after the fight")
+}
+
+// A lamp another player holds lights our world too: what it holds is in its Player_Record,
+// so our session gathers its light (engine.moving_lights) as it gathers our own.
+@(test)
+test_sandbox_lamp_seen :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	srv := playtest.srv(rig)
+	lamp, known := game.registry_item(srv.registry, "sandbox:hand_lamp")
+	testing.expect(t, known)
+	guest := playtest.guest_join(rig, "lamplighter")
+	if guest == nil {
+		testing.fail_now(t, "the guest never played")
+	}
+	lights := make([dynamic]render.Moving_Light, context.temp_allocator)
+	engine.moving_lights(rig.s, &lights)
+	testing.expect_value(t, len(lights), 0)
+	core.item_give(srv, guest, lamp, 1)
+	for st, slot in guest.inventory.slots[:game.HOTBAR_SLOTS] {
+		if st.item == lamp {guest.inventory.selected = slot}
+	}
+	playtest.step(rig, 2 * game.TICK_RATE)
+	clear(&lights)
+	engine.moving_lights(rig.s, &lights)
+	testing.expect_value(t, len(lights), 1)
+	if len(lights) == 1 {testing.expect_value(t, lights[0].level, 12)}
 }
 
 // The crafting screen: its action opens it; every recipe shows what it makes and what it

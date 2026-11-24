@@ -45,6 +45,45 @@ camp_folk :: proc(s: ^core.Server, i: int) -> []game.Entity_Handle {
 	return out
 }
 
+// A camp is not the players' to wreck: a hand may not break its fabricator, and a blast in it
+// breaks none of its blocks as built; what a player sets down in its air is its own.
+@(test)
+test_camp_kept :: proc(t: ^testing.T) {
+	rig := new(Rig)
+	defer free(rig)
+	i := camp(t, rig)
+	defer playtest.stop(rig)
+	if i < 0 {return}
+	s := playtest.srv(rig)
+	w := s.home
+	h := playtest.host(rig)
+	st := &settlements_of(s).list[i]
+	kit := &state(s).camp_kit
+	fab := layout_of(st.layout).fabricator
+	at := game.Block_Pos{st.site.origin.x + fab.x, st.site.floor + 1, st.site.origin.z + fab.y}
+	testing.expect(t, editing(s, h, at, kit.fabricator, .Air) != "", "a hand broke the fabricator")
+	high := st.site.origin + {SETTLEMENT_MID, SETTLEMENT_HEIGHT - 1, SETTLEMENT_MID}
+	testing.expect_value(t, editing(s, h, high, .Air, .Dirt), "")
+	testing.expect_value(t, editing(s, h, high, .Dirt, .Air), "")
+	t2 := camp_template(kit, st)
+	for p in blasted(w, at) {
+		l := p - st.site.origin
+		if l.x < 0 ||
+		   l.y < 0 ||
+		   l.z < 0 ||
+		   l.x >= SETTLEMENT_SIDE ||
+		   l.y >= SETTLEMENT_HEIGHT ||
+		   l.z >= SETTLEMENT_SIDE {continue}
+		cell := game.template_cell(&t2, l, 0)
+		testing.expectf(
+			t,
+			cell == game.VOID || cell == u16(game.Block.Air),
+			"a blast broke the camp's block at %v",
+			p,
+		)
+	}
+}
+
 @(test)
 test_camp_set_down :: proc(t: ^testing.T) {
 	rig := new(Rig)

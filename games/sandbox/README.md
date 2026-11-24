@@ -150,6 +150,12 @@ walks what yields what):
   remains' restorer.
 - **Gadgets**: survey scanner, tether hook (short and quick) and long hook (the engine's
   grapple), recall unit.
+- **Lights** (the engine's item `light`, a light that moves with whoever carries it, seen
+  by everyone): the hand lamp (12, warm; made by hand from coal, a plank and cord, and Edge
+  and Point's reward, so a new player has one before the first night) and the helmet lamp
+  (13, white; head armour, made at a fabricator from copper, glass and padding). A lamp
+  carried in the hand lights as the lamp block does (15), and the custodian's core glows
+  (7, cyan).
 - **Building**: fabricator, outpost beacon, hull plate, alloy panel, grating.
 
 What it tells its players: `sandbox.survival` (whether a fabricator is in reach, what is
@@ -174,7 +180,7 @@ Nothing counts in creative.
 | Quest | After | Steps | Reward | XP |
 |---|---|---|---|---|
 | Waking at the Gate | | carry 6 fibre, 5 flint, 4 logs | 2 cord | 40 |
-| Edge and Point | Waking | make 4 planks, 2 cord, a flint knife, a flint pick | field dressing | 60 |
+| Edge and Point | Waking | make 4 planks, 2 cord, a flint knife, a flint pick | field dressing, hand lamp | 60 |
 | The Court of Remains | Edge and Point | find a fallen tower; break open a remains cache | salvage | 80 |
 | Under the Turf | Edge and Point | carry 8 stone, 3 coal, 4 raw copper | 4 coal | 80 |
 | A Workshop | Under the Turf | make a fabricator; set it down; make 3 copper ingots | 2 copper ingots | 100 |
@@ -217,7 +223,7 @@ pack's, a first guess to tune there.
 |---|---|
 | A creature killed (by its threat, the creatures' table below) | 4 a point of threat |
 | A creature met for the first time | 10 |
-| A place found: a gate opened, the ruin, a site of the remains (a delve's stair head too), a town; a delve's third depth (as the ruin) | 50, 150, 40, 60; 150 |
+| A place found: a gate opened, the ruin, a site of the remains, a town, a camp; a delve's stair head or its third depth (the logbook's kind `delve`) | 50, 150, 40, 60, 80; 100 each |
 | A thing made for the first time | 8 |
 | The ruin's fight won, a custodian's | 300 |
 | A quest done | its XP (the quests' table above, 4420 in all; the camps' below, 1170) |
@@ -561,8 +567,11 @@ Under the home world lie the keepers' works: two or three delves a world (2.4 on
   (site.odin's footprints). One left out there is tried again anywhere round.
 - **The stair head.** On the land: a platform of slate tiles round the opening of a spiral
   stair, four posts of dark steel under a frame of riveted iron, the ground round it levelled;
-  it hums. A player within 24 blocks has it in its logbook as a "Sunken stair", so the journal
-  lists it, the compass marks it and the map shows it (a camp's scout sells the way to one).
+  it hums. A player within 24 blocks has it in its logbook as a "Sunken stair" (a place of the
+  engine's kind `delve`, as the third depth's "Deep works" is), so the journal lists it, the
+  compass marks it and the map shows it (a camp's scout sells the way to one). A logbook kept
+  before delves had a kind of their own (the stair as remains, the depth as a ruin) has them
+  as delves once its player joins (`delve_logbook_mend`).
 - **The layout.** Three depths, 9 blocks apart, the first 16 under the stair head: each a grid
   of 3 by 3 cells of 13 blocks, a room in each, joined by corridors three wide along a random
   tree of the grid, so every room is reached and by one way only. Each depth's landing is the
@@ -664,8 +673,25 @@ Nothing of a fight outlives the session: as a built delve is first loaded in one
 standing in its hall or vault is set down outside the chamber's door, the seal is down, the
 vault shut and the custodian whole at its post, so a server stopped mid-fight leaves nobody
 sealed in. Won, the vault stays open the rest of the session and the custodian comes again in
-the next. There is no music of its own: the engine's music director picks pieces by the world
-and the hour, not by a game's fight.
+the next. Its fight has music of its own (below, "Its music").
+
+## Its music
+
+The engine's music director plays the world's pieces by the world and the hour; the sandbox
+tells it what is happening to each player (`server/mood.odin`: the record `sandbox.mood`,
+which the client part states with `engine.music_mood`), looked at twice a second, judged in
+this order:
+
+| Mood | When | Piece |
+|---|---|---|
+| Victory | it won the ruin's fight or a custodian's in the last 6 seconds | `victory`, a stinger, once |
+| Boss | it fights a custodian in its hall | `boss` |
+| Danger | it fights at the ruin, a creature hurt it in the last 8 seconds, a creature of the night is within its notice of it, or one of the roster's (a predator, a delve's machine) is fighting within 20 blocks | `danger` |
+| Underground | it stands in a delve | `underground` |
+| Calm | none of these | the world's own |
+
+The director keeps to a mood a while after it is no longer stated and cross-fades between
+them (docs/audio.md), so a creature that comes and goes does not flap the music.
 
 `/delve` lists the home world's delves and `/delve go <n>|last [landing|deep|hall]` takes you
 to the n-th's (or the last set down's) stair head, its first or third depth's landing or into
@@ -704,7 +730,11 @@ Every camp has a fabricator (which hums, `core.world_hum`) with two chests besid
 stall under a wool awning and gaps in its fence or wall on each side. A player who comes within
 40 blocks of a built camp has it in its logbook by its name (`core.logbook_place`, a
 `settlement`: the journal lists it, the compass marks it, the map shows it, and a quest's
-`find` step may ask for one). No creature that fights comes by itself within 48 blocks of a
+`find` step may ask for one). A camp's blocks as built are not the players' to break, nor a
+blast's (what a player sets down in its air is its own): one rule keeps the ruin, the delves
+and the camps from a hand and a blast alike (`server/game.odin`'s `kept`, the editing and
+blasting hooks), and keeps a remains cache or a sealed relic vault, on any world, from a
+blast (a hand opens them with the tool they ask). No creature that fights comes by itself within 48 blocks of a
 camp, as round an outpost's beacon (the spawned hook). The world's `sandbox.settlements.txt`
 remembers which are built; a world saved before there were camps gets none.
 

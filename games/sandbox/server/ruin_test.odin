@@ -140,6 +140,11 @@ test_ruin_stands_from_the_seed :: proc(t: ^testing.T) {
 	testing.expect(t, ruin_use(s, h, altar) != "", "it woke for one outside its walls")
 	testing.expect_value(t, r.phase.now, sandbox.Ruin_Phase.Asleep)
 	testing.expect_value(t, editing(s, h, altar, r.altar, .Air), "The ruin holds")
+	// No blast breaks it either (game.odin's kept, the blasting hook).
+	area := ruin_area(r.site)
+	for p in blasted(w, r.site.origin + {1, 2, 1}) {
+		testing.expectf(t, !core.box_has(area, p), "a blast broke the ruin's block at %v", p)
+	}
 	core.teleport(s, h, inside, {0, 0})
 	playtest.step(rig, 5)
 	testing.expect_value(t, ruin_use(s, h, altar), "")

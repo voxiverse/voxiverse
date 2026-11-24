@@ -99,6 +99,111 @@ first_of :: proc(s: ^core.Server, d: ^Delve, block: game.Block) -> (game.Block_P
 	return {}, false
 }
 
+// blasted: what a blast of size 3 at `at` changed: the blocks within 4 of it that are not as
+// they were (the temp allocator).
+blasted :: proc(w: ^core.World, at: game.Block_Pos) -> []game.Block_Pos {
+	R :: 4
+	before := make(map[game.Block_Pos]game.Block, context.temp_allocator)
+	for y in i32(-R) ..= R {
+		for z in i32(-R) ..= R {
+			for x in i32(-R) ..= R {
+				b, _ := core.block_at(w, at + {x, y, z})
+				before[at + {x, y, z}] = b
+			}
+		}
+	}
+	center := [3]f64{f64(at.x) + 0.5, f64(at.y) + 0.5, f64(at.z) + 0.5}
+	core.explode(w, center, 3, core.world_act(w, .Explosion).action)
+	changed := make([dynamic]game.Block_Pos, context.temp_allocator)
+	for p, b in before {
+		if now, _ := core.block_at(w, p); now != b {append(&changed, p)}
+	}
+	return changed[:]
+}
+
+// A blast carves the rock round a delve but none of its blocks: not its shells, not its
+// caches, not its vault's ward, so nobody blows a way into the custodian's vault or round its
+// seal (game.odin's kept, the blasting hook).
+@(test)
+test_delve_kept_from_blasts :: proc(t: ^testing.T) {
+	sess := new(core.Session)
+	defer free(sess)
+	if !delve_session(t, sess, GAME, DELVE_SEED) {return}
+	defer core.session_stop(sess)
+	s := &sess.h.srv
+	w := s.home
+	d := delve_reached(t, sess)
+	if d == nil {return}
+	k := &delves_of(s).kit
+	cells := delve_cells(s, d)
+	ward := boss_ward_box(d)
+	shaft := d.origin + {d.plan.entry.x + 2, d.plan.depths[0].floor + 10, d.plan.entry.y}
+	carved := 0
+	for at in ([]game.Block_Pos{(ward.lo + ward.hi) / 2, shaft}) {
+		for p in blasted(w, at) {
+			if !delve_within(d, p) {continue}
+			cell := game.template_cell(&cells, delve_local(d, p), 0)
+			testing.expectf(t, cell == game.VOID, "a blast broke the delve's block at %v", p)
+			if cell == game.VOID {carved += 1}
+		}
+	}
+	testing.expect(t, carved > 0, "no blast carved the rock round the delve")
+	for y in ward.lo.y ..= ward.hi.y {
+		for z in ward.lo.z ..= ward.hi.z {
+			for x in ward.lo.x ..= ward.hi.x {
+				b, _ := core.block_at(w, {x, y, z})
+				testing.expectf(
+					t,
+					b == k.ward,
+					"the vault's ward blown at %v",
+					game.Block_Pos{x, y, z},
+				)
+			}
+		}
+	}
+	if cache, ok := first_of(s, d, k.cache); testing.expect(t, ok, "no cache") {
+		testing.expect(t, blasting(s, w, cache, k.cache) == false, "a blast may break a cache")
+	}
+	// Nor a relic vault or a remains cache anywhere (a gate world's landmark's): a hand opens
+	// them with the tool they ask.
+	rk := &state(s).remains_kit
+	testing.expect(
+		t,
+		!blasting(s, w, {0, 200, 0}, rk.relic_vault),
+		"a blast may open a relic vault",
+	)
+	testing.expect(t, !blasting(s, w, {0, 200, 0}, rk.remains_cache), "a blast may open a cache")
+	testing.expect(t, blasting(s, w, {0, 200, 0}, .Stone), "a blast may not carve stone")
+}
+
+// A logbook from before delves had a place kind of their own (a stair head kept as remains,
+// the third depth as a ruin, by their names) has them as delves once its player joins.
+@(test)
+test_delve_logbook_mends_old_places :: proc(t: ^testing.T) {
+	sess := new(core.Session)
+	defer free(sess)
+	if !delve_session(t, sess, GAME, DELVE_SEED) {return}
+	defer core.session_stop(sess)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	game.logbook_place(&c.logbook, .Remains, c.world.address, {700, 60, 20}, DELVE_STAIR)
+	game.logbook_place(&c.logbook, .Ruin, c.world.address, {700, 30, 40}, DELVE_DEEP)
+	game.logbook_place(&c.logbook, .Remains, c.world.address, {-300, 60, 20}, "Fallen tower")
+	delve_joined(s, c)
+	kinds: [3]game.Logbook_Place_Kind
+	for &p in c.logbook.places[:c.logbook.place_count] {
+		switch game.place_name(&p) {
+		case DELVE_STAIR:
+			kinds[0] = p.kind
+		case DELVE_DEEP:
+			kinds[1] = p.kind
+		case "Fallen tower":
+			kinds[2] = p.kind
+		}
+	}
+	testing.expect_value(t, kinds, [3]game.Logbook_Place_Kind{.Delve, .Delve, .Remains})
+}
+
 @(test)
 test_delve_built_as_drawn :: proc(t: ^testing.T) {
 	sess := new(core.Session)
@@ -136,18 +241,18 @@ test_delve_built_as_drawn :: proc(t: ^testing.T) {
 	core.harness_step(&sess.h, DELVE_EVERY)
 	noted := false
 	for &p in c.logbook.places[:c.logbook.place_count] {
-		noted ||= p.kind == .Remains && game.place_name(&p) == DELVE_STAIR
+		noted ||= p.kind == .Delve && game.place_name(&p) == DELVE_STAIR
 	}
 	testing.expect(t, noted, "the stair head is not in the logbook")
 	// Its blocks are held, but a cache; the rock round it and its air are the players'.
 	wall := d.origin + {d.plan.entry.x + 2, d.plan.depths[0].floor + 10, d.plan.entry.y}
 	b, _ := core.block_at(w, wall)
-	testing.expect(t, delve_editing(s, c, wall, b, .Air) != "", "a shaft's wall is not held")
+	testing.expect(t, delve_kept(s, c.world, wall, b) != "", "a shaft's wall is not held")
 	if cache, ok := first_of(s, d, k.cache); testing.expect(t, ok, "no cache") {
-		testing.expect_value(t, delve_editing(s, c, cache, k.cache, .Air), "")
+		testing.expect_value(t, delve_kept(s, c.world, cache, k.cache), "")
 	}
 	rock := d.origin - {1, 0, 1}
-	testing.expect_value(t, delve_editing(s, c, rock, .Stone, .Air), "")
+	testing.expect_value(t, delve_kept(s, c.world, rock, .Stone), "")
 	// A locked door: refused without a key, opened (all of it) by one, which is spent.
 	if door, ok := first_of(s, d, k.door); testing.expect(t, ok, "no locked door") {
 		testing.expect(t, machine_use(s, c, door) != "", "a door opened without a key")

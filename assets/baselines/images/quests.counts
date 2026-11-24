@@ -1,6 +1,6 @@
 world_meshes 402
 world_triangles 150868
-draw_calls 759
-api_draw_calls 23
+draw_calls 761
+api_draw_calls 25
 world_api_draw_calls 3
-frame_triangles 152351
+frame_triangles 152435

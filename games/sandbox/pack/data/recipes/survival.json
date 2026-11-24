@@ -13,6 +13,7 @@
 	"padded_hood": {"type": "process", "machine": "sandbox:hand", "time": 2, "inputs": [{"item": "sandbox:padding", "count": 2}], "output": {"item": "sandbox:padded_hood", "count": 1}},
 	"padded_vest": {"type": "process", "machine": "sandbox:hand", "time": 3, "inputs": [{"item": "sandbox:padding", "count": 4}], "output": {"item": "sandbox:padded_vest", "count": 1}},
 	"padded_leggings": {"type": "process", "machine": "sandbox:hand", "time": 2.5, "inputs": [{"item": "sandbox:padding", "count": 3}], "output": {"item": "sandbox:padded_leggings", "count": 1}},
+	"hand_lamp": {"type": "process", "machine": "sandbox:hand", "time": 1.5, "inputs": [{"item": "sandbox:coal", "count": 1}, {"item": "voxiverse:planks", "count": 1}, {"item": "sandbox:cord", "count": 1}], "output": {"item": "sandbox:hand_lamp", "count": 1}},
 	"padded_boots": {"type": "process", "machine": "sandbox:hand", "time": 2, "inputs": [{"item": "sandbox:padding", "count": 2}, {"item": "sandbox:cord", "count": 1}], "output": {"item": "sandbox:padded_boots", "count": 1}},
 	"fabricator": {"type": "process", "machine": "sandbox:hand", "time": 4, "inputs": [{"item": "voxiverse:stone", "count": 8}, {"item": "voxiverse:planks", "count": 4}, {"item": "sandbox:raw_copper", "count": 2}, {"item": "sandbox:cord", "count": 2}], "output": {"item": "sandbox:fabricator", "count": 1}},
 	"copper_ingot": {"type": "process", "machine": "sandbox:fabricator", "time": 2, "inputs": [{"item": "sandbox:raw_copper", "count": 1}, {"item": "sandbox:coal", "count": 1}], "output": {"item": "sandbox:copper_ingot", "count": 1}},
@@ -61,6 +62,7 @@
 	"survey_scanner": {"type": "process", "machine": "sandbox:fabricator", "time": 4, "inputs": [{"item": "sandbox:circuit_board", "count": 1}, {"item": "sandbox:optic", "count": 1}, {"item": "sandbox:charge_cell", "count": 1}], "output": {"item": "sandbox:survey_scanner", "count": 1}},
 	"tether_hook": {"type": "process", "machine": "sandbox:fabricator", "time": 4, "inputs": [{"item": "sandbox:iron_ingot", "count": 2}, {"item": "sandbox:cord", "count": 4}, {"item": "sandbox:charge_cell", "count": 1}], "output": {"item": "sandbox:tether_hook", "count": 1}},
 	"long_hook": {"type": "process", "machine": "sandbox:fabricator", "time": 5, "inputs": [{"item": "sandbox:tether_hook", "count": 1}, {"item": "sandbox:alloy_plate", "count": 2}, {"item": "sandbox:charge_cell", "count": 1}], "output": {"item": "sandbox:long_hook", "count": 1}},
+	"helmet_lamp": {"type": "process", "machine": "sandbox:fabricator", "time": 3, "inputs": [{"item": "sandbox:copper_ingot", "count": 2}, {"item": "voxiverse:glass", "count": 1}, {"item": "sandbox:padding", "count": 1}], "output": {"item": "sandbox:helmet_lamp", "count": 1}},
 	"recall_unit": {"type": "process", "machine": "sandbox:fabricator", "time": 4, "inputs": [{"item": "sandbox:charge_cell", "count": 1}, {"item": "sandbox:optic", "count": 1}, {"item": "sandbox:salvage", "count": 1}], "output": {"item": "sandbox:recall_unit", "count": 1}},
 	// What the home world's creatures leave (items/creature_drops.json), made into the same
 	// things another way.
