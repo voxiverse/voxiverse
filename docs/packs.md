@@ -277,7 +277,7 @@ player, and counts only while it is the step:
 
 | Goal | Names | Done when |
 |---|---|---|
-| `have` | `item` | the player carries `count` of it at once (slots, what it wears, the cursor) |
+| `have` | `item`, or an item tag (`"#<tag>"`) | the player carries `count` of it at once (slots, what it wears, the cursor); of a tag, of any of its items together (`game.quest_carried`) |
 | `make` | `item` | it made `count` of it: the game tells (`core.quest_note`; the sandbox's crafting) |
 | `place`, `break` | `block` | it placed or broke `count` blocks of the type |
 | `find` | `place` (`gate`, `ruin`, `town`, `outpost`, `beacon`, `remains`, `settlement`), maybe `name` | its logbook has such a place (in any world) |
@@ -286,11 +286,13 @@ player, and counts only while it is the step:
 | `win` | `name` | it won the game's encounter of that name (`core.quest_note`; the sandbox's ruin is `sandbox:ruin`) |
 | `address` | | it wrote an address on a gate within reach, whatever answered |
 | `talk` | `name` | it said something of that name to someone: the game tells (`core.quest_note`; the sandbox's conversations note a dialogue's id as one begins and a reply's `talk`) |
+| `visit` | maybe `name` | it stands on a world of that kind: `home` (the universe's home world) or a world class's name (`temperate`, `jungle`...: [world.md](world.md#world-classes)); none, any world but home. A state, as `have` and `find` are: it holds as the player travels there, or as the step comes while it is there |
 
 Quests are read after every other kind, so each id a step or reward names is checked
 (`"sandbox:nothing" is not an item`), and a quest that comes after itself by any way round is
-refused, as is a field its goal does not take or a `count` on a step that counts once (`find`,
-`win`, `address`, `talk`). Where it is played, the server keeps each character's progress (`quests` in its
+refused, as is a field its goal does not take, an item tag on a step but `have`, or a `count`
+on a step that counts once (`find`, `win`, `address`, `talk`, `visit`). A `visit` step's name
+is not checked against the classes (common:game knows none): a game's tests do that. Where it is played, the server keeps each character's progress (`quests` in its
 file, [saves.md](saves.md)) and sends it to its player (the `quests` record), and nothing
 counts for a player who cannot be hurt (creative, a watcher); the journal (J) lists the quests
 under way and done, and the HUD's tracker shows the step of the one followed.

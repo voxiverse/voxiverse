@@ -26,7 +26,18 @@ QUEST_PACK :: `{
 }`
 
 quest_registry :: proc(t: ^testing.T, quests: string) -> (^Registry, string) {
-	reg, errs := build_with(pack_of("testpack", []File{{"data/quests/q.json", quests}}))
+	reg, errs := build_with(
+		pack_of(
+			"testpack",
+			[]File {
+				{"data/quests/q.json", quests},
+				{
+					"data/item_tags/t.json",
+					`{"shiny": {"values": ["voxiverse:glass", "voxiverse:planks"]}}`,
+				},
+			},
+		),
+	)
 	return reg, errors_text(errs)
 }
 
@@ -86,6 +97,22 @@ test_quests_refused :: proc(t: ^testing.T) {
 		{
 			`{"a": {"title": "A", "steps": [{"text": "x", "goal": "have", "item": "voxiverse:nothing"}]}}`,
 			"\"voxiverse:nothing\" is not an item",
+		},
+		{
+			`{"a": {"title": "A", "steps": [{"text": "x", "goal": "make", "item": "#testpack:shiny"}]}}`,
+			"only a have step names an item tag",
+		},
+		{
+			`{"a": {"title": "A", "steps": [{"text": "x", "goal": "have", "item": "#testpack:nothing"}]}}`,
+			"testpack:nothing",
+		},
+		{
+			`{"a": {"title": "A", "steps": [{"text": "x", "goal": "visit", "name": "home", "count": 2}]}}`,
+			"a visit step counts once",
+		},
+		{
+			`{"a": {"title": "A", "steps": [{"text": "x", "goal": "visit", "item": "voxiverse:dirt"}]}}`,
+			"a visit step names maybe the world's kind",
 		},
 		{
 			`{"a": {"title": "A", "steps": [{"text": "x", "item": "voxiverse:dirt"}]}}`,
@@ -164,30 +191,41 @@ test_quest_conditions :: proc(t: ^testing.T) {
 	testing.expect(t, quest_wants(reg, &log, .Have) && !quest_wants(reg, &log, .Kill))
 	// Carrying two dirt is not three; a third is.
 	inventory_add(reg, &inv, {dirt, 2, 0, 0})
-	testing.expect_value(t, quest_settle(reg, &log, &inv, &book), Quest_Changes{})
+	testing.expect_value(t, quest_settle(reg, &log, &inv, &book, QUEST_HOME), Quest_Changes{})
 	inventory_add(reg, &inv, {dirt, 1, 0, 0})
-	testing.expect_value(t, quest_settle(reg, &log, &inv, &book), Quest_Changes{steps = 1})
+	testing.expect_value(
+		t,
+		quest_settle(reg, &log, &inv, &book, QUEST_HOME),
+		Quest_Changes{steps = 1},
+	)
 	testing.expect_value(t, log.quests[first], Quest_Progress{1, 0})
 	// Stone placed counts; grass does not, nor a break of stone.
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Place, block = grass, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Place, block = grass, count = 1}, &inv, &book, QUEST_HOME),
 		Quest_Changes{},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Break, block = stone, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Break, block = stone, count = 1}, &inv, &book, QUEST_HOME),
 		Quest_Changes{},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Place, block = stone, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Place, block = stone, count = 1}, &inv, &book, QUEST_HOME),
 		Quest_Changes{},
 	)
 	testing.expect_value(t, log.quests[first], Quest_Progress{1, 1})
 	// The ruin already in the logbook: the place step done as the one before it is.
 	logbook_place(&book, .Ruin, {}, {40, 0, 40})
-	changes := quest_note(reg, &log, {goal = .Place, block = stone, count = 1}, &inv, &book)
+	changes := quest_note(
+		reg,
+		&log,
+		{goal = .Place, block = stone, count = 1},
+		&inv,
+		&book,
+		QUEST_HOME,
+	)
 	testing.expect_value(t, changes, Quest_Changes{steps = 2, done = {first}})
 	testing.expect(t, quest_done(reg, &log, first) && quest_open(reg, &log, second))
 	testing.expect(t, quest_step(reg, &log, first) == nil)
@@ -196,61 +234,103 @@ test_quest_conditions :: proc(t: ^testing.T) {
 	// whatever the event.
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Break, block = stone, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Break, block = stone, count = 1}, &inv, &book, QUEST_HOME),
 		Quest_Changes{},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Kill, creature = dummy, count = 1}, &inv, &book),
+		quest_note(
+			reg,
+			&log,
+			{goal = .Kill, creature = dummy, count = 1},
+			&inv,
+			&book,
+			QUEST_HOME,
+		),
 		Quest_Changes{steps = 1},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Break, block = stone, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Break, block = stone, count = 1}, &inv, &book, QUEST_HOME),
 		Quest_Changes{steps = 1},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Make, item = planks, count = 4}, &inv, &book),
+		quest_note(reg, &log, {goal = .Make, item = planks, count = 4}, &inv, &book, QUEST_HOME),
 		Quest_Changes{},
 	)
 	logbook_place(&book, .Remains, {}, {90, 0, 0}, "Old wall")
-	changes = quest_note(reg, &log, {goal = .Make, item = planks, count = 4}, &inv, &book)
+	changes = quest_note(
+		reg,
+		&log,
+		{goal = .Make, item = planks, count = 4},
+		&inv,
+		&book,
+		QUEST_HOME,
+	)
 	testing.expect_value(t, changes, Quest_Changes{steps = 2, done = {aside}})
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Use, item = planks, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Use, item = planks, count = 1}, &inv, &book, QUEST_HOME),
 		Quest_Changes{},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Use, item = dirt, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Use, item = dirt, count = 1}, &inv, &book, QUEST_HOME),
 		Quest_Changes{steps = 1},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Win, name = "testpack:other", count = 1}, &inv, &book),
+		quest_note(
+			reg,
+			&log,
+			{goal = .Win, name = "testpack:other", count = 1},
+			&inv,
+			&book,
+			QUEST_HOME,
+		),
 		Quest_Changes{},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Win, name = "testpack:trial", count = 1}, &inv, &book),
+		quest_note(
+			reg,
+			&log,
+			{goal = .Win, name = "testpack:trial", count = 1},
+			&inv,
+			&book,
+			QUEST_HOME,
+		),
 		Quest_Changes{steps = 1},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Address, count = 1}, &inv, &book),
+		quest_note(reg, &log, {goal = .Address, count = 1}, &inv, &book, QUEST_HOME),
 		Quest_Changes{steps = 1},
 	)
 	// Something said counts by what it was.
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Talk, name = "testpack:stranger", count = 1}, &inv, &book),
+		quest_note(
+			reg,
+			&log,
+			{goal = .Talk, name = "testpack:stranger", count = 1},
+			&inv,
+			&book,
+			QUEST_HOME,
+		),
 		Quest_Changes{},
 	)
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Talk, name = "testpack:keeper", count = 1}, &inv, &book),
+		quest_note(
+			reg,
+			&log,
+			{goal = .Talk, name = "testpack:keeper", count = 1},
+			&inv,
+			&book,
+			QUEST_HOME,
+		),
 		Quest_Changes{steps = 1, done = {second}},
 	)
 	// A camp found: the quest after the one aside, open now, settles.
@@ -259,14 +339,21 @@ test_quest_conditions :: proc(t: ^testing.T) {
 	logbook_place(&book, .Settlement, {}, {400, 0, 0}, "Ember Hollow")
 	testing.expect_value(
 		t,
-		quest_settle(reg, &log, &inv, &book),
+		quest_settle(reg, &log, &inv, &book, QUEST_HOME),
 		Quest_Changes{steps = 1, done = {camp}},
 	)
 	for q in 0 ..< len(reg.quests) {testing.expect(t, quest_done(reg, &log, q))}
 	// Done is done: nothing counts any more.
 	testing.expect_value(
 		t,
-		quest_note(reg, &log, {goal = .Talk, name = "testpack:keeper", count = 1}, &inv, &book),
+		quest_note(
+			reg,
+			&log,
+			{goal = .Talk, name = "testpack:keeper", count = 1},
+			&inv,
+			&book,
+			QUEST_HOME,
+		),
 		Quest_Changes{},
 	)
 	testing.expect(t, quest_log_valid(reg, &log))
@@ -294,4 +381,59 @@ test_quest_log_valid :: proc(t: ^testing.T) {
 	log.quests[second] = {}
 	log.quests[len(reg.quests)] = {1, 0}
 	testing.expect(t, !quest_log_valid(reg, &log), "a quest the registry lacks")
+}
+
+// A visit step holds while the player stands on a world of its kind ("home", a class's;
+// none: any world but home), as the server names it; a have step of an item tag counts any
+// of its items together.
+@(test)
+test_quest_visit_and_any_of :: proc(t: ^testing.T) {
+	QUESTS :: `{
+		"away": {"title": "Away", "steps": [
+			{"text": "Step through", "goal": "visit"},
+			{"text": "Find the jungle", "goal": "visit", "name": "jungle"},
+			{"text": "Bring something shiny", "goal": "have", "item": "#testpack:shiny", "count": 3},
+			{"text": "Go home", "goal": "visit", "name": "home"}
+		]}
+	}`
+	reg, errs := quest_registry(t, QUESTS)
+	testing.expect_value(t, errs, "")
+	if reg == nil {return}
+	defer registry_destroy(reg)
+	away, _ := quest_by_id(reg, "testpack:away")
+	testing.expect_value(t, reg.quests[away].steps[2].objective.any_of, 1)
+	glass, _ := registry_item(reg, "voxiverse:glass")
+	planks, _ := registry_item(reg, "voxiverse:planks")
+	log: Quest_Log
+	inv: Inventory
+	book: Logbook
+	testing.expect_value(t, quest_settle(reg, &log, &inv, &book, QUEST_HOME), Quest_Changes{})
+	testing.expect_value(t, quest_settle(reg, &log, &inv, &book, ""), Quest_Changes{})
+	testing.expect_value(
+		t,
+		quest_settle(reg, &log, &inv, &book, "ocean"),
+		Quest_Changes{steps = 1},
+	)
+	testing.expect_value(t, quest_settle(reg, &log, &inv, &book, "ocean"), Quest_Changes{})
+	testing.expect_value(
+		t,
+		quest_settle(reg, &log, &inv, &book, "jungle"),
+		Quest_Changes{steps = 1},
+	)
+	inventory_add(reg, &inv, {glass, 2, 0, 0})
+	o := &reg.quests[away].steps[2].objective
+	testing.expect_value(t, quest_carried(reg, o, &inv), 2)
+	testing.expect_value(t, quest_settle(reg, &log, &inv, &book, "jungle"), Quest_Changes{})
+	inventory_add(reg, &inv, {planks, 1, 0, 0})
+	testing.expect_value(t, quest_carried(reg, o, &inv), 3)
+	testing.expect_value(
+		t,
+		quest_settle(reg, &log, &inv, &book, "jungle"),
+		Quest_Changes{steps = 1},
+	)
+	testing.expect_value(
+		t,
+		quest_settle(reg, &log, &inv, &book, QUEST_HOME),
+		Quest_Changes{steps = 1, done = {away}},
+	)
 }

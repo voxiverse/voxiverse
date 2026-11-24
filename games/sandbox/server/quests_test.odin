@@ -4,6 +4,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:worldgen"
 import "games:sandbox"
 import "server:core"
 import "server:playtest"
@@ -212,6 +213,15 @@ test_quests_chain :: proc(t: ^testing.T) {
 					where_,
 				)
 			case .Address:
+			case .Visit:
+				class, known := worldgen.class_by_name(o.name)
+				testing.expectf(
+					t,
+					o.name == "" || o.name == game.QUEST_HOME || (known && class != .None),
+					"%s: no kind of world is called %q",
+					where_,
+					o.name,
+				)
 			case .Talk:
 				testing.expectf(
 					t,

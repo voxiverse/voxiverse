@@ -3,8 +3,8 @@ package game
 // Quests (the Journal's Quests page, the HUD's tracker): a pack's chains of objectives
 // (data/quests, registry_quests.odin), each quest a few steps done in order, each step a
 // condition over what the server already knows of a player: what it carries, makes,
-// places, breaks, finds (its logbook), kills, uses up, wins, says to someone, and an address
-// written on a gate. A quest opens when the quests it comes after are done, and gives its reward when
+// places, breaks, finds (its logbook), kills, uses up, wins, says to someone, an address
+// written on a gate, and the kind of world it stands on. A quest opens when the quests it comes after are done, and gives its reward when
 // its last step is.
 //
 // What a character has done of them is its Quest_Log, kept with it (the server's player
@@ -32,16 +32,18 @@ Goal :: enum u8 {
 	Win, // win a game's encounter, by its name (core.quest_note)
 	Address, // write an address on a gate (whether or not it opens)
 	Talk, // say something to someone, by its name (a game's conversation: core.quest_note)
+	Visit, // stand on a world of a kind, by its name (Quest_World: "home", a world class's; none: any world but home)
 }
 
 // Objective: a step's condition; which of its fields count is its goal's.
 Objective :: struct {
 	goal:     Goal,
 	item:     Item, // Have, Make, Use
+	any_of:   i32, // Have: any items of the item tag of this index + 1, in place of the item (0: the item)
 	block:    Block_Type, // Place, Break
 	creature: Kind_Id, // Kill
 	place:    Logbook_Place_Kind, // Find
-	name:     string, // Find: the place's own name ("": any of its kind); Win: the encounter's; Talk: what was said
+	name:     string, // Find: the place's own name ("": any of its kind); Win: the encounter's; Talk: what was said; Visit: the world's kind ("": any but home)
 	count:    int, // 1 ..= MAX_QUEST_COUNT
 }
 
@@ -96,6 +98,14 @@ Quest_Event :: struct {
 	count:    int,
 }
 
+// Quest_World: the world a player stands on as a Visit step names it: QUEST_HOME for the
+// universe's home world, else its world class's name (worldgen.CLASS_NAMES, "none" for a
+// world of no class); "" while it stands on none. common:game knows no world class: the
+// server says the name (core's quest_world).
+Quest_World :: string
+
+QUEST_HOME :: "home"
+
 // Quest_Changes: what an event or a settle moved: the steps done, and of them the quests
 // finished (whose reward is due).
 Quest_Changes :: struct {
@@ -135,24 +145,43 @@ quest_counts :: proc(reg: ^Registry, o: ^Objective, e: Quest_Event) -> bool {
 		return o.name == e.name
 	case .Address:
 		return true
-	case .Find:
-		return false // (the logbook is a state: quest_settle)
+	case .Find, .Visit:
+		return false // (the logbook and the world stood on are states: quest_settle)
 	}
 	return false
 }
 
-// quest_holds: whether a step whose condition is a state (Have, Find) holds on what the
-// player carries and its logbook. False for the others: they are events.
-quest_holds :: proc(reg: ^Registry, o: ^Objective, inv: ^Inventory, book: ^Logbook) -> bool {
+// quest_holds: whether a step whose condition is a state (Have, Find, Visit) holds on what
+// the player carries, its logbook and the world it stands on. False for the others: they
+// are events.
+quest_holds :: proc(
+	reg: ^Registry,
+	o: ^Objective,
+	inv: ^Inventory,
+	book: ^Logbook,
+	world: Quest_World,
+) -> bool {
 	#partial switch o.goal {
 	case .Have:
-		return inventory_count(inv, o.item) >= o.count
+		return quest_carried(reg, o, inv) >= o.count
 	case .Find:
 		for &p in book.places[:book.place_count] {
 			if p.kind == o.place && (o.name == "" || place_name(&p) == o.name) {return true}
 		}
+	case .Visit:
+		if o.name == "" {return world != "" && world != QUEST_HOME}
+		return world == o.name
 	}
 	return false
+}
+
+// quest_carried: how much of what a Have step asks the player carries (its item, or any
+// items of its tag), as its journal and tracker count it.
+quest_carried :: proc(reg: ^Registry, o: ^Objective, inv: ^Inventory) -> int {
+	if o.any_of == 0 {return inventory_count(inv, o.item)}
+	have := 0
+	for m in reg.item_tags[o.any_of - 1].members {have += inventory_count(inv, Item(m))}
+	return have
 }
 
 // quest_advance: q's step done: on to the next.
@@ -164,13 +193,15 @@ quest_advance :: proc(reg: ^Registry, log: ^Quest_Log, q: int, changes: ^Quest_C
 }
 
 // quest_settle: every open quest whose step is a state that holds (it carries what it
-// asks, its logbook has the place) moves on, and on, as far as they hold: after an event,
-// a change to what it carries or to its logbook, and as it joins.
+// asks, its logbook has the place, it stands on the world) moves on, and on, as far as they
+// hold: after an event, a change to what it carries or to its logbook, as it travels and as
+// it joins.
 quest_settle :: proc(
 	reg: ^Registry,
 	log: ^Quest_Log,
 	inv: ^Inventory,
 	book: ^Logbook,
+	world: Quest_World,
 ) -> (
 	changes: Quest_Changes,
 ) {
@@ -179,7 +210,7 @@ quest_settle :: proc(
 		for q in 0 ..< min(len(reg.quests), MAX_QUESTS) {
 			if !quest_open(reg, log, q) {continue}
 			o := &quest_step(reg, log, q).objective
-			if !quest_holds(reg, o, inv, book) {continue}
+			if !quest_holds(reg, o, inv, book, world) {continue}
 			quest_advance(reg, log, q, &changes)
 			moved = true // (it may open others, or its next step may hold too)
 		}
@@ -195,6 +226,7 @@ quest_note :: proc(
 	e: Quest_Event,
 	inv: ^Inventory,
 	book: ^Logbook,
+	world: Quest_World,
 ) -> (
 	changes: Quest_Changes,
 ) {
@@ -210,7 +242,7 @@ quest_note :: proc(
 			log.quests[q].count = u16(have)
 		}
 	}
-	settled := quest_settle(reg, log, inv, book)
+	settled := quest_settle(reg, log, inv, book, world)
 	changes.steps += settled.steps
 	changes.done += settled.done
 	return

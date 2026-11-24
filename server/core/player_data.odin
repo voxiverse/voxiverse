@@ -14,6 +14,7 @@ import "common:access"
 import "common:base"
 import "common:game"
 import "common:starmap"
+import "common:worldgen"
 
 // What is kept about each character: their own file in the universe,
 // characters/<account>/<name>.json (where they are, where they look,
@@ -669,15 +670,31 @@ quests_read :: proc(reg: ^game.Registry, f: []File_Quest, ql: ^game.Quest_Log) {
 quest_note :: proc(s: ^Server, c: ^Client, e: game.Quest_Event) {
 	experience_note(s, c, e)
 	if !quests_count(s, c) || !game.quest_wants(s.registry, &c.quests, e.goal) {return}
-	quests_moved(s, c, game.quest_note(s.registry, &c.quests, e, &c.inventory, &c.logbook))
+	quests_moved(
+		s,
+		c,
+		game.quest_note(s.registry, &c.quests, e, &c.inventory, &c.logbook, quest_world(s, c)),
+	)
 }
 
-// quests_settle: what c carries or its logbook changed, or it joined: the steps that hold
-// now (game.quest_settle) move on.
+// quests_settle: what c carries or its logbook changed, it travelled, or it joined: the
+// steps that hold now (game.quest_settle) move on.
 @(private)
 quests_settle :: proc(s: ^Server, c: ^Client) {
 	if !quests_count(s, c) {return}
-	quests_moved(s, c, game.quest_settle(s.registry, &c.quests, &c.inventory, &c.logbook))
+	quests_moved(
+		s,
+		c,
+		game.quest_settle(s.registry, &c.quests, &c.inventory, &c.logbook, quest_world(s, c)),
+	)
+}
+
+// quest_world: the world c stands on as a quest's visit step names it (game.Quest_World):
+// "home" for the home world, else its class's name ("none" for a world of no class).
+quest_world :: proc(s: ^Server, c: ^Client) -> game.Quest_World {
+	if c.world == nil {return ""}
+	if c.world == s.home {return game.QUEST_HOME}
+	return worldgen.CLASS_NAMES[worldgen.world_class_of(&c.world.params)]
 }
 
 // quests_count: whether c's deeds count for its quests (a survivor's, where there are any).

@@ -124,7 +124,7 @@ quest_detail :: proc(app: ^engine.App, ctx: ^ui.Context, r: ui.Rect, q: int) {
 			case o.goal == .Have && o.count > 1:
 				count = engine.tr(
 					.Quest_Count,
-					min(game.inventory_count(&s.inventory, o.item), o.count),
+					min(game.quest_carried(s.reg, o, &s.inventory), o.count),
 					o.count,
 				)
 			case o.count > 1:

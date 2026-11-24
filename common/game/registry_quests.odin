@@ -9,9 +9,11 @@ import "core:fmt"
 //	                "reward": [{"item": "sandbox:field_dressing", "count": 2}]}}
 //
 // A step is its `text`, its `goal` (have, make, place, break, find, kill, use, win, address,
-// talk) with what the goal names (`item` for have, make and use; `block` for place and break;
+// talk, visit) with what the goal names (`item` for have, make and use, for have maybe an
+// item tag, "#<tag>": any of its items; `block` for place and break;
 // `creature` for kill; `place` (a logbook place's kind) and maybe `name` for find; `name`
-// (the encounter's) for win, (what is said: a dialogue's or a reply's) for talk), a `count` (1 when none) and maybe a `way`, {"place": <kind>,
+// (the encounter's) for win, (what is said: a dialogue's or a reply's) for talk, (the
+// world's kind: "home" or a world class's) and maybe for visit), a `count` (1 when none) and maybe a `way`, {"place": <kind>,
 // "name": <its name>}: the place the compass points at while it is the step. A find step
 // points at the place it asks for. Quests are read after everything they name, so every
 // id is checked; one quest may come after another (`after`) but never round in a circle.
@@ -42,6 +44,7 @@ GOAL_NAMES := []string {
 	"win",
 	"address",
 	"talk",
+	"visit",
 } // (by Goal)
 @(private)
 PLACE_NAMES := []string{"gate", "ruin", "town", "outpost", "beacon", "remains", "settlement"} // (by Logbook_Place_Kind)
@@ -214,7 +217,13 @@ read_step :: proc(
 			o.goal = Goal(choice_of(b, f, e.value, "goal", GOAL_NAMES, 0))
 			has += {.Goal}
 		case "item":
-			o.item = quest_item(b, reg, f, e.value)
+			if e.value.kind == .String && len(e.value.s) > 1 && e.value.s[0] == '#' {
+				if at, known := ref_index(b, .Item_Tag, e.value.s[1:], f, e.value); known {
+					o.any_of = i32(at) + 1
+				}
+			} else {
+				o.item = quest_item(b, reg, f, e.value)
+			}
 			has += {.Item}
 		case "block":
 			if e.value.kind != .String {
@@ -264,7 +273,7 @@ read_step :: proc(
 			b,
 			f,
 			v,
-			"a step has a \"goal\": have, make, place, break, find, kill, use, win, address or talk",
+			"a step has a \"goal\": have, make, place, break, find, kill, use, win, address, talk or visit",
 		)
 		return
 	}
@@ -283,6 +292,8 @@ read_step :: proc(
 		if step.way == nil {step.way = Quest_Way{o.place, o.name}}
 	case .Win, .Talk:
 		wants = {.Name}
+	case .Visit:
+		if .Name in has {wants += {.Name}}
 	case .Address:
 	}
 	if has - {.Goal} != wants {
@@ -294,7 +305,15 @@ read_step :: proc(
 		)
 		return
 	}
-	if (o.goal == .Find || o.goal == .Win || o.goal == .Address || o.goal == .Talk) &&
+	if o.any_of != 0 && o.goal != .Have {
+		fail_field(b, f, v, "only a have step names an item tag (\"#<tag>\"): any of its items")
+		return
+	}
+	if (o.goal == .Find ||
+		   o.goal == .Win ||
+		   o.goal == .Address ||
+		   o.goal == .Talk ||
+		   o.goal == .Visit) &&
 	   o.count != 1 {
 		fail_field(b, f, v, fmt.aprintf("a %s step counts once", GOAL_NAMES[o.goal]))
 		return
@@ -325,6 +344,7 @@ GOAL_WANTS := [Goal]string {
 	.Win     = "the encounter's \"name\"",
 	.Address = "nothing more",
 	.Talk    = "what is said: its \"name\"",
+	.Visit   = "maybe the world's kind: its \"name\" (\"home\", a world class's)",
 }
 
 @(private = "file")
