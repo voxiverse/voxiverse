@@ -300,6 +300,7 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 	     protocol.Inventory_Request,
 	     protocol.Choose,
 	     protocol.Open_Gate,
+	     protocol.Destination_Ask,
 	     protocol.Stats_Request,
 	     protocol.Telemetry_Report:
 		refuse(c, id, "this is a telemetry collector")

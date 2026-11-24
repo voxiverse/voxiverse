@@ -1202,6 +1202,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		inventory_request(s, c, v)
 	case protocol.Open_Gate:
 		notice_if(s, c, gate_open(s, c, v))
+	case protocol.Destination_Ask:
+		destination_answer(s, c, v)
 	case protocol.Edit:
 		queue_action(s, c, v)
 	case protocol.Attack:

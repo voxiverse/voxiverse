@@ -65,6 +65,12 @@ Open_Gate :: struct {
 	address: starmap.Address,
 }
 
+// Destination_Ask: what is the world at address? (the gate's address screen, before it
+// opens anything); the answer is a Destination.
+Destination_Ask :: struct {
+	address: starmap.Address,
+}
+
 // Choose: the character to play (an existing one of the account's, or a
 // new name), after Characters.
 Choose :: struct {
@@ -358,6 +364,7 @@ Client_Message :: union {
 	Reload,
 	Game_Action,
 	Game_Request,
+	Destination_Ask,
 }
 
 // Server -> client.
@@ -459,6 +466,18 @@ Unload_Chunk :: struct {
 
 Pong :: struct {
 	id: u32,
+}
+
+// Destination: what the world at address is, as the server knows it (a Destination_Ask's
+// answer): the universe's home world or not, the generator it is (or would be) made by
+// (worldgen.Kind's number) and its world class (worldgen.World_Class's: 0 none). A world
+// saved keeps the kind it was made with, and the home world is the universe's own, so this
+// is what the address alone cannot say.
+Destination :: struct {
+	address:   starmap.Address,
+	home:      bool,
+	generator: u8,
+	class:     u8,
 }
 
 // Stats_Page: a page of counters: "name value" lines, newline apart.
@@ -588,6 +607,7 @@ Server_Message :: union {
 	Packs,
 	Pack_Part,
 	Packs_Changed,
+	Destination,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -628,6 +648,7 @@ Client_Kind :: enum u8 {
 	// 28: retired (Market_Trade)
 	Game_Action = 29,
 	Game_Request,
+	Destination_Ask,
 }
 
 @(private = "file")
@@ -661,6 +682,7 @@ Server_Kind :: enum u8 {
 	Dev_Ack       = 41,
 	Dev_Replies   = 42,
 	// 43: retired (Market_View)
+	Destination   = 44,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -740,6 +762,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "choose"
 		case u8(Client_Kind.Open_Gate):
 			return "open_gate"
+		case u8(Client_Kind.Destination_Ask):
+			return "destination_ask"
 		}
 	} else {
 		switch kind {
@@ -749,6 +773,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "pack_part"
 		case u8(Server_Kind.Packs_Changed):
 			return "packs_changed"
+		case u8(Server_Kind.Destination):
+			return "destination"
 		case u8(Server_Kind.Welcome):
 			return "welcome"
 		case u8(Server_Kind.Reject):
@@ -827,6 +853,9 @@ encode_client :: proc(w: ^game.Writer, m: Client_Message) {
 	case Open_Gate:
 		game.write_u8(w, u8(Client_Kind.Open_Gate))
 		write_block_pos(w, v.gate)
+		write_address(w, v.address)
+	case Destination_Ask:
+		game.write_u8(w, u8(Client_Kind.Destination_Ask))
 		write_address(w, v.address)
 	case Input:
 		game.write_u8(w, u8(Client_Kind.Input))
@@ -1059,6 +1088,12 @@ encode_server :: proc(w: ^game.Writer, m: Server_Message, blocks: ^game.Chunk_Bl
 	case Packs_Changed:
 		game.write_u8(w, u8(Server_Kind.Packs_Changed))
 		game.write_fixed64(w, v.content)
+	case Destination:
+		game.write_u8(w, u8(Server_Kind.Destination))
+		write_address(w, v.address)
+		game.write_u8(w, u8(v.home))
+		game.write_u8(w, v.generator)
+		game.write_u8(w, v.class)
 	case Pack_Part:
 		game.write_u8(w, u8(Server_Kind.Pack_Part))
 		game.write_u8(w, v.index)
@@ -1114,6 +1149,8 @@ decode_client :: proc(data: []u8, reg: ^game.Registry = nil) -> (m: Client_Messa
 		}
 		d.address = read_address(&r)
 		m = d
+	case u8(Client_Kind.Destination_Ask):
+		m = Destination_Ask{read_address(&r)}
 	case u8(Client_Kind.Input):
 		m = Input {
 			sequence = game.read_u32(&r),
@@ -1432,6 +1469,16 @@ decode_server :: proc(
 		m = ps
 	case u8(Server_Kind.Packs_Changed):
 		m = Packs_Changed{game.read_fixed64(&r)}
+	case u8(Server_Kind.Destination):
+		d := Destination {
+			address = read_address(&r),
+		}
+		home := game.read_u8(&r)
+		if home > 1 {game.reader_fail(&r)}
+		d.home = home == 1
+		d.generator = game.read_u8(&r)
+		d.class = game.read_u8(&r)
+		m = d
 	case u8(Server_Kind.Pack_Part):
 		part := Pack_Part {
 			index  = game.read_u8(&r),

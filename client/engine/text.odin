@@ -81,6 +81,7 @@ Text :: enum u16 {
 	Class_Jungle,
 	World_Home, // a logbook's world: the universe's home world
 	World_No_Class, // ... one of no class (Earth's kind)
+	World_Flat, // a world a game made flat (the gate's address)
 	Gate_Known, // the gate's row of the worlds the player has stood on
 	Crash_Title,
 	Crash_Saved,
@@ -426,6 +427,7 @@ TEXT_EN := [Text]string {
 	.Class_Jungle                           = "A jungle world under a tall canopy",
 	.World_Home                             = "Your home world",
 	.World_No_Class                         = "A world like Earth",
+	.World_Flat                             = "A flat world, made for a purpose",
 	.Gate_Known                             = "Worlds you have stood on",
 	.Crash_Title                            = "Voxiverse closed unexpectedly last time",
 	.Crash_Saved                            = "A report was saved on this computer.",
@@ -707,14 +709,27 @@ tr :: proc(key: Text, args: ..any) -> string {
 	return base.text_format(TEXT_EN[key], ..args)
 }
 
-// destination_line: what the world at an address is, in one line, from the address alone:
-// its class (worldgen.world_class) and what lives there (life_line): "An ocean world of
-// scattered islands. Plants and animals". A world of no class (Earth) is its life alone.
-destination_line :: proc(a: starmap.Address) -> string {
+// destination_line: what the world at an address is, in one line, as the server says it
+// is (destination_of: the home world as it was made, a world saved as it was made, another
+// as it would be), and what lives there (life_line): "An ocean world of scattered islands.
+// Plants and animals", "Your home world. Plants". A world of no class (Earth) is its life
+// alone, and so is any while the server has not answered.
+destination_line :: proc(s: ^Session, a: starmap.Address) -> string {
 	life := life_line(worldgen.world_life(a))
-	class := worldgen.world_class(a)
-	if class == .None {return life}
-	return tr(.Gate_Destination, tr(Text(int(Text.Class_Temperate) + int(class) - 1)), life)
+	d, known := destination_of(s, a)
+	switch {
+	case !known:
+		return life
+	case d.home:
+		return tr(.Gate_Destination, tr(.World_Home), life)
+	case d.generator == u8(worldgen.Kind.Flat):
+		return tr(.Gate_Destination, tr(.World_Flat), life)
+	case d.generator != u8(worldgen.Kind.Earth) ||
+	     d.class == 0 ||
+	     int(d.class) >= len(worldgen.World_Class):
+		return life
+	}
+	return tr(.Gate_Destination, tr(Text(int(Text.Class_Temperate) + int(d.class) - 1)), life)
 }
 
 // world_title: a world of the logbook as players read it: home, or what its class is

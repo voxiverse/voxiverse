@@ -3,11 +3,16 @@ package core
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:os"
+import "core:path/filepath"
+import "core:strconv"
 
+import "common:base"
 import "common:game"
 import "common:protocol"
 import "common:starmap"
 import "common:worldgen"
+import "server:store"
 
 // Gates (common/worldgen/gates.odin has their shape and places): a player
 // writes an address on one (Open_Gate: a world of this galaxy), and it
@@ -91,6 +96,57 @@ gate_open :: proc(s: ^Server, c: ^Client, d: protocol.Open_Gate) -> string {
 	record(s, c, .Gate_Dial, "opened")
 	logbook_place(s, c, .Gate, {centre.x, centre.y, centre.z})
 	return ""
+}
+
+// destination_answer: what the world at an address is, for the gate's address screen
+// (a Destination_Ask): the home world as it was made, a world loaded or saved as it was
+// made (its world.cfg), and one never made as it would be (world_kind, the game's claim
+// too). An address that is none is not answered.
+@(private)
+destination_answer :: proc(s: ^Server, c: ^Client, d: protocol.Destination_Ask) {
+	if !starmap.address_valid(d.address) {return}
+	generator, params := destination_kind(s, d.address)
+	send_message(
+		s,
+		c,
+		protocol.Destination {
+			address = d.address,
+			home = d.address == s.home.address,
+			generator = u8(generator),
+			class = u8(worldgen.world_class_of(&params)),
+		},
+	)
+}
+
+// destination_kind: the generator and parameters the world at address a is made by.
+@(private)
+destination_kind :: proc(s: ^Server, a: starmap.Address) -> (worldgen.Kind, worldgen.Params) {
+	if w := world_find(s, a); w != nil {return w.generator, w.params}
+	if s.store.dir != "" {
+		path, _ := filepath.join(
+			{s.store.dir, store.WORLDS_DIR, starmap.address_dir(a), store.WORLD_FILE},
+			context.temp_allocator,
+		)
+		if data, err := os.read_entire_file_from_path(path, context.temp_allocator); err == nil {
+			// A world saved: its generator, and its class (none in one from before classes).
+			generator := worldgen.Kind.Classic // (one from before generators were named)
+			params := worldgen.PARAMS_DEFAULTS
+			params.class = 0
+			for l in base.config_lines(string(data)) {
+				switch l.key {
+				case "generator":
+					if k, known := worldgen.kind_by_name(l.value); known {generator = k}
+				case "worldgen.class":
+					if v, ok := strconv.parse_f32(l.value); ok {params.class = v}
+				}
+			}
+			return generator, params
+		}
+	}
+	w := new(World, context.temp_allocator) // (a world's kind alone: nothing of it is opened)
+	w.server, w.address = s, a
+	world_kind(w)
+	return w.generator, w.params
 }
 
 @(private = "file")

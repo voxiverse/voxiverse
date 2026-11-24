@@ -11,6 +11,7 @@ import "common:game"
 import "common:protocol"
 import "common:starmap"
 import "common:worldgen"
+import "server:store"
 
 // The exit check over UDP: wrong addresses are refused; a gate opens,
 // alice walks through its opening to the far world's gate, and once the
@@ -378,4 +379,55 @@ test_gate_dead_saved :: proc(t: ^testing.T) {
 	d := f64(arrival.lo.x) * f64(arrival.lo.x) + f64(arrival.lo.z) * f64(arrival.lo.z)
 	testing.expect(t, d >= f64(w.params.gate_distance * w.params.gate_distance))
 	testing.expect(t, harness_stop(h))
+}
+
+// What the gate's address screen is told of a world: the home world as it was made (an
+// alien one is of no class, whatever its address alone would say), a world saved as it was
+// made (one saved before classes is of none), and one never made as its address makes it.
+@(test)
+test_gate_destination :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "gate_destination"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	h := new(Harness)
+	defer free(h)
+	config := dead_gate_config(dir)
+	// An alien home world (its address made from the seed) whose address alone would say a
+	// class: the gap the answer closes.
+	for seed in i64(1) ..< 200 {
+		config.seed = seed
+		if worldgen.world_class(starmap.address_derive(u64(seed))) != .None {break}
+	}
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	srv := &h.srv
+	home := srv.home.address
+	generator, params := destination_kind(srv, home)
+	testing.expect_value(t, generator, srv.home.generator)
+	testing.expect_value(t, worldgen.world_class_of(&params), worldgen.World_Class.None)
+	// A world never made: as its address makes it.
+	away := starmap.address_derive(77)
+	away.galaxy = home.galaxy
+	generator, params = destination_kind(srv, away)
+	testing.expect_value(t, generator, worldgen.Kind.Earth)
+	testing.expect_value(t, worldgen.world_class_of(&params), worldgen.world_class(away))
+	// One saved before classes: of none, as it loads.
+	old := starmap.address_derive(78)
+	old.galaxy = home.galaxy
+	if !testing.expect(t, worldgen.world_class(old) != .None) {return}
+	world_dir :=
+		filepath.join(
+			{dir, store.WORLDS_DIR, starmap.address_dir(old)},
+			context.temp_allocator,
+		) or_else ""
+	os.make_directory_all(world_dir)
+	cfg := "format = 9\ngenerator = earth\nseed = 5\n\nworldgen.sea_level = 3\n"
+	written := os.write_entire_file(
+		filepath.join({world_dir, store.WORLD_FILE}, context.temp_allocator) or_else "",
+		transmute([]u8)cfg,
+	)
+	testing.expect(t, written == nil)
+	generator, params = destination_kind(srv, old)
+	testing.expect_value(t, generator, worldgen.Kind.Earth)
+	testing.expect_value(t, worldgen.world_class_of(&params), worldgen.World_Class.None)
 }

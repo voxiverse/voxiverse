@@ -188,6 +188,9 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && at.(Prediction_Check) == check, "Prediction_Check did not round-trip")
 	at, ok = decode_client_t(encode_c(Use_Entity{12, 35})[:])
 	testing.expect(t, ok && at.(Use_Entity) == Use_Entity{12, 35})
+	there := starmap.address_derive(9)
+	at, ok = decode_client_t(encode_c(Destination_Ask{there})[:])
+	testing.expect(t, ok && at.(Destination_Ask) == Destination_Ask{there})
 	at, ok = decode_client_t(encode_c(Stats_Request{"blocks", 2, "bob"})[:])
 	testing.expect(t, ok && at.(Stats_Request) == Stats_Request{"blocks", 2, "bob"})
 	_, ok = decode_client_t(
@@ -274,6 +277,13 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, !pok, "an empty Pack_Part decoded")
 	changed, cok := decode_server_t(encode_s(Packs_Changed{0xfeed_beef_1234})[:], scratch)
 	testing.expect(t, cok && changed.(Packs_Changed) == Packs_Changed{0xfeed_beef_1234})
+	dest := Destination{starmap.address_derive(9), true, 2, 8}
+	answer, dok := decode_server_t(encode_s(dest)[:], scratch)
+	testing.expect(t, dok && answer.(Destination) == dest, "a Destination did not round-trip")
+	bad := encode_s(dest)
+	bad[1 + 15] = 2 // (home is a bool)
+	_, dok = decode_server_t(bad[:], scratch)
+	testing.expect(t, !dok, "a Destination with home 2 decoded")
 	// The market's kinds are retired (the sandbox's records and requests now): they do not decode.
 	_, retired := decode_client_t([]u8{28, 3, 1, 0, 0, 32, 64})
 	testing.expect(t, !retired, "a retired Market_Trade decoded")

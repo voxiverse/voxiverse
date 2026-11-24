@@ -104,6 +104,7 @@ Session :: struct {
 	feel:              Feel, // the feedback under way and its clock (feel.odin)
 	hud:               Hud_State, // what the HUD keeps between frames (popup.odin)
 	logbook:           protocol.Logbook_State, // the player's places found and creatures met, as the server last said (the Journal screen, the compass, the map)
+	destinations:      Destinations, // what the server said of the worlds the gate's address screen asked about (gates.odin)
 	quests:            protocol.Quest_State, // the player's quests, as the server last said (the journal's Quests, the HUD's tracker, the compass)
 	quests_heard:      bool, // ... a value came (the first is no news)
 	quest_pick:        int, // the quest the player picked to track in the journal, + 1 (0: the first under way; quest_tracked)

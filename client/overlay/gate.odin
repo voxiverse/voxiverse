@@ -224,7 +224,7 @@ gate_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		}
 	}
 	if a, has := life_at.?; has {
-		ui.label(ctx, engine.destination_line(a), l.life, .Center, t.text_muted)
+		ui.label(ctx, engine.destination_line(s, a), l.life, .Center, t.text_muted)
 	}
 	// The worlds stood on: one pressed writes its address whole.
 	if len(known) > 0 {

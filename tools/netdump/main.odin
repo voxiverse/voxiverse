@@ -383,6 +383,8 @@ describe :: proc(
 				true
 		case protocol.Choose:
 			return fmt.tprintf("choose character=%q", v.character), true
+		case protocol.Destination_Ask:
+			return fmt.tprintf("destination_ask address=%s", starmap.address_dir(v.address)), true
 		case protocol.Input:
 			text := fmt.tprintf(
 				"input seq=%d snapshot=%d move=[%.2f, %.2f] yaw=%.3f pitch=%.3f buttons=%v",
@@ -550,6 +552,15 @@ describe :: proc(
 			return fmt.tprintf("packs content=%016x count=%d", v.content, v.count), true
 		case protocol.Packs_Changed:
 			return fmt.tprintf("packs_changed content=%016x", v.content), true
+		case protocol.Destination:
+			return fmt.tprintf(
+					"destination address=%s home=%v generator=%d class=%d",
+					starmap.address_dir(v.address),
+					v.home,
+					v.generator,
+					v.class,
+				),
+				true
 		case protocol.Pack_Part:
 			return fmt.tprintf(
 					"pack_part index=%d offset=%d bytes=%d",

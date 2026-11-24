@@ -9,6 +9,7 @@ import "client:ui"
 import "common:game"
 import "common:protocol"
 import "common:starmap"
+import "common:worldgen"
 
 // The gate's address with the mouse: a symbol a click, none twice,
 // Backspace and Erase take the last back; once whole the board takes no
@@ -92,13 +93,39 @@ test_gate_address :: proc(t: ^testing.T) {
 	testing.expect(t, engine.overlay_is_open(&app.overlays, .Gate))
 	picks := [starmap.WORLD_LENGTH]u8{39, 0, 7, 21, 5, 33, 18}
 	for p in picks[:starmap.WORLD_LENGTH - 1] {click(app, l.symbols[p])}
-	// Six in, the pointer on a symbol: the line says what that world is and what lives
-	// there.
+	// Six in, the pointer on a symbol: the server is asked what that world is, and until it
+	// answers the line says what lives there; its answer (here: the home world, whatever
+	// class the address alone would give) is what the line says then.
 	at := ui.Vec2{l.symbols[picks[6]].x + 2, l.symbols[picks[6]].y + 2}
 	frame(app, {mouse = at})
 	want_addr := starmap.Address{s.welcome.address.galaxy, picks}
-	want := engine.destination_line(want_addr)
+	asked, ask_ok := protocol.decode_client(s.writer.buf[:], testkit.test_reg())
+	ask, is_ask := asked.(protocol.Destination_Ask)
+	testing.expect(t, ask_ok && is_ask && ask.address == want_addr, "the server is not asked")
+	life := engine.life_line(worldgen.world_life(want_addr))
+	testing.expectf(t, says(app, life), "the gate does not say %q", life)
+	engine.destination_take(
+		s,
+		{address = want_addr, home = true, generator = u8(worldgen.Kind.Earth), class = 0},
+	)
+	frame(app, {mouse = at})
+	want := engine.destination_line(s, want_addr)
+	testing.expect_value(t, want, engine.tr(.Gate_Destination, engine.tr(.World_Home), life))
 	testing.expectf(t, says(app, want), "the gate does not say %q", want)
+	// A class the server names is the one shown.
+	other := want_addr
+	other.world[6] = 1
+	engine.destination_take(s, {address = other, generator = u8(worldgen.Kind.Earth), class = 8})
+	testing.expect_value(
+		t,
+		engine.destination_line(s, other),
+		engine.tr(
+			.Gate_Destination,
+			engine.tr(.Class_Jungle),
+			engine.life_line(worldgen.world_life(other)),
+		),
+	)
+	clear(&s.writer.buf)
 	// Seven: whole, still open, the board full, the life still shown.
 	click(app, l.symbols[picks[6]])
 	click(app, l.symbols[1])
@@ -107,7 +134,7 @@ test_gate_address :: proc(t: ^testing.T) {
 	frame(app, {})
 	testing.expectf(t, says(app, want), "the whole address does not say %q", want)
 	testing.expect(t, says(app, engine.symbols_text(picks[:])), "the address is not written out")
-	testing.expect(t, len(s.writer.buf) == 0, "sent before Open")
+	testing.expect(t, len(s.writer.buf) == 0, "sent before Open (or asked again)")
 	click(app, l.open)
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Gate))
 	m, decoded := protocol.decode_client(s.writer.buf[:], testkit.test_reg())

@@ -194,6 +194,8 @@ handle_packets :: proc(s: ^Session, packets: []protocol.Packet) {
 		case protocol.Telemetry_Ack, protocol.Dev_Ack, protocol.Dev_Replies:
 		case protocol.Stats_Page:
 			stats_data_take(&s.player_stats, v)
+		case protocol.Destination:
+			destination_take(s, v)
 		case protocol.Bulk_Begin:
 			world_bulk_begin(&s.world, int(v.count))
 		case protocol.Edit_Result:

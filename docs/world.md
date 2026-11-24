@@ -85,8 +85,16 @@ To use a gate, right-click its frame from within 8 blocks: the gate's address ov
 board of the 40 symbols below it, a row for each body and a column for each set of marks.
 Each symbol pressed is added to the address (none twice; Backspace or Erase takes the last
 back); once all seven are there the board takes no more, the line under the field says what
-lives on that world (`engine.destination_line`: its class and its life, "An ocean world of
-scattered islands. Plants and animals"), and Open (or Enter) sends it (`protocol.Open_Gate`). The gate opens at
+that world is and what lives there (`engine.destination_line`: "An ocean world of scattered
+islands. Plants and animals"). What it is the server says, asked once for each address
+(`protocol.Destination_Ask`, answered by a `protocol.Destination`: whether it is the
+universe's home world, its generator and its class, `server/core/gates.odin`'s
+`destination_answer`): the home world as it was made (an alien home world is of no class,
+"Your home world"), a world loaded or saved as it was made (`world.cfg`; one saved before
+classes is of none), and any other as its address makes it (`world_kind`, a game's claim
+too); until it answers, the line says what lives there alone. Over the board, the worlds of
+this galaxy the player has stood on (its logbook's, the latest four) are a row of buttons:
+one writes that world's address whole. Open (or Enter) sends it (`protocol.Open_Gate`). The gate opens at
 once, and the far world's gate, the one nearest its middle, with it; both ends stay open for
 30 s, and walking into the opening arrives at the other world's gate.
 

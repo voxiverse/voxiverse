@@ -115,7 +115,7 @@ word :: proc(rng: ^base.Rng, max_len: int) -> string {
 }
 
 fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
-	which := base.rng_int_max(rng, 29)
+	which := base.rng_int_max(rng, 30)
 	m: Client_Message
 	switch which {
 	case 0:
@@ -186,6 +186,11 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		m = Proof{sig}
 	case 12:
 		m = Choose{"Alex"}
+	case 29:
+		d: Destination_Ask
+		for &b in d.address.galaxy {b = u8(base.rng_int_max(rng, starmap.SYMBOLS))}
+		for &b in d.address.world {b = u8(base.rng_int_max(rng, starmap.SYMBOLS))}
+		m = d
 	case 13:
 		g: Open_Gate
 		g.gate = edge_pos(rng)
@@ -279,7 +284,7 @@ fuzz_net_server_decode :: proc(data: []u8, allocator: runtime.Allocator) -> u64 
 }
 
 fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
-	which := base.rng_int_max(rng, 20)
+	which := base.rng_int_max(rng, 21)
 	m: Server_Message
 	blocks: game.Chunk_Blocks
 	switch which {
@@ -385,6 +390,15 @@ fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		for &e in d.entries {
 			e = {word(rng, 20), i64(base.rng_u32(rng)), word(rng, 300), word(rng, 40)}
 		}
+		m = d
+	case 19:
+		d := Destination {
+			home      = base.rng_int_max(rng, 2) == 0,
+			generator = u8(base.rng_u32(rng)),
+			class     = u8(base.rng_u32(rng)),
+		}
+		for &b in d.address.galaxy {b = u8(base.rng_int_max(rng, starmap.SYMBOLS))}
+		for &b in d.address.world {b = u8(base.rng_int_max(rng, starmap.SYMBOLS))}
 		m = d
 	case:
 		m = Packs_Changed{base.rng_u64(rng)}

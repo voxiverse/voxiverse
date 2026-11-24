@@ -13,6 +13,8 @@ import "common:access"
 import "common:base"
 import "common:game"
 import "common:protocol"
+import "common:starmap"
+import "common:worldgen"
 
 // A scripted client: joins, then flies in a straight line, keeping the
 // chunks it is sent (and dropping those it is told to), as the real client
@@ -43,6 +45,7 @@ Fake_Client :: struct {
 	bulk_left:      int, // chunks a bulk edit sends again (after Bulk_Begin)
 	variables:      string, // the last Variables (temp allocator)
 	selection:      [2]Maybe(game.Block_Pos), // the last Selection
+	destination:    Maybe(protocol.Destination), // the last Destination
 }
 
 // fake_hello: c joins as the character name (of the account test_key(name)),
@@ -142,6 +145,8 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			c.columns[v.pos] = v
 		case protocol.Bulk_Begin:
 			c.bulk_left = int(v.count)
+		case protocol.Destination:
+			c.destination = v
 		case protocol.Pong,
 		     protocol.Stats_Page,
 		     protocol.Telemetry_Ack,
@@ -363,6 +368,55 @@ test_server_refuses_without_permission :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, c.rejected, "")
 	testing.expect(t, !protocol.is_closed(c.endpoint))
+	testing.expect(t, harness_stop(h))
+}
+
+// A Destination_Ask is answered with what the world at the address is: the home world as
+// the home world (of the Earth generator here, of no class), another as its address makes
+// it.
+@(test)
+test_server_answers_destination :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	testing.expect(
+		t,
+		harness_start(
+			h,
+			{seed = 1, view_radius = 2, view_height = 1, generator = .Earth},
+			local = true,
+		),
+	)
+	c := Fake_Client {
+		endpoint = harness_local(h),
+		stepper  = h,
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	defer delete(c.has)
+	defer delete(c.columns)
+	fake_hello(t, &c, "tester")
+	home := h.srv.home.address
+	fake_send(&c, protocol.Destination_Ask{home})
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.destination != nil}),
+	)
+	d, _ := c.destination.?
+	testing.expect_value(t, d, protocol.Destination{home, true, u8(worldgen.Kind.Earth), 0})
+	away := starmap.address_derive(77)
+	away.galaxy = home.galaxy
+	c.destination = nil
+	fake_send(&c, protocol.Destination_Ask{away})
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.destination != nil}),
+	)
+	d, _ = c.destination.?
+	testing.expect_value(
+		t,
+		d,
+		protocol.Destination{away, false, u8(worldgen.Kind.Earth), u8(worldgen.world_class(away))},
+	)
 	testing.expect(t, harness_stop(h))
 }
 

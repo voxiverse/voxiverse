@@ -2,11 +2,12 @@ package engine
 
 import "client:font"
 import "common:game"
+import "common:protocol"
 import "common:starmap"
 
 // Gates on the client: the address being written on one (its overlay is
-// overlay/gate.odin), the addresses' symbols drawn for the UI, and a gate's
-// void gathering as it opens.
+// overlay/gate.odin), what the server says of the world at an address, the
+// addresses' symbols drawn for the UI, and a gate's void gathering as it opens.
 
 // Gate_Entry: the address being written on a gate (overlay/gate.odin).
 Gate_Entry :: struct {
@@ -14,6 +15,47 @@ Gate_Entry :: struct {
 	symbols: [starmap.WORLD_LENGTH]u8,
 	count:   int,
 	last:    int, // the symbol pressed last: where a pad's focus goes on
+}
+
+// DESTINATIONS_KEPT: the server's answers a session keeps (the latest).
+DESTINATIONS_KEPT :: 16
+
+// Destinations: what the server said of the worlds at the addresses the gate's screen asked
+// about (protocol.Destination), the latest last, and the address asked of last.
+Destinations :: struct {
+	known: [DESTINATIONS_KEPT]protocol.Destination,
+	count: int,
+	asked: Maybe(starmap.Address),
+}
+
+// destination_of: what the server said of the world at a; false while it has not (asked
+// for once: destination_take keeps the answer).
+destination_of :: proc(s: ^Session, a: starmap.Address) -> (protocol.Destination, bool) {
+	d := &s.destinations
+	for k in d.known[:d.count] {if k.address == a {return k, true}}
+	if asked, has := d.asked.?; !has || asked != a {
+		d.asked = a
+		send_message(s, protocol.Destination_Ask{a})
+	}
+	return {}, false
+}
+
+// destination_take keeps an answer of the server's (the oldest forgotten past
+// DESTINATIONS_KEPT).
+destination_take :: proc(s: ^Session, v: protocol.Destination) {
+	d := &s.destinations
+	for &k in d.known[:d.count] {
+		if k.address == v.address {
+			k = v
+			return
+		}
+	}
+	if d.count == DESTINATIONS_KEPT {
+		copy(d.known[:], d.known[1:])
+		d.count -= 1
+	}
+	d.known[d.count] = v
+	d.count += 1
 }
 
 // symbol_glyph: a gate address's symbol, drawn for the UI from its strokes
