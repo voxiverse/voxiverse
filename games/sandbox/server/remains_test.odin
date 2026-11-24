@@ -202,8 +202,8 @@ test_remains_court_at_spawn :: proc(t: ^testing.T) {
 }
 
 // A vault is built when a player comes near it, the survival loop's relic vault in its
-// chamber, and goes into the player's logbook; the other scattered sites, out of reach, are
-// not built.
+// chamber, hums, and goes into the player's logbook; the other scattered sites, out of
+// reach, are not built.
 @(test)
 test_remains_vault_sealed :: proc(t: ^testing.T) {
 	sess := new(core.Session)
@@ -229,6 +229,11 @@ test_remains_vault_sealed :: proc(t: ^testing.T) {
 	at := site.middle - u
 	b, _ := core.block_at(w, {at.x, site.floor + 1, at.y})
 	testing.expect_value(t, b, state(s).remains_kit.relic_vault)
+	hums := false
+	for h in w.hums {
+		hums ||= h.at == {site.middle.x, site.floor + 1, site.middle.y} && h.strength == VAULT_HUM
+	}
+	testing.expect(t, hums, "the vault does not hum")
 	core.harness_step(&sess.h, REMAINS_EVERY)
 	noted := false
 	for &p in c.logbook.places[:c.logbook.place_count] {
@@ -347,6 +352,28 @@ test_remains_remembered :: proc(t: ^testing.T) {
 	)
 	b, _ := core.block_at(s.home, marker)
 	testing.expect_value(t, b, game.Block.Planks)
+}
+
+// What hums: a vault always; a pylon, tower or ring of stones when its alloy relic was rolled
+// (about REMAINS_RELIC of them); a wall, the court and the road never.
+@(test)
+test_remains_hum :: proc(t: ^testing.T) {
+	testing.expect_value(t, remains_hum({kind = .Vault, seed = 1}), VAULT_HUM)
+	for k in ([]Remain_Kind{.Wall, .Court, .Road}) {
+		testing.expect_value(t, remains_hum({kind = k, seed = 1}), 0)
+	}
+	relics, plain := 0, 0
+	for seed in u64(1) ..= 200 {
+		switch remains_hum({kind = .Stones, seed = seed}) {
+		case RELIC_HUM:
+			relics += 1
+		case 0:
+			plain += 1
+		case:
+			testing.fail_now(t, "a ring of stones hums neither as a relic nor not at all")
+		}
+	}
+	testing.expect(t, relics > 0 && plain > 0)
 }
 
 // A universe saved before there were remains (assets/fixtures/save-v8) gets none.

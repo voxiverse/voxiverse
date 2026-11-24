@@ -145,6 +145,24 @@ remains_build :: proc(s: ^core.Server, w: ^core.World, site: Remain) {
 	log.infof("remains built kind=%v middle=%v finds=%d", site.kind, site.middle, d.finds)
 }
 
+// VAULT_HUM: how strongly a vault's relic vault hums; RELIC_HUM: a site's alloy relic.
+VAULT_HUM :: 0.8
+RELIC_HUM :: 0.5
+
+// remains_hum: how strongly a site hums at its middle (0: not): a vault always, a pylon, a
+// tower or a ring of stones when it was built with an alloy relic (remains_build's roll).
+// Hum sources are not saved: remains_site marks them again for the built sites when the
+// plan is made.
+remains_hum :: proc(site: Remain) -> f32 {
+	#partial switch site.kind {
+	case .Vault:
+		return VAULT_HUM
+	case .Pylon, .Tower, .Stones:
+		if roll(site.seed, 0, 0, 11) < REMAINS_RELIC {return RELIC_HUM}
+	}
+	return 0
+}
+
 // remain_post: the machine a site keeps and its post (its feet), drawn: a sentry folded in
 // the cut before a vault's door, and in the middle of a tower that holds a cache; a mender
 // beside the plinth of a ring of stones, by a fallen pylon's stump, and on the court's floor

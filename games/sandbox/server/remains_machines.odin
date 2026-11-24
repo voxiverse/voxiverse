@@ -105,10 +105,14 @@ ruin_posts :: proc(s: ^core.Server, w: ^core.World) {
 }
 
 // remains_site: a site round the gate built (remains_build), or found built as the plan is
-// made: marked, unless a stretch of the road.
+// made: marked, unless a stretch of the road, and humming if it holds what still hums
+// (remains_hum).
 remains_site :: proc(s: ^core.Server, site: Remain) {
 	if site.kind == .Road {return}
 	remains_mark(s, {f64(site.middle.x) + 0.5, f64(site.floor) + 1, f64(site.middle.y) + 0.5})
+	if k := remains_hum(site); k > 0 {
+		core.world_hum(s.home, {site.middle.x, site.floor + 1, site.middle.y}, k)
+	}
 }
 
 // remains_keep: the machine a site round the gate keeps, set down at its post as the site is
