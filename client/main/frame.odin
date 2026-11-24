@@ -385,9 +385,11 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 				engine.camera_fov(s, app.settings),
 			)
 			fog := f32(s.welcome.view_radius * game.CHUNK_SIZE)
-			sky := render.look_sky(s.game.look, game.time_of_day(s.clock))
-			// The weather, unless the game's look holds its sky still (its own time of day).
-			if s.game.look.time == 0 {sky = atmosphere_frame(app, s, sky)}
+			// The world's look (the game's, a class's sky over it), then the weather over
+			// that, unless the look holds its sky still (its own time of day).
+			look := engine.world_look(s)
+			sky := render.look_sky(look, game.time_of_day(s.clock))
+			if look.time == 0 {sky = atmosphere_frame(app, s, sky)}
 			made := render.scene_make(
 				camera,
 				sky,
@@ -396,7 +398,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 				engine.eye_in_water(s),
 				app.settings.brightness,
 				app.settings.clouds,
-				s.game.look,
+				look,
 				{width, height},
 			)
 			made.gate = engine.gate_gather_scene(s, camera.chunk, s.view.position)

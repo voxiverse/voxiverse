@@ -136,6 +136,7 @@ handle_packets :: proc(s: ^Session, packets: []protocol.Packet) {
 			clear(&s.edits)
 			clear(&s.puffs)
 			s.welcome.address = v.address
+			s.has_worldgen = false // (the new world's generator says its own, if it has any)
 			s.place = {
 				biome = protocol.NO_BIOME,
 			}

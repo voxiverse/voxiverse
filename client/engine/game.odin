@@ -15,6 +15,7 @@ import "client:ui"
 import "common:base"
 import "common:game"
 import "common:protocol"
+import "common:worldgen"
 import "server:core"
 
 // Game: a game's client part (docs/games.md): what the client does for the game its
@@ -555,4 +556,23 @@ game_command :: proc(s: ^Session, name: string) -> (^Command_Spec, bool) {
 		if cmd.name == name {return &cmd, true}
 	}
 	return nil, false
+}
+
+// world_look: the look the world in view is drawn in: the game's (Game.look) and, on a
+// world of a class (common/worldgen/classes.odin), the class's sky where the game's look
+// leaves the sky its own: the time of day's zenith and horizon tinted by the class's, and
+// no clouds where it has none. The class comes with the world's generator parameters
+// (the Variables state), so a world of no class, or of another generator, is drawn as
+// the game says.
+world_look :: proc(s: ^Session) -> render.Look {
+	look := s.game.look
+	if !s.has_worldgen {return look}
+	class := worldgen.world_class_of(&s.worldgen)
+	if class == .None {return look}
+	d := &worldgen.CLASSES[class]
+	sky := render.sky_at(render.look_time(look, game.time_of_day(s.clock)))
+	if look.zenith == {} && d.zenith != {} {look.zenith = sky.zenith * d.zenith}
+	if look.horizon == {} && d.horizon != {} {look.horizon = sky.horizon * d.horizon}
+	look.no_clouds ||= d.no_clouds
+	return look
 }

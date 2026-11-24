@@ -151,7 +151,10 @@ generated with the class's authored rules (`common/worldgen/classes.odin`, `CLAS
   within the class's spans from the address (`base.lcg64`, like the rest of a world's kind),
   so two worlds of a class differ while staying recognisable. The world's class is the
   generator parameter `worldgen.class` (0: none), saved in `world.cfg`: a saved world keeps
-  its class, and one saved before classes loads with none and generates as before.
+  its class, and one saved before classes loads with none and generates as before. The
+  client reads it from the world's generator parameters for the sky (`engine.world_look`:
+  the time of day's zenith and horizon tinted by the class's, clouds off on a moon, where the
+  game's look leaves the sky its own).
 - **Generation.** The Earth generator with the class's parameters, then: `continent_bias`
   (more sea or land), `class_shape` (a canyon's terraces and canyons, a volcano's cones and
   craters, a moon's craters), `class_surface` (Earth's surface rules with the class's blocks
