@@ -305,6 +305,14 @@ road is marked once built (`remains_mark`: watchers come near it) and sets down 
 keeps as it is built (`remains_post`). Hurt while asleep, a machine lets half the harm
 through.
 
+On a gate world of a class only the creatures `worlds.odin` lists for it come by themselves
+(`spawned` refuses the rest): Earth's kin all of them, a canyon its hacklebirds, twitchets,
+duskrunners, cragmauls and pitmaws, a frozen world its cragmauls, pitmaws and fish, an ocean
+world its fish, barbcasters and small island creatures, a volcanic world its cragmauls,
+duskrunners and pitmaws, a fungal world its small and many-legged ones, a jungle nearly all,
+a moon none. Their grounds include the classes' (`block_tags/creatures.json`: `wild_ground`,
+the open ground the small creatures come on, is the plant soil and red sand, ash and mud).
+
 `/creatures wildlife|guards|predators|machines|giant|all [still]` sets a group down in a row
 in front of you (the summoning permission), `still` standing for a picture.
 

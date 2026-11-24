@@ -168,7 +168,8 @@ generated with the class's authored rules (`common/worldgen/classes.odin`, `CLAS
   world and Earth generate exactly as before (the golden hashes and image baselines).
 - **What lives there.** A game says which creatures live on each class: the sandbox's
   `CLASS_CREATURES` (`games/sandbox/worlds.odin`), by kind id, which its `spawned` hook
-  enforces; a world of no class takes every kind.
+  enforces (a world of no class takes every kind), and its creatures' grounds include the
+  classes' (its `block_tags/creatures.json`).
 - **Cost.** `build bench chunks -class <name>` runs the chunk pipeline on the class's first
   world around its spawn (`-check` judges the same per-stage budgets as Earth's region).
 

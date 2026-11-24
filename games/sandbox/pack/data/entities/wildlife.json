@@ -62,7 +62,7 @@
 			{"box": [0.06, 0, 0.06, 0.12, 0.1, 0.12], "color": [100, 86, 70], "skin": "legs", "swing": "walk"}
 		]},
 		"spawn": {
-			"on": "#voxiverse:wild_plant_soil", "day": [0.2, 0.85], "every": 90, "chance": 0.3,
+			"on": "#sandbox:wild_ground", "day": [0.2, 0.85], "every": 90, "chance": 0.3,
 			"cap": 4, "within": 48, "distance": [16, 36], "group": [1, 2], "sky": true
 		}
 	},
@@ -91,7 +91,7 @@
 			{"box": [0.02, 0, -0.04, 0.05, 0.12, -0.01], "color": [200, 140, 60], "skin": "legs", "swing": "walk_back"}
 		]},
 		"spawn": {
-			"on": "#voxiverse:wild_plant_soil", "day": [0.22, 0.8], "every": 120, "chance": 0.3,
+			"on": "#sandbox:wild_ground", "day": [0.22, 0.8], "every": 120, "chance": 0.3,
 			"cap": 5, "within": 48, "distance": [16, 40], "group": [1, 3], "sky": true
 		}
 	},
@@ -147,7 +147,7 @@
 			{"box": [-0.08, 0.3, 0.5, 0.08, 0.4, 0.7], "color": [120, 128, 96], "hidden": ["hidden"]}
 		]},
 		"spawn": {
-			"on": "#voxiverse:wild_plant_soil", "day": [0.25, 0.75], "every": 300, "chance": 0.25,
+			"on": "#sandbox:wild_ground", "day": [0.25, 0.75], "every": 300, "chance": 0.25,
 			"cap": 2, "within": 64, "distance": [24, 48], "group": [1, 1], "sky": true
 		}
 	},
@@ -183,7 +183,7 @@
 			{"box": [-0.14, 1.4, -0.42, 0.14, 1.55, -0.2], "color": [222, 92, 50], "swing": "strike", "hinge": [0, 1.3, -0.3], "shown": ["fight"]}
 		]},
 		"spawn": {
-			"on": "#voxiverse:wild_plant_soil", "day": [0.25, 0.8], "every": 240, "chance": 0.25,
+			"on": "#sandbox:wild_ground", "day": [0.25, 0.8], "every": 240, "chance": 0.25,
 			"cap": 2, "within": 64, "distance": [24, 48], "group": [1, 2], "sky": true, "safe": 32
 		}
 	},

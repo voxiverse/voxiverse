@@ -115,7 +115,7 @@
 			{"box": [-0.21, 0.6, -0.3, 0.21, 0.64, 0.3], "color": [240, 120, 60], "shown": ["winding"]}
 		]},
 		"spawn": {
-			"on": "#voxiverse:wild_plant_soil", "day": [0.8, 0.2], "every": 300, "chance": 0.3,
+			"on": "#sandbox:wild_ground", "day": [0.8, 0.2], "every": 300, "chance": 0.3,
 			"cap": 4, "within": 64, "distance": [28, 44], "group": [3, 4], "sky": true,
 			"safe": 64
 		}

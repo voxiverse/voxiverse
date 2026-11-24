@@ -1,13 +1,43 @@
 {
-	// Where the home world's creatures come (their spawn rules' "on": data/entities).
+	// Where the creatures come (their spawn rules' "on": data/entities): the home world's
+	// grounds, and the world classes' that stand in for them (common/worldgen/classes.odin;
+	// none of those is on the home world, so it is as before). Which creatures live on which
+	// class is games/sandbox/worlds.odin.
+	"wild_ground": {
+		"values": [
+			"voxiverse:grass",
+			"voxiverse:dirt",
+			"voxiverse:sand",
+			"voxiverse:mycelium",
+			"voxiverse:red_sand",
+			"voxiverse:ash",
+			"voxiverse:mud"
+		]
+	},
 	"water_bed": {
-		"values": ["voxiverse:sand", "voxiverse:gravel", "voxiverse:dirt", "voxiverse:clay"]
+		"values": [
+			"voxiverse:sand",
+			"voxiverse:gravel",
+			"voxiverse:dirt",
+			"voxiverse:clay",
+			"voxiverse:red_sand",
+			"voxiverse:limestone",
+			"voxiverse:mud"
+		]
 	},
 	"cave_floor": {
-		"values": ["voxiverse:stone", "voxiverse:gravel", "voxiverse:dirt"]
+		"values": [
+			"voxiverse:stone",
+			"voxiverse:gravel",
+			"voxiverse:dirt",
+			"voxiverse:basalt",
+			"voxiverse:slate",
+			"voxiverse:red_rock",
+			"voxiverse:limestone"
+		]
 	},
 	"shore": {
-		"values": ["voxiverse:sand", "voxiverse:gravel"]
+		"values": ["voxiverse:sand", "voxiverse:gravel", "voxiverse:red_sand"]
 	},
 	"open_ground": {
 		"values": [
@@ -16,7 +46,18 @@
 			"voxiverse:sand",
 			"voxiverse:stone",
 			"voxiverse:gravel",
-			"voxiverse:snow"
+			"voxiverse:snow",
+			"voxiverse:red_sand",
+			"voxiverse:red_rock",
+			"voxiverse:ash",
+			"voxiverse:basalt",
+			"voxiverse:regolith",
+			"voxiverse:packed_ice",
+			"voxiverse:slate",
+			"voxiverse:limestone",
+			"voxiverse:mycelium",
+			"voxiverse:mud",
+			"voxiverse:obsidian"
 		]
 	}
 }
