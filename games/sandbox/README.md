@@ -779,6 +779,65 @@ What it tells its players: `sandbox.talk` (the conversation a player is in: the 
 name and camp, the dialogue, the node and the replies offered); what they ask: `sandbox.say`
 (the reply chosen, or leave).
 
+## The gate worlds' places
+
+Every world of a class (a gate world: not the home world, not Earth) has a landmark of its
+class's own kind and two small sites round the gate travellers arrive at
+(`server/beyond.odin` plans and keeps them, `server/beyond_build.odin` draws them), all from
+the world's address (the rolls) and its land (where they may stand): the landmark 110 to 260
+blocks from the arrival gate, the sites 50 to 300, each on land that suits it (dry and not
+too uneven; the ocean's platform in sea 2 to 10 blocks deep), 24 blocks clear of the arrival
+gate and its platform, of the generator's structures and of the world's spawn, and 40 of each
+other. Each is built whole, in one paste, when a player comes within 192 blocks and its
+ground is loaded; a landmark on its ground levelled (the class's rock under, its ground on
+top), a site following the land. Then it is the world's like any block. It hums (a landmark
+0.8, a site 0.4), and a player within 64 blocks of a landmark (32 of a site) has it in its
+logbook, by name, the landmark as a `landmark`, the site as `remains`: the journal, the
+compass and the map show it, and a quest's `find` step may ask for one. A world's
+`sandbox.places.txt` remembers which are built; a world saved before there were places gets
+none.
+
+| Class | Landmark | Site | Machines |
+|---|---|---|---|
+| Temperate | Standing ring: twelve slate stones (two fallen) 9 blocks round a mossy dais, a relic vault in its plinth under a crystal, a cache at a stone's foot | Mossy cairn: a cairn of cobbles and moss over a cache, a standing stone | a mender over the ring |
+| Canyon | Cliff dwelling: three stepped storeys of sandstone, banded with red rock, stairs up its side; a relic vault in the lowest room, a cache in the highest | Dry well: a sandstone kerb round a shaft six deep, a cache at its bottom, posts and a beam | |
+| Frozen | Ice-bound hall: a long slate hall under a pitched roof, drifts of packed ice against it and over its roof; a relic vault at its far end, a cache by a wall | Iced cache: a mound of packed ice round a cache, a slate marker | a sentry folded inside the door |
+| Ocean | Sunken platform: an iron deck on four legs in the shallows, sloping into the sea at one end, a cabin on its high end with a relic vault and a cache | Beached hull: a rusted hull broken open on an island, a cache in its belly | |
+| Volcanic | Basalt vault: polished basalt with obsidian corners round a relic vault and two caches, a dark steel door, a ring of magma crossed by one bridge | Obsidian obelisk: on a basalt pad, a crystal near its top, a cache at its foot | a sentry by the bridge |
+| Fungal | Spore tower: a crumbling hollow tower of mossy bricks overgrown by three giant fungi, a relic vault and a cache on its floor | Spore shrine: a mossy dais ringed by glowing caps, a cache on it | |
+| Moon | Keepers' relay: a dark steel mast on a concrete pad, a dish of grating, a crystal at its tip, screens and vents; a relic vault in its housing, a cache | Fallen probe: a capsule of dark steel half sunk in the dust, a cache inside | two sentries on the pad; one by the probe |
+| Jungle | Canopy station: a planked deck on four redwood stilts 15 up, a thatched hut with a relic vault and a cache, a stair winding up round a post | Overgrown altar: three mossy steps to a rune stone, a cache on top, leaves over it | |
+
+The machines are the remains' own (folded until a player comes near; none in a world whose
+creatures do not come by themselves). A cache or a vault broken open on a gate world spills
+the remains' draws and the class's own (`server/survival.odin`, `CLASS_LOOT`: a cache one
+draw more, a vault two):
+
+| Class | What its caches and vaults may spill beside the remains' own |
+|---|---|
+| Temperate | amber (2-4), thistle horns, med gel, an amber charm |
+| Canyon | opal, sail membranes, stim patches, an opal visor |
+| Frozen | cryolite, a frost pelt, a charge cell, frost striders |
+| Ocean | nacre shards, med gel, coil charges, nacre greaves |
+| Volcanic | sulfur (2-4), ember glands, a charge cell, a data shard |
+| Fungal | glow spores (2-4), spore sacs, spore tonics, med gel |
+| Moon | ilmenite, a power cell, scrap, a lens, a data shard |
+| Jungle | jade, fangs, med gel, a jade talisman |
+
+`/places` says where a gate world's places are, built or not; `/places view landmark|site`
+takes you (flying; the teleport permission) over the landmark or the first site, looking at
+it, for a picture.
+
+Over 16 worlds of each class (`server/beyond_test.odin`) every one had its landmark but one
+frozen world, and all but two ocean worlds both sites. Planning one world asks about 200 (a
+moon, a canyon) to 1 800 (an ocean world) columns of its land on average, 6 200 at most, once,
+as the world opens: 1 to 3 ms in a development build on a 4-core box. What it costs beside is
+finding the arrival gate (`worldgen.arrival_gate`, the search the engine makes when a gate
+opens onto the world; kept by the plan for a death's respawn): 1 ms on a moon or a volcanic
+world, 55 to 130 ms on average on the others, 620 ms at worst over those worlds, in that one
+tick. A place is built in one paste of its box (a landmark's up to 19 x 19 x 40 blocks, a
+site's 11 x 11 x 12), as a remains site is.
+
 ## Its materials
 
 The sandbox has a block of every material of the kit (`sandbox:basalt_bricks`, ...: its pack's
@@ -841,6 +900,10 @@ A character's quests are the engine's (its file's `quests`, [docs/saves.md](../.
   little-endian). A file that is cut, longer, has a bad CRC or more outposts than a world
   keeps is moved aside (`.bad`) and the world keeps none (its beacons stand, dark, until
   placed again).
+
+- `sandbox.places.txt`: a gate world's places built, as `sandbox.remains.txt` is: `before`
+  alone (a world saved before there were places), or a line `built <x> <z>` for each built,
+  naming its middle column; a line it does not know moves the file aside.
 
 - `sandbox.settlements.txt`: the home world's camps built, as text: `before` alone (a world
   saved before there were camps: none is built in it), or a line `built <x> <z>` for each camp

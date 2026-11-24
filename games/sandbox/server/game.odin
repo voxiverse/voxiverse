@@ -33,6 +33,7 @@ GAME :: core.Game {
 		{name = OUTPOSTS_FILE, check = outposts_check},
 		{name = SETTLEMENTS_FILE, check = settlements_check},
 		{name = DELVE_FILE, check = delves_check},
+		{name = BEYOND_FILE, check = beyond_check},
 	},
 	stats          = {
 		{name = "sheep.sheared", kind = .Count, xp = 5},
@@ -121,7 +122,8 @@ stop :: proc(s: ^core.Server) {
 // tick: the economy (economy.odin), the night's creatures (danger.odin), the ruined site
 // (ruin.odin), the remains (remains.odin: planned once the ruin is placed), the camps
 // (settlement.odin: planned once the remains are), the delves (delve.odin: planned once the
-// camps are), the areas they keep loaded (site.odin), the conversations with the camps'
+// camps are), the gate worlds' places (beyond.odin), the areas they keep loaded (site.odin),
+// the conversations with the camps'
 // people (talk.odin) and the players' crafting (survival.odin).
 tick :: proc(s: ^core.Server) {
 	economy_tick(s)
@@ -130,6 +132,7 @@ tick :: proc(s: ^core.Server) {
 	remains_tick(s)
 	settlements_tick(s)
 	delve_tick(s)
+	beyond_tick(s)
 	keeps_update(s)
 	talk_tick(s)
 	survival_tick(s)
@@ -240,6 +243,7 @@ world_opened :: proc(s: ^core.Server, w: ^core.World) {
 	settlements_load(s, w)
 	outposts_load(w)
 	delves_load(s, w)
+	beyond_load(s, w)
 }
 
 // world_closed: what the sandbox made of a world is freed (its economy's build waited for).
@@ -257,6 +261,7 @@ world_save :: proc(s: ^core.Server, w: ^core.World) {
 	settlements_write(s, w)
 	outposts_write(w)
 	delves_write(s, w)
+	beyond_write(s, w)
 }
 
 // action: the market's asks for it (trader.odin); Use uses what is in the hand
@@ -283,7 +288,8 @@ request :: proc(s: ^core.Server, c: ^core.Client, r: core.Request) {
 // `/interventions [radius]` lists the world's interventions (interventions.odin); `/town`
 // takes the player to the nearest town with a market (trader.odin); `/showroom <family>`
 // sets every material of a family up to look at (showroom.odin); `/settlement` says where
-// the camps are or sets one down (settlement.odin).
+// the camps are or sets one down (settlement.odin); `/places` says where a gate world's places
+// are or views one (beyond.odin).
 command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) -> bool {
 	if name == "interventions" {return interventions_command(s, c, args)}
 	if name == "showroom" {return showroom_command(s, c, args)}
@@ -291,6 +297,7 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 	if name == "town" && len(args) == 0 {return town_command(s, c)}
 	if name == "outposts" && len(args) == 0 {return outposts_command(s, c)}
 	if name == "settlement" {return settlement_command(s, c, args)}
+	if name == "places" {return beyond_command(s, c, args)}
 	if name == "delve" {return delve_command(s, c, args)}
 	if name != "sheep" {return false}
 	if !core.allowed(s, c, "world.summon") {

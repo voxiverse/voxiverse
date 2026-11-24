@@ -140,3 +140,14 @@ world_jungle: /travel 151b0b27231e0c18-1725142119061f; wait_world; set rules.day
 delve_entrance: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /tp 9 11 -7 0 0; ticks 5; wait_world; camera at 7 18 11 30 -32
 delve_landing: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /delve go last landing; ticks 20; wait_world
 delve_boss: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7 still; ticks 90; wait_world; /gamemode survival; /delve go last hall; ticks 30; wait_world
+# Each world class's landmark (games/sandbox/server/beyond.odin, beyond_build.odin): the
+# class's first address, `/places view landmark` standing the player over it once planned,
+# and the ticks it takes to be built when its ground is there.
+landmark_temperate: /travel 271c0f1324051d07-1e22060d0e2417; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; /places view landmark; ticks 60; wait_world; ticks 60; wait_world
+landmark_canyon: /travel 09180a2606240d00-030c231f211b1a; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; /places view landmark; ticks 60; wait_world; ticks 60; wait_world
+landmark_frozen: /travel 09041a0018251927-2415191b100311; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; /places view landmark; ticks 60; wait_world; ticks 60; wait_world
+landmark_ocean: /travel 14020627220d101b-1e140e1213070f; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; /places view landmark; ticks 60; wait_world; ticks 60; wait_world
+landmark_volcanic: /travel 111a140f0413180e-14040022162710; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; /places view landmark; ticks 60; wait_world; ticks 60; wait_world
+landmark_fungal: /travel 0e0a1a1200271f17-15201a060e1011; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; /places view landmark; ticks 60; wait_world; ticks 60; wait_world
+landmark_moon: /travel 09141e0b170f0e0d-0c1a031d010f22; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; /places view landmark; ticks 60; wait_world; ticks 60; wait_world
+landmark_jungle: /travel 151b0b27231e0c18-1725142119061f; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; /places view landmark; ticks 60; wait_world; ticks 60; wait_world

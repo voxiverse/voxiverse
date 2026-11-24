@@ -5,6 +5,7 @@ import "core:math"
 
 import "common:base"
 import "common:game"
+import "common:worldgen"
 import "games:sandbox"
 import "server:core"
 
@@ -63,30 +64,77 @@ Loot :: enum u8 {
 	Keeper_Key,
 	Keeper_Sigil,
 	Servo_Spring,
+	// The gate worlds' (CLASS_LOOT).
+	Amber,
+	Opal,
+	Cryolite,
+	Nacre_Shard,
+	Sulfur,
+	Glow_Spores,
+	Ilmenite,
+	Jade,
+	Scrap,
+	Power_Cell,
+	Lens,
+	Thistle_Horn,
+	Sail_Membrane,
+	Frost_Pelt,
+	Ember_Gland,
+	Spore_Sac,
+	Fang,
+	Amber_Charm,
+	Opal_Visor,
+	Frost_Striders,
+	Nacre_Greaves,
+	Jade_Talisman,
+	Spore_Tonic,
 }
 
 @(rodata)
 LOOT_NAMES := [Loot]string {
-	.Salvage       = "sandbox:salvage",
-	.Ancient_Alloy = "sandbox:ancient_alloy",
-	.Data_Shard    = "sandbox:data_shard",
-	.Charge_Cell   = "sandbox:charge_cell",
-	.Circuit_Board = "sandbox:circuit_board",
-	.Med_Gel       = "sandbox:med_gel",
-	.Stim_Patch    = "sandbox:stim_patch",
-	.Rivets        = "sandbox:rivets",
-	.Recall_Unit   = "sandbox:recall_unit",
-	.Restorer      = "sandbox:restorer",
-	.Relic_Blade   = "sandbox:relic_blade",
-	.Ward_Emitter  = "sandbox:ward_emitter",
-	.Phase_Lattice = "sandbox:phase_lattice",
-	.Coil_Charge   = "sandbox:coil_charge",
-	.Alloy_Plate   = "sandbox:alloy_plate",
-	.Servo_Bundle  = "sandbox:servo_bundle",
-	.Keeper_Coil   = "sandbox:keeper_coil",
-	.Keeper_Key    = "sandbox:keeper_key",
-	.Keeper_Sigil  = "sandbox:keeper_sigil",
-	.Servo_Spring  = "sandbox:servo_spring",
+	.Salvage        = "sandbox:salvage",
+	.Ancient_Alloy  = "sandbox:ancient_alloy",
+	.Data_Shard     = "sandbox:data_shard",
+	.Charge_Cell    = "sandbox:charge_cell",
+	.Circuit_Board  = "sandbox:circuit_board",
+	.Med_Gel        = "sandbox:med_gel",
+	.Stim_Patch     = "sandbox:stim_patch",
+	.Rivets         = "sandbox:rivets",
+	.Recall_Unit    = "sandbox:recall_unit",
+	.Restorer       = "sandbox:restorer",
+	.Relic_Blade    = "sandbox:relic_blade",
+	.Ward_Emitter   = "sandbox:ward_emitter",
+	.Phase_Lattice  = "sandbox:phase_lattice",
+	.Coil_Charge    = "sandbox:coil_charge",
+	.Alloy_Plate    = "sandbox:alloy_plate",
+	.Servo_Bundle   = "sandbox:servo_bundle",
+	.Keeper_Coil    = "sandbox:keeper_coil",
+	.Keeper_Key     = "sandbox:keeper_key",
+	.Keeper_Sigil   = "sandbox:keeper_sigil",
+	.Servo_Spring   = "sandbox:servo_spring",
+	.Amber          = "sandbox:amber",
+	.Opal           = "sandbox:opal",
+	.Cryolite       = "sandbox:cryolite",
+	.Nacre_Shard    = "sandbox:nacre_shard",
+	.Sulfur         = "sandbox:sulfur",
+	.Glow_Spores    = "sandbox:glow_spores",
+	.Ilmenite       = "sandbox:ilmenite",
+	.Jade           = "sandbox:jade",
+	.Scrap          = "sandbox:scrap",
+	.Power_Cell     = "sandbox:power_cell",
+	.Lens           = "sandbox:lens",
+	.Thistle_Horn   = "sandbox:thistle_horn",
+	.Sail_Membrane  = "sandbox:sail_membrane",
+	.Frost_Pelt     = "sandbox:frost_pelt",
+	.Ember_Gland    = "sandbox:ember_gland",
+	.Spore_Sac      = "sandbox:spore_sac",
+	.Fang           = "sandbox:fang",
+	.Amber_Charm    = "sandbox:amber_charm",
+	.Opal_Visor     = "sandbox:opal_visor",
+	.Frost_Striders = "sandbox:frost_striders",
+	.Nacre_Greaves  = "sandbox:nacre_greaves",
+	.Jade_Talisman  = "sandbox:jade_talisman",
+	.Spore_Tonic    = "sandbox:spore_tonic",
 }
 
 // Loot_Roll: one line of a loot table: what, how many (lo..hi) and its weight.
@@ -125,6 +173,65 @@ VAULT_LOOT := []Loot_Roll {
 	{.Phase_Lattice, 1, 1, 6},
 }
 VAULT_ROLLS :: 2
+
+// CLASS_LOOT: what a cache or a vault on a world of a class spills beside the remains' own
+// (beyond.odin's places): one draw for a cache, CLASS_VAULT_ROLLS for a vault, of the class's
+// rare resource, what its own creatures leave and what its resource makes. The home world's
+// (class none) has none: its remains spill theirs alone.
+@(rodata)
+CLASS_LOOT := [worldgen.World_Class][]Loot_Roll {
+	.None      = nil,
+	.Temperate = {
+		{.Amber, 2, 4, 30},
+		{.Thistle_Horn, 1, 2, 20},
+		{.Med_Gel, 1, 2, 15},
+		{.Amber_Charm, 1, 1, 5},
+	},
+	.Canyon    = {
+		{.Opal, 1, 2, 25},
+		{.Sail_Membrane, 1, 3, 20},
+		{.Stim_Patch, 1, 2, 15},
+		{.Opal_Visor, 1, 1, 4},
+	},
+	.Frozen    = {
+		{.Cryolite, 1, 2, 25},
+		{.Frost_Pelt, 1, 1, 15},
+		{.Charge_Cell, 1, 1, 15},
+		{.Frost_Striders, 1, 1, 4},
+	},
+	.Ocean     = {
+		{.Nacre_Shard, 1, 3, 25},
+		{.Med_Gel, 1, 1, 15},
+		{.Coil_Charge, 6, 6, 8},
+		{.Nacre_Greaves, 1, 1, 4},
+	},
+	.Volcanic  = {
+		{.Sulfur, 2, 4, 30},
+		{.Ember_Gland, 1, 2, 20},
+		{.Charge_Cell, 1, 1, 10},
+		{.Data_Shard, 1, 1, 8},
+	},
+	.Fungal    = {
+		{.Glow_Spores, 2, 4, 30},
+		{.Spore_Sac, 1, 2, 20},
+		{.Spore_Tonic, 1, 2, 10},
+		{.Med_Gel, 1, 1, 10},
+	},
+	.Moon      = {
+		{.Ilmenite, 1, 2, 25},
+		{.Power_Cell, 1, 1, 20},
+		{.Scrap, 2, 4, 20},
+		{.Lens, 1, 1, 15},
+		{.Data_Shard, 1, 1, 8},
+	},
+	.Jungle    = {
+		{.Jade, 1, 2, 25},
+		{.Fang, 1, 2, 15},
+		{.Med_Gel, 1, 1, 15},
+		{.Jade_Talisman, 1, 1, 4},
+	},
+}
+CLASS_VAULT_ROLLS :: 2
 
 // DELVE_LOOT: what a delve's cache spills by the depth it stands in (delve.odin: broken open
 // with any tier 1 tool), DELVE_ROLLS draws by weight: the keepers' parts, keys and trinkets
@@ -439,13 +546,14 @@ recall :: proc(s: ^core.Server, c: ^core.Client) {
 	if why := core.go_to(s, c, place); why != "" {core.notice(s, c, why)}
 }
 
-// remains_loot: what one cache (vault false) or sealed vault spills, drawn from rng, into
-// out; how many stacks.
+// remains_loot: what one cache (vault false) or sealed vault spills on a world of class,
+// drawn from rng, into out; how many stacks.
 remains_loot :: proc(
 	g: ^Survival_State,
 	rng: ^base.Rng,
 	vault: bool,
 	out: ^[MAX_LOOT]game.Stack,
+	class := worldgen.World_Class.None,
 ) -> int {
 	n := 0
 	table, rolls := CACHE_LOOT, CACHE_ROLLS
@@ -455,7 +563,11 @@ remains_loot :: proc(
 		out[n] = {g.loot[.Salvage], base.rng_int_range(rng, 1, 4), 0, 0}
 		n += 1
 	}
-	return loot_roll(g, rng, table, rolls, out, n)
+	n = loot_roll(g, rng, table, rolls, out, n)
+	if theirs := CLASS_LOOT[class]; len(theirs) > 0 {
+		n = loot_roll(g, rng, theirs, CLASS_VAULT_ROLLS if vault else 1, out, n)
+	}
+	return n
 }
 
 // loot_roll: rolls draws by weight from a loot table into out after its first n stacks;
@@ -490,7 +602,13 @@ loot_roll :: proc(
 // area's code may call it for remains it opens its own way).
 remains_spill :: proc(s: ^core.Server, w: ^core.World, at: game.Block_Pos, vault: bool) {
 	loot: [MAX_LOOT]game.Stack
-	n := remains_loot(survival_of(s), &state(s).rng, vault, &loot)
+	n := remains_loot(
+		survival_of(s),
+		&state(s).rng,
+		vault,
+		&loot,
+		worldgen.world_class_of(&w.params),
+	)
 	centre := [3]f64{f64(at.x) + 0.5, f64(at.y) + 0.5, f64(at.z) + 0.5}
 	for st in loot[:n] {core.item_drop(s, w, centre, st)}
 }
