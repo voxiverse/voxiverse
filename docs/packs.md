@@ -91,12 +91,12 @@ draws them all, by family, with their names (`build/sheets/materials.png`). The 
 family:
 
 <!-- materials: written from common/game/materials.odin (materials_doc) -->
-- **stone and masonry** (25): `stone`, `cobblestone`, `stone_bricks`, `stone_tiles`, `polished_stone`, `basalt`, `basalt_cobble`, `basalt_bricks`, `basalt_tiles`, `polished_basalt`, `sandstone`, `sandstone_cobble`, `sandstone_bricks`, `sandstone_tiles`, `polished_sandstone`, `limestone`, `limestone_cobble`, `limestone_bricks`, `limestone_tiles`, `polished_limestone`, `slate`, `slate_cobble`, `slate_bricks`, `slate_tiles`, `polished_slate`
+- **stone and masonry** (33): `stone`, `cobblestone`, `stone_bricks`, `stone_tiles`, `polished_stone`, `basalt`, `basalt_cobble`, `basalt_bricks`, `basalt_tiles`, `polished_basalt`, `sandstone`, `sandstone_cobble`, `sandstone_bricks`, `sandstone_tiles`, `polished_sandstone`, `limestone`, `limestone_cobble`, `limestone_bricks`, `limestone_tiles`, `polished_limestone`, `slate`, `slate_cobble`, `slate_bricks`, `slate_tiles`, `polished_slate`, `red_rock`, `amber_ore`, `opal_ore`, `cryolite_ore`, `sulfur_ore`, `ilmenite_ore`, `jade_ore`, `nacre`
 - **wood** (15): `birch_log`, `birch_planks`, `birch_panel`, `oak_log`, `oak_planks`, `oak_panel`, `spruce_log`, `spruce_planks`, `spruce_panel`, `redwood_log`, `redwood_planks`, `redwood_panel`, `weathered_log`, `weathered_planks`, `weathered_panel`
 - **metal** (10): `iron_plate`, `riveted_iron`, `iron_grating`, `rusted_iron`, `dark_steel`, `copper`, `verdigris_copper`, `brass`, `hazard_stripes`, `pipes`
 - **built and industrial** (15): `concrete`, `stained_concrete`, `concrete_tiles`, `asphalt`, `red_bricks`, `painted_red`, `painted_blue`, `painted_yellow`, `painted_white`, `glass`, `tinted_glass`, `lamp`, `screen`, `vent`, `conveyor`
 - **soft and domestic** (14): `thatch`, `white_plaster`, `cream_plaster`, `ochre_plaster`, `clay_roof`, `slate_roof`, `white_wool`, `black_wool`, `red_wool`, `blue_wool`, `green_wool`, `yellow_wool`, `carpet`, `bookshelf`
-- **natural** (18): `dirt`, `mud`, `dry_earth`, `grass`, `dry_grass`, `snowy_grass`, `sand`, `red_sand`, `gravel`, `clay`, `moss`, `oak_leaves`, `birch_leaves`, `autumn_leaves`, `spruce_leaves`, `snow`, `ice`, `packed_ice`
+- **natural** (25): `dirt`, `mud`, `dry_earth`, `grass`, `dry_grass`, `snowy_grass`, `sand`, `red_sand`, `gravel`, `clay`, `moss`, `oak_leaves`, `birch_leaves`, `autumn_leaves`, `spruce_leaves`, `snow`, `ice`, `packed_ice`, `ash`, `regolith`, `mycelium`, `fungus_stem`, `fungus_cap`, `glow_cap`, `spore_sprout`
 - **fantasy and dungeon** (7): `dark_bricks`, `mossy_bricks`, `rune_stone`, `bone`, `crystal`, `magma`, `obsidian`
 <!-- end of materials -->
 

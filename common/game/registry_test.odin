@@ -7,9 +7,11 @@ import "core:testing"
 import "common:starmap"
 
 // The base pack's block types after the builtins: four stairs (8 states each),
-// four slabs (3), a ladder (4), a fence (16) and a door (16).
-BASE_NEW_TYPES :: 11
-BASE_NEW_STATES :: 4 * 8 + 4 * 3 + 4 + 16 + 16
+// four slabs (3), a ladder (4), a fence (16), a door (16) and the world classes' 23
+// (data/blocks/worlds.json, a state each).
+BASE_NEW_TYPES :: 11 + WORLD_CLASS_BLOCKS
+BASE_NEW_STATES :: 4 * 8 + 4 * 3 + 4 + 16 + 16 + WORLD_CLASS_BLOCKS
+WORLD_CLASS_BLOCKS :: 23
 BASE_WEAPONS :: 6 // the pistol, rifle, sniper, shotgun, grappling hook and jump boots: items of their own
 BASE_TYPES :: len(Block) + BASE_NEW_TYPES
 BASE_STATES :: len(Block) + BASE_NEW_STATES

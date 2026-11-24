@@ -28,7 +28,7 @@ block_of :: proc(g: ^Grief, text: string) -> game.Block {
 
 // The world hash after 600 ticks (pinned when the test first passed: the three OSes' CI
 // runs check that the rules give bit-identical worlds everywhere).
-CREEP_HASH :: u64(11098566303082434175)
+CREEP_HASH :: u64(10774002900231692682)
 FIRE_HASH :: u64(899791116715346582)
 
 @(private = "file")

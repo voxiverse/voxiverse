@@ -1,0 +1,39 @@
+{
+	// The world classes' ground, rock, seas and plants, and each class's rare resource
+	// (common/worldgen/classes.odin, docs/world.md "World classes"). The generator finds
+	// them by id; a class's world is made of them where Earth has grass, dirt, sand and stone.
+	"basalt": {"material": "basalt"},
+	"obsidian": {"material": "obsidian"},
+	"magma": {"material": "magma"},
+	"slate": {"material": "slate"},
+	"limestone": {"material": "limestone"},
+	"packed_ice": {"material": "packed_ice"},
+	"mud": {"material": "mud"},
+	"red_sand": {"material": "red_sand"},
+	"red_rock": {"material": "red_rock"},
+	"ash": {"material": "ash"},
+	"regolith": {"material": "regolith"},
+	"mycelium": {"material": "mycelium"},
+	"fungus_stem": {"material": "fungus_stem"},
+	"fungus_cap": {"material": "fungus_cap"},
+	// A fungal world's rare resource: the cap of one giant fungus in six, which glows.
+	"glow_cap": {"material": "glow_cap"},
+	"spore_sprout": {
+		"material": "spore_sprout",
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"support": {"below": "voxiverse:wild_plant_soil"},
+		"replaceable": true,
+		"drop": "none"
+	},
+	// The other classes' rare resources: an ore in each one's rock, and an ocean world's
+	// beds of nacre on the sea floor.
+	"amber_ore": {"material": "amber_ore"},
+	"opal_ore": {"material": "opal_ore"},
+	"cryolite_ore": {"material": "cryolite_ore"},
+	"sulfur_ore": {"material": "sulfur_ore"},
+	"ilmenite_ore": {"material": "ilmenite_ore"},
+	"jade_ore": {"material": "jade_ore"},
+	"nacre": {"material": "nacre"}
+}

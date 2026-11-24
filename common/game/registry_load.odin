@@ -432,13 +432,15 @@ build_packs :: proc(b: ^Reg_Build) {
 	for src, pi in b.sources {read_pack_manifest(b, pi, src)}
 	if len(b.errs) > 0 {return}
 	// Kind by kind, so a block's item exists before the item files merge, and every
-	// material's textures before the blocks that use them.
+	// material's textures before the blocks that use them. The materials' textures come
+	// right after the base pack's own, before any other pack's, so a pack's art never
+	// moves the textures the base pack's blocks name (which the content hash covers).
 	for kind in Content_Kind {
 		if kind == .Item {seed_block_items(b)}
 		for pi in 0 ..< len(b.sources) {
 			for f in b.by_dir[pi][kind] {read_definitions(b, pi, kind, f)}
+			if kind == .Texture && pi == 0 {seed_material_textures(b)}
 		}
-		if kind == .Texture {seed_material_textures(b)}
 	}
 	apply_shape_blocks(b)
 }

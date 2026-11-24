@@ -150,6 +150,23 @@ Generator :: enum u32 {
 	Crystal,
 	Magma,
 	Obsidian,
+	// The world classes' (worlds.odin).
+	Red_Rock,
+	Ash,
+	Regolith,
+	Mycelium_Top,
+	Mycelium_Side,
+	Fungus_Stem,
+	Fungus_Cap,
+	Glow_Cap,
+	Spore_Sprout,
+	Amber_Ore,
+	Opal_Ore,
+	Cryolite_Ore,
+	Sulfur_Ore,
+	Ilmenite_Ore,
+	Jade_Ore,
+	Nacre,
 }
 
 // generate fills pixels (SIZE² values, row by row) for t.
@@ -178,6 +195,7 @@ seed_of :: proc(g: Generator) -> u32 {
 @(private = "file")
 pixel :: proc(t: Generator, seed: u32, x, y: int) -> Rgba {
 	if c, ok := kit_pixel(t, seed, x, y); ok {return c}
+	if c, ok := worlds_pixel(t, seed, x, y); ok {return c}
 	// Pixel grit and a 4 x 4 noise, both tiling.
 	fine := hash01(seed, x, y)
 	coarse := noise(seed ~ 0x5bd1_e995, x, y, 4, 4)

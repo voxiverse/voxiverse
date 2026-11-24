@@ -102,6 +102,18 @@ family :: proc(g: Generator) -> Family {
 		return .Masonry
 	case .Bone, .Crystal, .Magma, .Obsidian:
 		return .Rock
+	case .Red_Rock, .Regolith:
+		return .Rock
+	case .Ash:
+		return .Sand
+	case .Mycelium_Top, .Mycelium_Side:
+		return .Soil
+	case .Fungus_Stem, .Fungus_Cap, .Glow_Cap, .Spore_Sprout:
+		return .Plant
+	case .Amber_Ore, .Opal_Ore, .Cryolite_Ore, .Sulfur_Ore, .Ilmenite_Ore, .Jade_Ore:
+		return .Ore
+	case .Nacre:
+		return .Rock
 	case .Lamp, .Glass, .Chest_Side, .Chest_Top, .Ladder, .Door_Lower, .Door_Upper:
 		return .Fixture
 	case .Gate_Ring, .Gate_Chevron, .Gate_Chevron_Lit, .Gate_Horizon:

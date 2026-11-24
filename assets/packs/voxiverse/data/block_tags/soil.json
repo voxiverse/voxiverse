@@ -3,7 +3,8 @@
 		"values": [
 			"voxiverse:grass",
 			"voxiverse:dirt",
-			"voxiverse:sand"
+			"voxiverse:sand",
+			"voxiverse:mycelium"
 		]
 	},
 	"tillable": {

@@ -269,6 +269,35 @@ MATERIALS := [?]Material_Def {
 	{name = "crystal", family = .Fantasy, side = "crystal", sound = "glass", light = 10},
 	{name = "magma", family = .Fantasy, side = "magma", sound = "stone", light = 12},
 	{name = "obsidian", family = .Fantasy, side = "obsidian", sound = "glass"},
+	// The world classes' ground, fungi, plants and rare resources (common/worldgen/classes.odin).
+	{name = "red_rock", family = .Stone, side = "red_rock", sound = "stone"},
+	{name = "amber_ore", family = .Stone, side = "amber_ore", sound = "stone"},
+	{name = "opal_ore", family = .Stone, side = "opal_ore", sound = "stone"},
+	{name = "cryolite_ore", family = .Stone, side = "cryolite_ore", sound = "stone"},
+	{name = "sulfur_ore", family = .Stone, side = "sulfur_ore", sound = "stone"},
+	{name = "ilmenite_ore", family = .Stone, side = "ilmenite_ore", sound = "stone"},
+	{name = "jade_ore", family = .Stone, side = "jade_ore", sound = "stone"},
+	{name = "nacre", family = .Stone, side = "nacre", sound = "stone"},
+	{name = "ash", family = .Natural, side = "ash", sound = "gravel"},
+	{name = "regolith", family = .Natural, side = "regolith", sound = "sand"},
+	{
+		name = "mycelium",
+		family = .Natural,
+		side = "mycelium_side",
+		top = "mycelium_top",
+		bottom = "dirt",
+		sound = "grass",
+	},
+	{name = "fungus_stem", family = .Natural, side = "fungus_stem", sound = "wood"},
+	{name = "fungus_cap", family = .Natural, side = "fungus_cap", sound = "wood"},
+	{name = "glow_cap", family = .Natural, side = "glow_cap", sound = "wood", light = 11},
+	{
+		name = "spore_sprout",
+		family = .Natural,
+		side = "spore_sprout",
+		sound = "grass",
+		layer = .Cutout,
+	},
 }
 
 // material_faces: m's generators: side, top, bottom.

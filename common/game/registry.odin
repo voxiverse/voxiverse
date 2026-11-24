@@ -174,6 +174,23 @@ TEXTURE_GENERATOR_NAMES := [?]string {
 	"crystal",
 	"magma",
 	"obsidian",
+	// The world classes' (common/worldgen/classes.odin).
+	"red_rock",
+	"ash",
+	"regolith",
+	"mycelium_top",
+	"mycelium_side",
+	"fungus_stem",
+	"fungus_cap",
+	"glow_cap",
+	"spore_sprout",
+	"amber_ore",
+	"opal_ore",
+	"cryolite_ore",
+	"sulfur_ore",
+	"ilmenite_ore",
+	"jade_ore",
+	"nacre",
 }
 @(rodata)
 SOUND_GENERATOR_NAMES := [?]string {

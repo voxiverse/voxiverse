@@ -104,5 +104,20 @@
 	"bone": {"material": "bone"},
 	"crystal": {"material": "crystal"},
 	"magma": {"material": "magma"},
-	"obsidian": {"material": "obsidian"}
+	"obsidian": {"material": "obsidian"},
+	"red_rock": {"material": "red_rock"},
+	"amber_ore": {"material": "amber_ore"},
+	"opal_ore": {"material": "opal_ore"},
+	"cryolite_ore": {"material": "cryolite_ore"},
+	"sulfur_ore": {"material": "sulfur_ore"},
+	"ilmenite_ore": {"material": "ilmenite_ore"},
+	"jade_ore": {"material": "jade_ore"},
+	"nacre": {"material": "nacre"},
+	"ash": {"material": "ash"},
+	"regolith": {"material": "regolith"},
+	"mycelium": {"material": "mycelium"},
+	"fungus_stem": {"material": "fungus_stem"},
+	"fungus_cap": {"material": "fungus_cap"},
+	"glow_cap": {"material": "glow_cap"},
+	"spore_sprout": {"material": "spore_sprout"}
 }
