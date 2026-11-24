@@ -187,7 +187,8 @@ A world's `world.cfg` also lists its working chunks (`working = x,y,z`, a line e
 chunks holding a game's machines or belts, loaded again as the world opens: games.md,
 Machines) and its dead gates (`gate.dead = x,y,z,turns`, a line each: the gate's box's
 lowest corner and its quarter turns; a world without the line has every gate alive:
-world.md, Gates).
+world.md, Gates) and, when `/weather` set it, the weather it stands at (`weather = rain`; a
+world without the line has its own spells: world.md, Weather). An older game ignores the line.
 
 `SAVE_FORMAT` (10) is recorded in `universe.cfg` and in each `world.cfg`. A universe of an older format the migrations reach is brought up to date when it is opened, any other refused (see [Migrations](#migrations)).
 

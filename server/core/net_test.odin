@@ -46,6 +46,8 @@ Net_Client :: struct {
 	stats_pages:                 int,
 	health:                      protocol.Health, // the last Health message
 	island:                      protocol.Island, // the last Island record
+	weather:                     protocol.Weather_Record, // the last Weather record
+	hums:                        map[game.Block_Pos]f32, // the Hum records as told
 	mode:                        string, // the last Mode record's id (heap)
 	hurt:                        int, // Entity_Hurt messages
 	bulk_begins:                 int,
@@ -151,6 +153,7 @@ net_close :: proc(c: ^Net_Client) {
 	game.layer_pools_destroy(&c.pools)
 	game.block_arrays_destroy(&c.arrays)
 	delete(c.chunks)
+	delete(c.hums)
 	for _, n in c.others {delete(n)}
 	delete(c.others)
 	delete(c.mode)
@@ -237,6 +240,15 @@ net_apply :: proc(c: ^Net_Client, got: []protocol.Received) {
 			delete(c.mode)
 			c.mode = strings.clone((^protocol.Mode_Record)(g.value).mode)
 		case .Rules, .Clock, .Variables, .Selection, .Machine, .Belt, .Logbook, .Quests:
+		case .Weather:
+			c.weather = (^protocol.Weather_Record)(g.value)^
+		case .Hum:
+			at := protocol.key_block(g.key)
+			if g.op == .Remove {
+				delete_key(&c.hums, at)
+			} else {
+				c.hums[at] = (^protocol.Hum_Source)(g.value).strength
+			}
 		case .Island:
 			c.island = (^protocol.Island)(g.value)^
 		case .Tally:

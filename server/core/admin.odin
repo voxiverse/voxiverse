@@ -45,6 +45,13 @@ ADMIN_COMMANDS := [?]Admin_Command {
 		admin_time,
 		"world.time",
 	},
+	{
+		"weather",
+		"[clear | overcast | rain | storm | fog | auto]",
+		{0, 1},
+		admin_weather,
+		"world.weather",
+	},
 	{"setblock", "<x y z> <block>", {4, 4}, admin_setblock, "world.edit.bulk"},
 	{"cell", "<x y z> [<channel> [<value>]]", {3, 5}, admin_cell, "world.edit.bulk"},
 	{"rule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},

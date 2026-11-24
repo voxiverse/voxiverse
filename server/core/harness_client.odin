@@ -300,7 +300,9 @@ mirror_apply :: proc(sess: ^Session, got: []protocol.Received) {
 		     .Entity_Motion,
 		     .Tally,
 		     .Island,
-		     .Place:
+		     .Place,
+		     .Weather,
+		     .Hum:
 		}
 	}
 }

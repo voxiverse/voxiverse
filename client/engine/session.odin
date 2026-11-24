@@ -170,6 +170,8 @@ Session :: struct {
 	rules:            game.Rules, // the server's, as last announced
 	clock:            f64, // world time: the server's last word, carried on since (common/game/time.odin)
 	cloud_drift:      f64, // blocks the clouds have moved
+	weather:          protocol.Weather_Record, // the server's word: with the clock, the weather (session_weather)
+	hums:             map[game.Block_Pos]f32, // hum sources near us and their strength (heap; the Hum records)
 	tick_time:        f32, // seconds into the current client tick
 	toggle_fly:       bool, // a double-tapped jump waits for the next tick
 	frame_seconds:    f64, // the sum of the frames' dt: the session's own clock for the double tap
@@ -294,6 +296,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.fills = make([dynamic]render.Debug_Point, 0, 0) // heap: drawn and cleared every frame
 	s.world_lines = make([dynamic]render.Debug_Point, 0, 0) // heap: likewise
 	s.others = make(map[u16]Other_Player) // heap: players come and go (an arena would only grow)
+	s.hums = make(map[game.Block_Pos]f32) // heap, as they come and go
 	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, 2 * protocol.MAX_KNOWN_ENTITIES) // (a message may create before it removes)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
 	session_texels(s)
@@ -427,6 +430,7 @@ session_free :: proc(s: ^Session) -> bool {
 	if s.remote {netcode.link_close(&s.link, "left the game")}
 	if s.config.steam != nil {steam.cancel_ticket(s.config.steam, &s.ticket)}
 	delete(s.entities) // the heap: entities come and go
+	delete(s.hums)
 	for _, list in s.machines {delete(list)}
 	delete(s.machines)
 	belts_destroy(&s.belts)

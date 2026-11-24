@@ -150,6 +150,9 @@ a game's client part (docs/games.md): what the client does for the game its sess
 - `world_made :: proc(w: ^World) -> bool`: w was made in this session rather than read from a save: what a game builds into a new world only (once, keeping in its own files that it did) it does not build into one saved before it built such things.
 - `gate_wake :: proc(w: ^World, p: game.Block_Pos) -> bool`: gate_wake brings the dead gate a block of which is at p (its frame, its platform) to life: from now on it is opened and arrived at as any gate.
 - `gate_kill :: proc(w: ^World, p: game.Block_Pos) -> bool`: gate_kill makes the gate a block of which is at p dead (gate_wake's reverse).
+- `world_weather :: proc(w: ^World) -> game.Weather`: the weather in w now: for a game (rain puts out fires, a storm keeps creatures in), the same the players see.
+- `world_weather_set :: proc(w: ^World, kind: Maybe(game.Weather_Kind))`: w's weather stands at kind (nil: the spells again), told to its players at the end of the tick and kept in world.cfg.
+- `world_hum :: proc(w: ^World, at: game.Block_Pos, strength: f32)`: a game marks block `at` of w as humming at strength (0..1; 0 removes it).
 - `under_sky :: proc(w: ^World, p: game.Block_Pos) -> bool`: nothing stands above the block p (the sky's light reaches it).
 - `block_at :: proc(w: ^World, p: game.Block_Pos) -> (game.Block, bool)`: the block at p in w; false while its chunk is not loaded (or still generating), and the block is then .Air.
 - `game_act :: proc(s: ^Server, w: ^World, system: game.Edit_System) -> Act`: a cause for the game the server runs (Config.game) to change blocks by through system: a new action whose actor is the game (Actor_Kind.Game, by its id).
@@ -246,6 +249,8 @@ The types these name:
 - `game.Quest_Event :: struct {...}`: something a player did that a step may count: its goal and what (as the Objective's fields), and how many.
 - `game.Stack :: struct {...}`: some of one item (count 0: empty, item NO_ITEM).
 - `game.Template :: struct {...}`
+- `game.Weather :: struct {...}`: how the air is, every field 0..1.
+- `game.Weather_Kind :: enum u8 {Clear, Overcast, Rain, Storm, Fog}`
 - `grid.Kind :: struct {...}`
 - `grid.Part :: struct {...}`
 - `protocol.Game_Kinds :: struct {...}`: the state and event kinds a game replicates besides the engine's (docs/games.md), declared as data in its shared package.

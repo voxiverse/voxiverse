@@ -73,6 +73,8 @@ World :: struct {
 	game_open:         bool, // the game's world_opened ran: its world_closed runs when the world closes
 	fog:               bool, // its players on a team are told only of what their team sees (world_fog; sides.odin)
 	sight:             Sight, // every team's eyes this tick (sight_of; heap)
+	weather_forced:    Maybe(game.Weather_Kind), // the weather it was set to (/weather; world.cfg), nil: its spells (weather.odin)
+	hums:              [dynamic]Hum_Place, // the hum sources a game marked (world_hum; heap)
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -189,6 +191,7 @@ world_close :: proc(w: ^World) {
 	delete(w.tops)
 	delete(w.noted_changes)
 	delete(w.gates)
+	delete(w.hums)
 	delete(w.touched)
 	delete(w.kept)
 	delete(w.tops_pending)

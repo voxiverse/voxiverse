@@ -600,6 +600,9 @@ write_world_file :: proc(w: ^World) -> bool {
 	fmt.sbprintfln(&b, "seed = %d", w.seed)
 	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[w.generator])
 	fmt.sbprintfln(&b, "time = %.17f", w.clock) // (exact: reloaded, it may not run back)
+	if k, forced := w.weather_forced.?; forced {
+		fmt.sbprintfln(&b, "weather = %s", game.WEATHER_NAMES[k]) // (none: the spells)
+	}
 	if w.spawn.known {
 		sp := w.spawn
 		fmt.sbprintfln(&b, "spawn.x = %.6f", sp.position.x)
@@ -683,6 +686,8 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 			}
 		case key == "time":
 			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {w.clock = v}
+		case key == "weather":
+			if k, ok := game.weather_kind_by_name(value); ok {w.weather_forced = k}
 		case key == "journal.segment":
 			if n, ok := strconv.parse_u64(value, 10); ok {
 				w.journal_resume.known, w.journal_resume.segment = true, u32(n)

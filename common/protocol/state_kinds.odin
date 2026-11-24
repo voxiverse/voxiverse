@@ -18,6 +18,7 @@ import "core:slice"
 
 MAX_TEAMS :: 8 // the sides a world's players and entities may be on (server/core/sides.odin)
 MAX_KNOWN_ENTITIES :: 1024 // entities a client is told about at a time (the nearest)
+MAX_HUM_SOURCES :: 16 // hum sources a client is told about at a time (the nearest)
 
 State_Kind :: enum u8 {
 	Own_Player,
@@ -42,6 +43,8 @@ State_Kind :: enum u8 {
 	Belt,
 	Logbook,
 	Quests,
+	Weather,
+	Hum,
 }
 
 Event_Kind :: enum u8 {
@@ -88,6 +91,21 @@ Inventory_State :: struct {
 Clock :: struct {
 	time: f64,
 	tick: u32,
+}
+
+// Weather_Record: what the client needs to work the weather out itself from the clock
+// (game.weather_at): the world's weather seed, the kind it was set to (0: none, else
+// the game.Weather_Kind + 1) and the climate where the player stands (a game.Climate).
+Weather_Record :: struct {
+	seed:    u64,
+	forced:  u8,
+	climate: u8,
+}
+
+// Hum_Source: a place a game marked as humming (core.world_hum: ancient machinery, a
+// gate), heard as a low hum near it; the key is its block. strength 0..1.
+Hum_Source :: struct {
+	strength: f32,
 }
 
 // Player_Record: someone is in the world (the key is their player id).
@@ -310,6 +328,14 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 	},
 	.Logbook = {name = "logbook", value = Logbook_State, check = check_logbook},
 	.Quests = {name = "quests", value = Quest_State, check = check_quests},
+	.Weather = {name = "weather", value = Weather_Record, check = check_weather},
+	.Hum = {
+		name = "hum",
+		value = Hum_Source,
+		key = .Block,
+		max_records = MAX_HUM_SOURCES,
+		check = check_hum,
+	},
 }
 
 @(rodata)
@@ -429,6 +455,24 @@ check_rules :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 @(private = "file")
 check_clock :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	return game.time_valid((^Clock)(v).time)
+}
+
+@(private = "file")
+check_weather :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	w := (^Weather_Record)(v)
+	return int(w.forced) <= len(game.Weather_Kind) && int(w.climate) < len(game.Climate)
+}
+
+@(private = "file")
+check_hum :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	k := (^Hum_Source)(v).strength
+	return k >= 0 && k <= 1 // (false for NaN too)
+}
+
+// weather_forced: a Weather_Record's forced kind, if it has one.
+weather_forced :: proc(w: Weather_Record) -> Maybe(game.Weather_Kind) {
+	if w.forced == 0 {return nil}
+	return game.Weather_Kind(w.forced - 1)
 }
 
 @(private = "file")

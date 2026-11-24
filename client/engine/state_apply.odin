@@ -43,6 +43,8 @@ APPLY := [protocol.State_Kind]Apply_Proc {
 	.Belt          = apply_belt,
 	.Logbook       = apply_logbook,
 	.Quests        = apply_quests,
+	.Weather       = apply_weather,
+	.Hum           = apply_hum,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -114,6 +116,28 @@ apply_clock :: proc(s: ^Session, g: protocol.Received) {
 	// the anchor is the time at its tick; this message is of s.rx.tick
 	behind := f64(s.rx.tick - c.tick) * f64(game.TICK_SECONDS)
 	s.clock = game.advance_time(c.time, max(behind, 0), &s.rules)
+}
+
+@(private)
+apply_weather :: proc(s: ^Session, g: protocol.Received) {
+	s.weather = (^protocol.Weather_Record)(g.value)^
+}
+
+// session_weather: the weather where the player is now, as the server works it out
+// (game.weather_at from the world's seed and the clock), and the climate there.
+session_weather :: proc(s: ^Session) -> (game.Weather, game.Climate) {
+	w := game.weather_at(s.weather.seed, s.clock, protocol.weather_forced(s.weather))
+	return w, game.Climate(s.weather.climate)
+}
+
+@(private)
+apply_hum :: proc(s: ^Session, g: protocol.Received) {
+	at := protocol.key_block(g.key)
+	if g.op == .Remove {
+		delete_key(&s.hums, at)
+	} else {
+		s.hums[at] = (^protocol.Hum_Source)(g.value).strength
+	}
 }
 
 @(private)

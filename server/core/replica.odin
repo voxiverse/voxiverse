@@ -73,6 +73,7 @@ replicate_tick :: proc(s: ^Server, c: ^Client) {
 	state_put(s, c, .Logbook, &logbook)
 	quests := protocol.Quest_State{c.quests}
 	state_put(s, c, .Quests, &quests)
+	weather_put(s, c)
 	if c.clock_pending || s.time_stopped {
 		c.clock_pending = false
 		clock := protocol.Clock{c.world.clock, u32(s.tick)}

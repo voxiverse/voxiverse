@@ -24,6 +24,7 @@ game, and `/help` does not list them.
 | Command | Effect |
 |---|---|
 | `/time set <t>`, `/time add <hours>`, `/time query` (and `/time <t>`) | The time of day: `sunrise day noon sunset night midnight` or `0..1` (`world.time`). |
+| `/weather [clear\|overcast\|rain\|storm\|fog\|auto]` | Says the weather (its kind, its values, the climate where you stand), or makes it stand at a kind until `auto` gives it back to its spells; kept in `world.cfg` (`world.weather`; [world.md](world.md#weather)). |
 | `/rule [name] [value]` (`/gamerule`) | Lists the world's rules, shows one, or sets one (setting needs `voxiverse.command.rule`): `random_tick_speed`, `drops`, `reach`, `daylight_cycle` (false stops the clock), `day_length` (seconds per day), `explosion_size` and `explosion_throw` (every explosion's radius and throw, times these; a game may set them per world), `respawn_delay` (seconds from a death before the Respawn button works; the death screen counts them down), `respawn_auto` (the dead come back by themselves when the delay is over), `spawn_protection` (seconds one who came back cannot be hurt), `break_time` (how long breaking takes, times each block's hardness: 0 at once, [packs.md](packs.md#breaking-time)), ... A change is journalled and announced to the world. |
 | `/islands` | Lists the world's simulation islands: each one's id, chunk count and players (`info.islands`; docs/world.md, "Simulation islands"). |
 | `/gamemode [mode] [player]` | Shows the mode, changes your own, or another player's. What a player may ask for is a permission (`voxiverse.command.gamemode.self`, `.others`); what the character can do is the mode's abilities. |
@@ -80,7 +81,7 @@ game, and `/help` does not list them.
 What a player may do is a set of nodes: dotted lower-case words. The families in use:
 
 - `world.*`: `world.edit` (build), `world.edit.bulk`, `world.edit.undo`, `world.fire`,
-  `world.summon`, `world.kill`, `world.tag`, `world.structure`, `world.time`, `world.gen`, `world.spawn`,
+  `world.summon`, `world.kill`, `world.tag`, `world.structure`, `world.time`, `world.weather`, `world.gen`, `world.spawn`,
   `world.travel`, `world.gate`, `world.rollback`, `world.protect`, `world.interventions`;
 - `debug.coordinates`: F3 shows position, chunk and the block underneath when
   `rules.show_coordinates` is off;

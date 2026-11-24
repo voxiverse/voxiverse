@@ -125,6 +125,10 @@ Client :: struct {
 	island_put:      u64, // the tick the Island record is next worked out
 	island:          protocol.Island, // what it said
 	clock_pending:   bool, // the Clock record is due (join, travel)
+	climate:         game.Climate, // where they stand (weather.odin) ...
+	climate_cell:    [2]i32, // ... worked out in this cell
+	climate_world:   ^World, // ... of this world
+	climate_known:   bool,
 	inv_changed:     bool, // since the end of the last tick
 	open_chest:      Maybe(game.Block_Pos), // the chest it is looking into (containers.odin)
 	disturbed:       u64, // the last tick something besides its own inputs could have changed its movement (desync.odin)
