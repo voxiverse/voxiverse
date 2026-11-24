@@ -177,7 +177,10 @@ generated with the class's authored rules (`common/worldgen/classes.odin`, `CLAS
 - **What lives there.** A game says which creatures live on each class: the sandbox's
   `CLASS_CREATURES` (`games/sandbox/worlds.odin`), by kind id, which its `spawned` hook
   enforces (a world of no class takes every kind), and its creatures' grounds include the
-  classes' (its `block_tags/creatures.json`). What each rare resource is worth is the
+  classes' (its `block_tags/creatures.json`); each class but the moon has creatures of its
+  own there too (`CLASS_NATIVES`), and the sandbox builds a landmark and two sites of the
+  class's kind round each gate world's arrival gate (games/sandbox/README.md, "The gate
+  worlds' places"). What each rare resource is worth is the
   game's too: the sandbox's tool tiers, items and recipes (games/sandbox/README.md).
 - **Cost.** `build bench chunks -class <name>` runs the chunk pipeline on the class's first
   world around its spawn (`-check` judges the same per-stage budgets as Earth's region).
