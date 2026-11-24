@@ -290,11 +290,11 @@ regenerate :: proc(s: ^Server, c: ^Client) {
 	)
 }
 
-// admin_damage: damage <player> <amount>: hurt a player by a command (a source
-// like any other: the abilities and rules decide).
+// admin_damage: damage <player> <amount>: hurt a player (a name or a selector, @s) by a
+// command (a source like any other: the abilities and rules decide).
 @(private)
 admin_damage :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	target := client_by_name(s, args[0])
+	target := find_player(s, c, args[0])
 	if target == nil {
 		notice(s, c, fmt.tprintf("&cNo player %s here", args[0]))
 		return true

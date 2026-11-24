@@ -338,3 +338,30 @@ test_game_health_bonus :: proc(t: ^testing.T) {
 	respawn(s, c)
 	testing.expect_value(t, c.health, base_most + 2)
 }
+
+// /damage names its player by its name or by a selector (@s: whoever typed it), as /give
+// and /xp do.
+@(test)
+test_damage_command_takes_a_selector :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	dir := filepath.join({"build", "test", "damage_selector"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	if !testing.expect(t, harness_start(h, config(dir))) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	if !testing.expect(t, ok, "never landed") {return}
+	s := &h.srv
+	c := client_by_name(s, "a")
+	c.protected_until = 0
+	before := c.health
+	testing.expect(t, admin_damage(s, c, {"@s", "3"}))
+	testing.expect_value(t, c.health, before - 3)
+	testing.expect(t, admin_damage(s, c, {"a", "2"}))
+	testing.expect_value(t, c.health, before - 5)
+}
