@@ -97,7 +97,7 @@ test_weather_mist_at_dawn :: proc(t: ^testing.T) {
 	testing.expectf(t, misty > 30 && misty < 170, "%d misty mornings of 199", misty)
 }
 
-// Rain falls as snow in the cold and not at all where it is dry.
+// Rain falls as snow in the cold, as ash on an ashen world and not at all where it is dry.
 @(test)
 test_precipitation_by_climate :: proc(t: ^testing.T) {
 	rain := WEATHER_OF[.Rain]
@@ -107,6 +107,9 @@ test_precipitation_by_climate :: proc(t: ^testing.T) {
 	testing.expect(t, p == .Snow && k == rain.rain)
 	p, k = precipitation_of(rain, .Dry)
 	testing.expect(t, p == .None && k == 0)
+	p, k = precipitation_of(rain, .Ashen)
+	testing.expect(t, p == .Ash && k == rain.rain)
+	testing.expect_value(t, weather_in(rain, .Ashen), rain)
 	p, _ = precipitation_of(WEATHER_OF[.Overcast], .Temperate)
 	testing.expect_value(t, p, Precipitation.None)
 	// Where there is no air there is no weather at all.

@@ -434,8 +434,9 @@ record, `server/core/weather.odin`). Stopping the daylight cycle stops the weath
 - **Climate.** What falls depends on where the player stands, from the generator's biome:
   snow in the cold (tundra, frozen ocean, ice sheet, mountains, cold desert), nothing in a
   desert (the cloud still comes), rain elsewhere. A world class may have one climate
-  everywhere ([World classes](#world-classes), `Class_Def.climate`): a canyon and a volcanic
-  world dry, a frozen world cold, and an airless moon none at all (`Airless`:
+  everywhere ([World classes](#world-classes), `Class_Def.climate`): a canyon dry, a
+  volcanic world ashen (its rain falls as ash: `Ashen`), a frozen world cold, and an airless
+  moon none at all (`Airless`:
   `game.weather_in` gives no cloud, no rain, no fog, no wind there, on the server and the
   client alike). The server works it out again when the player crosses a 32-block cell. On
   a class's world the weather's sky is drawn over the class's (`engine.world_look`, then the
@@ -448,16 +449,17 @@ record, `server/core/weather.odin`). Stopping the daylight cycle stops the weath
   flattens the sky, hides the sun, moon and stars, lowers the cloud map's threshold until the
   blocky clouds close into one sheet and dims the sky's light; rain and storm darken it more;
   mist and rain bring the fog in. Rain falls as streaks and snow as flakes in the 14 blocks
-  round the camera (`MAX_DROPS`, 2400, at most): one column-top look-up a column keeps them
-  out from under roofs, trees and rock.
+  round the camera (`MAX_DROPS`, 2400, at most), ash as slower flakes in greys from soot to
+  cinder with an ember now and then: one column-top look-up a column keeps them out from
+  under roofs, trees and rock.
 - **Hum sources.** A game marks blocks as humming (`core.world_hum`: the sandbox's sealed
   vaults, and its fallen pylons, towers and rings of stones that hold an alloy relic), and
   every open gate hums at its middle; each player is told of the nearest 16 within 96 blocks (the `Hum`
   records), heard as a low hum within 40.
 
 `/weather [kind|auto]` says or sets it; the visual baselines stand it at clear unless a scene
-sets another. Options' **Rain and snow** turns off the falling and the flashes (the sky still
-clouds over).
+sets another. Options' **Rain and snow** turns off the falling (ash too) and the flashes (the
+sky still clouds over).
 
 ## Simulation islands
 

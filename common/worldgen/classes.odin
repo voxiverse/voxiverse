@@ -291,7 +291,7 @@ CLASSES := [World_Class]Class_Def {
 		horizon         = {0.40, 0.14, 0.05},
 		cloud           = {0.10, 0.07, 0.06},
 		no_buildings    = true,
-		climate         = game.Climate.Dry, // (ash would fall here: dry until the sky can draw it)
+		climate         = game.Climate.Ashen, // (its rain falls as ash)
 	},
 	.Fungal = {
 		sea_level = {-4, 4},

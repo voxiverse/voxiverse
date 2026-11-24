@@ -20,7 +20,7 @@ import "core:math"
 Weather_Kind :: enum u8 {
 	Clear,
 	Overcast,
-	Rain, // snow in a cold climate, nothing falling in a dry one (precipitation_of)
+	Rain, // snow in a cold climate, ash in an ashen one, nothing falling in a dry one (precipitation_of)
 	Storm, // rain or snow, wind, lightning
 	Fog,
 }
@@ -37,7 +37,7 @@ WEATHER_NAMES := [Weather_Kind]string {
 // Weather: how the air is, every field 0..1.
 Weather :: struct {
 	cover: f32, // cloud: 0 the fair-weather clouds, 1 one grey sheet
-	rain:  f32, // how hard it falls (as rain, snow or not at all: precipitation_of)
+	rain:  f32, // how hard it falls (as rain, snow, ash or not at all: precipitation_of)
 	storm: f32, // lightning and gusts
 	fog:   f32, // mist: the view closes in
 	wind:  f32,
@@ -50,12 +50,14 @@ Climate :: enum u8 {
 	Cold, // ... as snow
 	Dry, // nothing falls (the clouds still come)
 	Airless, // no air, so no weather at all: no cloud, nothing falls, no wind (an airless moon's)
+	Ashen, // rain falls as ash (a volcanic world's: what its cones send up comes down)
 }
 
 Precipitation :: enum u8 {
 	None,
 	Rain,
 	Snow,
+	Ash,
 }
 
 SPELL_DAYS :: 1.0 / 3 // a spell of weather: a third of a day (6 min 40 s in the default 20 min day)
@@ -188,6 +190,8 @@ precipitation_of :: proc(w: Weather, climate: Climate) -> (Precipitation, f32) {
 		return .None, 0
 	case .Cold:
 		return .Snow, w.rain
+	case .Ashen:
+		return .Ash, w.rain
 	case .Temperate:
 	}
 	return .Rain, w.rain

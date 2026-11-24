@@ -86,6 +86,10 @@ weather_rain_noon: /weather rain; /time set noon; look 30 0
 weather_storm_dusk: /weather storm; /time set 0.74; look 30 0
 weather_fog_dawn: /weather fog; /time set 0.27; look 30 0
 weather_clear_night: /time set midnight; look 180 55
+# Ash falling on a volcanic world (its climate is ashen: its rain falls as grey flakes,
+# common/game/weather.odin; client/atmosphere/precipitation.odin): the class's first
+# address, its rain stood and its rules made still.
+weather_ash: @1280x720 /travel 111a140f0413180e-14040022162710; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /weather rain; /time set noon; ticks 10; wait_world; /tp ~ ~2 ~ 30 -8; ticks 10; wait_world
 # Levels, skills and a fight's feel (games/sandbox: pack/data/levels, pack/data/skills;
 # client/hud/experience.odin, client/menu/skills.odin, client/overlay/death.odin), at
 # 1280x720 in survival with the health not coming back by itself: the HUD's experience bar

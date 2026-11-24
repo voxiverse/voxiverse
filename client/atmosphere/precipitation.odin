@@ -19,8 +19,10 @@ FALL_ABOVE :: 18 // the band drops fall through: from this far above the eye ...
 FALL_BELOW :: 8 // ... to this far below
 RAIN_SPEED :: 15 // blocks a second
 SNOW_SPEED :: 1.6
+ASH_SPEED :: 1.1 // ash drifts down slower than snow, in flakes of grey
 RAIN_PER_COLUMN :: 3 // drops a column holds in the heaviest fall
 SNOW_PER_COLUMN :: 2
+ASH_PER_COLUMN :: 3 // (a thicker fall of larger flakes than snow's)
 
 // Column_Top: the top of block column (x, z) (game's column top: rain stops on it),
 // false when it is not known (not loaded: nothing falls there).
@@ -33,7 +35,7 @@ sheltered :: proc(top: i32, y: f64) -> bool {
 }
 
 // drops_make adds this frame's drops to d (at most render.MAX_DROPS in all) and
-// returns how many: what falls (none, rain, snow) and how hard (0..1), the wind
+// returns how many: what falls (none, rain, snow, ash) and how hard (0..1), the wind
 // (x, z, blocks a second), the eye, the seconds the animation has run.
 drops_make :: proc(
 	d: ^render.Weather_Draw,
@@ -46,10 +48,11 @@ drops_make :: proc(
 	data: rawptr,
 ) -> int {
 	if kind == .None || amount <= 0 {return 0}
-	snow := kind == .Snow
+	snow := kind == .Snow || kind == .Ash // (ash falls as snow does, slower and grey)
 	radius: i32 = SNOW_RADIUS if snow else RAIN_RADIUS
 	speed := f64(SNOW_SPEED if snow else RAIN_SPEED)
 	per := f32(SNOW_PER_COLUMN if snow else RAIN_PER_COLUMN) * clamp(amount, 0, 1)
+	if kind == .Ash {speed, per = ASH_SPEED, ASH_PER_COLUMN * clamp(amount, 0, 1)}
 	span := f64(FALL_ABOVE + FALL_BELOW)
 	ex, ez := i32(math.floor(eye.x)), i32(math.floor(eye.z))
 	made := 0
@@ -80,11 +83,19 @@ drops_make :: proc(
 					at.x += f64(math.sin(sway) * 0.3 + wind.x * 0.15)
 					at.z += f64(math.cos(sway * 0.8) * 0.3 + wind.y * 0.15)
 					size := 0.06 + 0.05 * unit(g, 4)
+					color := [4]u8{245, 248, 255, 230}
+					if kind == .Ash {
+						size = 0.09 + 0.1 * unit(g, 4)
+						// Greys from soot to pale cinder, an ember now and then.
+						grey := u8(90 + 120 * unit(g, 12))
+						color = {grey, grey - grey / 12, grey - grey / 8, 235}
+						if unit(g, 20) < 0.04 {color = {235, 120, 50, 240}}
+					}
 					drop = {
 						at     = at,
 						height = size,
 						width  = size,
-						color  = {245, 248, 255, 230},
+						color  = color,
 						shape  = .Flake,
 					}
 				} else {
