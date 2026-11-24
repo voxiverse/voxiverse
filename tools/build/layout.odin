@@ -139,11 +139,13 @@ lint_layout :: proc(rows: []Layout_Row, tracked: []string) -> []string {
 			)
 		}
 	}
-	// A listed folder (or shape) with no tracked file is a stale row.
+	// A listed folder (or shape) with no tracked file is a stale row. A base pack folder's
+	// row is in use while a game's pack has files under it (layout_folder), though the base
+	// pack has none of its own there (a kind of content only a game brings).
 	for row in rows {
 		used := false
 		for path in tracked {
-			if row_matches(row.folder, folder_of(path)) {used = true; break}
+			if row_matches(row.folder, layout_folder(folder_of(path))) {used = true; break}
 		}
 		if !used {
 			append(

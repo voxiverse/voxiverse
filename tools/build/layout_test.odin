@@ -86,6 +86,19 @@ test_layout_game_pack :: proc(t: ^testing.T) {
 		len(lint_layout(rows, with_base("games/tag/pack/data/blocks/a.json"))),
 		1,
 	)
+	// A base pack row only a game's pack uses (the base pack has no file there) is in use.
+	quests := parse_layout(
+		"| `assets/packs/voxiverse` | manifest | `*.json` |\n" +
+		"| `assets/packs/voxiverse/data/game_modes` | modes | `*.json` |\n" +
+		"| `assets/packs/voxiverse/data/quests` | quests | `*.json` |\n" +
+		"| `games` | the games | `README.md` |\n",
+	)
+	testing.expect_value(
+		t,
+		len(lint_layout(quests, with_base("games/tag/pack/data/quests/q.json"))),
+		0,
+	)
+	testing.expect_value(t, len(lint_layout(quests, with_base())), 1)
 	testing.expect_value(
 		t,
 		layout_folder("games/tag/pack/data/sim"),
