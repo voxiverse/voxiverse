@@ -410,7 +410,7 @@ feel_view :: proc(f: ^Feel) -> (move: [3]f32, turn: [3]f32) {
 // ---------------------------------------------------------------------------
 
 MAX_FLOATS :: 24 // texts floating at once (one more takes the oldest's place)
-FLOAT_TEXT_MAX :: 24 // bytes of one (cut at a whole letter)
+FLOAT_TEXT_MAX :: 64 // bytes of one (cut at a whole letter): a quest's step done says its text
 FLOAT_SECONDS :: 0.9
 FLOAT_RISE :: 1.1 // blocks it rises
 FLOAT_POP :: 0.15 // seconds it takes to pop to its size

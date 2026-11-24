@@ -1,6 +1,7 @@
 package engine
 
 import "core:math"
+import "core:strings"
 import "core:testing"
 
 import "client:render"
@@ -189,15 +190,23 @@ test_floats_are_capped_and_go :: proc(t: ^testing.T) {
 		testing.expect_value(t, s.feel.floats[i].len, 2)
 	}
 	first := s.feel.floats[0].born
-	float_text(s, {1, 2, 3}, "+5 coins and then a very long tail", {255, 255, 255, 255})
+	long := strings.repeat("+5 coins and then a very long tail ", 3, context.temp_allocator)
+	float_text(s, {1, 2, 3}, long, {255, 255, 255, 255})
 	testing.expect(t, s.feel.floats[0].born > first, "the oldest gave way")
 	testing.expect_value(t, s.feel.floats[0].at, [3]f64{1, 2, 3})
 	testing.expect_value(t, s.feel.floats[0].len, FLOAT_TEXT_MAX)
-	float_text(s, {}, "ééééééééééééééééééé", {255, 255, 255, 255}) // (two bytes a letter)
+	wide := strings.repeat("é", FLOAT_TEXT_MAX / 2 + 3, context.temp_allocator) // (two bytes a letter)
+	float_text(s, {}, wide, {255, 255, 255, 255})
 	testing.expect_value(t, s.feel.floats[1].len, FLOAT_TEXT_MAX)
-	float_text(s, {}, "éééééééééééééééééééé", {255, 255, 255, 255})
-	testing.expect_value(t, s.feel.floats[2].len, FLOAT_TEXT_MAX) // (24 is whole: 12 letters)
-	float_text(s, {}, "aéééééééééééééééééééé", {255, 255, 255, 255})
+	exact := strings.repeat("é", FLOAT_TEXT_MAX / 2, context.temp_allocator)
+	float_text(s, {}, exact, {255, 255, 255, 255})
+	testing.expect_value(t, s.feel.floats[2].len, FLOAT_TEXT_MAX) // (whole letters that fill it)
+	float_text(
+		s,
+		{},
+		strings.concatenate({"a", wide}, context.temp_allocator),
+		{255, 255, 255, 255},
+	)
 	testing.expect_value(t, s.feel.floats[3].len, FLOAT_TEXT_MAX - 1)
 }
 
