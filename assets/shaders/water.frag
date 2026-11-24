@@ -14,6 +14,7 @@ layout(location = 0) in vec3 in_uvw;
 layout(location = 1) in vec3 in_light;
 layout(location = 2) in vec3 in_pos;
 layout(location = 3) flat in uint in_portal; // a gate's open surface: 1 | its rim's sides << 1 (-h, +h, -y, +y)
+layout(location = 4) in float in_shade;
 layout(location = 0) out vec4 out_color;
 
 // PORTAL_LAYERS: how many sheets of motes lie behind the surface.
@@ -110,5 +111,6 @@ void main() {
 		return;
 	}
 	vec4 texel = texture(sampler2DArray(array_textures[push.textures], samplers[push.sampler_id]), in_uvw);
-	out_color = vec4(graded(push.scene, world_shade(push.scene, texel.rgb, in_light, in_pos), gl_FragCoord.xy), texel.a);
+	vec3 light = lit(push.scene, in_light, in_shade, in_pos, facing_normal(dFdx(in_pos), dFdy(in_pos), push.scene.camera.xyz - in_pos));
+	out_color = vec4(graded(push.scene, world_shade(push.scene, texel.rgb, light, in_pos), gl_FragCoord.xy), texel.a);
 }

@@ -8,6 +8,14 @@ layout(buffer_reference, std430) readonly buffer Cloud_Map {
 	uint bits[];
 };
 
+// A light that moves (render/scene.odin's Light: a lamp someone carries).
+struct Light {
+	vec4 at;    // xyz from the camera chunk's origin; w: its level (it reaches w blocks)
+	vec4 color; // rgb at full (linear)
+};
+
+const int MAX_LIGHTS = 8; // render/scene.odin
+
 layout(buffer_reference, std430) readonly buffer Scene {
 	mat4 view_proj;     // from the camera chunk's origin
 	mat4 inv_view_proj;
@@ -29,7 +37,41 @@ layout(buffer_reference, std430) readonly buffer Scene {
 	vec4 gate;          // xyz: the middle of a gate's opening whose void is gathering; w: seconds since it began, < 0: none
 	ivec4 camera_chunk; // xyz: the camera's chunk; w: no block at this y or above is drawn (render/scene.odin's NO_CUT: none)
 	Cloud_Map cloud_map;
+	ivec4 light_count;  // x: the lights that move in use (0: none, and nothing here is asked)
+	Light lights[MAX_LIGHTS];
 };
+
+// level_brightness: the brightness of a light level l (0..15, fractional): world.vert's
+// curve for block light, so a carried lamp lights as a lamp block does.
+float level_brightness(float l) {
+	float x = clamp(l / 15.0, 0.0, 1.0);
+	return 0.03 + 0.97 * x * x * (3.0 - 2.0 * x) * x;
+}
+
+// facing_normal: the unit normal of a surface from its position's screen derivatives
+// (a fragment shader's dFdx and dFdy of it), turned to the camera (to_eye: from the surface
+// to it; any face drawn faces the camera).
+vec3 facing_normal(vec3 dx, vec3 dy, vec3 to_eye) {
+	vec3 n = normalize(cross(dx, dy));
+	return dot(n, to_eye) < 0.0 ? -n : n;
+}
+
+// moving_light: what the scene's lights that move (render/scene.odin's scene_lights) give a
+// surface at pos facing n, by channel the brightest of them, as block light is the brightest
+// that reaches a block: each falls a level a block from its own, and lights no face turned
+// away from it (so it does not shine through a wall onto its far side).
+vec3 moving_light(Scene s, vec3 pos, vec3 n) {
+	vec3 light = vec3(0.0);
+	for (int i = 0; i < min(s.light_count.x, MAX_LIGHTS); i++) {
+		vec3 to = s.lights[i].at.xyz - pos;
+		float d = length(to);
+		float level = s.lights[i].at.w - d;
+		if (level <= 0.0) continue;
+		float facing = d > 0.001 ? smoothstep(-0.15, 0.35, dot(n, to / d)) : 1.0;
+		light = max(light, s.lights[i].color.rgb * level_brightness(level) * facing);
+	}
+	return light;
+}
 
 const float CLOUD_CELL = 12.0;  // render/scene.odin
 const float CLOUD_PERIOD_CELLS = 256.0; // CLOUD_MAP_SIZE

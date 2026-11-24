@@ -183,6 +183,8 @@ ITEM_FIELDS := []string {
 	"model",
 	"gather",
 	"consume",
+	"light",
+	"light_color",
 	"override",
 }
 @(private)

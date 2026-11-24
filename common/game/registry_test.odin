@@ -934,6 +934,48 @@ test_item_rarity_and_trinkets :: proc(t: ^testing.T) {
 	testing.expect(t, len(bad) == 1, "a rarity that is not one of the five is refused")
 }
 
+// An item's light: its own level and colour, else its block's (a lamp carried is a lamp),
+// and none for an item that gives none; a level or a colour out of bounds is refused.
+@(test)
+test_item_light :: proc(t: ^testing.T) {
+	reg, errs := build_with(
+		pack_of(
+			"testpack",
+			[]File {
+				{
+					"data/items/a.json",
+					`{"lantern": {"stack": 1, "light": 12, "light_color": [255, 200, 120]}, "glow": {"light": 9}, "rock": {}}`,
+				},
+			},
+		),
+	)
+	testing.expect_value(t, errors_text(errs), "")
+	if reg == nil {return}
+	defer registry_destroy(reg)
+	lantern, _ := registry_item(reg, "testpack:lantern")
+	glow, _ := registry_item(reg, "testpack:glow")
+	rock, _ := registry_item(reg, "testpack:rock")
+	level, color := item_light(reg, lantern)
+	testing.expect_value(t, level, 12)
+	testing.expect_value(t, color, [3]u8{255, 200, 120})
+	level, color = item_light(reg, glow)
+	testing.expect(t, level == 9 && color == {}, "a light with no colour of its own")
+	level, _ = item_light(reg, rock)
+	testing.expect_value(t, level, 0)
+	level, _ = item_light(reg, NO_ITEM)
+	testing.expect_value(t, level, 0)
+	lamp, _ := registry_item(reg, "voxiverse:lamp")
+	info, _ := registry_item_info(reg, lamp)
+	level, color = item_light(reg, lamp)
+	testing.expect(t, level > 0, "a lamp carried gives no light")
+	testing.expect_value(t, level, block_light(&reg.blocks, info.block))
+	testing.expect_value(t, color, [3]u8{})
+	for bad in ([]string{`{"a": {"light": 16}}`, `{"a": {"light_color": [300, 0, 0]}}`}) {
+		_, refused := build_with(pack_of("testpack", []File{{"data/items/x.json", bad}}))
+		testing.expectf(t, len(refused) == 1, "%s: not refused", bad)
+	}
+}
+
 // A weapon is data: every number is required, the values are checked, and a
 // pack that overrides the base's pistol changes what it does.
 @(test)

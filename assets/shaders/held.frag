@@ -4,8 +4,8 @@
 #include "scene.glsl"
 
 // What the hands hold: a flat colour (a voxel, with a little crunch: each
-// voxel face a touch lighter or darker: the uv is one value a face) or a block's texture, lit by the sky
-// and the brightness setting.
+// voxel face a touch lighter or darker: the uv is one value a face) or a block's texture, lit by the sky,
+// a lamp carried and the brightness setting.
 
 layout(set = 0, binding = 0) uniform texture2DArray array_textures[];
 layout(set = 0, binding = 1) uniform sampler samplers[3];
@@ -20,6 +20,7 @@ layout(location = 0) in vec2 in_uv;
 layout(location = 1) in vec3 in_color;
 layout(location = 2) flat in uint in_layer;
 layout(location = 3) in float in_shade;
+layout(location = 4) in vec3 in_pos;
 layout(location = 0) out vec4 out_color;
 
 const uint FLAT = 0xffffu; // render/held_pass.odin: HELD_FLAT
@@ -43,6 +44,9 @@ void main() {
 		albedo = texel.rgb;
 	}
 	vec3 light = max(s.sky_light.rgb + s.ambient.rgb, s.figure.rgb) * in_shade;
+	if (s.light_count.x > 0) { // (a lamp carried: scene.glsl's moving_light)
+		light = max(light, moving_light(s, in_pos, facing_normal(dFdx(in_pos), dFdy(in_pos), s.camera.xyz - in_pos)) * in_shade);
+	}
 	light = mix(light, 1.0 - pow(1.0 - min(light, vec3(1.0)), vec3(4.0)), s.sky_light.w);
 	out_color = vec4(graded(s, albedo * light, gl_FragCoord.xy), 1.0);
 }

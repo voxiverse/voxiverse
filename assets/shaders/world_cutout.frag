@@ -14,10 +14,12 @@ layout(location = 0) in vec3 in_uvw;
 layout(location = 1) in vec3 in_light;
 layout(location = 2) in vec3 in_pos;
 layout(location = 3) flat in uint in_portal; // (world.vert's for water.frag: never on this layer)
+layout(location = 4) in float in_shade;
 layout(location = 0) out vec4 out_color;
 
 void main() {
 	vec4 texel = texture(sampler2DArray(array_textures[push.textures], samplers[push.sampler_id]), in_uvw);
 	if (texel.a < 0.5) discard;
-	out_color = vec4(graded(push.scene, world_shade(push.scene, texel.rgb, in_light, in_pos), gl_FragCoord.xy), 1.0);
+	vec3 light = lit(push.scene, in_light, in_shade, in_pos, facing_normal(dFdx(in_pos), dFdy(in_pos), push.scene.camera.xyz - in_pos));
+	out_color = vec4(graded(push.scene, world_shade(push.scene, texel.rgb, light, in_pos), gl_FragCoord.xy), 1.0);
 }

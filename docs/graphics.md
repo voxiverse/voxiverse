@@ -206,6 +206,32 @@ light, column tops), `relit_edit` (chunks an edit lit again), `unchanged` (lit a
 meshed: light and geometry as their mesh's), `light_reused` (lit from the cache), and task
 times.
 
+## Lights that move
+
+A light someone carries (an item's `light`: a lamp in the hand, one worn; `game.item_light`)
+lights the world as it moves without meshing a chunk again: it is the shaders', not the
+chunks' light. Each frame `engine.moving_lights` gathers the lights of what our player and
+every other player in view hold and wear (the others' from their `Player_Record`, so every
+player sees every lamp; nothing is sent for it), from the hand (1.2 blocks over the feet) or
+the head (1.7), and `render.scene_lights` puts the `MAX_LIGHTS` (8) nearest the camera in the
+scene, each from the camera chunk's origin as every chunk's vertices are, so a light lights
+the same on either side of a chunk's border and stays exact far from the world's origin.
+
+`scene.glsl`'s `moving_light` gives a surface the brightest of them by channel, each falling a
+level a block from its own (as block light does, on block light's curve) and none on a face
+turned away from it (from the screen's derivatives: `facing_normal`), so it does not shine
+through a wall onto its far side; a surface that faces it behind another (round a corner)
+is lit, as the shaders cast no shadow. The world's layers (`world.glsl`'s `lit`) take it
+where it is brighter than their mesh's light, shaded by face and corner as the mesh's is and
+lifted by the brightness setting; figures and held items take it too, and the view model's
+own scene carries our lights in view space so our hands are lit by what we carry. With no
+light that moves the scene's `light_count` is 0 and every shader skips it on a uniform
+branch, so a picture where nobody carries one is the same as before.
+
+What it costs: nothing on the CPU but gathering the lights (a few per player) and no mesh,
+light or upload work (`session mesher` counts no chunk for it); on the GPU, at most eight
+distance tests a fragment of the world, figure and held passes while one is near.
+
 ## Pipelines
 
 Pipelines are created through a `VkPipelineCache` whose data is kept beside the game as

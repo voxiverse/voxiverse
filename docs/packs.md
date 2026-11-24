@@ -127,6 +127,10 @@ a block players may place has its item made for it. Every field is optional:
   (its game calls `core.item_consume` when its player uses the stack in its hand): `heal`
   health at once, then for `seconds` `regen` health a second and `defence` taken off every
   harm, in place of what one used before still did; a death ends it, and it is not saved.
+- `light` (0..15) and `light_color` (`[r, g, b]`, 0..255; none: a lamp's warm colour): the
+  light it gives whoever holds it in the hand or wears it, a light that moves with them and
+  that everyone sees (`game.item_light`; [graphics.md](graphics.md#lights-that-move)). An item
+  that names none gives the light of the block it places, so a lamp carried is a lamp.
 
 ### Breaking time
 

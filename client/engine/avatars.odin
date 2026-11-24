@@ -28,6 +28,51 @@ SHIRTS := [8][4]u8 {
 LEGS :: [4]u8{52, 58, 92, 255}
 AVATAR_SKIN :: [4]u8{224, 178, 140, 255}
 
+// LIGHT_HAND, LIGHT_HEAD: where a carried light shines from, over its holder's feet: a lamp
+// in the hand, one worn (on a helmet).
+LIGHT_HAND :: 1.2
+LIGHT_HEAD :: 1.7
+
+// moving_lights: the lights the players carry (game.item_light: a lamp held in the hand or
+// worn), ours (with a body, alive) and every other player's the session shows, each from
+// its holder's hand or head, for render.scene_lights to keep the nearest. What the others
+// hold and wear is their Player_Record's, so everyone sees everyone's lamp.
+moving_lights :: proc(s: ^Session, out: ^[dynamic]render.Moving_Light) {
+	if !session_ability(s, .Bodiless) && !s.dead {
+		carried_lights(s.reg, out, s.feet, held(s).item, game.worn_of(&s.inventory))
+	}
+	now, live := session_others_now(s)
+	if !live {return}
+	for _, &o in s.others {
+		if v, ok := other_view(&o, now);
+		   ok {carried_lights(s.reg, out, v.position, o.held, o.worn)}
+	}
+}
+
+// carried_lights: the lights of what someone standing at feet holds and wears.
+carried_lights :: proc(
+	reg: ^game.Registry,
+	out: ^[dynamic]render.Moving_Light,
+	feet: [3]f64,
+	held: game.Item,
+	worn: [game.WORN_SLOTS]game.Item,
+) {
+	add :: proc(
+		reg: ^game.Registry,
+		out: ^[dynamic]render.Moving_Light,
+		at: [3]f64,
+		item: game.Item,
+	) {
+		level, srgb := game.item_light(reg, item)
+		if level == 0 {return}
+		color: [3]f32
+		for c, k in srgb {color[k] = math.pow(f32(c) / 255, 2.2)} 	// (zero stays the lamp's)
+		append(out, render.Moving_Light{at, f32(level), color})
+	}
+	add(reg, out, feet + {0, LIGHT_HAND, 0}, held)
+	for item in worn {add(reg, out, feet + {0, LIGHT_HEAD, 0}, item)}
+}
+
 NAME_TAG_DISTANCE :: 48 // blocks: names further away are not shown
 
 // shirt_of: a player's colour, the same everywhere for the same name.

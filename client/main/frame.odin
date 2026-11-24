@@ -402,6 +402,9 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 				{width, height},
 			)
 			made.gate = engine.gate_gather_scene(s, camera.chunk, s.view.position)
+			lights := make([dynamic]render.Moving_Light, context.temp_allocator)
+			engine.moving_lights(s, &lights)
+			render.scene_lights(&made, camera, lights[:])
 			scene = render.scene_upload(&app.scenes, g, made)
 			engine.world_debug_lines(app)
 			engine.avatars_draw(

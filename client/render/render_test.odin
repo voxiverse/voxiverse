@@ -114,8 +114,9 @@ test_sky_through_a_day :: proc(t: ^testing.T) {
 	}
 }
 
-// scene.glsl's Scene: two mat4, sixteen vec4, an ivec4, the cloud map's address (std430).
-#assert(size_of(Scene) == 2 * 64 + 17 * 16 + 16)
+// scene.glsl's Scene: two mat4, sixteen vec4, an ivec4, the cloud map's address (std430),
+// then the lights that move: an ivec4 and MAX_LIGHTS of two vec4.
+#assert(size_of(Scene) == 2 * 64 + 17 * 16 + 16 + 16 + MAX_LIGHTS * 32)
 #assert(offset_of(Scene, camera) == 128)
 #assert(offset_of(Scene, water) == 272)
 #assert(offset_of(Scene, lamp) == 288)
@@ -123,6 +124,99 @@ test_sky_through_a_day :: proc(t: ^testing.T) {
 #assert(offset_of(Scene, gate) == 368)
 #assert(offset_of(Scene, camera_chunk) == 384)
 #assert(offset_of(Scene, cloud_map) == 400)
+#assert(offset_of(Scene, light_count) == 416)
+#assert(offset_of(Scene, lights) == 432)
+#assert(size_of(Light) == 32)
+
+// The lights that move: none leaves the scene as it was; the MAX_LIGHTS nearest the camera
+// are kept, each from the camera chunk's origin, in its own colour or the lamp's; and a
+// light lights a point of the world the same whichever chunk the camera is in, so it meets
+// itself across a chunk's border (moving_light_at: scene.glsl's moving_light).
+@(test)
+test_scene_lights :: proc(t: ^testing.T) {
+	camera := Camera {
+		chunk    = {2, 0, -1},
+		position = {8, 8, 8},
+	}
+	scene := scene_make(camera, sky_at(0), 256, 0)
+	before := scene
+	scene_lights(&scene, camera, nil)
+	testing.expect(t, scene == before, "no light changed the scene")
+	eye := [3]f64{40, 8, -8}
+	lights: [12]Moving_Light
+	for &l, i in lights {l = {eye + {f64(len(lights) - 1 - i) * 3, 0, 0}, 10, {}}}
+	lights[len(lights) - 1].color = {1, 0, 0}
+	scene_lights(&scene, camera, lights[:])
+	testing.expect_value(t, scene.light_count.x, MAX_LIGHTS)
+	testing.expect_value(t, scene.lights[0].at, [4]f32{8, 8, 8, 10})
+	testing.expect_value(t, scene.lights[0].color, [4]f32{1, 0, 0, 0})
+	testing.expect_value(t, scene.lights[1].color.rgb, scene.lamp.rgb)
+	testing.expect_value(t, scene.lights[MAX_LIGHTS - 1].at.x, f32(8 + 3 * (MAX_LIGHTS - 1)))
+
+	// x = 48 is the first block of the chunk east of the camera's.
+	lamp := []Moving_Light{{{47.5, 8, -8}, 12, {}}}
+	at :: proc(camera: Camera, lamp: []Moving_Light, world: [3]f64) -> [3]f32 {
+		s := scene_make(camera, sky_at(0), 256, 0)
+		scene_lights(&s, camera, lamp)
+		origin :=
+			[3]f64{f64(camera.chunk.x), f64(camera.chunk.y), f64(camera.chunk.z)} * CHUNK_EXTENT
+		p := world - origin
+		return moving_light_at(&s, {f32(p.x), f32(p.y), f32(p.z)}, {0, 1, 0})
+	}
+	east := Camera {
+		chunk    = {3, 0, -1},
+		position = {4, 8, 8},
+	}
+	west, over := at(camera, lamp, {47.95, 7, -8}), at(camera, lamp, {48.05, 7, -8})
+	for k in 0 ..< 3 {
+		testing.expectf(t, west[k] > 0.3, "the lamp lights nothing near it: %v", west)
+		testing.expectf(
+			t,
+			abs(west[k] - over[k]) < 0.02,
+			"a seam at the border: %v, %v",
+			west,
+			over,
+		)
+	}
+	from_east := [2][3]f32{at(east, lamp, {47.95, 7, -8}), at(east, lamp, {48.05, 7, -8})}
+	for k in 0 ..< 3 {
+		testing.expectf(
+			t,
+			abs(from_east[0][k] - west[k]) < 1e-5,
+			"%v from the east, %v",
+			from_east[0],
+			west,
+		)
+		testing.expectf(
+			t,
+			abs(from_east[1][k] - over[k]) < 1e-5,
+			"%v from the east, %v",
+			from_east[1],
+			over,
+		)
+	}
+	testing.expect_value(t, at(camera, lamp, {47.5, 7, 8}), [3]f32{}) // (16 blocks off: beyond its reach)
+}
+
+// moving_light_at: scene.glsl's moving_light on the CPU.
+@(private = "file")
+moving_light_at :: proc(s: ^Scene, pos, n: [3]f32) -> (light: [3]f32) {
+	for l in s.lights[:s.light_count.x] {
+		to := l.at.xyz - pos
+		d := math.sqrt(to.x * to.x + to.y * to.y + to.z * to.z)
+		level := l.at.w - d
+		if level <= 0 {continue}
+		facing := f32(1)
+		if d > 0.001 {
+			c := clamp(((n.x * to.x + n.y * to.y + n.z * to.z) / d + 0.15) / 0.5, 0, 1)
+			facing = c * c * (3 - 2 * c)
+		}
+		x := clamp(level / 15, 0, 1)
+		b := 0.03 + 0.97 * x * x * (3 - 2 * x) * x
+		for k in 0 ..< 3 {light[k] = max(light[k], l.color[k] * b * facing)}
+	}
+	return
+}
 
 // world.glsl's push constants and chunk draw records.
 #assert(offset_of(World_Push, textures) == 8)

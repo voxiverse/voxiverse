@@ -49,19 +49,21 @@ view_model_frame :: proc(app: ^App, s: ^Session, width, height: i32) -> u64 {
 	camera := render.Camera {
 		view_proj = view_model_projection(aspect),
 	}
-	return render.held_view_scene(
-		&app.held_pass,
-		&app.g,
-		render.scene_make(
-			camera,
-			render.look_sky(world_look(s), game.time_of_day(s.clock)),
-			1e9,
-			0,
-			false,
-			app.settings.brightness,
-			false,
-			world_look(s),
-			{width, height},
-		),
+	scene := render.scene_make(
+		camera,
+		render.look_sky(world_look(s), game.time_of_day(s.clock)),
+		1e9,
+		0,
+		false,
+		app.settings.brightness,
+		false,
+		world_look(s),
+		{width, height},
 	)
+	// What we carry lights our hands: our lights, in view space (the eyes at its origin).
+	lights := make([dynamic]render.Moving_Light, context.temp_allocator)
+	feet := [3]f64{0, -game.player_eye_height(s.prediction.state), 0}
+	carried_lights(s.reg, &lights, feet, item, game.worn_of(&s.inventory))
+	render.scene_lights(&scene, camera, lights[:])
+	return render.held_view_scene(&app.held_pass, &app.g, scene)
 }

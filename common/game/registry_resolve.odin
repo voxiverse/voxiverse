@@ -1214,6 +1214,14 @@ read_item :: proc(
 	if f := field_of(m, "rarity"); f != nil {
 		info.rarity = Rarity(choice_of(b, f, f.value, "rarity", RARITY_NAMES, 0))
 	}
+	info.light = u8(rd_int(b, m, "light", 0, 0, LIGHT_MAX))
+	if f := field_of(m, "light_color"); f != nil {
+		color, ok := read_color(f.value)
+		if !ok {
+			fail_field(b, f, f.value, "light_color is [r, g, b], each a whole number 0..255")
+		}
+		info.light_color = color
+	}
 	if f := field_of(m, "description"); f != nil {
 		if f.value.kind != .String || len(f.value.s) > ITEM_DESCRIPTION_MAX {
 			fail_field(

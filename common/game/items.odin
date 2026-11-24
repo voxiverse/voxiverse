@@ -104,6 +104,8 @@ Item_Info :: struct {
 	model:       Maybe(u16), // the voxel model it is held as (an index into Registry.models)
 	gather:      Gather_Info, // what it gathers in the hand (its `gather`; zero: what hands do)
 	consume:     Maybe(Consume_Info), // what it does used up (its `consume`: item_consume)
+	light:       u8, // the light it gives held or worn (its `light`, 0..LIGHT_MAX; 0: none of its own, item_light)
+	light_color: [3]u8, // ... its colour, sRGB (its `light_color`; zero: a lamp's)
 }
 
 // MAX_TIER: the highest tier a block asks of the tool that breaks it (a block's `tier`).
@@ -267,6 +269,18 @@ item_of_tool :: proc(t: Tool) -> Item {
 
 // item_info: what item i is; false if it is no item here.
 item_info :: registry_item_info
+
+// item_light: the light item i gives whoever holds it in the hand or wears it (a light that
+// moves with them: the client's render.scene_lights) and its colour, sRGB (zero: a lamp's):
+// its own (`light`), else the light of the block it places, so a lamp carried is a lamp.
+// Level 0: none (NO_ITEM, an item that is no item here, one that gives none).
+item_light :: proc(reg: ^Registry, i: Item) -> (level: u8, color: [3]u8) {
+	info, ok := registry_item_info(reg, i)
+	if !ok {return}
+	if info.light > 0 {return info.light, info.light_color}
+	if info.block != .Air {return block_light(&reg.blocks, info.block), {}}
+	return
+}
 
 item_valid :: proc(reg: ^Registry, i: Item) -> bool {
 	_, ok := registry_item_info(reg, i)

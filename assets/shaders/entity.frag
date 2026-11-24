@@ -34,6 +34,9 @@ void main() {
 	vec3 albedo = in_color * (0.82 + 0.18 * texel_noise(t, in_part));
 	if (in_part == FACE && t.y == 3u && (t.x == 2u || t.x == 5u)) albedo = vec3(0.02);
 	vec3 light = max(s.sky_light.rgb + s.ambient.rgb, s.figure.rgb) * in_shade;
+	if (s.light_count.x > 0) { // (a lamp someone carries: scene.glsl's moving_light)
+		light = max(light, moving_light(s, in_pos, facing_normal(dFdx(in_pos), dFdy(in_pos), s.camera.xyz - in_pos)) * in_shade);
+	}
 	if (in_part == GLOW) light = vec3(1.0);
 	vec3 color = albedo * light;
 	color = fog_mix(s, color, in_pos - s.camera.xyz);

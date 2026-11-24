@@ -2,6 +2,7 @@ package render
 
 import "core:math"
 import "core:math/linalg"
+import "core:slice"
 
 import "client:gpu"
 
@@ -37,6 +38,59 @@ Scene :: struct {
 	camera_chunk:  [4]i32, // xyz: the camera's chunk (what "from the camera chunk's origin" is from); w: the world is cut at this y (NO_CUT: not)
 	cloud_map:     u64, // address of the Cloud_Map (set by scene_upload)
 	_:             u64,
+	light_count:   [4]i32, // x: the lights that move in use, lights[:x] (scene_lights); 0: none, and the shaders skip them
+	lights:        [MAX_LIGHTS]Light,
+}
+
+// MAX_LIGHTS: the most lights that move a scene carries (scene_lights keeps the nearest).
+MAX_LIGHTS :: 8
+
+// Light: one of a scene's lights that move (scene.glsl's): where it is, from the camera
+// chunk's origin, its level in at.w (it falls a level a block, as block light does, so it
+// reaches that many blocks), and its colour at full (linear rgb).
+Light :: struct {
+	at:    [4]f32,
+	color: [4]f32,
+}
+
+// Moving_Light: a light someone carries (a lamp in the hand, one on a helmet): where it is
+// in the world, its level (0..15) and its colour (linear rgb; zero: the scene's lamp's).
+Moving_Light :: struct {
+	position: [3]f64,
+	level:    f32,
+	color:    [3]f32,
+}
+
+// scene_lights puts the lights that move nearest the camera into the scene, MAX_LIGHTS at
+// most (one that reaches nowhere within the fog's distance is left out), each from the
+// camera chunk's origin, as every chunk's blocks are, so it lights the same across a chunk's
+// border and stays exact far from the world's origin. The light is the shaders' (scene.glsl's
+// moving_light), so a light that moves meshes no chunk again. None leaves the scene as it
+// was, and the shaders as they were.
+scene_lights :: proc(scene: ^Scene, camera: Camera, lights: []Moving_Light) {
+	Near :: struct {
+		light:    Moving_Light,
+		distance: f64,
+	}
+	origin := [3]f64{f64(camera.chunk.x), f64(camera.chunk.y), f64(camera.chunk.z)} * CHUNK_EXTENT
+	eye := origin + {f64(camera.position.x), f64(camera.position.y), f64(camera.position.z)}
+	near := make([dynamic]Near, 0, len(lights), context.temp_allocator)
+	for l in lights {
+		d := linalg.length(l.position - eye)
+		if l.level <= 0 || d - f64(l.level) > f64(scene.zenith.w) {continue}
+		append(&near, Near{l, d})
+	}
+	slice.stable_sort_by(near[:], proc(a, b: Near) -> bool {return a.distance < b.distance})
+	n := min(len(near), MAX_LIGHTS)
+	for e, i in near[:n] {
+		at := e.light.position - origin
+		color := e.light.color if e.light.color != {} else scene.lamp.rgb
+		scene.lights[i] = {
+			at    = {f32(at.x), f32(at.y), f32(at.z), e.light.level},
+			color = {color.r, color.g, color.b, 0},
+		}
+	}
+	scene.light_count = {i32(n), 0, 0, 0}
 }
 
 // NO_CUT: the scene's cut when the whole world is drawn (above anything there is).

@@ -19,6 +19,7 @@ layout(location = 0) out vec3 out_uvw; // texture coordinates and layer
 layout(location = 1) out vec3 out_light;
 layout(location = 2) out vec3 out_pos; // from the camera chunk's origin
 layout(location = 3) flat out uint out_portal; // a gate's open surface: 1 | its rim's sides << 1 (client/mesh PORTAL)
+layout(location = 4) out float out_shade; // the face's and the corner's share of the light (world.glsl's lit)
 out float gl_ClipDistance[1]; // the cut: what is above it is clipped away
 
 // +x -x +y -y +z -z, then a plant's two diagonal planes.
@@ -31,12 +32,6 @@ const float PI = 3.14159265;
 float brightness(uint l) {
 	float x = float(l) / 15.0;
 	return 0.03 + 0.97 * x * x * (3.0 - 2.0 * x) * x;
-}
-
-// lifted: light bent up by the brightness setting (lift, 0..1), most where it
-// is darkest (as Minecraft's: a cave or a night is dim, not black).
-vec3 lifted(vec3 light, float lift) {
-	return mix(light, 1.0 - pow(1.0 - min(light, vec3(1.0)), vec3(4.0)), lift);
 }
 
 void main() {
@@ -74,7 +69,8 @@ void main() {
 	// look's colours, render/look.odin), and the look's ambient is everywhere.
 	vec3 light = max(s.sky_light.rgb * brightness(sky), s.lamp.rgb * brightness(block)) + s.ambient.rgb;
 	light = lifted(light, s.sky_light.w);
-	out_light = FACE_LIGHT[face] * AO_LIGHT[ao] * light;
+	out_shade = FACE_LIGHT[face] * AO_LIGHT[ao];
+	out_light = out_shade * light;
 	out_pos = pos;
 	out_portal = (in_layer >> 24) & 31u;
 }
