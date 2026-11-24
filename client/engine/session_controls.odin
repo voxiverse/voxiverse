@@ -104,6 +104,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, a: ^Actions, dt: f32) {
 		if s.edit_timer <= 0 {
 			s.edit_timer = EDIT_REPEAT_SECONDS
 			vm_event(&s.vm, .Swing)
+			break_tap(s)
 		}
 		return
 	}
@@ -370,6 +371,19 @@ break_hold :: proc(s: ^Session, down: bool) -> bool {
 		s.breaking = {}
 	}
 	return true
+}
+
+// BREAK_TAP_VOLUME: a tap's loudness, against the break's 1: each swing at a block being
+// broken is heard, softly, so the break that ends them stands out.
+BREAK_TAP_VOLUME :: 0.45
+
+// break_tap: a swing at the block being broken (Break_Hold) is heard: its step, quieter.
+break_tap :: proc(s: ^Session) {
+	if !s.breaking.on {return}
+	b, _ := world_block(&s.world, s.breaking.pos)
+	p := s.breaking.pos
+	centre := [3]f64{f64(p.x), f64(p.y), f64(p.z)} + 0.5
+	append(&s.sounds, Sound_Event{.Tap, b, centre, BREAK_TAP_VOLUME, {}})
 }
 
 // break_progress: how far the hold on the aimed block has gone, 0..1 (0: none).

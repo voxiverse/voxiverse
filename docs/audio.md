@@ -20,7 +20,7 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
 | Loudness | Music is mastered to -20 LUFS integrated with a -1 dB true-peak ceiling (`tools/music/master.odin`). The master has a look-ahead limiter at -1 dBFS (a listener option can lower the ceiling to at most -0.1). A K-weighted loudness meter (BS.1770) is in the engine for tests and analysis. |
 | Real time | The audio thread never allocates, locks or logs. The game thread and the audio thread talk through two lock-free rings (commands in, voice-end events out); a full command ring drops the command and counts it. |
 | Cost | The mix of 64 real voices stays under 5% of one core: a 480-frame block (10 ms) is timed by the `audio` scenario of `build bench` in a release build (`BENCH_AUDIO_BUDGET`). |
-| Sound effects | Synthesized at start-up by `client/sfx` (no recordings): layers of filtered noise bursts and decaying tones at 16 kHz, crushed to 8 bits, three variants of each sound, resampled to the device rate when registered. The ambience's loops and thunder are made the same way, uncrushed. |
+| Sound effects | Synthesized at start-up by `client/sfx` (no recordings): layers of filtered noise bursts and decaying tones at 16 kHz, rounded to 12 bits, three variants of each sound, resampled to the device rate when registered. A block sound comes in over a few milliseconds (no click), keeps its energy low (no hiss above 4 kHz but glass's) and decays gently; a break crumbles. `build audiodump -sounds` measures every one (peak, RMS, crest, loudness, rise, length, decay, centroid, energy above 4 kHz) and writes each as a WAV with `-wav:<dir>`. The ambience's loops and thunder are made the same way, not rounded. |
 
 ## The engine
 
@@ -59,7 +59,7 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
   cross-feed (the other ear gets the lows), the Night compressor, and the limiter ceiling.
 - **Ambience.** Seven loops (`sfx.Bed`: wind, rain, water, cave, insects, birds, hum), made
   at start-up by `client/sfx/ambience.odin` (6 s each, their tails faded into their heads, not
-  crushed to 8 bits), play all the time in a world on the Ambience bus, each at the weight
+  rounded to 12 bits), play all the time in a world on the Ambience bus, each at the weight
   where the listener is gives it (`atmosphere.bed_weights`: wind by height, weather and
   shelter; rain on the ground, quieter under a roof, none under rock; water from the blocks
   near; the cave's drone deep under cover; insects on warm calm nights, birds on fair days;
@@ -67,8 +67,13 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
   (three variants) is played on the same bus, delayed by the strike's distance, quieter and
   duller far off or under cover. The Ambience slider is the bus's gain.
 - **Events.** The session records what happened (`Sound_Kind`: break, place, step, land, hurt,
-  die, launch, explosion, weapon shots, hit markers) and the app plays each frame's events as
-  voices with a random pitch drawn on the game thread. A pack's sound sets (`assets/sounds/`: Ogg files by action, up to
+  die, launch, explosion, weapon shots, hit markers, the taps of a block being broken) and the
+  app plays each frame's events as voices with a random pitch drawn on the game thread. A
+  footstep plays at `STEP_VOLUME` (0.45 of a break: its loudest at or under a fair day's
+  beds), and each swing at a block being broken taps its step at `BREAK_TAP_VOLUME` (0.45),
+  so the break stands out; a step or a tap never plays the variant the last one did, and
+  takes a random level (0.8 to 1) and brightness (a low-pass from 2.5 to 6 kHz), so a walk
+  does not tick like a clock. A pack's sound sets (`assets/sounds/`: Ogg files by action, up to
   `SOUND_VARIANTS` variants) are used for the blocks that name them; an action a set gives no
   file takes the break sound's.
 - **Music director** (`client/music`). A state machine the app feeds with the session, the place

@@ -82,3 +82,27 @@ test_sound_occlusion_obstruction :: proc(t: ^testing.T) {
 	testing.expect_value(t, cutoff_thick, 450)
 	testing.expect_value(t, gain_thick, 0.60)
 }
+
+// A swing at a block being broken taps: the block's step, quieter than the break that ends
+// the hold; nothing when no block is being broken.
+@(test)
+test_a_swing_at_a_block_being_broken_taps_softly :: proc(t: ^testing.T) {
+	// On the heap: a Session is far past the 512 KB a test thread has on macOS (#104).
+	s := new(Session)
+	defer free(s)
+	defer delete(s.sounds)
+	break_tap(s)
+	testing.expect_value(t, len(s.sounds), 0)
+	s.breaking = {
+		pos  = {3, 4, 5},
+		need = 30,
+		on   = true,
+	}
+	break_tap(s)
+	testing.expect_value(t, len(s.sounds), 1)
+	tap := s.sounds[0]
+	testing.expect_value(t, tap.kind, Sound_Kind.Tap)
+	testing.expect_value(t, tap.position, [3]f64{3.5, 4.5, 5.5})
+	testing.expect(t, tap.volume > 0 && tap.volume < 1, "softer than the break (volume 1)")
+	testing.expect(t, STEP_VOLUME < 1, "a footstep softer than a break")
+}

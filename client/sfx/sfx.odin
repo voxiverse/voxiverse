@@ -6,18 +6,25 @@ import "common:base"
 import "common:game"
 
 // Sound effects, synthesized: no recordings. Each sound is a few layers of
-// filtered noise bursts and decaying tones, made at a low rate and crushed
-// to 8 bits, so it is gritty the way the textures are crunchy. A material
-// has a recipe (a resonant clack for stone, a low crumble for dirt, a hiss
-// of grains for sand...); breaking, placing and stepping play it bigger or
-// smaller. Variants come from different seeds; the game adds random pitch.
+// filtered noise bursts and decaying tones, made at a low rate (nothing above
+// 8 kHz) and rounded to 12 bits. A material has a recipe (a dull tap for
+// stone, a low crumble for dirt, a soft brush for grass, a hush of grains for
+// sand...); breaking, placing and stepping play it bigger or smaller.
+// Variants come from different seeds; the game adds random pitch, level and
+// brightness to each play (engine/sounds.odin).
+//
+// What a block sound is held to (measured by `build audiodump -sounds`;
+// docs/audio.md): an attack of a few milliseconds, never a click; its energy
+// low (a centroid under about 1.2 kHz for the soft materials, under 2 kHz for
+// the hard ones, glass alone brighter); a gentle decay; a break a crumble, not
+// a crack.
 //
 //	samples := sfx.block_sound(.Stone, .Break, variant = 0, allocator)
 //	audio.add_sound(&mixer, {samples, sfx.RATE})
 
 RATE :: 16000 // samples per second
 VARIANTS :: 3 // of every sound
-BITS :: 8 // samples are crushed to this many bits
+BITS :: 12 // samples are rounded to this many bits
 
 Material :: enum u8 {
 	Stone,
@@ -75,7 +82,8 @@ material_of :: proc(reg: ^game.Registry, b: game.Block) -> (Material, bool) {
 }
 
 // Breaking is the full sound; placing a shorter, fuller thunk; a step a
-// small part of it: how long the layers ring, how many grains, how loud.
+// small part of it: how long the layers ring, how many grains, how loud, and
+// how slowly it comes in (a step is a soft footfall, not a hit).
 @(private = "file", rodata)
 ACTION_SIZE := [Action]f32 {
 	.Break = 1,
@@ -94,6 +102,12 @@ ACTION_PEAK := [Action]f32 {
 	.Place = 0.8,
 	.Step  = 0.45,
 }
+@(private = "file", rodata)
+ACTION_ATTACK := [Action]f32 {
+	.Break = 0.004,
+	.Place = 0.004,
+	.Step  = 0.007,
+}
 
 // block_sound makes a material's sound for an action.
 block_sound :: proc(
@@ -106,141 +120,165 @@ block_sound :: proc(
 		rng = seed(u32(m) * 977 + u32(a) * 131 + u32(variant) * 7 + 1),
 	}
 	size, grains, peak := ACTION_SIZE[a], ACTION_GRAINS[a], ACTION_PEAK[a]
+	s.attack = ACTION_ATTACK[a]
 	r := rand_range(&s.rng, 0.92, 1.08) // each variant a little higher or lower
+	// A break crumbles: more grains after the hit, falling quieter as they go.
+	crumble := a == .Break
 	switch m {
 	case .Stone:
-		f := rand_range(&s.rng, 1500, 2000) * r
-		burst(&s, {start = 0, tau = 0.018 * size, filter = .Band, freq = f, q = 5, gain = 1})
-		burst(
-			&s,
-			{start = 0, tau = 0.030 * size, filter = .Band, freq = f * 1.73, q = 8, gain = 0.5},
-		)
-		burst(&s, {start = 0, tau = 0.040 * size, filter = .Low, freq = 220 * r, gain = 0.7})
+		// A dull tap: a low body and a muted knock, then a few chips.
+		burst(&s, {tau = 0.035 * size, filter = .Low, freq = 320 * r, gain = 1})
+		burst(&s, {tau = 0.020 * size, filter = .Band, freq = 900 * r, q = 1.2, gain = 0.6})
 		scatter(
 			&s,
-			int(5 * grains),
-			0.02,
+			int(6 * grains),
+			0.03,
+			0.16,
+			{tau = 0.008, filter = .Band, q = 1.2},
+			700,
+			1600,
 			0.15,
-			{tau = 0.006, filter = .Band, q = 3},
-			2500,
-			4500,
-			0.2,
-			0.45,
-		)
-	case .Dirt:
-		burst(&s, {start = 0, tau = 0.060 * size, filter = .Low, freq = 600 * r, gain = 1})
-		burst(&s, {start = 0, tau = 0.050 * size, filter = .Low, freq = 160 * r, gain = 0.8})
-		scatter(
-			&s,
-			int(8 * grains + 0.5),
-			0.01,
-			0.18,
-			{tau = 0.015, filter = .Band, q = 1.5},
-			250,
-			900,
-			0.25,
-			0.55,
-		)
-	case .Grass:
-		burst(&s, {start = 0, tau = 0.050 * size, filter = .Low, freq = 650 * r, gain = 0.8})
-		burst(&s, {start = 0, tau = 0.045 * size, filter = .Low, freq = 170 * r, gain = 0.6})
-		burst(&s, {start = 0.005, tau = 0.040 * size, filter = .High, freq = 2500, gain = 0.3})
-		scatter(
-			&s,
-			int(8 * grains + 0.5),
-			0.0,
-			0.18,
-			{tau = 0.008, filter = .Band, q = 1},
-			3000,
-			6000,
-			0.15,
-			0.35,
-		)
-	case .Sand:
-		burst(&s, {start = 0, tau = 0.050 * size, filter = .Low, freq = 900 * r, gain = 0.45})
-		scatter(
-			&s,
-			int(28 * grains + 1),
-			0.0,
-			0.2 * size,
-			{tau = 0.007, filter = .Band, q = 0.8},
-			1500,
-			4000,
-			0.15,
-			0.35,
-		)
-	case .Gravel:
-		burst(&s, {start = 0, tau = 0.040 * size, filter = .Low, freq = 250 * r, gain = 0.7})
-		scatter(
-			&s,
-			int(16 * grains + 1),
-			0.0,
-			0.16 * size,
-			{tau = 0.005, filter = .Band, q = 2.5},
-			900,
-			2600,
 			0.3,
-			0.75,
 		)
-	case .Glass:
-		// A brittle clink: short inharmonic partials (no two in tune), a
-		// tick, then shards.
-		for ratio, i in ([?]f32{1, 1.47, 2.09, 2.56, 3.31}) {
-			tone(&s, 1900 * r * ratio, (0.055 - 0.008 * f32(i)) * size, 1 / (1 + 0.4 * f32(i)))
+		if crumble {
+			burst(&s, {start = 0.03, tau = 0.06, filter = .Low, freq = 220 * r, gain = 0.4})
+			scatter(&s, 12, 0.06, 0.3, {tau = 0.012, filter = .Band, q = 1}, 400, 1100, 0.15, 0.35)
 		}
-		burst(&s, {start = 0, tau = 0.003, filter = .High, freq = 4000, gain = 0.8})
+	case .Dirt:
+		// A low crumble.
+		burst(&s, {tau = 0.050 * size, filter = .Low, freq = 450 * r, gain = 1})
+		burst(&s, {tau = 0.050 * size, filter = .Low, freq = 150 * r, gain = 0.8})
 		scatter(
 			&s,
-			int(9 * grains),
+			int(8 * grains + 0.5),
 			0.01,
-			0.16 * size,
-			{tau = 0.010, filter = .Band, q = 6},
-			3500,
-			7000,
+			0.18,
+			{tau = 0.015, filter = .Band, q = 1.2},
+			250,
+			800,
 			0.25,
 			0.5,
 		)
-	case .Wood:
-		// A hollow knock: two body resonances, a tap, then a splinter or two.
-		tone(&s, 310 * r, 0.060 * size, 1)
-		tone(&s, 740 * r, 0.035 * size, 0.55)
-		burst(
+		if crumble {
+			scatter(&s, 8, 0.08, 0.28, {tau = 0.018, filter = .Low}, 250, 600, 0.1, 0.25)
+		}
+	case .Grass:
+		// A soft brush: low leafy noise coming in slowly, a few blades.
+		s.attack *= 2
+		burst(&s, {tau = 0.050 * size, filter = .Low, freq = 900 * r, gain = 0.8})
+		burst(&s, {tau = 0.040 * size, filter = .Low, freq = 170 * r, gain = 0.5})
+		scatter(
 			&s,
-			{start = 0, tau = 0.012 * size, filter = .Band, freq = 1200 * r, q = 2, gain = 0.6},
+			int(10 * grains + 0.5),
+			0.0,
+			0.18,
+			{tau = 0.010, filter = .Band, q = 0.8},
+			900,
+			2200,
+			0.12,
+			0.25,
 		)
+	case .Sand:
+		// A hush of grains.
+		s.attack *= 1.5
+		burst(&s, {tau = 0.050 * size, filter = .Low, freq = 700 * r, gain = 0.5})
+		scatter(
+			&s,
+			int(24 * grains + 1),
+			0.0,
+			0.2 * size,
+			{tau = 0.008, filter = .Band, q = 0.7},
+			700,
+			2000,
+			0.12,
+			0.3,
+		)
+	case .Gravel:
+		// Small stones shifting.
+		burst(&s, {tau = 0.040 * size, filter = .Low, freq = 250 * r, gain = 0.7})
+		scatter(
+			&s,
+			int(14 * grains + 1),
+			0.02,
+			0.16 * size,
+			{tau = 0.006, filter = .Band, q = 1.5},
+			500,
+			1500,
+			0.2,
+			0.45,
+		)
+		if crumble {
+			scatter(
+				&s,
+				14,
+				0.06,
+				0.3,
+				{tau = 0.008, filter = .Band, q = 1.5},
+				400,
+				1100,
+				0.15,
+				0.35,
+			)
+		}
+	case .Glass:
+		// A clink: short inharmonic partials (no two in tune), a soft tick, then
+		// shards; the brightest of the materials, but no hiss.
+		for ratio, i in ([?]f32{1, 1.47, 2.09, 2.56, 3.31}) {
+			tone(&s, 1500 * r * ratio, (0.045 - 0.007 * f32(i)) * size, 1 / (1 + 0.5 * f32(i)))
+		}
+		burst(&s, {tau = 0.003, filter = .Band, freq = 2500, q = 1.5, gain = 0.5})
+		scatter(
+			&s,
+			int(7 * grains),
+			0.01,
+			0.16 * size,
+			{tau = 0.010, filter = .Band, q = 4},
+			2500,
+			5000,
+			0.15,
+			0.35,
+		)
+	case .Wood:
+		// A low knock: two body resonances, a soft tap, a splinter or two.
+		tone(&s, 200 * r, 0.050 * size, 1)
+		tone(&s, 470 * r, 0.030 * size, 0.5)
+		burst(&s, {tau = 0.010 * size, filter = .Band, freq = 800 * r, q = 1.5, gain = 0.5})
 		scatter(
 			&s,
 			int(3 * grains),
 			0.01,
 			0.10 * size,
-			{tau = 0.006, filter = .Band, q = 4},
-			1800,
-			3200,
-			0.15,
-			0.3,
+			{tau = 0.006, filter = .Band, q = 3},
+			1200,
+			2200,
+			0.12,
+			0.25,
 		)
+		if crumble {
+			scatter(&s, 5, 0.06, 0.22, {tau = 0.012, filter = .Band, q = 2}, 400, 900, 0.12, 0.25)
+		}
 	case .Snow:
 		// A muffled crunch: soft grains under a low thump, no highs.
-		burst(&s, {start = 0, tau = 0.045 * size, filter = .Low, freq = 500 * r, gain = 0.7})
+		s.attack *= 1.5
+		burst(&s, {tau = 0.045 * size, filter = .Low, freq = 450 * r, gain = 0.7})
 		scatter(
 			&s,
 			int(22 * grains + 1),
 			0.0,
 			0.18 * size,
 			{tau = 0.010, filter = .Low},
-			600,
-			1400,
+			500,
+			1200,
 			0.2,
 			0.4,
 		)
 	case .Metal:
-		// A struck plate: a clank of inharmonic partials that ring on longer than
-		// stone's, a hard tick, no grit.
-		for ratio, i in ([?]f32{1, 2.76, 5.4, 8.93}) {
-			tone(&s, 620 * r * ratio, (0.16 - 0.03 * f32(i)) * size, 1 / (1 + 0.6 * f32(i)))
+		// A muted plate: a clank of inharmonic partials damped soon, a soft tick.
+		for ratio, i in ([?]f32{1, 2.76, 5.4}) {
+			tone(&s, 520 * r * ratio, (0.08 - 0.02 * f32(i)) * size, 1 / (1 + 0.8 * f32(i)))
 		}
-		burst(&s, {start = 0, tau = 0.004, filter = .Band, freq = 3000 * r, q = 2, gain = 0.5})
-		burst(&s, {start = 0, tau = 0.020 * size, filter = .Low, freq = 300 * r, gain = 0.4})
+		burst(&s, {tau = 0.004, filter = .Band, freq = 1800 * r, q = 1.5, gain = 0.4})
+		burst(&s, {tau = 0.020 * size, filter = .Low, freq = 260 * r, gain = 0.5})
 	}
 	return finish(&s, peak, allocator)
 }
@@ -255,6 +293,7 @@ player_sound :: proc(p: Player_Sound, variant: int, allocator := context.allocat
 	r := rand_range(&s.rng, 0.92, 1.08)
 	switch p {
 	case .Land:
+		s.attack = 0.004 // a thud, not a slap
 		burst(&s, {start = 0, tau = 0.070, filter = .Low, freq = 140 * r, gain = 1})
 		burst(&s, {start = 0, tau = 0.030, filter = .Low, freq = 420 * r, gain = 0.6})
 		scatter(&s, 3, 0.005, 0.05, {tau = 0.01, filter = .Band, q = 1.5}, 300, 800, 0.2, 0.3)
@@ -520,10 +559,13 @@ MAX_SECONDS :: 1
 
 @(private)
 Synth :: struct {
-	buf: [RATE * MAX_SECONDS]f32,
-	len: int, // samples used so far
-	rng: u32,
+	buf:    [RATE * MAX_SECONDS]f32,
+	len:    int, // samples used so far
+	rng:    u32,
+	attack: f32, // seconds a burst or tone takes to come in (0: ATTACK)
 }
+
+ATTACK :: 0.0015 // seconds: a millisecond and a half: sharp, not clicking
 
 @(private)
 Filter :: enum u8 {
@@ -533,7 +575,8 @@ Filter :: enum u8 {
 	Band,
 }
 
-// Burst: noise, sharply on, decaying (time constant tau), filtered.
+// Burst: noise, coming in over the synth's attack, decaying (time constant
+// tau), filtered.
 @(private)
 Burst :: struct {
 	start:  f32, // seconds
@@ -558,7 +601,7 @@ burst :: proc(s: ^Synth, b: Burst) {
 	case .Band:
 		f = bandpass(b.freq, b.q)
 	}
-	attack := f32(0.0015) // a millisecond and a half: sharp, not clicking
+	attack := s.attack if s.attack > 0 else ATTACK
 	for i in first ..< n {
 		t := f32(i - first) / RATE
 		env := min(t / attack, 1) * math.exp(-t / b.tau)
@@ -589,19 +632,22 @@ scatter :: proc(
 	}
 }
 
-// tone: a sine that rings down (glass, metal).
+// tone: a sine that rings down (glass, metal, wood), coming in over the
+// synth's attack (no sine starts at full height: that is a click).
 @(private)
 tone :: proc(s: ^Synth, freq, tau, gain: f32) {
 	n := min(int(6 * tau * RATE), len(s.buf))
 	phase := rand_range(&s.rng, 0, math.TAU)
+	attack := max(s.attack, ATTACK)
 	for i in 0 ..< n {
 		t := f32(i) / RATE
-		s.buf[i] += math.sin(phase + math.TAU * freq * t) * math.exp(-t / tau) * gain
+		env := min(t / attack, 1) * math.exp(-t / tau)
+		s.buf[i] += math.sin(phase + math.TAU * freq * t) * env * gain
 	}
 	s.len = max(s.len, n)
 }
 
-// finish scales the sound to peak, fades its last milliseconds and crushes
+// finish scales the sound to peak, fades its last milliseconds and rounds
 // it to BITS bits; the result is a copy.
 @(private)
 finish :: proc(s: ^Synth, peak: f32, allocator := context.allocator) -> []f32 {

@@ -17,34 +17,36 @@ SPECTRUM_RATE :: 48000
 SPECTRUM_BANDS :: 24 // third octaves from 50 Hz to 12.5 kHz
 SPECTRUM_FLOOR :: -60.0 // dB under the loudest band: quieter bands are not compared
 
-// EFFECTS_BANDS: dB of each band, from the mix before streams (what the
-// listener heard from the one-shot voices alone); see effects_scene.
+// EFFECTS_BANDS: dB of each band, from the mix of the one-shot voices alone; see
+// effects_scene. Taken again when the block sounds were made softer (client/sfx: a few
+// milliseconds' attack, their noise filtered lower, rounded to 12 bits, a break that
+// crumbles), which took 10 to 15 dB out of the bands above 3 kHz on purpose.
 @(rodata)
 EFFECTS_BANDS := [SPECTRUM_BANDS]f64 {
-	-51.05,
-	-55.23,
-	-49.44,
-	-49.04,
-	-47.12,
-	-50.16,
-	-50.19,
-	-46.86,
-	-39.80,
-	-55.12,
-	-56.34,
-	-52.09,
-	-47.70,
-	-54.31,
-	-51.99,
-	-48.34,
-	-41.83,
+	-49.37,
+	-53.11,
+	-48.98,
+	-48.85,
+	-46.48,
+	-46.46,
+	-39.35,
+	-47.59,
+	-49.50,
+	-50.02,
 	-47.83,
-	-43.52,
-	-51.82,
-	-47.48,
-	-55.93,
-	-54.65,
-	-79.76,
+	-52.50,
+	-50.45,
+	-49.49,
+	-50.71,
+	-43.04,
+	-52.97,
+	-47.24,
+	-57.78,
+	-49.34,
+	-61.45,
+	-57.56,
+	-84.39,
+	-130.35,
 }
 
 @(private = "file")

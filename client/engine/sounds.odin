@@ -32,6 +32,7 @@ Sound_Kind :: enum u8 {
 	Reload,
 	Gate_Open, // a gate's void gathering (gates.odin)
 	Made, // the player made something (feel.odin's made)
+	Tap, // a swing at a block being broken (break_tap): its step, softly
 }
 
 Sound_Event :: struct {
@@ -64,10 +65,12 @@ Sound_Bank :: struct {
 	bed:          [sfx.Bed]audio.Sound_Id, // the ambience's loops
 	thunder:      [sfx.VARIANTS]audio.Sound_Id,
 	samples:      [dynamic][]f32, // owned
+	last_step:    int, // the variant the last step or tap played (the next plays another)
 }
 
 SOUND_RANGE :: 24 // blocks: further sounds are not heard
 STRIDE :: 1.8 // blocks walked per footstep
+STEP_VOLUME :: 0.45 // a footstep's loudness, against a break's 1: well under the ambience
 LAND_MIN_SPEED :: 5 // blocks/s: softer landings make no sound
 LAND_LOUD_SPEED :: 20 // ... and this hard is as loud as it gets
 
@@ -417,9 +420,20 @@ sounds_play :: proc(
 					{sound = id, gain = gain, pitch = pitch, bus = .World, cutoff = cutoff},
 				)
 			}
-		case .Break, .Place, .Step:
+		case .Break, .Place, .Step, .Tap:
 			action: sfx.Action =
 				.Break if e.kind == .Break else (.Place if e.kind == .Place else .Step)
+			if action == .Step {
+				// No two steps alike: another variant than the last, a little softer or
+				// louder, duller or brighter, so a walk does not tick like a clock.
+				rng := base.cosmetic_rng()
+				variant =
+					(b.last_step + 1 + base.rng_int_max(rng, sfx.VARIANTS - 1)) % sfx.VARIANTS
+				b.last_step = variant
+				gain *= base.rng_f32_range(rng, 0.8, 1)
+				bright := base.rng_f32_range(rng, 2500, 6000)
+				cutoff = bright if cutoff == 0 else min(cutoff, bright)
+			}
 			id, ok := block_sound(b, reg, e.block, action, variant)
 			if !ok {continue}
 			audio.play(m, {sound = id, gain = gain, pitch = pitch, bus = .World, cutoff = cutoff})
@@ -452,7 +466,7 @@ movement_sounds :: proc(s: ^Session) {
 		s.walked += f32(math.sqrt(d.x * d.x + d.z * d.z))
 		if s.walked >= STRIDE {
 			s.walked -= STRIDE
-			if solid {append(&s.sounds, Sound_Event{.Step, under, feet, 1, {}})}
+			if solid {append(&s.sounds, Sound_Event{.Step, under, feet, STEP_VOLUME, {}})}
 		}
 	}
 }

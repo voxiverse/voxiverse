@@ -4,8 +4,8 @@ import "core:math"
 
 // Ambience: long loops for the beds the client's atmosphere mixes by where
 // the listener is (client/atmosphere), and thunder. Synthesized like the
-// effects, at RATE, but not crushed to BITS: a bed plays for minutes at a
-// low level, where 8-bit grain would be a hiss of its own.
+// effects, at RATE, but not rounded to BITS: a bed plays for minutes at a
+// low level, where any grain would be a hiss of its own.
 //
 // A bed is made a little longer than LOOP_SECONDS and its tail is faded into
 // its head with equal power, so it loops without a seam; its tones have a
