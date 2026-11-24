@@ -97,7 +97,9 @@ night. An outpost goes into the logbook of whoever places or claims it (the jour
 and the map show it). Only its placer may take a beacon down; a world keeps 32 at most. The crafting screen
 lists the world's outposts (yours, and which is your respawn), and `/outposts` says them in
 the chat. A death with no outpost (or one whose beacon is gone) stands you at the world's
-spawn as before.
+spawn as before on the home world (its gate stands before it), and on a gate world before the
+gate travellers arrive at, on its platform (its spawn may be thousands of blocks from any
+gate), the death screen saying how far; one who leaves on a gate world comes back there.
 
 **The pressure.** The night's creatures (below) and a death that drops what you carry, far
 from where you were: an outpost is where you stand again and where nothing comes for you.

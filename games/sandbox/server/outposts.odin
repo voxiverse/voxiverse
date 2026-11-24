@@ -7,6 +7,7 @@ import "core:math"
 
 import "common:game"
 import "common:starmap"
+import "common:worldgen"
 import "games:sandbox"
 import "server:core"
 
@@ -186,20 +187,48 @@ outpost_home :: proc(s: ^core.Server, c: ^core.Client) -> (core.Place, bool) {
 }
 
 // outpost_respawn_where: where c, just dead, will stand again, as its death screen says it
-// (the respawn_where hook): at its outpost, and how far off; "" for the world's spawn.
+// (the respawn_where hook): at its outpost, and how far off; else, on a world other than home,
+// before the gate travellers arrive at there (gate_respawn); "" for the world's spawn.
 outpost_respawn_where :: proc(s: ^core.Server, c: ^core.Client) -> string {
 	place, ok := outpost_home(s, c)
-	if !ok {return ""}
+	if !ok {
+		gate, by_gate := gate_respawn(s, c.world)
+		if !by_gate {return ""}
+		d := gate.position - c.player.position
+		return fmt.tprintf(
+			"this world's gate, %d blocks away",
+			int(math.sqrt(d.x * d.x + d.z * d.z)),
+		)
+	}
 	if place.world != c.world.address {return "your outpost, on another world"}
 	d := place.position - c.player.position
 	return fmt.tprintf("your outpost, %d blocks away", int(math.sqrt(d.x * d.x + d.z * d.z)))
 }
 
-// outpost_respawned: one who died stands at its outpost, when it has one.
+// outpost_respawned: one who died stands at its outpost, when it has one; else, on a world
+// other than home, before its arrival gate, the way home (gate_respawn), not at the world's
+// spawn, which on a gate world lies thousands of blocks from any gate.
 outpost_respawned :: proc(s: ^core.Server, c: ^core.Client) {
 	place, ok := outpost_home(s, c)
+	if !ok {place, ok = gate_respawn(s, c.world)}
 	if !ok {return}
 	if why := core.go_to(s, c, place); why != "" {core.notice(s, c, why)}
+}
+
+// gate_respawn: where one who dies on w with no outpost stands again: before the gate
+// travellers arrive at (on its platform, facing out, as a traveller arrives); false on the
+// home world (its spawn is the way: the home gate stands before it) and on a world with no
+// gate.
+gate_respawn :: proc(s: ^core.Server, w: ^core.World) -> (core.Place, bool) {
+	if w == s.home || w.generator != .Earth {return {}, false}
+	gate, has := beyond_of(w).gate.? // (its places' plan found it, on a gate world of a class)
+	if !has {
+		gen := worldgen.generator_make(w.generator, terrain_seed(w), s.registry, w.params)
+		gate, has = worldgen.arrival_gate(&gen)
+	}
+	if !has {return {}, false}
+	front, yaw := worldgen.gate_front(gate)
+	return {w.address, front, {yaw, 0}}, true
 }
 
 // outposts_shown: the outposts of c's world, as c is shown them.

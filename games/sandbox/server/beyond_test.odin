@@ -2,6 +2,7 @@ package sandbox_server
 
 import "core:log"
 import "core:math"
+import "core:os"
 import "core:testing"
 
 import "common:game"
@@ -13,7 +14,8 @@ import "server:playtest"
 // The gate worlds' places (beyond.odin): planned for many worlds of each class, each clear of
 // the arrival gate and its platform, of each other and of the spawn, the same each time from
 // the same address; built on a running sandbox as a player comes near, in its logbook,
-// humming, its cache's loot the class's, its machines posted.
+// humming, its cache's loot the class's, its machines posted; and one who dies on a gate world
+// with no outpost standing again before its gate, one who leaves there coming back there.
 
 BEYOND_UNIVERSE :: 4242 // the universe seed the plans are made in
 
@@ -153,7 +155,8 @@ test_beyond_plan_over_many_worlds :: proc(t: ^testing.T) {
 	}
 }
 
-// beyond_session: a universe of the sandbox (in dir, if any), its creatures coming by
+// beyond_session: a universe of the sandbox (g: GAME, named by the caller, whose frame holds
+// what its slices point at; in dir, if any), its creatures coming by
 // themselves if natural, the local player joined, then gone by /travel to the first world of
 // class and standing in creative a little way off its arrival gate; false (the test told)
 // when it never was.
@@ -161,6 +164,7 @@ test_beyond_plan_over_many_worlds :: proc(t: ^testing.T) {
 beyond_session :: proc(
 	t: ^testing.T,
 	sess: ^core.Session,
+	g: core.Game,
 	class: worldgen.World_Class,
 	natural := false,
 	dir := "",
@@ -169,7 +173,7 @@ beyond_session :: proc(
 	ok: bool,
 ) {
 	config := core.Config {
-		game              = GAME,
+		game              = g,
 		seed              = BEYOND_UNIVERSE,
 		view_radius       = 3,
 		view_height       = 2,
@@ -217,9 +221,10 @@ place_built :: proc(data: rawptr) -> bool {
 // loot beside the remains' own; the plan is remembered in the world's file.
 @(test)
 test_beyond_moon_relay_built :: proc(t: ^testing.T) {
+	g := GAME
 	sess := new(core.Session)
 	defer free(sess)
-	w, ok := beyond_session(t, sess, .Moon, natural = true)
+	w, ok := beyond_session(t, sess, g, .Moon, natural = true)
 	if !ok {return}
 	defer core.session_stop(sess)
 	s := &sess.h.srv
@@ -240,14 +245,14 @@ test_beyond_moon_relay_built :: proc(t: ^testing.T) {
 	   !testing.expect(t, built, "the relay was never built") {
 		return
 	}
-	g := survival_of(s)
+	sv := survival_of(s)
 	vaults, caches := 0, 0
 	for x in p.at.lo.x ..= p.at.hi.x {
 		for z in p.at.lo.y ..= p.at.hi.y {
 			for y in p.floor ..= p.floor + 4 {
 				b, _ := core.block_at(w, {x, y, z})
-				if b == g.relic_vault {vaults += 1}
-				if b == g.remains_cache {caches += 1}
+				if b == sv.relic_vault {vaults += 1}
+				if b == sv.remains_cache {caches += 1}
 			}
 		}
 	}
@@ -269,11 +274,87 @@ test_beyond_moon_relay_built :: proc(t: ^testing.T) {
 	moon := 0
 	for _ in 0 ..< 40 {
 		loot: [MAX_LOOT]game.Stack
-		n := remains_loot(g, &state(s).rng, false, &loot, .Moon)
+		n := remains_loot(sv, &state(s).rng, false, &loot, .Moon)
 		testing.expect_value(t, n, 1 + CACHE_ROLLS + 1)
 		last := loot[n - 1].item
-		for l in CLASS_LOOT[.Moon] {if g.loot[l.what] == last {moon += 1}}
+		for l in CLASS_LOOT[.Moon] {if sv.loot[l.what] == last {moon += 1}}
 	}
 	testing.expect_value(t, moon, 40)
 	testing.expect_value(t, be.built_count, 1)
+}
+
+// One who dies on a gate world with no outpost stands again before its arrival gate (the
+// death screen says so), not at the world's spawn thousands of blocks off.
+@(test)
+test_beyond_death_by_the_gate :: proc(t: ^testing.T) {
+	g := GAME
+	sess := new(core.Session)
+	defer free(sess)
+	w, ok := beyond_session(t, sess, g, .Temperate)
+	if !ok {return}
+	defer core.session_stop(sess)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	core.game_mode(s, c, "survival")
+	where_, by_gate := gate_respawn(s, w)
+	if !testing.expect(t, by_gate, "no gate to stand by") {return}
+	testing.expect(t, outpost_respawn_where(s, c) != "", "the death screen says the world's spawn")
+	core.damage(s, c, 1000, {kind = .Explosion})
+	testing.expect(t, c.dead)
+	testing.expect(t, core.respawn(s, c))
+	core.harness_step(&sess.h, 60)
+	testing.expect(t, c.world == w, "stood again in another world")
+	d := c.player.position - where_.position
+	testing.expectf(
+		t,
+		d.x * d.x + d.z * d.z < 4 * 4,
+		"stood again at %v, not by the gate %v",
+		c.player.position,
+		where_.position,
+	)
+	// On the home world it is the world's spawn as before.
+	_, home_gate := gate_respawn(s, s.home)
+	testing.expect(t, !home_gate)
+}
+
+// One who leaves while on a gate world comes back there, where it was, when the universe
+// opens again.
+@(test)
+test_beyond_left_on_a_gate_world :: proc(t: ^testing.T) {
+	g := GAME
+	dir := "build/test/beyond_left"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	at: [3]f64
+	address: starmap.Address
+	{
+		sess := new(core.Session)
+		defer free(sess)
+		w, ok := beyond_session(t, sess, g, .Frozen, dir = dir)
+		if !ok {return}
+		c := &sess.h.srv.clients[0]
+		core.harness_step(&sess.h, 60)
+		at, address = c.player.position, w.address
+		core.session_stop(sess)
+	}
+	config := core.Config {
+		game        = g,
+		seed        = BEYOND_UNIVERSE,
+		view_radius = 3,
+		view_height = 2,
+		max_players = 1,
+		rules       = game.rules_still(),
+		save_dir    = dir,
+	}
+	sess := new(core.Session)
+	defer free(sess)
+	if !testing.expect(t, core.session_start(sess, {}, false, with = config), "no server") {return}
+	defer core.session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^core.Session)(data).mirror.welcomed}
+	if _, joined := core.harness_step_until(&sess.h, welcomed, sess, 900);
+	   !testing.expect(t, joined) {return}
+	c := &sess.h.srv.clients[0]
+	testing.expect_value(t, c.world.address, address)
+	d := c.player.position - at
+	testing.expectf(t, d.x * d.x + d.z * d.z < 1, "back at %v, left at %v", c.player.position, at)
 }
