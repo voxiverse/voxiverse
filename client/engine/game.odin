@@ -560,10 +560,11 @@ game_command :: proc(s: ^Session, name: string) -> (^Command_Spec, bool) {
 
 // world_look: the look the world in view is drawn in: the game's (Game.look) and, on a
 // world of a class (common/worldgen/classes.odin), the class's sky where the game's look
-// leaves the sky its own: the time of day's zenith and horizon tinted by the class's, and
-// no clouds where it has none. The class comes with the world's generator parameters
-// (the Variables state), so a world of no class, or of another generator, is drawn as
-// the game says.
+// leaves the sky its own: by day its zenith, horizon and clouds, blended into the time of
+// day's at dusk and dawn so the night is the night; stars by day under an airless sky;
+// no clouds where it has none. The class comes with the world's generator parameters (the
+// Variables state), so a world of no class, or of another generator, is drawn as the
+// game says.
 world_look :: proc(s: ^Session) -> render.Look {
 	look := s.game.look
 	if !s.has_worldgen {return look}
@@ -571,8 +572,16 @@ world_look :: proc(s: ^Session) -> render.Look {
 	if class == .None {return look}
 	d := &worldgen.CLASSES[class]
 	sky := render.sky_at(render.look_time(look, game.time_of_day(s.clock)))
-	if look.zenith == {} && d.zenith != {} {look.zenith = sky.zenith * d.zenith}
-	if look.horizon == {} && d.horizon != {} {look.horizon = sky.horizon * d.horizon}
+	noon := render.sky_at(0.5)
+	day := clamp(sky.sky_light.b / noon.sky_light.b, 0, 1) // 1 by day, the moonlight's at night
+	day = clamp((day - 0.22) / 0.78, 0, 1)
+	blend :: proc(time_of_day, class: [3]f32, day: f32) -> [3]f32 {
+		return time_of_day + (class - time_of_day) * day
+	}
+	if look.zenith == {} && d.zenith != {} {look.zenith = blend(sky.zenith, d.zenith, day)}
+	if look.horizon == {} && d.horizon != {} {look.horizon = blend(sky.horizon, d.horizon, day)}
+	if look.cloud == {} && d.cloud != {} {look.cloud = blend(sky.cloud, d.cloud, day)}
+	if look.stars == 0 {look.stars = d.stars}
 	look.no_clouds ||= d.no_clouds
 	return look
 }

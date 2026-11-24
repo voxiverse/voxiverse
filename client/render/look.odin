@@ -10,6 +10,8 @@ Look :: struct {
 	zenith:       [3]f32, // the sky overhead (linear rgb); zero: the time of day's
 	horizon:      [3]f32, // the sky at the horizon, which the fog fades into; zero: the time of day's
 	sun_light:    [3]f32, // what full sky light looks like on blocks and figures; zero: the time of day's
+	cloud:        [3]f32, // the clouds' colour (linear rgb); zero: the time of day's
+	stars:        f32, // the stars are at least this bright (0..1), by day too: an airless sky; 0: the time of day's
 	lamp_light:   [3]f32, // what full block light looks like (a lamp, magma); zero: LAMP_LIGHT, warm
 	ambient:      [3]f32, // light added everywhere, in the dark too; zero: none
 	figure_light: [3]f32, // the least light creatures, players and items are drawn in, so they read in the dark; zero: FIGURE_LIGHT
@@ -50,6 +52,8 @@ look_sky :: proc(look: Look, world: f64) -> Sky {
 	if look.zenith != {} {sky.zenith = look.zenith}
 	if look.horizon != {} {sky.horizon = look.horizon}
 	if look.sun_light != {} {sky.sky_light = look.sun_light}
+	if look.cloud != {} {sky.cloud = look.cloud}
+	sky.stars = max(sky.stars, look.stars)
 	if look.no_sun {
 		sky.stars = 0
 		sky.glow_k = 0
