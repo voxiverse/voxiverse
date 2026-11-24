@@ -459,7 +459,7 @@ The types these name:
 - `INVENTORY_SLOT :: ui.Vec2 {...}`: a slot's size in a screen (the hotbar's is engine.SLOT_SIZE).
 - `item_tooltip :: proc(ctx: ^ui.Context, reg: ^game.Registry, stack: game.Stack, compared: game.Stack = {}, worn := false, beside: Maybe(ui.Rect) = nil)`: an item's tooltip by the pointer, or beside a slot (the pad's cursor), on the top layer on the panels' colour, opaque, framed in its rarity's colour: its name in its rarity's colour, its type line, its stats (beside each, how it differs from `compared`'s, green for better and red for worse), what it grants, its description, and "Compared with <item>" or "Equipped" (worn: it is the stack worn or held).
 - `slot_tooltip :: proc(ctx: ^ui.Context, reg: ^game.Registry, inv: ^game.Inventory, slot: int, beside: Maybe(ui.Rect) = nil)`: the tooltip of an inventory's slot (a chest's too), compared with what is worn or held.
-- `item_title :: proc(reg: ^game.Registry, item: game.Item) -> string`: an item's name as players read it ("rocket launcher").
+- `item_title :: proc(reg: ^game.Registry, item: game.Item) -> string`: an item's name as players read it ("rocket launcher"; a pack's without its namespace: "flint pick", not "sandbox:flint_pick").
 - `item_rarity :: proc(reg: ^game.Registry, item: game.Item) -> game.Rarity`: an item's rarity (common for an item that names none, or no item).
 - `rarity_color :: proc(t: ^ui.Theme, r: game.Rarity) -> ui.Color`: the theme's colour for a rarity (an item's name, its slot's frame).
 - `pane :: proc(ctx: ^ui.Context, r: ui.Rect, title: string) -> ui.Rect`: a titled part of a screen (the bag, the equipment, a chest's slots, a list): its frame and title; what is left inside for its content.

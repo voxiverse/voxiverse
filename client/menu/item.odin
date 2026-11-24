@@ -19,9 +19,12 @@ INVENTORY_SLOT :: ui.Vec2{44, 44}
 TOOLTIP_WIDTH :: 300 // a tooltip's most width: its description wraps to it
 PANE_HEADING :: 26 // a pane's title row
 
-// item_title: an item's name as players read it ("rocket launcher").
+// item_title: an item's name as players read it ("rocket launcher"; a pack's without its
+// namespace: "flint pick", not "sandbox:flint_pick").
 item_title :: proc(reg: ^game.Registry, item: game.Item) -> string {
-	name, _ := strings.replace_all(game.item_name(reg, item), "_", " ", context.temp_allocator)
+	id := game.item_name(reg, item)
+	if at := strings.index_byte(id, ':'); at >= 0 {id = id[at + 1:]}
+	name, _ := strings.replace_all(id, "_", " ", context.temp_allocator)
 	return name
 }
 
