@@ -649,8 +649,9 @@ Before a slam its core blazes and its arms rise (the look `charging`); the slam 
 fighter within its reach, half as hard at its edge; after it the custodian stands still with
 its casing open, venting (3 seconds, 4 in the third phase), when blows get through it best.
 At most four scuttlers it called are out at once. Each fighter is shown the fight
-(`sandbox.delve`): a line across the top naming it, its phase, its health and whether its
-casing is open, the line's foot a bar of its health in the target frame's colours.
+(`sandbox.delve`): the foe's bar under the compass (`engine.boss_bar`) naming it, its phase
+and its health, with a line under it while its casing is open; the target frame leaves the
+custodian to the bar (`engine.hud_boss`), so it is not shown twice.
 
 The fight is won when the custodian dies: every fighter in the hall has the win
 (`sandbox:delve`, its quest's goal, and the win's experience), the seal and the reward vault's

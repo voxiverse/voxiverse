@@ -8,6 +8,7 @@ import "client:menu"
 import "client:playtest"
 import "client:ui"
 import "common:game"
+import "games:sandbox"
 import sandbox_server "games:sandbox/server"
 import "server:core"
 
@@ -52,31 +53,51 @@ test_sandbox_ruin_bar :: proc(t: ^testing.T) {
 	testing.expect(t, playtest.drawn(rig, "RUIN   wave 2 of 5 held   the next in 6 s"))
 }
 
-// A delve's custodian shows as a line across the top with its health in it while the
-// player fights it, the line saying when its casing is open; nothing shows while it fights
-// none.
+// A delve's custodian shows as its bar under the compass (its name, its phase, its health,
+// a line under it while its casing is open) while the player fights it, and the target
+// frame leaves it to the bar, so it is not shown twice; nothing shows while it fights none.
 @(test)
 test_sandbox_delve_boss_bar :: proc(t: ^testing.T) {
 	rig := new(playtest.Rig)
 	defer free(rig)
 	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
 	defer playtest.stop(rig)
+	s := rig.s
 	testing.expect(t, !playtest.drawn(rig, "THE CUSTODIAN"), "a bar with no fight")
-	view(rig.s).delve = {
+	custodian, known := game.registry_kind(s.reg, CUSTODIAN)
+	testing.expect(t, known)
+	s.entities[999_999] = {
+		kind       = custodian,
+		health     = 200,
+		max_health = 360,
+	}
+	s.hud.aimed = 999_999
+	testing.expect(t, playtest.drawn(rig, "200 / 360"), "no target frame out of a fight")
+	fight := sandbox.Delve_Fight {
 		phase  = 2,
 		phases = 3,
 		health = 200,
 		most   = 360,
 	}
-	testing.expect(t, playtest.drawn(rig, "THE CUSTODIAN   phase 2 of 3   200 / 360"))
-	view(rig.s).delve.open = true
-	testing.expect(
-		t,
-		playtest.drawn(
-			rig,
-			"THE CUSTODIAN   phase 2 of 3   200 / 360   its casing is open: strike now",
-		),
-	)
+	delve_received(s, &fight)
+	testing.expect(t, playtest.drawn(rig, "THE CUSTODIAN"))
+	testing.expect(t, playtest.drawn(rig, "phase 2 of 3"))
+	shown := 0
+	playtest.draw(rig)
+	for x in rig.app.ui.texts {if x == "200 / 360" {shown += 1}}
+	bar := rig.app.ui.top_claimed
+	ui.end_frame(&rig.app.ui)
+	testing.expect_value(t, shown, 1) // (the bar's, not the target frame's too)
+	testing.expect(t, bar.h > 0, "its bar not claimed across the top")
+	testing.expect(t, playtest.drawn_within(rig, 120), "its bar over what is above the game's")
+	testing.expect(t, !playtest.drawn(rig, "its casing is open"))
+	fight.open = true
+	delve_received(s, &fight)
+	testing.expect(t, playtest.drawn(rig, "its casing is open: strike now"))
+	fight = {}
+	delve_received(s, &fight)
+	testing.expect(t, !playtest.drawn(rig, "THE CUSTODIAN"), "a bar after the fight")
+	testing.expect(t, playtest.drawn(rig, "200 / 360"), "no target frame after the fight")
 }
 
 // The crafting screen: its action opens it; every recipe shows what it makes and what it

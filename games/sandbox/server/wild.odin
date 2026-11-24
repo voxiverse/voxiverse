@@ -846,6 +846,10 @@ wild_harming :: proc(s: ^core.Server, hm: ^core.Harming) {
 	}
 }
 
+// ROW_GAP: blocks between two creatures `/creatures` sets down in a row (a carapace's plate
+// stands out of its box).
+ROW_GAP :: 1.0
+
 // creatures_command: `/creatures <group>|all [still]` sets the roster's creatures of a
 // group (WILD_GROUPS) down in a row in front of the player (north of it), facing it; still,
 // they stand for a picture, showing how each looks at its most telling (a bird aloft, a
@@ -872,12 +876,16 @@ creatures_command :: proc(s: ^core.Server, c: ^core.Client, args: []string) -> b
 	g := state(s)
 	w := c.world
 	width := 0.0
-	for which in kinds {width += f64(game.kind_info(s.registry, g.wild[which]).box[0]) + 0.5}
+	for which in kinds {width += f64(game.kind_info(s.registry, g.wild[which]).box[0]) + ROW_GAP}
 	x := c.player.position.x - width / 2
 	for which in kinds {
 		box := game.kind_info(s.registry, g.wild[which]).box
-		at := [3]f64{x + f64(box[0]) / 2 + 0.25, c.player.position.y, c.player.position.z - 8}
-		x += f64(box[0]) + 0.5
+		at := [3]f64 {
+			x + f64(box[0]) / 2 + ROW_GAP / 2,
+			c.player.position.y,
+			c.player.position.z - 8,
+		}
+		x += f64(box[0]) + ROW_GAP
 		h := core.entity_spawn(w, g.wild[which], at, false)
 		if h == 0 {
 			core.notice(s, c, "The world is full")

@@ -50,12 +50,12 @@ walk_third: look -90 0; camera behind 30; set debug.own_stride 1.2
 swing_third: look -90 0; camera behind 30; set debug.swing_at 0.14
 # The sandbox's creatures in a row on a cleared field (`/creatures all still`: each
 # standing still as it looks at its most telling, the fliers held aloft), from the
-# wildlife on the left to the giant on the right.
-creatures: @1280x720 /fill 6 10 -12 44 10 18 grass; /fill 6 11 -12 44 28 18 air; ticks 20; wait_world; /tp 25 11 4 0 0; ticks 10; /creatures all still; ticks 30; /tp 25 11 26 0 0; ticks 30; wait_world; camera at 26 14.5 11 0 7
+# wildlife on the left to the delves' machines on the right, the custodian last and whole.
+creatures: @1280x720 /fill 6 10 -12 44 10 18 grass; /fill 6 11 -12 44 28 18 air; ticks 20; wait_world; /tp 25 11 4 0 0; ticks 10; /creatures all still; ticks 30; /tp 25 11 26 0 0; ticks 30; wait_world; camera at 27.5 14.5 17 0 5
 # The gate worlds' own creatures in a row on the same field (`/creatures natives still`:
 # games/sandbox/pack/data/entities/natives.json), each as it looks at its most telling (a
 # guard warning, a flier aloft, the sporemaw risen).
-natives: @1280x720 /fill 6 10 -12 44 10 18 grass; /fill 6 11 -12 44 28 18 air; ticks 20; wait_world; /tp 25 11 4 0 0; ticks 10; /creatures natives still; ticks 30; /tp 25 11 26 0 0; ticks 30; wait_world; camera at 25.5 12.6 4.5 0 2
+natives: @1280x720 /fill 6 10 -12 44 10 18 grass; /fill 6 11 -12 44 28 18 air; ticks 20; wait_world; /tp 25 11 4 0 0; ticks 10; /creatures natives still; ticks 30; /tp 25 11 26 0 0; ticks 30; wait_world; camera at 25.5 12.6 7 0 2
 # The player interfaces (client/hud, client/menu), at 1280x720 in survival: the HUD with
 # jump boots and the feather charm put on in the inventory (shift-clicks) and the rifle in
 # hand, `ticks` letting the pickup feed's lines go (the target frame is a unit test's);
@@ -136,10 +136,13 @@ world_jungle: /travel 151b0b27231e0c18-1725142119061f; wait_world; set rules.day
 # with its stair head at the player's feet on a cleared field; nothing posted in a scene but
 # the custodian): its stair head from above; its first depth's landing, lit by its one lamp,
 # from a corner; and the custodian's hall in survival, the fight on (the custodian on its feet,
-# standing still: `still`), its seal up and its line with the health bar across the top.
+# standing still: `still`), seen whole from a corner of its hall (two blocks up), its seal up
+# and its bar under the compass (the target frame leaves it to the bar); and the same in a
+# small window (640x360) with the quest tracker on, which keeps under the bar.
 delve_entrance: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /tp 9 11 -7 0 0; ticks 5; wait_world; camera at 7 18 11 30 -32
 delve_landing: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /delve go last landing; ticks 20; wait_world
-delve_boss: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7 still; ticks 90; wait_world; /gamemode survival; /delve go last hall; ticks 30; wait_world
+delve_boss: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7 still; ticks 90; wait_world; /gamemode survival; /delve go last hall; ticks 30; wait_world; /tp ~-3 ~1.8 ~-0.3 -40 -21; ticks 10; wait_world
+delve_boss_small: @640x360 set quest_tracker 1; /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7 still; ticks 90; wait_world; /gamemode survival; /delve go last hall; ticks 30; wait_world; /tp ~-3 ~1.8 ~-0.3 -40 -21; ticks 10; wait_world
 # Each world class's landmark (games/sandbox/server/beyond.odin, beyond_build.odin): the
 # class's first address, `/places view landmark` standing the player over it once planned,
 # and the ticks it takes to be built when its ground is there.
