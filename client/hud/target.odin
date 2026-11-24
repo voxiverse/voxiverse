@@ -1,10 +1,9 @@
 package hud
 
-import "core:strings"
 
 import "client:engine"
+import "client:menu"
 import "client:ui"
-import "common:game"
 
 // The target frame: the creature under the crosshair (within engine.TARGET_RANGE, in
 // sight: Hud_State.aimed), its name and its health as a bar with the number, under the
@@ -14,14 +13,6 @@ TARGET_WIDTH :: 280
 TARGET_HOLD :: 1.0
 TARGET_FADE :: 0.4
 TARGET_GAP :: 64 // under the compass, clear of a game's line across the top
-
-// creature_title: a creature's name as players read it ("shambler").
-creature_title :: proc(reg: ^game.Registry, kind: game.Kind_Id) -> string {
-	info := game.kind_info(reg, kind)
-	if info == nil {return ""}
-	name, _ := strings.replace_all(game.kind_name(info), "_", " ", context.temp_allocator)
-	return name
-}
 
 // target_frame: the frame, under top (the compass's bottom).
 target_frame :: proc(ctx: ^ui.Context, s: ^engine.Session, top: f32) {
@@ -55,7 +46,7 @@ target_frame :: proc(ctx: ^ui.Context, s: ^engine.Session, top: f32) {
 	ui.draw_text(
 		ctx,
 		ui.cut_top(&inner, t.row_height - 16),
-		creature_title(s.reg, e.kind),
+		menu.creature_name(s.reg, e.kind),
 		t.font_size,
 		t.text,
 		.Center,

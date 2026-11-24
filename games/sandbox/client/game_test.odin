@@ -1,5 +1,6 @@
 package sandbox_client
 
+import "core:strings"
 import "core:testing"
 
 import "client:engine"
@@ -122,4 +123,28 @@ test_sandbox_effect_shown :: proc(t: ^testing.T) {
 	playtest.step(rig, 31 * game.TICK_RATE)
 	testing.expect_value(t, rig.s.effect_left, 0)
 	testing.expect(t, !playtest.drawn(rig, "1 s"), "an effect past its time")
+}
+
+// The home world's creatures read well in the target frame and the journal: each a word or
+// two, no id's colon or underscore.
+@(test)
+test_sandbox_creature_names :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	reg := rig.s.reg
+	names := sandbox_server.WILD_KINDS
+	for id in names {
+		kind, ok := game.registry_kind(reg, id)
+		if !testing.expectf(t, ok, "no %s", id) {continue}
+		name := menu.creature_name(reg, kind)
+		testing.expectf(
+			t,
+			name != "" && strings.index_any(name, ":_") < 0,
+			"%s reads %q",
+			id,
+			name,
+		)
+	}
 }
