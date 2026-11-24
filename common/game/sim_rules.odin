@@ -428,7 +428,11 @@ parse_matcher_into :: proc(p: ^Rule_Parser, m: ^Rule_Matcher) -> bool {
 				fmt.aprintf("\"#%s\" is not a block tag: name a tag some pack defines", name.text),
 			)
 		}
-		for member in reg.block_tags[idx].members {set_bit(m, Block(member))}
+		// A tag's members are block types: each of their states matches.
+		for member in reg.block_tags[idx].members {
+			ty := reg.blocks.types[member]
+			for st in ty.first_state ..< ty.first_state + ty.state_count {set_bit(m, Block(st))}
+		}
 		return true
 	case .At:
 		p.pos += 1

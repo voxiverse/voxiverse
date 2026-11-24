@@ -411,3 +411,27 @@ test_attack_hunting_data :: proc(t: ^testing.T) {
 		`testpack/data/entities/k.json:3:13: attack shoot is a shooter's; add its "shot"`,
 	)
 }
+
+// A #tag matcher matches each state of every block type in the tag, by the block's number:
+// a block numbered after the base pack's many-stated ones (stairs, fences) as well as
+// grass (a tag's members are types; reading them as numbers matched fence states).
+@(test)
+test_tag_matcher_states :: proc(t: ^testing.T) {
+	reg := test_reg()
+	m, ok := matcher_compile(reg, "#voxiverse:wild_plant_soil")
+	if !testing.expect(t, ok) {return}
+	defer delete(m.bits)
+	for id in ([]string{"voxiverse:grass", "voxiverse:sand", "voxiverse:mycelium"}) {
+		b, found := registry_block(reg, id)
+		testing.expectf(t, found && rule_matcher_has(&m, b), "%s not matched", id)
+	}
+	for b in 0 ..< reg.blocks.count {
+		if !rule_matcher_has(&m, Block(b)) {continue}
+		in_tag := false
+		for x in reg.blocks.defs[reg.blocks.types[reg.blocks.type_of[b]].first_state].tags {
+			tag, _ := registry_block_tag(reg, "voxiverse:wild_plant_soil")
+			in_tag ||= i32(x) == tag
+		}
+		testing.expectf(t, in_tag, "%s matched, not in the tag", block_id(reg, Block(b)))
+	}
+}
