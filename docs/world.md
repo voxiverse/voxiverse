@@ -387,8 +387,9 @@ record, `server/core/weather.odin`). Stopping the daylight cycle stops the weath
   mist and rain bring the fog in. Rain falls as streaks and snow as flakes in the 14 blocks
   round the camera (`MAX_DROPS`, 2400, at most): one column-top look-up a column keeps them
   out from under roofs, trees and rock.
-- **Hum sources.** A game marks blocks as humming (`core.world_hum`); each player is told of
-  the nearest 16 within 96 blocks (the `Hum` records), heard as a low hum within 40.
+- **Hum sources.** A game marks blocks as humming (`core.world_hum`), and every open gate
+  hums at its middle; each player is told of the nearest 16 within 96 blocks (the `Hum`
+  records), heard as a low hum within 40.
 
 `/weather [kind|auto]` says or sets it; the visual baselines stand it at clear unless a scene
 sets another. Options' **Rain and snow** turns off the falling and the flashes (the sky still

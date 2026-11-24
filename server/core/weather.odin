@@ -14,12 +14,14 @@ import "common:worldgen"
 // set to (/weather, kept in world.cfg) and the climate where the player stands (the
 // Weather record); the client works out the rest as the server would.
 //
-// Hum sources: places a game marks as humming (world_hum: ancient machinery, a dead
-// gate), each client told of the nearest MAX_HUM_SOURCES within HUM_RANGE (the Hum
-// record), which its ambience plays as a low hum near them.
+// Hum sources: places a game marks as humming (world_hum: ancient machinery), and
+// every open gate (its opening's middle, at GATE_HUM), each client told of the nearest
+// MAX_HUM_SOURCES within HUM_RANGE (the Hum record), which its ambience plays as a
+// low hum near them.
 
 HUM_RANGE :: 96 // blocks: hum sources this near a player are sent
 CLIMATE_CELL :: 32 // blocks: a player's climate is worked out again when they cross a cell
+GATE_HUM :: 1 // an open gate's hum: the strongest
 
 // Hum_Place: a hum source of a world's.
 Hum_Place :: struct {
@@ -45,6 +47,7 @@ world_weather_set :: proc(w: ^World, kind: Maybe(game.Weather_Kind)) {
 }
 
 // world_hum: a game marks block `at` of w as humming at strength (0..1; 0 removes it).
+// (Open gates hum without it.)
 // Not saved: a game marks its places again when its world opens.
 world_hum :: proc(w: ^World, at: game.Block_Pos, strength: f32) {
 	k := clamp(strength, 0, 1)
@@ -86,22 +89,33 @@ weather_put :: proc(s: ^Server, c: ^Client) {
 	}
 	if k, forced := w.weather_forced.?; forced {rec.forced = u8(k) + 1}
 	state_put(s, c, .Weather, &rec)
-	if len(w.hums) == 0 {return}
+	if len(w.hums) == 0 && len(w.gates) == 0 {return}
 	Near :: struct {
 		place: Hum_Place,
 		d2:    f64,
 	}
-	near := make([dynamic]Near, 0, len(w.hums), context.temp_allocator)
-	for h in w.hums {
+	near := make([dynamic]Near, 0, len(w.hums) + len(w.gates), context.temp_allocator)
+	consider :: proc(near: ^[dynamic]Near, h: Hum_Place, p: [3]f64) {
 		d := [3]f64{f64(h.at.x) + 0.5, f64(h.at.y) + 0.5, f64(h.at.z) + 0.5} - p
 		d2 := d.x * d.x + d.y * d.y + d.z * d.z
-		if d2 <= HUM_RANGE * HUM_RANGE {append(&near, Near{h, d2})}
+		if d2 <= HUM_RANGE * HUM_RANGE {append(near, Near{h, d2})}
+	}
+	for h in w.hums {consider(&near, h, p)}
+	for g in w.gates {
+		if g.phase != .Open {continue}
+		consider(&near, {gate_middle(g.structure), GATE_HUM}, p)
 	}
 	slice.sort_by(near[:], proc(a, b: Near) -> bool {return a.d2 < b.d2})
 	for n in near[:min(len(near), protocol.MAX_HUM_SOURCES)] {
 		hum := protocol.Hum_Source{n.place.strength}
 		state_put(s, c, .Hum, &hum, protocol.key_of_block(n.place.at))
 	}
+}
+
+// gate_middle: the block in the middle of a gate's box.
+@(private = "file")
+gate_middle :: proc(s: worldgen.Structure) -> game.Block_Pos {
+	return (s.lo + s.hi) / 2
 }
 
 // admin_weather: /weather [clear|overcast|rain|storm|fog|auto]: says the weather, or sets it.

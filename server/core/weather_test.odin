@@ -6,6 +6,7 @@ import "core:testing"
 
 import "common:game"
 import "common:protocol"
+import "common:worldgen"
 
 // What the Weather record says is enough for a client to work out the weather the
 // server has, whether the world follows its spells or /weather set it; the hum
@@ -90,4 +91,21 @@ test_weather_reaches_the_client :: proc(t: ^testing.T) {
 	pump(t, clients)
 	testing.expect_value(t, len(a.hums), 0)
 	testing.expect_value(t, len(w.hums), 1)
+
+	// An open gate hums, at its middle; a dead one does not.
+	box := worldgen.Structure {
+		kind = .Gate,
+		lo   = {i32(p.x) + 3, i32(p.y), i32(p.z) + 3},
+		hi   = {i32(p.x) + 3, i32(p.y) + 4, i32(p.z) + 7},
+	}
+	append(&w.gates, Gate{structure = box, phase = .Dead})
+	pump(t, clients)
+	testing.expect_value(t, len(a.hums), 0)
+	w.gates[len(w.gates) - 1] = Gate {
+		structure = box,
+		close_at  = srv.tick + 100_000,
+	}
+	pump(t, clients)
+	testing.expect_value(t, a.hums[(box.lo + box.hi) / 2], GATE_HUM)
+	pop(&w.gates)
 }
