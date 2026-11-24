@@ -120,3 +120,11 @@ world_volcanic: /travel 111a140f0413180e-14040022162710; wait_world; set rules.d
 world_fungal: /travel 0e0a1a1200271f17-15201a060e1011; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; wait_world; /tp ~ ~24 ~ 30 -18; ticks 10; wait_world
 world_moon: /travel 09141e0b170f0e0d-0c1a031d010f22; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; wait_world; /tp ~ ~24 ~ 30 -18; ticks 10; wait_world
 world_jungle: /travel 151b0b27231e0c18-1725142119061f; wait_world; set rules.daylight_cycle 0; set rules.gravity 0; set rules.random_tick_speed 0; /time set noon; ticks 10; wait_world; /tp ~ ~24 ~ 30 -18; ticks 10; wait_world
+# A delve (games/sandbox: server/delve.odin, `/delve here 7` setting the delve of seed 7 down
+# with its stair head at the player's feet on a cleared field; nothing posted in a scene but
+# the custodian): its stair head from above; its first depth's landing, lit by its one lamp,
+# from a corner; and the custodian's hall in survival, the fight on (the custodian on its feet,
+# standing still: `still`), its seal up and its line with the health bar across the top.
+delve_entrance: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /tp 9 11 -7 0 0; ticks 5; wait_world; camera at 7 18 11 30 -32
+delve_landing: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7; ticks 90; wait_world; /delve go last landing; ticks 20; wait_world
+delve_boss: @1280x720 /fill -24 10 -24 24 10 24 grass; /fill -24 11 -24 24 30 24 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /delve here 7 still; ticks 90; wait_world; /gamemode survival; /delve go last hall; ticks 30; wait_world
