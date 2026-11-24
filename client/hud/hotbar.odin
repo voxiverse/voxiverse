@@ -44,6 +44,9 @@ HEALTH_BAR_HEIGHT :: 16
 TRAIL_HOLD :: 0.4 // seconds the health bar's trail stands after a hit ...
 TRAIL_FALL :: 0.5 // ... and falls to the health over
 HARM_PULSE_ALPHA :: 90 // the screen's edge in the health colour when hurt (engine.pulse)
+LOW_HEALTH :: 0.3 // of the most: at or under it the bar warns
+HEARTBEAT :: 1.1 // seconds between the low-health warning's beats
+HEARTBEAT_ALPHA :: 60 // ... each a faint pulse at the screen's edge
 
 // hotbar_row: where the hotbar is (its slots from its left, a slot and a gap each).
 hotbar_row :: proc(ctx: ^ui.Context) -> ui.Rect {
@@ -60,6 +63,9 @@ hotbar_row :: proc(ctx: ^ui.Context) -> ui.Rect {
 // health_bar: a bar as wide as the hotbar over it, full to the health, with the number in
 // it ("18 / 20"); a hit leaves a pale trail of what was lost that falls to the health after
 // a moment, and the screen's edge glows red (with the arc toward what hurt us: weapon_hud).
+// At or under LOW_HEALTH of the most it warns: framed red with "Low health" over it, and
+// the screen's edge beats faintly red each HEARTBEAT (the frame steady and no beat under
+// Reduce motion).
 health_bar :: proc(ctx: ^ui.Context, s: ^engine.Session) {
 	h := &s.hud
 	defer h.trail_health = s.health
@@ -89,6 +95,27 @@ health_bar :: proc(ctx: ^ui.Context, s: ^engine.Session) {
 	small := t.font_size * 0.8
 	ui.draw_text(ctx, {bar.x + 1, bar.y + 1, bar.w, bar.h}, text, small, t.text_shadow, .Center)
 	ui.draw_text(ctx, bar, text, small, t.text, .Center)
+	if s.dead || health > most * LOW_HEALTH {return}
+	beat := f32(1)
+	if !s.feel.still {
+		if engine.feel_age(s, h.heartbeat) >= HEARTBEAT {
+			h.heartbeat = engine.feel_now(s)
+			engine.pulse(s, ui.with_alpha(t.health_full, HEARTBEAT_ALPHA))
+		}
+		beat = 1 - 0.6 * clamp(engine.feel_age(s, h.heartbeat) / HEARTBEAT, 0, 1)
+	}
+	ui.stroke_rect(ctx, ui.rect_expand(bar, 2), 2, ui.with_alpha(t.health_full, u8(255 * beat)))
+	warn := engine.tr(.Hud_Low_Health)
+	above := ui.Rect{bar.x, bar.y - 4 - small - 4, bar.w, small + 4}
+	ui.draw_text(
+		ctx,
+		{above.x + 1, above.y + 1, above.w, above.h},
+		warn,
+		small,
+		t.text_shadow,
+		.Center,
+	)
+	ui.draw_text(ctx, above, warn, small, t.health_full, .Center)
 }
 
 EFFECT_SIZE :: 30

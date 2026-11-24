@@ -38,7 +38,7 @@ test_section_table :: proc(t: ^testing.T) {
 	}
 	for sec, id in menu.SECTIONS {
 		testing.expect_value(t, sec.action, keys[id])
-		shown := id != .Character && id != .Atlas // (Character's key opens the Inventory)
+		shown := id != .Atlas // (the Character section only where the registry has skills: section_shown)
 		testing.expectf(t, sec.visible == shown, "%v: visible is %v", id, sec.visible)
 		testing.expectf(t, (sec.draw != nil) == shown, "%v: a draw proc iff shown", id)
 	}
@@ -59,6 +59,8 @@ test_section_table :: proc(t: ^testing.T) {
 	testing.expect_value(t, menu.section_step(.Journal, 1), engine.Section_Id.Inventory)
 	testing.expect_value(t, menu.section_step(.Inventory, -1), engine.Section_Id.Journal)
 	testing.expect_value(t, menu.section_step(.Map, -1), engine.Section_Id.Statistics)
+	testing.expect_value(t, menu.section_step(.Inventory, 1, true), engine.Section_Id.Character)
+	testing.expect_value(t, menu.section_step(.Statistics, -1, true), engine.Section_Id.Character)
 }
 
 @(test)

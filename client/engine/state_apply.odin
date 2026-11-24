@@ -213,8 +213,24 @@ apply_progress :: proc(s: ^Session, g: protocol.Received) {
 		s.progress, s.progress_heard = {}, false
 		return
 	}
+	was := s.progress
 	s.progress = (^protocol.Progress_State)(g.value)^
+	heard := s.progress_heard
 	s.progress_heard = true
+	if !heard || s.progress.xp <= was.xp {return}
+	feed_experience(s, int(s.progress.xp - was.xp))
+	if level := game.level_of(s.reg, u64(s.progress.xp));
+	   level > game.level_of(s.reg, u64(was.xp)) {
+		made(s, tr(.Level_Reached, level))
+		tween_start(&s.hud.level_news, s)
+	}
+}
+
+// skill_value: a rule's value as the player's skills make it, as the server said them
+// (game.skill_value): what a game's client part shows of a rule of its own a skill changes
+// (a recipe's time).
+skill_value :: proc(s: ^Session, effect: game.Skill_Effect, base: f32) -> f32 {
+	return game.skill_value(s.reg, &s.progress.skills, effect, base)
 }
 
 @(private)
@@ -395,11 +411,13 @@ apply_event :: proc(s: ^Session, g: protocol.Received) {
 			)
 			amount := int(e.lost)
 			e.lost = 0
+			damage_number(s, id, amount, false)
 			game_seen(s, Seen_Hurt{id, e.kind, entity_middle(s, e), amount})
 		}
 	case .Entity_Died:
 		id := (^protocol.Entity_Died)(g.value).entity
 		if e, known := &s.entities[id]; known {
+			damage_number(s, id, int(e.lost) + int(e.health), true)
 			entity_died(s, e)
 			game_seen(s, Seen_Death{id, e.kind, entity_middle(s, e), int(e.lost) + int(e.health)})
 		}
@@ -427,5 +445,26 @@ apply_event :: proc(s: ^Session, g: protocol.Received) {
 		kind, _ := game.damage_source_parse(d.cause)
 		line := game.death_text(kind, s.config.name, d.attacker, d.weapon, true)
 		s.death_len = copy(s.death_line[:], line)
+		s.death_respawn_len = copy(s.death_respawn[:], d.respawn)
+		s.death_dropped = d.dropped
 	}
+}
+
+DAMAGE_NUMBER :: [4]u8{255, 236, 200, 255} // a hit's number
+DAMAGE_KILL :: [4]u8{255, 96, 72, 255} // the blow that killed
+
+// damage_number: the health a hit took (amount) floating up from over the entity, larger
+// and red for the blow that killed it, under the player's Damage numbers (none: nothing).
+@(private)
+damage_number :: proc(s: ^Session, id: u32, amount: int, kill: bool) {
+	if !s.feel.numbers || amount <= 0 {return}
+	at, ok := entity_top(s, id)
+	if !ok {return}
+	float_text(
+		s,
+		at,
+		fmt.tprint(amount),
+		DAMAGE_KILL if kill else DAMAGE_NUMBER,
+		1.3 if kill else 1,
+	)
 }

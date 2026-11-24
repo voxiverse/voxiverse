@@ -17,6 +17,7 @@ Player_Menu :: struct {
 	has_last:     bool,
 	journal_page: Journal_Page, // the journal's page shown (where the registry has quests)
 	quest_list:   ui.Scroll_List, // the journal's quests: the row picked is the quest shown (the tracked one when the journal first shows them)
+	skill_pick:   int, // the Character section's skill shown (an index into the registry's)
 }
 
 // Journal_Page: the journal's pages (client/menu/journal.odin).

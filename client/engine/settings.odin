@@ -74,6 +74,8 @@ Settings :: struct {
 	chat_text_size:    f32, // times the UI's text size
 	prompt_bar:        bool, // the bar of button prompts along the bottom of menus (off by default)
 	quest_tracker:     bool, // the tracked quest's step at the top right of the HUD
+	experience_bar:    bool, // the experience bar and the level over the hotbar (where the game has levels)
+	damage_numbers:    bool, // the health a hit takes floating up from what it hit
 }
 
 @(rodata)
@@ -106,6 +108,8 @@ SETTINGS_DEFAULTS := Settings {
 	view_bobbing      = true,
 	screen_shake      = 1,
 	quest_tracker     = true,
+	experience_bar    = true,
+	damage_numbers    = true,
 }
 
 @(rodata)
@@ -402,6 +406,18 @@ SETTINGS_VARS := [?]base.Var {
 		field = "quest_tracker",
 		label = "Quest tracker",
 		help = "Shows the step of the quest you follow at the top right of the screen.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "experience_bar",
+		label = "Experience bar",
+		help = "Shows your level and how far you are to the next over the hotbar.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "damage_numbers",
+		label = "Damage numbers",
+		help = "Shows the health a hit takes rising from what it hit.",
 		choices = {{0, "Off"}, {1, "On"}},
 	},
 	{

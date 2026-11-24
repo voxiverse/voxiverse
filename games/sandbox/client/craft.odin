@@ -138,7 +138,11 @@ craft_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 		ink := t.text if makes else t.text_muted
 		top_line := ui.cut_top(&inner, t.font_size + 4)
 		place := sandbox.tr(.Craft_Hand if station == .Hand else .Craft_Fabricator)
-		info := fmt.tprintf("%s   %s", place, sandbox.tr(.Craft_Seconds, r.time))
+		info := fmt.tprintf(
+			"%s   %s",
+			place,
+			sandbox.tr(.Craft_Seconds, engine.skill_value(s, .Craft_Time, r.time)),
+		)
 		ui.draw_text(ctx, top_line, info, small, t.text_muted, .Right)
 		ui.draw_text(ctx, top_line, out, t.font_size, ink)
 		ui.draw_text(ctx, inner, craft_inputs(s, r), small, ink)
@@ -173,7 +177,11 @@ craft_screen :: proc(s: ^engine.Session, ctx: ^ui.Context, top: bool) {
 		ui.draw_text(
 			ctx,
 			head,
-			fmt.tprintf("%s   %s", place, sandbox.tr(.Craft_Seconds, r.time)),
+			fmt.tprintf(
+				"%s   %s",
+				place,
+				sandbox.tr(.Craft_Seconds, engine.skill_value(s, .Craft_Time, r.time)),
+			),
 			small,
 			ink,
 		)

@@ -33,7 +33,8 @@ game_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 
 // hud_draw: what F1 hides (hud_keys): the compass along the top, the crosshair and the
 // target frame under it; at the top right the quest tracker; along the bottom the hotbar
-// with the health bar and the effects over it, the held item's name, the magazine; the
+// with the health bar, the experience bar and the effects over it, the held item's name,
+// the magazine; the
 // pickup feed at the right; the feel kit's and the game's HUD, the game's given the screen
 // below the compass (and F3).
 hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
@@ -50,6 +51,7 @@ hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		hotbar(ctx, s, &app.item_icons)
 		engine.weapon_hud(ctx, s)
 		health_bar(ctx, s)
+		experience_bar(app, ctx)
 		effects_row(ctx, s, &app.item_icons)
 		hud_popup(app, ctx)
 		pickup_feed(app, ctx)

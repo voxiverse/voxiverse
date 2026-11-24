@@ -6,7 +6,8 @@ import "client:engine"
 import "client:ui"
 
 // The player menu: one overlay with a section open (the Map, the Journal, the Inventory
-// with the character, the Statistics; later the Atlas). A section is a row of
+// with the character's gear, the Character with its level and skills where the game has a
+// skill sheet (skills.odin), the Statistics; later the Atlas). A section is a row of
 // SECTIONS (its key, whether it is shown, its draw proc) and a draw proc
 // that calls section_tabs for the strip. A hidden section's key does
 // nothing: its row is there for the day it is built.
@@ -15,8 +16,9 @@ import "client:ui"
 // when its section is the open one, else switches to it; Tab opens the
 // section shown last (Inventory the first time) and closes the menu when
 // open; Escape closes it (overlay.odin); the pad's View is Tab, LB and RB
-// step the shown sections, round. The Character key (C) is the Inventory's too: it is the
-// character's screen. The world runs on behind it.
+// step the shown sections, round. The Character key (C) opens the Character section, or
+// the Inventory where there is none (its gear: the character's screen). The world runs on
+// behind it.
 
 Section :: struct {
 	label:   string,
@@ -30,9 +32,17 @@ SECTIONS := [engine.Section_Id]Section {
 	.Map        = {"Map", .World_Map, true, map_ui},
 	.Journal    = {"Journal", .Journal, true, journal_ui},
 	.Inventory  = {"Inventory", .Inventory, true, inventory_ui},
-	.Character  = {"Character", .Character, false, nil},
+	.Character  = {"Character", .Character, true, character_ui}, // (where the registry has skills: section_shown)
 	.Atlas      = {"Atlas", .Atlas, false, nil},
 	.Statistics = {"Statistics", .Stats, true, stats_ui},
+}
+
+// section_shown: whether a section is shown: built, and the Character section only where
+// the registry has a skill sheet (else its key opens the Inventory, the character's gear).
+section_shown :: proc(app: ^engine.App, id: engine.Section_Id) -> bool {
+	if !SECTIONS[id].visible {return false}
+	if id != .Character {return true}
+	return app.session != nil && len(app.session.reg.skills) > 0
 }
 
 // section_open: the player menu is open at id.
@@ -44,7 +54,7 @@ section_open :: proc(app: ^engine.App, id: engine.Section_Id) -> bool {
 // switches to it; the section it leaves is told (the inventory gives the
 // cursor's stack back).
 player_menu_show :: proc(app: ^engine.App, id: engine.Section_Id) {
-	if !SECTIONS[id].visible {return}
+	if !section_shown(app, id) {return}
 	m := &app.player_menu
 	if engine.overlay_is_open(&app.overlays, .Player_Menu) {
 		if m.section == id {return}
@@ -78,13 +88,14 @@ section_leave :: proc(app: ^engine.App, id: engine.Section_Id) {
 	}
 }
 
-// section_step: the next (or previous) shown section from id, round.
-section_step :: proc(id: engine.Section_Id, step: int) -> engine.Section_Id {
+// section_step: the next (or previous) shown section from id, round (character: the
+// Character section is shown).
+section_step :: proc(id: engine.Section_Id, step: int, character := false) -> engine.Section_Id {
 	n := len(engine.Section_Id)
 	to := id
 	for _ in 0 ..< n {
 		to = engine.Section_Id((int(to) + step + n) % n)
-		if SECTIONS[to].visible {break}
+		if SECTIONS[to].visible && (to != .Character || character) {break}
 	}
 	return to
 }
@@ -108,7 +119,7 @@ player_menu_keys :: proc(app: ^engine.App) {
 			return
 		}
 		for sec, id in SECTIONS {
-			if !sec.visible || !engine.key_action_pressed(a, sec.action) {continue}
+			if !section_shown(app, id) || !engine.key_action_pressed(a, sec.action) {continue}
 			if id == m.section {player_menu_close(app)} else {player_menu_show(app, id)}
 			return
 		}
@@ -117,14 +128,13 @@ player_menu_keys :: proc(app: ^engine.App) {
 			   .Inventory {player_menu_close(app)} else {player_menu_show(app, .Inventory)}
 			return
 		}
-		if engine.action_pressed(
-			a,
-			.Section_Prev,
-		) {player_menu_show(app, section_step(m.section, -1))}
-		if engine.action_pressed(
-			a,
-			.Section_Next,
-		) {player_menu_show(app, section_step(m.section, 1))}
+		character := section_shown(app, .Character)
+		if engine.action_pressed(a, .Section_Prev) {
+			player_menu_show(app, section_step(m.section, -1, character))
+		}
+		if engine.action_pressed(a, .Section_Next) {
+			player_menu_show(app, section_step(m.section, 1, character))
+		}
 		return
 	}
 	if !engine.game_controls(app) {return}
@@ -133,7 +143,7 @@ player_menu_keys :: proc(app: ^engine.App) {
 		return
 	}
 	for sec, id in SECTIONS {
-		if sec.visible && engine.action_pressed(a, sec.action) {
+		if section_shown(app, id) && engine.action_pressed(a, sec.action) {
 			player_menu_show(app, id)
 			return
 		}
@@ -192,7 +202,7 @@ section_tabs :: proc(
 	t := &ctx.theme
 	row := r
 	for sec, id in SECTIONS {
-		if !sec.visible {continue}
+		if !section_shown(app, id) {continue}
 		b := ui.cut_left(&row, SECTION_TAB_WIDTH)
 		ui.cut_left(&row, t.spacing)
 		name := fmt.tprintf("%s (%s)", sec.label, engine.action_label(app, sec.action))

@@ -292,6 +292,47 @@ Text :: enum u16 {
 	Quest_Finished,
 	Quest_Complete, // {0}: the quest's title
 	Quest_Step_Done, // {0}: the step's text
+	Quest_Xp, // {0}: the experience a quest gives
+	Hud_Level, // {0}: the level
+	Hud_Points, // {0}: skill points left to spend, {1}: the key of the Character section
+	Hud_Xp_Gain, // {0}: experience earned (the pickup feed)
+	Hud_Low_Health,
+	Level_Reached, // {0}: the level (in gold, with the chime)
+	Target_Threat, // {0}: a creature's threat
+	Death_Respawn_Spawn,
+	Death_Respawn_At, // {0}: the game's words for where (its respawn_where)
+	Death_Dropped,
+	Death_Kept,
+	Section_Character,
+	Skills_Level, // {0}: the level
+	Skills_Xp, // {0}: experience into the level, {1}: what the next takes
+	Skills_Xp_Top, // {0}: the experience, at the highest level
+	Skills_Points, // {0}: points left
+	Skills_Spent, // {0}: points spent in a branch
+	Skills_Rank, // {0}: rank, {1}: ranks
+	Skills_Now, // {0}: what its ranks do now
+	Skills_Next, // {0}: what one more rank would
+	Skills_Nothing,
+	Skills_Cost, // {0}: points a rank costs
+	Skills_Needs, // {0}: points, {1}: the branch
+	Skills_Learn,
+	Skills_All_Learnt,
+	Skills_Unlearn,
+	Skills_Unlearn_Where, // {0}: blocks, {1}: the block's name
+	Skills_Unlearn_Free,
+	Effect_Break_Speed, // {0}: the amount, signed, as a percent ("+20%")
+	Effect_Yield_Chance,
+	Effect_Drop_Chance,
+	Effect_Max_Health, // {0}: health points, signed
+	Effect_Defence,
+	Effect_Fall_Guard,
+	Effect_Regen,
+	Effect_Consume_Strength,
+	Effect_Melee_Damage,
+	Effect_Reload_Time,
+	Effect_Spread,
+	Effect_Craft_Time,
+	Effect_Craft_Yield,
 }
 
 @(rodata)
@@ -577,6 +618,47 @@ TEXT_EN := [Text]string {
 	.Quest_Finished                         = "Done",
 	.Quest_Complete                         = "Quest done: {0}",
 	.Quest_Step_Done                        = "Done: {0}",
+	.Quest_Xp                               = "+{0} XP",
+	.Hud_Level                              = "Lv {0}",
+	.Hud_Points                             = "{0} skill points ({1})",
+	.Hud_Xp_Gain                            = "+{0} XP",
+	.Hud_Low_Health                         = "Low health",
+	.Level_Reached                          = "Level {0}",
+	.Target_Threat                          = "Threat {0}",
+	.Death_Respawn_Spawn                    = "You will stand again at the world's spawn",
+	.Death_Respawn_At                       = "You will stand again at {0}",
+	.Death_Dropped                          = "What you carried lies where you fell",
+	.Death_Kept                             = "You keep what you carried",
+	.Section_Character                      = "Character",
+	.Skills_Level                           = "Level {0}",
+	.Skills_Xp                              = "{0} / {1} XP",
+	.Skills_Xp_Top                          = "{0} XP: the highest level",
+	.Skills_Points                          = "Skill points to spend: {0}",
+	.Skills_Spent                           = "{0} spent",
+	.Skills_Rank                            = "{0}/{1}",
+	.Skills_Now                             = "Now: {0}",
+	.Skills_Next                            = "Next rank: {0}",
+	.Skills_Nothing                         = "nothing yet",
+	.Skills_Cost                            = "A rank costs {0}",
+	.Skills_Needs                           = "Opens with {0} points spent in {1}",
+	.Skills_Learn                           = "Learn",
+	.Skills_All_Learnt                      = "Every rank learnt",
+	.Skills_Unlearn                         = "Unlearn all",
+	.Skills_Unlearn_Where                   = "Unlearning is free within {0} blocks of {1}",
+	.Skills_Unlearn_Free                    = "Unlearning is free here",
+	.Effect_Break_Speed                     = "{0} break speed",
+	.Effect_Yield_Chance                    = "{0} chance of one more ore",
+	.Effect_Drop_Chance                     = "{0} chance of each drop",
+	.Effect_Max_Health                      = "{0} most health",
+	.Effect_Defence                         = "{0} of harm turned aside",
+	.Effect_Fall_Guard                      = "{0} of a fall turned aside",
+	.Effect_Regen                           = "{0} regeneration",
+	.Effect_Consume_Strength                = "{0} healing from consumables",
+	.Effect_Melee_Damage                    = "{0} melee damage",
+	.Effect_Reload_Time                     = "{0} reload time",
+	.Effect_Spread                          = "{0} spread",
+	.Effect_Craft_Time                      = "{0} craft time",
+	.Effect_Craft_Yield                     = "{0} chance of one more made",
 }
 
 // tr: the string for key with {n} replaced by args[n] (temp allocator; base.text_format).

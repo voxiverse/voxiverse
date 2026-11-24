@@ -380,6 +380,7 @@ The types these name:
 - `game_screen_close :: proc(s: ^Session)`: game_screen_close closes the game's screen (closed: nothing to do).
 - `game_screen_shown :: proc(s: ^Session) -> bool`: the game's screen is open.
 - `session_item_icons :: proc(s: ^Session) -> ^Item_Icons`: every item's icon (the App's), for a game's screen to draw its slots as the player menu does (client/menu: stack_slot); nil outside the game's screen.
+- `skill_value :: proc(s: ^Session, effect: game.Skill_Effect, base: f32) -> f32`: a rule's value as the player's skills make it, as the server said them (game.skill_value): what a game's client part shows of a rule of its own a skill changes (a recipe's time).
 - `game_action_key :: proc(s: ^Session, index: int) -> string`: the name of the key the player has bound to the game's action `index` (into Game.actions), as their keyboard prints it ("Z"; "(none)" when unbound), for a HUD to say which key does what.
 - `game_action_pressed :: proc(s: ^Session, index: int) -> bool`: the key of the game's action `index` was pressed this frame, wherever the keyboard is (over the world or the game's own screen: the key that opened a screen may close it).
 - `game_key_pressed :: proc(s: ^Session, index: int) -> bool`: the game's own key `index` (into Game.keys) went down this frame, while the world has the keyboard.
@@ -403,6 +404,7 @@ The types these name:
 The types these name:
 
 - `Item_Icons :: map[game.Item]ui.Icon`
+- `game.Skill_Effect :: enum u8 {...}`: the rule a skill changes, and how its amount adds (SKILL_EFFECTS).
 - `protocol.Received :: struct {...}`
 
 ## `client/engine` (`engine.`): What a game's HUD is made of

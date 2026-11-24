@@ -216,3 +216,172 @@ test_sandbox_journal_quests :: proc(t: ^testing.T) {
 	testing.expect(t, drew(rig, "Tracked"))
 	testing.expect(t, !drew(rig, "Twist fibre into cord"), "a step to come shown")
 }
+
+// floated: a text the feel kit floats now (a made's gold words, a damage number).
+@(private = "file")
+floated :: proc(s: ^engine.Session, text: string) -> (found: bool) {
+	for &f in s.feel.floats {found ||= f.len > 0 && string(f.text[:f.len]) == text}
+	return
+}
+
+// The experience bar: the level beside the health bar and the bar over the hotbar; a level
+// gained pops it and says so in gold, the experience earned comes into the pickup feed,
+// and the points to spend show with the Character key. Nothing is earned in creative, and
+// Options' Experience bar hides it.
+@(test)
+test_sandbox_experience_bar :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	c := playtest.client(rig)
+	core.game_mode(s, c, "creative")
+	core.experience_gain(s, c, 500)
+	playtest.step(rig, 4)
+	testing.expect(t, playtest.drawn(rig, "Lv 1"))
+	core.game_mode(s, c, "survival")
+	core.experience_gain(s, c, 60)
+	playtest.step(rig, 4)
+	testing.expect_value(t, rig.s.progress.xp, 60)
+	testing.expect(t, playtest.drawn(rig, "Lv 2"))
+	testing.expect(t, playtest.drawn(rig, "+60 XP"))
+	testing.expect(t, playtest.drawn(rig, "1 skill points (C)"))
+	testing.expect(t, floated(rig.s, "Level 2"), "the level not said")
+	rig.app.settings.experience_bar = false
+	testing.expect(t, !playtest.drawn(rig, "Lv 2"), "a bar turned off")
+}
+
+// The Character section (C): the level, the experience into it and the points; each
+// branch with its skills and ranks; the skill picked with what it does now and with one
+// more rank; the ranks the server sends show at once.
+@(test)
+test_sandbox_character_section :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	c := playtest.client(rig)
+	core.game_mode(s, c, "survival")
+	core.experience_gain(s, c, 200)
+	playtest.step(rig, 4)
+	app := rig.app
+	testing.expect(t, menu.section_shown(app, .Character))
+	menu.player_menu_show(app, .Character)
+	drew :: proc(rig: ^playtest.Rig, prefix: string) -> (found: bool) {
+		app := rig.app
+		ui.begin_frame(&app.ui, {}, {playtest.WIDTH, playtest.HEIGHT}, 1)
+		menu.player_menu_ui(app, &app.ui, true)
+		for x in app.ui.texts {found ||= strings.has_prefix(x, prefix)}
+		ui.end_frame(&app.ui)
+		return
+	}
+	testing.expect(t, drew(rig, "Level 3"))
+	testing.expect(t, drew(rig, "40 / 140 XP"))
+	testing.expect(t, drew(rig, "Skill points to spend: 2"))
+	testing.expect(t, drew(rig, "Survival"))
+	testing.expect(t, drew(rig, "Engineering"))
+	testing.expect(t, drew(rig, "Quick Hands"))
+	testing.expect(t, drew(rig, "Now: nothing yet"))
+	testing.expect(t, drew(rig, "Next rank: +10% break speed"))
+	testing.expect(
+		t,
+		drew(rig, "Unlearning is free within") && !drew(rig, "Unlearning is free here"),
+	)
+	quick, _ := game.skill_by_id(s.registry, "sandbox:quick_hands")
+	c.skills.ranks[quick] = 1
+	playtest.step(rig, 4)
+	testing.expect(t, drew(rig, "Now: +10% break speed"))
+	testing.expect(t, drew(rig, "1/3"))
+	testing.expect(t, drew(rig, "Skill points to spend: 1"))
+}
+
+// Prediction: the client counts a break's ticks with the ranks the server sent, as the
+// server judges it, and a skill changes both alike.
+@(test)
+test_sandbox_break_predicted_with_a_skill :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	c := playtest.client(rig)
+	core.game_mode(s, c, "survival")
+	playtest.step(rig, 4)
+	stone, _ := game.registry_block(s.registry, "stone")
+	pick_item, _ := game.registry_item(s.registry, "sandbox:flint_pick")
+	pick := game.Stack{pick_item, 1, 0, 0}
+	ticks :: proc(
+		reg: ^game.Registry,
+		rules: ^game.Rules,
+		b: game.Block,
+		held: game.Stack,
+		skills: ^game.Skill_Ranks,
+	) -> int {
+		return game.break_ticks(reg, rules, b, held, {}, skills)
+	}
+	without := ticks(s.registry, &c.world.rules, stone, pick, &c.skills)
+	quick, _ := game.skill_by_id(s.registry, "sandbox:quick_hands")
+	c.skills.ranks[quick] = 3
+	playtest.step(rig, 4)
+	server := ticks(s.registry, &c.world.rules, stone, pick, &c.skills)
+	client := ticks(rig.s.reg, &rig.s.rules, stone, pick, &rig.s.progress.skills)
+	testing.expect(t, server < without, "the skill changes nothing")
+	testing.expect_value(t, client, server)
+}
+
+// The death screen's words come over the wire: where the player stands again (the
+// sandbox's outpost, or the world's spawn) and whether what it carried was dropped.
+@(test)
+test_sandbox_death_says_where_and_what :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	c := playtest.client(rig)
+	core.game_mode(s, c, "survival")
+	playtest.step(rig, 4)
+	c.protected_until = 0
+	core.damage(s, c, 1000, {kind = .Command})
+	playtest.step(rig, 4)
+	testing.expect(t, rig.s.dead, "not dead")
+	testing.expect_value(t, rig.s.death_respawn_len, 0) // (no outpost: the world's spawn)
+	testing.expect_value(t, rig.s.death_dropped, !c.world.rules.keep_inventory)
+	// The other way round: survival drops what is carried unless the world keeps it.
+	core.respawn(s, c)
+	core.game_rule(
+		s,
+		c.world,
+		"keep_inventory",
+		"false" if c.world.rules.keep_inventory else "true",
+	)
+	playtest.step(rig, 4)
+	c.protected_until = 0
+	core.damage(s, c, 1000, {kind = .Command})
+	playtest.step(rig, 4)
+	testing.expect(t, rig.s.dead, "not dead again")
+	testing.expect_value(t, rig.s.death_dropped, !c.world.rules.keep_inventory)
+}
+
+// Damage numbers: a creature hurt shows the health it lost rising from it.
+@(test)
+test_sandbox_damage_numbers :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	c := playtest.client(rig)
+	giant, _ := game.registry_kind(s.registry, "sandbox:domeback")
+	e := core.entity_spawn(s.home, giant, c.player.position + {3, 0, 0}, false)
+	id := core.entity_id(s.home, e)
+	known :: proc(rig: ^playtest.Rig) -> bool {return len(rig.s.entities) > 0}
+	testing.expect(t, playtest.until(rig, known, 5), "the creature never came")
+	_, seen := rig.s.entities[id]
+	testing.expect(t, seen, "not that creature")
+	core.entity_harm(s.home, e, {amount = 3, kind = .Game})
+	playtest.step(rig, 4)
+	testing.expect(t, floated(rig.s, "3"), "no number rose")
+}

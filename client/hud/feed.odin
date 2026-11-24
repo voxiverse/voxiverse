@@ -6,7 +6,8 @@ import "client:ui"
 import "common:game"
 
 // The pickup feed: at the right of the screen, a line for what came into the inventory
-// ("+3 iron ore", in its rarity's colour, with its icon), newest on top, each standing
+// ("+3 iron ore", in its rarity's colour, with its icon) and for experience earned ("+25
+// XP" in gold: engine.feed_experience), newest on top, each standing
 // PICKUP_SECONDS on the feel clock and fading at the end; more of the same item soon after
 // adds to its line. What came is what the inventory holds more of than the frame before
 // (from the ground, a chest, a trade, a craft, the server's kit); the Creative tab's
@@ -14,7 +15,7 @@ import "common:game"
 
 PICKUP_SECONDS :: 4.0
 PICKUP_FADE :: 0.8
-PICKUP_MERGE :: 2.0 // seconds: more of the newest line's item within this joins it
+
 PICKUP_ROW :: 26
 PICKUP_WIDTH :: 260
 
@@ -59,7 +60,7 @@ pickup_add :: proc(s: ^engine.Session, item: game.Item, count: int) {
 	h := &s.hud
 	now := engine.feel_now(s)
 	if f := &h.feed[0];
-	   f.count > 0 && f.item == item && engine.feel_age(s, f.born) < PICKUP_MERGE {
+	   f.count > 0 && f.item == item && engine.feel_age(s, f.born) < engine.PICKUP_MERGE {
 		f.count += count
 		f.born = now
 		return
@@ -89,13 +90,16 @@ pickup_feed :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		faded.opacity *= alpha
 		ui.theme_scope(ctx, faded)
 		text := engine.tr(.Hud_Pickup, f.count, menu.item_title(s.reg, f.item))
+		ink := menu.rarity_color(t, menu.item_rarity(s.reg, f.item))
+		if f.item == game.NO_ITEM { 	// (experience earned: engine.feed_experience)
+			text, ink = engine.tr(.Hud_Xp_Gain, f.count), engine.MADE_COLOR
+		}
 		w := ui.measure_text(ctx, text, small) + PICKUP_ROW + 2 * t.padding
 		line := ui.Rect{x + PICKUP_WIDTH - w, y, w, PICKUP_ROW - 2}
 		ui.fill_rect(ctx, line, t.hud_fill)
 		if icon, ok := app.item_icons[f.item]; ok {
 			ui.draw_icon(ctx, {line.x + 3, line.y + 2, line.h - 4, line.h - 4}, icon)
 		}
-		ink := menu.rarity_color(t, menu.item_rarity(s.reg, f.item))
 		ui.draw_text(ctx, {line.x + PICKUP_ROW, line.y, w - PICKUP_ROW, line.h}, text, small, ink)
 		y += PICKUP_ROW
 	}

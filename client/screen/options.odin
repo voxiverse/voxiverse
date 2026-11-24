@@ -63,6 +63,8 @@ OPTIONS_TABS := [engine.Options_Tab][]string {
 		"screen_shake",
 		"prompt_bar",
 		"quest_tracker",
+		"experience_bar",
+		"damage_numbers",
 		"chat_text_size",
 	},
 	.Profile       = PROFILE_ROWS,

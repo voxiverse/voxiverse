@@ -28,6 +28,7 @@ Feel :: struct {
 	burst_puffs: int, // live puffs bursts made (at most MAX_BURST_PUFFS)
 	shaking:     f32, // how much the view shakes and kicks: the Screen shake setting, 0 under Reduce motion
 	still:       bool, // Reduce motion: what eases in is simply there, what floats up stands
+	numbers:     bool, // Damage numbers: the health a hit takes floats up from what it hit
 	shakes:      [MAX_SHAKES]Shake,
 	kicks:       [MAX_KICKS]Kick,
 	floats:      [MAX_FLOATS]Float_Text,
@@ -39,6 +40,7 @@ Feel :: struct {
 feel_advance :: proc(s: ^Session, settings: Settings, dt: f32) {
 	f := &s.feel
 	f.still = settings.reduce_motion
+	f.numbers = settings.damage_numbers
 	f.shaking = 0 if settings.reduce_motion else clamp(settings.screen_shake, 0, 1)
 	f.clock += f64(dt) * game.TICK_RATE
 	if c := &s.render_clock; c.heard {

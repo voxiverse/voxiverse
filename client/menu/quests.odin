@@ -152,7 +152,16 @@ quest_detail :: proc(app: ^engine.App, ctx: ^ui.Context, r: ui.Rect, q: int) {
 		small,
 		t.text_muted,
 	)
-	if len(def.reward) == 0 {
+	if def.xp > 0 {
+		ui.draw_text(
+			ctx,
+			ui.cut_top(&area, JOURNAL_ROW),
+			engine.tr(.Quest_Xp, def.xp),
+			t.font_size,
+			engine.MADE_COLOR,
+		)
+	}
+	if len(def.reward) == 0 && def.xp == 0 {
 		ui.draw_text(
 			ctx,
 			ui.cut_top(&area, JOURNAL_ROW),

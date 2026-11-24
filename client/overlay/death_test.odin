@@ -10,8 +10,9 @@ import "common:game"
 import "common:protocol"
 
 // The death screen: it opens when the server says the player is dead, says how
-// (the death line), cannot be escaped, and its one button sends Respawn; it
-// closes when the server says the player is alive again.
+// (the death line), where it will stand again and what became of what it carried,
+// cannot be escaped, and its one button sends Respawn; it closes when the server says
+// the player is alive again.
 @(test)
 test_death_screen :: proc(t: ^testing.T) {
 	app := new(engine.App)
@@ -51,6 +52,22 @@ test_death_screen :: proc(t: ^testing.T) {
 	testing.expect(t, engine.overlay_is_open(&app.overlays, .Death) && !engine.game_controls(app))
 	testing.expect_value(t, string(s.death_line[:s.death_len]), "You fell")
 
+	// Where the player stands again (the game's word; none: the world's spawn) and what
+	// became of what it carried.
+	said :: proc(app: ^engine.App, text: string) -> (found: bool) {
+		ui.begin_frame(&app.ui, {}, {1280, 720}, 1)
+		draw_overlays(app, &app.ui)
+		for x in app.ui.texts {found ||= x == text}
+		ui.end_frame(&app.ui)
+		return
+	}
+	testing.expect(t, said(app, "You will stand again at the world's spawn"))
+	testing.expect(t, said(app, "You keep what you carried"))
+	s.death_respawn_len = copy(s.death_respawn[:], "your outpost, 40 blocks away")
+	s.death_dropped = true
+	testing.expect(t, said(app, "You will stand again at your outpost, 40 blocks away"))
+	testing.expect(t, said(app, "What you carried lies where you fell"))
+
 	// Escape and the pad's Start do not leave it.
 	pause_toggle(app)
 	escape(app)
@@ -58,7 +75,7 @@ test_death_screen :: proc(t: ^testing.T) {
 
 	// A click on the button: Respawn is sent.
 	th := &app.ui.theme
-	box := ui.rect_center({0, 0, 1280, 720}, 420, 170)
+	box := ui.rect_center({0, 0, 1280, 720}, DEATH_SIZE.x, DEATH_SIZE.y)
 	inner := ui.rect_shrink(box, 2 * th.padding)
 	button := ui.cut_bottom(&inner, th.row_height)
 	at := ui.Vec2{button.x + button.w / 2, button.y + button.h / 2}
@@ -109,7 +126,7 @@ test_death_screen_waits_the_delay :: proc(t: ^testing.T) {
 	death_sync(app)
 
 	th := &app.ui.theme
-	box := ui.rect_center({0, 0, 1280, 720}, 420, 170)
+	box := ui.rect_center({0, 0, 1280, 720}, DEATH_SIZE.x, DEATH_SIZE.y)
 	inner := ui.rect_shrink(box, 2 * th.padding)
 	button := ui.cut_bottom(&inner, th.row_height)
 	at := ui.Vec2{button.x + button.w / 2, button.y + button.h / 2}

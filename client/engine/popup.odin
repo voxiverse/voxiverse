@@ -44,4 +44,23 @@ Hud_State :: struct {
 	target:       Maybe(u32), // the creature the target frame shows
 	target_seen:  f64, // the feel clock's tick it was last under the crosshair
 	quest_news:   Tween, // a step of a quest done: the tracker eases its new step in
+	level_news:   Tween, // a level gained: the level beside the health bar pops
+	heartbeat:    f64, // the feel clock at the low-health warning's last beat
 }
+
+// feed_experience: a line of the pickup feed for experience earned ("+25 XP": item
+// NO_ITEM), or more on the newest such line while it is recent.
+feed_experience :: proc(s: ^Session, gain: int) {
+	h := &s.hud
+	now := feel_now(s)
+	if f := &h.feed[0];
+	   f.count > 0 && f.item == game.NO_ITEM && feel_age(s, f.born) < PICKUP_MERGE {
+		f.count += gain
+		f.born = now
+		return
+	}
+	copy(h.feed[1:], h.feed[:PICKUP_LINES - 1])
+	h.feed[0] = {game.NO_ITEM, gain, now}
+}
+
+PICKUP_MERGE :: 2.0 // seconds: more of the newest line's item within this joins it

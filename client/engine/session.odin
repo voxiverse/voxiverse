@@ -74,170 +74,173 @@ Session_State :: enum u8 {
 // Session: the client playing on one server, its own or another's: the connection, the
 // world as it was told it, the player, and the game's client part and its state.
 Session :: struct {
-	state:            Session_State,
-	loading:          Maybe(Loading), // the loading screen is up (screen_loading.odin)
-	failure:          string, // why it failed (in the arena)
-	arena:            virtual.Arena,
-	pipe:             protocol.Pipe, // to our own server (hosting)
-	endpoint:         protocol.Endpoint,
-	ticket:           steam.Ticket, // the Steam auth ticket Hello carried (cancelled at the end)
-	server:           core.Server,
-	remote:           bool, // playing on someone else's server, through link
-	link:             netcode.Link,
-	capture:          netcode.Capture,
-	last_flush:       time.Tick,
-	traffic:          [protocol.Side]protocol.Traffic, // counted here when remote (the pipe counts its own)
-	others:           map[u16]Other_Player, // the other players, by player id (players.odin)
-	entities:         map[u32]Other_Entity, // near us, by id (entities.odin)
-	machines:         map[game.Chunk_Pos][dynamic]Machine_Shown, // what the game's machines show, by chunk (heap; machine_shown)
-	belts:            Session_Belts, // the conveyors' items near us (belts.odin)
-	screen_view:      Screen_View, // the frame's view, for a HUD's marks in the world (marks.odin)
-	world_boxes:      [MAX_WORLD_BOXES]World_Box, // outlines a game asked for this frame
-	world_box_count:  int,
-	world_lines:      [dynamic]render.Debug_Point, // lines a game drew on the ground this frame (pairs; heap)
-	fills:            [dynamic]render.Debug_Point, // ground covers and ghosts this frame (free_camera.odin; heap)
-	free:             Free_View, // the free camera (free_camera.odin)
-	free_move:        [2]f32, // ... its pan this frame, along the screen
-	tool:             Pointer_Tool, // the free pointer's (pointer_tool)
-	pointer_over_ui:  bool, // the pointer is over the UI (ui.pointer_over): the world does not take its clicks
-	puffs:            [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
-	feel:             Feel, // the feedback under way and its clock (feel.odin)
-	hud:              Hud_State, // what the HUD keeps between frames (popup.odin)
-	logbook:          protocol.Logbook_State, // the player's places found and creatures met, as the server last said (the Journal screen, the compass, the map)
-	quests:           protocol.Quest_State, // the player's quests, as the server last said (the journal's Quests, the HUD's tracker, the compass)
-	quests_heard:     bool, // ... a value came (the first is no news)
-	quest_pick:       int, // the quest the player picked to track in the journal, + 1 (0: the first under way; quest_tracked)
-	progress:         protocol.Progress_State, // the player's experience and skills, as the server last said (the HUD's bar, the Character section, the prediction of what a skill changes)
-	progress_heard:   bool, // ... a value came (the first is no news)
-	world_map:        Minimap, // the player menu's map (marks.odin; its cells in the arena, made when first shown)
-	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
-	has_worldgen:     bool,
-	grants:           [dynamic]access.Grant, // what the server lets this player do (heap)
-	characters:       [dynamic]string, // the account's, to choose from (heap; Choosing)
-	commands:         [dynamic]string, // the server commands it may use (heap, for Tab)
-	chat:             [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
-	texels:           [][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures by layer, for debris (made again when the registry is swapped)
-	render_clock:     Render_Clock, // when to show the others (players.odin)
-	notices:          [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
-	welcome:          protocol.Welcome,
-	reg:              ^game.Registry, // what the blocks and items are: the game's, or (hosting) the universe's
-	available:        []store.Pack_Candidate, // packs found outside the universe: local, Workshop (arena)
-	reg_owned:        bool, // reg is the universe's own (freed with the session)
-	reg_fresh:        ^game.Registry, // the registry the server's reload made, waiting for the mesh jobs to end (hot reload; the App swaps it in)
-	reg_swapped:      bool, // reg was replaced by the packs of the server joined (the App makes the new items' icons, then clears it)
-	item_icons:       ^Item_Icons, // the App's, for the game's screen (session_item_icons)
-	fetch:            ^protocol.Pack_Fetch, // the server's packs, while joining (pack_fetch.odin)
-	fetching:         bool, // a Packs message came
-	fetched:          bool, // ... and its registry is built
-	world:            World, // set up from Welcome
-	world_init:       bool,
-	camera:           View, // the eyes, from the prediction; looking turns it every frame
-	view:             View, // what is drawn from: the eyes, or the third person camera, with the bobbing (view_camera.odin)
-	camera_mode:      Camera_Mode, // F5 (not saved); what the game's camera says, while it chooses
-	game_camera:      Game_Camera, // the game's choice this frame (view_camera.odin)
-	placed:           Maybe(View), // the camera put somewhere for a picture (camera_place: `camera at`)
-	placed_mode:      Camera_Mode, // ... and the F5 mode it gives back (camera_release)
-	pointer:          Maybe([3]f64), // the top-down camera: the point of the world under the pointer
-	pull:             f64, // the third person camera's distance now (pulled in against walls, easing back out)
-	fov_kick:         f32, // 0 ..= 1: how far the sprint widening has come
-	bob_phase:        f32,
-	bob_amp:          f32, // 0 ..= 1, easing in and out as walking starts and stops
-	own_stride:       f32, // our own walk phase, for the third person avatar (avatars.odin)
-	own_stride_pos:   [3]f64, // the feet position its distance was last taken from
-	aiming:           bool, // a held item that aims is aimed (the crosshair stays in third person)
-	weapon_clock:     f64, // seconds, advanced by the frames (weapons.odin's timers)
-	shot_seen_by:     u16, // the shooter and place of the last shot drawn: a pattern's other rays are tracers only
-	shot_seen_at:     [3]f64,
-	shot_seen_time:   f64,
-	shot_next:        f64, // when the held weapon may fire again (its rate)
-	ammo_shown:       int, // the magazine as predicted ...
-	ammo_until:       f64, // ... until this time (the server's word is shown after)
-	reload_end:       f64, // when the reload we asked for is done (0: none)
-	reload_slot:      int,
-	recoil:           f32, // radians the view is lifted by the last shots (cosmetic)
-	orbit:            f32, // radians: the third person camera circles the head by this (a picture aid, `camera <mode> <degrees>`)
-	vm:               Vm_State, // the view model's animations (viewmodel.odin)
-	vm_item:          game.Item, // what they were last stepped for
-	zoom:             f32, // 0 ..= 1: how far the held weapon's zoom has come
-	zoom_to:          f32, // the held weapon's field-of-view factor
-	marker:           f32, // seconds the hit marker has left
-	marker_kill:      bool,
-	marker_head:      bool,
-	hurt_age:         f32, // seconds since the last Damage_Hit
-	shots:            int, // shots we fired (tests)
-	confirms:         int, // Hit_Confirm events seen
-	feet:             [3]f64, // where the predicted player stands (the avatar in third person)
-	teleport:         Maybe(protocol.Teleport), // requested before joining: sent on Welcome
-	prediction:       protocol.Prediction,
-	rules:            game.Rules, // the server's, as last announced
-	clock:            f64, // world time: the server's last word, carried on since (common/game/time.odin)
-	cloud_drift:      f64, // blocks the clouds have moved
-	weather:          protocol.Weather_Record, // the server's word: with the clock, the weather (session_weather)
-	hums:             map[game.Block_Pos]f32, // hum sources near us and their strength (heap; the Hum records)
-	tick_time:        f32, // seconds into the current client tick
-	toggle_fly:       bool, // a double-tapped jump waits for the next tick
-	frame_seconds:    f64, // the sum of the frames' dt: the session's own clock for the double tap
-	last_jump:        f64, // frame_seconds at the last jump, for double-tap detection (-1e9: never)
-	sneak_on:         bool,
-	eye_height:       f64, // the camera above the feet: easing to player_eye_height // toggled sneaking and sprinting (Options: Toggle)
-	sprint_on:        bool,
-	sprint_moved:     bool, // moved since the sprint toggled on
-	autopilot:        Maybe(game.Player_Input), // overrides the controls (fly_test)
-	aim:              Maybe(game.Ray_Hit), // the block under the crosshair, within reach
-	aim_entity:       Maybe(u32), // an entity under the crosshair, nearer than that block
-	edits:            [dynamic]protocol.Edit, // predicted, waiting for Edit_Result
-	next_edit:        u32,
-	edit_timer:       f32, // seconds until a held button edits again
-	breaking:         Break_Hold, // the block the attack is held on, where breaking takes time (session_controls.odin)
-	input_yaw:        f32, // the yaw of the last input predicted (the one an edit follows)
-	sounds:           [dynamic]Sound_Event, // this frame's; the App plays and clears them
-	gate_gathers:     [4]Gate_Gather, // gates opening in sight (gates.odin)
-	walked:           f32, // blocks on the ground since the last footstep
-	drop_repeat:      Drop_Repeat, // the drop key held (items.odin)
-	inventory:        game.Inventory, // as we predict it (items.odin)
-	server_inventory: game.Inventory, // as the server last said
-	inv_pending:      [dynamic]Pending_Inventory, // sent, not yet answered (heap)
-	inv_sequence:     u32,
-	writer:           game.Writer,
-	scratch:          ^game.Block_Array, // decoding target for chunk messages
-	received:         [dynamic]protocol.Packet,
-	last_acked:       u32, // the acked of the newest Own_Player applied
-	schema:           protocol.Schema, // what the server replicates (state_kinds.odin)
-	rx:               protocol.Receiver, // what it has told us (State and Snapshot messages)
-	teleports:        u8, // Own_Player.teleports as last seen
-	frozen:           bool, // paused, the world standing still (session_freeze)
-	selection:        [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
-	island:           protocol.Island, // the simulation island we are in (F3)
-	stats:            Session_Stats,
-	mode:             int, // the game mode the server last said (Mode): an index into reg.game_modes
-	health:           f32, // as the server last said (Health)
-	max_health:       f32,
-	hurt:             protocol.Damage_Hit, // the last hit (the damage direction on the screen)
-	hurts:            int, // Damage_Hits seen
-	dead:             bool, // at the death screen (Health.dead)
-	effect:           game.Item, // the consumable whose effect is running (Health; NO_ITEM: none)
-	effect_left:      u16, // ... its seconds left
-	death_line:       [96]u8, // how it happened, as the death screen says it
-	death_len:        int,
-	death_age:        f32, // seconds since the last Player_Died (the death screen's countdown)
-	tally:            protocol.Tally, // our kills and deaths (the P list)
-	place:            protocol.Place, // the server's word on where we are (the music's)
-	home:             starmap.Address, // the world we joined in (the music's "home")
-	died:             int, // Player_Died events seen (the music's death stinger)
-	arrivals:         int, // arrivals through a gate or travel (the music's discovery stinger)
-	player_stats:     Stats_Data, // the counters the server last sent (menu_statistics.odin)
-	game:             Game, // the game the server plays (game.odin; zero: none)
-	game_state:       []byte, // its state (game_state), in the arena
-	game_screen:      bool, // the game's screen is open (game_screen_open; game.odin)
-	binds:            Game_Binds, // the keys of the game's actions and its own keys (game.odin)
-	game_keys:        [protocol.MAX_GAME_ACTIONS]Key_Label, // the keys bound to its actions, named (game_action_key)
-	game_pressed:     bit_set[0 ..< protocol.MAX_GAME_ACTIONS], // its actions pressed this frame (game_action_pressed)
-	game_key_pressed: bit_set[0 ..< MAX_GAME_KEYS], // its own keys pressed this frame (game_key_pressed)
-	game_key_down:    bit_set[0 ..< MAX_GAME_KEYS], // ... and held
-	game_key_labels:  [MAX_GAME_KEYS]Key_Label, // ... named
-	game_playing:     bool, // its started hook ran (so ended will)
-	config:           Session_Config,
-	net:              Net_Stats,
+	state:             Session_State,
+	loading:           Maybe(Loading), // the loading screen is up (screen_loading.odin)
+	failure:           string, // why it failed (in the arena)
+	arena:             virtual.Arena,
+	pipe:              protocol.Pipe, // to our own server (hosting)
+	endpoint:          protocol.Endpoint,
+	ticket:            steam.Ticket, // the Steam auth ticket Hello carried (cancelled at the end)
+	server:            core.Server,
+	remote:            bool, // playing on someone else's server, through link
+	link:              netcode.Link,
+	capture:           netcode.Capture,
+	last_flush:        time.Tick,
+	traffic:           [protocol.Side]protocol.Traffic, // counted here when remote (the pipe counts its own)
+	others:            map[u16]Other_Player, // the other players, by player id (players.odin)
+	entities:          map[u32]Other_Entity, // near us, by id (entities.odin)
+	machines:          map[game.Chunk_Pos][dynamic]Machine_Shown, // what the game's machines show, by chunk (heap; machine_shown)
+	belts:             Session_Belts, // the conveyors' items near us (belts.odin)
+	screen_view:       Screen_View, // the frame's view, for a HUD's marks in the world (marks.odin)
+	world_boxes:       [MAX_WORLD_BOXES]World_Box, // outlines a game asked for this frame
+	world_box_count:   int,
+	world_lines:       [dynamic]render.Debug_Point, // lines a game drew on the ground this frame (pairs; heap)
+	fills:             [dynamic]render.Debug_Point, // ground covers and ghosts this frame (free_camera.odin; heap)
+	free:              Free_View, // the free camera (free_camera.odin)
+	free_move:         [2]f32, // ... its pan this frame, along the screen
+	tool:              Pointer_Tool, // the free pointer's (pointer_tool)
+	pointer_over_ui:   bool, // the pointer is over the UI (ui.pointer_over): the world does not take its clicks
+	puffs:             [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
+	feel:              Feel, // the feedback under way and its clock (feel.odin)
+	hud:               Hud_State, // what the HUD keeps between frames (popup.odin)
+	logbook:           protocol.Logbook_State, // the player's places found and creatures met, as the server last said (the Journal screen, the compass, the map)
+	quests:            protocol.Quest_State, // the player's quests, as the server last said (the journal's Quests, the HUD's tracker, the compass)
+	quests_heard:      bool, // ... a value came (the first is no news)
+	quest_pick:        int, // the quest the player picked to track in the journal, + 1 (0: the first under way; quest_tracked)
+	progress:          protocol.Progress_State, // the player's experience and skills, as the server last said (the HUD's bar, the Character section, the prediction of what a skill changes)
+	progress_heard:    bool, // ... a value came (the first is no news)
+	world_map:         Minimap, // the player menu's map (marks.odin; its cells in the arena, made when first shown)
+	worldgen:          worldgen.Params, // the server's generator settings (Variables), if it has any
+	has_worldgen:      bool,
+	grants:            [dynamic]access.Grant, // what the server lets this player do (heap)
+	characters:        [dynamic]string, // the account's, to choose from (heap; Choosing)
+	commands:          [dynamic]string, // the server commands it may use (heap, for Tab)
+	chat:              [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
+	texels:            [][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures by layer, for debris (made again when the registry is swapped)
+	render_clock:      Render_Clock, // when to show the others (players.odin)
+	notices:           [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
+	welcome:           protocol.Welcome,
+	reg:               ^game.Registry, // what the blocks and items are: the game's, or (hosting) the universe's
+	available:         []store.Pack_Candidate, // packs found outside the universe: local, Workshop (arena)
+	reg_owned:         bool, // reg is the universe's own (freed with the session)
+	reg_fresh:         ^game.Registry, // the registry the server's reload made, waiting for the mesh jobs to end (hot reload; the App swaps it in)
+	reg_swapped:       bool, // reg was replaced by the packs of the server joined (the App makes the new items' icons, then clears it)
+	item_icons:        ^Item_Icons, // the App's, for the game's screen (session_item_icons)
+	fetch:             ^protocol.Pack_Fetch, // the server's packs, while joining (pack_fetch.odin)
+	fetching:          bool, // a Packs message came
+	fetched:           bool, // ... and its registry is built
+	world:             World, // set up from Welcome
+	world_init:        bool,
+	camera:            View, // the eyes, from the prediction; looking turns it every frame
+	view:              View, // what is drawn from: the eyes, or the third person camera, with the bobbing (view_camera.odin)
+	camera_mode:       Camera_Mode, // F5 (not saved); what the game's camera says, while it chooses
+	game_camera:       Game_Camera, // the game's choice this frame (view_camera.odin)
+	placed:            Maybe(View), // the camera put somewhere for a picture (camera_place: `camera at`)
+	placed_mode:       Camera_Mode, // ... and the F5 mode it gives back (camera_release)
+	pointer:           Maybe([3]f64), // the top-down camera: the point of the world under the pointer
+	pull:              f64, // the third person camera's distance now (pulled in against walls, easing back out)
+	fov_kick:          f32, // 0 ..= 1: how far the sprint widening has come
+	bob_phase:         f32,
+	bob_amp:           f32, // 0 ..= 1, easing in and out as walking starts and stops
+	own_stride:        f32, // our own walk phase, for the third person avatar (avatars.odin)
+	own_stride_pos:    [3]f64, // the feet position its distance was last taken from
+	aiming:            bool, // a held item that aims is aimed (the crosshair stays in third person)
+	weapon_clock:      f64, // seconds, advanced by the frames (weapons.odin's timers)
+	shot_seen_by:      u16, // the shooter and place of the last shot drawn: a pattern's other rays are tracers only
+	shot_seen_at:      [3]f64,
+	shot_seen_time:    f64,
+	shot_next:         f64, // when the held weapon may fire again (its rate)
+	ammo_shown:        int, // the magazine as predicted ...
+	ammo_until:        f64, // ... until this time (the server's word is shown after)
+	reload_end:        f64, // when the reload we asked for is done (0: none)
+	reload_slot:       int,
+	recoil:            f32, // radians the view is lifted by the last shots (cosmetic)
+	orbit:             f32, // radians: the third person camera circles the head by this (a picture aid, `camera <mode> <degrees>`)
+	vm:                Vm_State, // the view model's animations (viewmodel.odin)
+	vm_item:           game.Item, // what they were last stepped for
+	zoom:              f32, // 0 ..= 1: how far the held weapon's zoom has come
+	zoom_to:           f32, // the held weapon's field-of-view factor
+	marker:            f32, // seconds the hit marker has left
+	marker_kill:       bool,
+	marker_head:       bool,
+	hurt_age:          f32, // seconds since the last Damage_Hit
+	shots:             int, // shots we fired (tests)
+	confirms:          int, // Hit_Confirm events seen
+	feet:              [3]f64, // where the predicted player stands (the avatar in third person)
+	teleport:          Maybe(protocol.Teleport), // requested before joining: sent on Welcome
+	prediction:        protocol.Prediction,
+	rules:             game.Rules, // the server's, as last announced
+	clock:             f64, // world time: the server's last word, carried on since (common/game/time.odin)
+	cloud_drift:       f64, // blocks the clouds have moved
+	weather:           protocol.Weather_Record, // the server's word: with the clock, the weather (session_weather)
+	hums:              map[game.Block_Pos]f32, // hum sources near us and their strength (heap; the Hum records)
+	tick_time:         f32, // seconds into the current client tick
+	toggle_fly:        bool, // a double-tapped jump waits for the next tick
+	frame_seconds:     f64, // the sum of the frames' dt: the session's own clock for the double tap
+	last_jump:         f64, // frame_seconds at the last jump, for double-tap detection (-1e9: never)
+	sneak_on:          bool,
+	eye_height:        f64, // the camera above the feet: easing to player_eye_height // toggled sneaking and sprinting (Options: Toggle)
+	sprint_on:         bool,
+	sprint_moved:      bool, // moved since the sprint toggled on
+	autopilot:         Maybe(game.Player_Input), // overrides the controls (fly_test)
+	aim:               Maybe(game.Ray_Hit), // the block under the crosshair, within reach
+	aim_entity:        Maybe(u32), // an entity under the crosshair, nearer than that block
+	edits:             [dynamic]protocol.Edit, // predicted, waiting for Edit_Result
+	next_edit:         u32,
+	edit_timer:        f32, // seconds until a held button edits again
+	breaking:          Break_Hold, // the block the attack is held on, where breaking takes time (session_controls.odin)
+	input_yaw:         f32, // the yaw of the last input predicted (the one an edit follows)
+	sounds:            [dynamic]Sound_Event, // this frame's; the App plays and clears them
+	gate_gathers:      [4]Gate_Gather, // gates opening in sight (gates.odin)
+	walked:            f32, // blocks on the ground since the last footstep
+	drop_repeat:       Drop_Repeat, // the drop key held (items.odin)
+	inventory:         game.Inventory, // as we predict it (items.odin)
+	server_inventory:  game.Inventory, // as the server last said
+	inv_pending:       [dynamic]Pending_Inventory, // sent, not yet answered (heap)
+	inv_sequence:      u32,
+	writer:            game.Writer,
+	scratch:           ^game.Block_Array, // decoding target for chunk messages
+	received:          [dynamic]protocol.Packet,
+	last_acked:        u32, // the acked of the newest Own_Player applied
+	schema:            protocol.Schema, // what the server replicates (state_kinds.odin)
+	rx:                protocol.Receiver, // what it has told us (State and Snapshot messages)
+	teleports:         u8, // Own_Player.teleports as last seen
+	frozen:            bool, // paused, the world standing still (session_freeze)
+	selection:         [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
+	island:            protocol.Island, // the simulation island we are in (F3)
+	stats:             Session_Stats,
+	mode:              int, // the game mode the server last said (Mode): an index into reg.game_modes
+	health:            f32, // as the server last said (Health)
+	max_health:        f32,
+	hurt:              protocol.Damage_Hit, // the last hit (the damage direction on the screen)
+	hurts:             int, // Damage_Hits seen
+	dead:              bool, // at the death screen (Health.dead)
+	effect:            game.Item, // the consumable whose effect is running (Health; NO_ITEM: none)
+	effect_left:       u16, // ... its seconds left
+	death_line:        [96]u8, // how it happened, as the death screen says it
+	death_len:         int,
+	death_respawn:     [64]u8, // where it will stand again, as its game says it (Player_Died; none: the world's spawn)
+	death_respawn_len: int,
+	death_dropped:     bool, // ... what it carried was dropped where it fell
+	death_age:         f32, // seconds since the last Player_Died (the death screen's countdown)
+	tally:             protocol.Tally, // our kills and deaths (the P list)
+	place:             protocol.Place, // the server's word on where we are (the music's)
+	home:              starmap.Address, // the world we joined in (the music's "home")
+	died:              int, // Player_Died events seen (the music's death stinger)
+	arrivals:          int, // arrivals through a gate or travel (the music's discovery stinger)
+	player_stats:      Stats_Data, // the counters the server last sent (menu_statistics.odin)
+	game:              Game, // the game the server plays (game.odin; zero: none)
+	game_state:        []byte, // its state (game_state), in the arena
+	game_screen:       bool, // the game's screen is open (game_screen_open; game.odin)
+	binds:             Game_Binds, // the keys of the game's actions and its own keys (game.odin)
+	game_keys:         [protocol.MAX_GAME_ACTIONS]Key_Label, // the keys bound to its actions, named (game_action_key)
+	game_pressed:      bit_set[0 ..< protocol.MAX_GAME_ACTIONS], // its actions pressed this frame (game_action_pressed)
+	game_key_pressed:  bit_set[0 ..< MAX_GAME_KEYS], // its own keys pressed this frame (game_key_pressed)
+	game_key_down:     bit_set[0 ..< MAX_GAME_KEYS], // ... and held
+	game_key_labels:   [MAX_GAME_KEYS]Key_Label, // ... named
+	game_playing:      bool, // its started hook ran (so ended will)
+	config:            Session_Config,
+	net:               Net_Stats,
 }
 
 // Net_Stats: what the F3 overlay shows about the connection.
