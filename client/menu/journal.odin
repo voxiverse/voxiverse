@@ -14,11 +14,12 @@ import "common:game"
 // with their character by the server and sent to them: game.Logbook; the gates they
 // opened, a game's places such as the sandbox's ruin, the creatures that came into view).
 //
-// The journal is two pages where the registry has quests (else the second alone), chosen by
-// the row under its tab: the quests (quests.odin), shown first; and the places and
-// creatures, two panes: the places, those in this world nearest first, each with how far
-// and which way it lies ("120 m NE"), then those in other worlds; and the creatures met, in
-// the order met. The map is the ground
+// The journal is three pages where the registry has quests (else the last two), chosen by
+// the row under its tab: the quests (quests.odin), shown first; the places and creatures,
+// two panes: the places, those in this world nearest first, each with how far and which way
+// it lies ("120 m NE"), then those in other worlds; and the creatures met, in the order met;
+// and the worlds stood on, each with what it is, its address and what was found there. The
+// map is the ground
 // round the player seen from above (engine.Minimap, the minimap's ground read from the
 // world as the session holds it, re-centred when the player walks off its middle), the
 // player an arrow at their place and heading, each place a dot with its name (the tracked
@@ -41,6 +42,7 @@ PLACE_TEXT := [game.Logbook_Place_Kind]engine.Text {
 	.Beacon     = .Place_Beacon,
 	.Remains    = .Place_Remains,
 	.Settlement = .Place_Settlement,
+	.Landmark   = .Place_Landmark,
 }
 
 // place_title: a place as the journal names it: its own name, else its kind's.
@@ -133,13 +135,20 @@ journal_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	defer ui.end_layer(ctx, prev)
 	content, shown := section_frame(app, ctx)
 	if !shown {return}
-	if len(s.reg.quests) > 0 {
-		journal_pages(app, ctx, ui.cut_top(&content, t.row_height))
-		ui.cut_top(&content, t.spacing)
-		if app.player_menu.journal_page == .Quests {
-			quests_page(app, ctx, content)
-			return
-		}
+	pages := ~bit_set[engine.Journal_Page]{}
+	if len(s.reg.quests) == 0 {pages -= {.Quests}}
+	page := &app.player_menu.journal_page
+	if page^ not_in pages {page^ = .Log}
+	journal_pages(app, ctx, ui.cut_top(&content, t.row_height), pages)
+	ui.cut_top(&content, t.spacing)
+	switch page^ {
+	case .Quests:
+		quests_page(app, ctx, content)
+		return
+	case .Worlds:
+		worlds_page(app, ctx, content)
+		return
+	case .Log:
 	}
 	half := (content.w - 2 * t.spacing) / 2
 	left := ui.cut_left(&content, half)
@@ -173,15 +182,21 @@ journal_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 JOURNAL_PAGE_TEXT := [engine.Journal_Page]engine.Text {
 	.Quests = .Journal_Quests_Page,
 	.Log    = .Journal_Log_Page,
+	.Worlds = .Journal_Worlds_Page,
 }
 
-// journal_pages: the row of the journal's pages in r, the one shown lit, the others
-// buttons that show theirs.
+// journal_pages: the row of the journal's pages in r (those of `pages`), the one shown lit,
+// the others buttons that show theirs.
 @(private = "file")
-journal_pages :: proc(app: ^engine.App, ctx: ^ui.Context, r: ui.Rect) {
+journal_pages :: proc(
+	app: ^engine.App,
+	ctx: ^ui.Context,
+	r: ui.Rect,
+	pages: bit_set[engine.Journal_Page],
+) {
 	t := &ctx.theme
 	row := r
-	for page in engine.Journal_Page {
+	for page in pages {
 		name := engine.tr(JOURNAL_PAGE_TEXT[page])
 		b := ui.cut_left(&row, ui.measure_text(ctx, name, t.font_size) + 4 * t.padding)
 		ui.cut_left(&row, t.spacing)
@@ -192,6 +207,65 @@ journal_pages :: proc(app: ^engine.App, ctx: ^ui.Context, r: ui.Rect) {
 		} else if ui.button(ctx, name, b) {
 			app.player_menu.journal_page = page
 		}
+	}
+}
+
+// WORLD_ROW: a world's two lines on the worlds page.
+WORLD_ROW :: 2 * JOURNAL_ROW + 6
+
+// worlds_page: the worlds the player has stood on (its logbook's), in the order first
+// stood on: what each is and its address, then that it is here, or the places found there
+// (or that none was).
+@(private = "file")
+worlds_page :: proc(app: ^engine.App, ctx: ^ui.Context, r: ui.Rect) {
+	s := app.session
+	t := &ctx.theme
+	j := &s.logbook.logbook
+	area := pane(ctx, r, engine.tr(.Journal_Worlds))
+	if j.world_count == 0 {
+		ui.draw_text(
+			ctx,
+			ui.cut_top(&area, JOURNAL_ROW),
+			engine.tr(.Journal_No_Worlds),
+			t.font_size,
+			t.text_muted,
+		)
+		return
+	}
+	fits := max(int(area.h / WORLD_ROW), 1)
+	for &w, i in j.worlds[:j.world_count] {
+		if i == fits - 1 && int(j.world_count) > fits {
+			ui.draw_text(
+				ctx,
+				ui.cut_top(&area, JOURNAL_ROW),
+				fmt.tprintf("+%d", int(j.world_count) - i),
+				t.font_size,
+				t.text_muted,
+			)
+			break
+		}
+		box := ui.rect_shrink(ui.cut_top(&area, WORLD_ROW), 2)
+		top := ui.cut_top(&box, JOURNAL_ROW)
+		address := engine.symbols_text(w.world.world[:])
+		ui.draw_text(ctx, top, engine.world_title(w), t.font_size, t.text)
+		ui.draw_text(ctx, top, address, t.font_size * 1.4, t.text, .Right)
+		found := engine.tr(.Journal_Found_None)
+		if w.world == s.logbook.here {
+			found = engine.tr(.Journal_Here)
+		} else if game.logbook_found_in(j, w.world) > 0 {
+			names := make([dynamic]string, context.temp_allocator)
+			for &p in j.places[:j.place_count] {
+				if p.world == w.world {append(&names, place_title(&p))}
+			}
+			found = strings.join(names[:], ", ", context.temp_allocator)
+		}
+		ui.draw_text(
+			ctx,
+			box,
+			ui.text_elide(ctx, found, box.w, t.font_size),
+			t.font_size,
+			t.text_muted,
+		)
 	}
 }
 

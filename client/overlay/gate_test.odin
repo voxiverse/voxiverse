@@ -106,7 +106,7 @@ test_gate_address :: proc(t: ^testing.T) {
 	testing.expect(t, engine.overlay_is_open(&app.overlays, .Gate))
 	frame(app, {})
 	testing.expectf(t, says(app, want), "the whole address does not say %q", want)
-	testing.expect(t, says(app, symbols_text(picks[:])), "the address is not written out")
+	testing.expect(t, says(app, engine.symbols_text(picks[:])), "the address is not written out")
 	testing.expect(t, len(s.writer.buf) == 0, "sent before Open")
 	click(app, l.open)
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Gate))

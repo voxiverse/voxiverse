@@ -238,10 +238,15 @@ item ledger's audit counts them as held.
 
 A character file of format 7 may have a `logbook`: the places the character found
 (`places`: each its `kind` by name, `gate` or `ruin` or the rest of `game.Logbook_Place_Kind`,
-its `world`'s address in directory form, the block `at` and its own `name` if it has one) and
-the creature kinds it met (`met`: their ids). The server keeps it with the character and
-sends it to the player (the `logbook` record); a place of a kind or world it cannot read, or
-a kind the registry no longer has, is skipped (and logged). A file before has none.
+its `world`'s address in directory form, the block `at` and its own `name` if it has one),
+the creature kinds it met (`met`: their ids) and the worlds it has stood on (`worlds`: each
+its `world`'s address, its `class` by name, `worldgen.CLASS_NAMES`, and `home` for the
+universe's home world; noted as it joins and as it travels; at most 16, the oldest but home
+forgotten first). The server keeps it with the character and sends it to the player (the
+`logbook` record); a place of a kind or world it cannot read, a kind the registry no longer
+has, or a world of an address or class it cannot read, is skipped (and logged). A file before
+has none. `worlds` came with format 7 still: a reader of format 7 from before skips it, as
+it does `quests`.
 
 ### The quests
 

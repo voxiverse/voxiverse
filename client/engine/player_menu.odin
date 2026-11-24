@@ -24,4 +24,5 @@ Player_Menu :: struct {
 Journal_Page :: enum u8 {
 	Quests, // the quests under way and done
 	Log, // the places found and the creatures met
+	Worlds, // the worlds stood on, and what was found on each
 }

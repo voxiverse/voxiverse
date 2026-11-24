@@ -7,6 +7,7 @@ import "core:testing"
 import "common:game"
 import "common:protocol"
 import "common:starmap"
+import "common:worldgen"
 
 // The exit check, two players over UDP: armor goes on through the
 // inventory's own actions (only into the slot it fits; swapping; quick
@@ -153,8 +154,8 @@ test_trinkets_saved :: proc(t: ^testing.T) {
 }
 
 // The logbook is kept with the character (a player file of format 7): its places, each in
-// its world and with its name, and the creatures met by their kinds' ids; a file from
-// before it has none.
+// its world and with its name, the creatures met by their kinds' ids and the worlds stood
+// on with their classes; a file from before it has none.
 @(test)
 test_logbook_saved :: proc(t: ^testing.T) {
 	reg := test_reg()
@@ -165,6 +166,8 @@ test_logbook_saved :: proc(t: ^testing.T) {
 	game.logbook_place(&r.logbook, .Ruin, far, {-300, 12, 280}, "Old ruin")
 	dummy, _ := game.registry_kind(reg, "voxiverse:dummy")
 	game.logbook_meet(&r.logbook, dummy)
+	game.logbook_world(&r.logbook, {home, 0, true})
+	game.logbook_world(&r.logbook, {far, u8(worldgen.World_Class.Jungle), false})
 	back, ok := player_parse(reg, player_json(reg, &r, nil), nil)
 	defer counters_free(&back.stats)
 	testing.expect(t, ok)

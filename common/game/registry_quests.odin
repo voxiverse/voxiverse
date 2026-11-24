@@ -47,7 +47,16 @@ GOAL_NAMES := []string {
 	"visit",
 } // (by Goal)
 @(private)
-PLACE_NAMES := []string{"gate", "ruin", "town", "outpost", "beacon", "remains", "settlement"} // (by Logbook_Place_Kind)
+PLACE_NAMES := []string {
+	"gate",
+	"ruin",
+	"town",
+	"outpost",
+	"beacon",
+	"remains",
+	"settlement",
+	"landmark",
+} // (by Logbook_Place_Kind)
 
 // read_quests: the quests (after every kind they may name), and that none comes after
 // itself by any way round.

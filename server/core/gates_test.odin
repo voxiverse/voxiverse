@@ -314,6 +314,25 @@ test_gate_dead_until_woken :: proc(t: ^testing.T) {
 	}
 	_, through_ok := harness_step_until(h, through, &walk, 20 * game.TICK_RATE)
 	testing.expect(t, through_ok, "never went through the woken gate")
+	// The gate arrived at is in the logbook, in its world, and both worlds stood on are.
+	arrived := false
+	far_middle := worldgen.gate_at(far, 5, 5)
+	for &q in c.logbook.places[:c.logbook.place_count] {
+		arrived ||=
+			q.kind == .Gate &&
+			q.world == away &&
+			q.at == {far_middle.x, far_middle.y, far_middle.z}
+	}
+	testing.expect(t, arrived, "the far gate is not in the logbook")
+	lb := &c.logbook
+	testing.expect_value(t, lb.world_count, 2)
+	testing.expect(t, lb.worlds[0] == game.Logbook_World{w.address, 0, true}, "home first")
+	testing.expect_value(t, lb.worlds[1].world, away)
+	testing.expect_value(
+		t,
+		worldgen.World_Class(lb.worlds[1].class),
+		worldgen.world_class_of(&c.world.params),
+	)
 }
 
 // Dead gates are saved with their world and come back with it; a woken one

@@ -407,7 +407,10 @@ travel :: proc(s: ^Server, c: ^Client, a: starmap.Address, there: Maybe(Place) =
 		land_at_spawn(s, c)
 	}
 	c.back = back
-	if to != from {quests_settle(s, c)} 	// (a step may ask for the world it is on now)
+	if to != from {
+		logbook_world(s, c)
+		quests_settle(s, c) // (a step may ask for the world it is on now)
+	}
 	if travelled := s.config.game.travelled;
 	   travelled != nil && to != from {travelled(s, c, from, to)}
 	return ""

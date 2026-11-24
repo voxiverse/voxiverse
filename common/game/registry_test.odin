@@ -1181,3 +1181,26 @@ test_logbook_notes_once :: proc(t: ^testing.T) {
 	testing.expect(t, logbook_meet(&lb, Kind_Id(3)) && !logbook_meet(&lb, Kind_Id(3)))
 	testing.expect_value(t, lb.met_count, 1)
 }
+
+// A logbook notes each world stood on once (told anew, its class changes), how many places
+// it found in each, and past its room forgets the oldest but the home world.
+@(test)
+test_logbook_worlds :: proc(t: ^testing.T) {
+	lb: Logbook
+	home, far := starmap.address_derive(1), starmap.address_derive(2)
+	testing.expect(t, logbook_world(&lb, {home, 0, true}))
+	testing.expect(t, !logbook_world(&lb, {home, 0, true}), "the same world")
+	testing.expect(t, logbook_world(&lb, {far, 3, false}))
+	testing.expect(t, logbook_world(&lb, {far, 4, false}), "told anew")
+	testing.expect_value(t, lb.world_count, 2)
+	testing.expect_value(t, lb.worlds[1].class, 4)
+	logbook_place(&lb, .Gate, far, {10, 5, 10})
+	logbook_place(&lb, .Landmark, far, {300, 5, 10}, "The ring")
+	logbook_place(&lb, .Ruin, home, {300, 5, 10})
+	testing.expect_value(t, logbook_found_in(&lb, far), 2)
+	testing.expect_value(t, logbook_found_in(&lb, home), 1)
+	for i in 0 ..< LOGBOOK_WORLDS {logbook_world(&lb, {starmap.address_derive(u64(10 + i)), 1, false})}
+	testing.expect_value(t, int(lb.world_count), LOGBOOK_WORLDS)
+	testing.expect(t, lb.worlds[0].home, "the home world is kept")
+	testing.expect_value(t, lb.worlds[1].world, starmap.address_derive(11))
+}

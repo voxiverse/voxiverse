@@ -280,7 +280,7 @@ player, and counts only while it is the step:
 | `have` | `item`, or an item tag (`"#<tag>"`) | the player carries `count` of it at once (slots, what it wears, the cursor); of a tag, of any of its items together (`game.quest_carried`) |
 | `make` | `item` | it made `count` of it: the game tells (`core.quest_note`; the sandbox's crafting) |
 | `place`, `break` | `block` | it placed or broke `count` blocks of the type |
-| `find` | `place` (`gate`, `ruin`, `town`, `outpost`, `beacon`, `remains`, `settlement`), maybe `name` | its logbook has such a place (in any world) |
+| `find` | `place` (`gate`, `ruin`, `town`, `outpost`, `beacon`, `remains`, `settlement`, `landmark`), maybe `name` | its logbook has such a place (in any world) |
 | `kill` | `creature` | it killed `count` creatures of the kind (its blow, shot or blast) |
 | `use` | `item` | it used up `count` of the consumable |
 | `win` | `name` | it won the game's encounter of that name (`core.quest_note`; the sandbox's ruin is `sandbox:ruin`) |

@@ -1,8 +1,10 @@
 package engine
 
 import "core:fmt"
+import "core:strings"
 
 import "common:base"
+import "common:game"
 import "common:starmap"
 import "common:worldgen"
 
@@ -77,6 +79,9 @@ Text :: enum u16 {
 	Class_Fungal,
 	Class_Moon,
 	Class_Jungle,
+	World_Home, // a logbook's world: the universe's home world
+	World_No_Class, // ... one of no class (Earth's kind)
+	Gate_Known, // the gate's row of the worlds the player has stood on
 	Crash_Title,
 	Crash_Saved,
 	Crash_Not_Sent,
@@ -286,11 +291,17 @@ Text :: enum u16 {
 	Place_Beacon,
 	Place_Remains,
 	Place_Settlement,
+	Place_Landmark,
 	Map_You,
 	Map_Places,
 	Map_Across,
 	Journal_Quests_Page,
 	Journal_Log_Page,
+	Journal_Worlds_Page,
+	Journal_Worlds,
+	Journal_No_Worlds,
+	Journal_Here,
+	Journal_Found_None,
 	Quests_Open,
 	Quests_Done,
 	Quests_None,
@@ -413,6 +424,9 @@ TEXT_EN := [Text]string {
 	.Class_Fungal                           = "A fungal world under giant fungi",
 	.Class_Moon                             = "A barren moon, airless dust and craters",
 	.Class_Jungle                           = "A jungle world under a tall canopy",
+	.World_Home                             = "Your home world",
+	.World_No_Class                         = "A world like Earth",
+	.Gate_Known                             = "Worlds you have stood on",
 	.Crash_Title                            = "Voxiverse closed unexpectedly last time",
 	.Crash_Saved                            = "A report was saved on this computer.",
 	.Crash_Not_Sent                         = "Nothing was sent anywhere.",
@@ -622,11 +636,17 @@ TEXT_EN := [Text]string {
 	.Place_Beacon                           = "Beacon",
 	.Place_Remains                          = "Remains",
 	.Place_Settlement                       = "Settlement",
+	.Place_Landmark                         = "Landmark",
 	.Map_You                                = "You",
 	.Map_Places                             = "Places",
 	.Map_Across                             = "{0} m across",
 	.Journal_Quests_Page                    = "Quests",
 	.Journal_Log_Page                       = "Places and creatures",
+	.Journal_Worlds_Page                    = "Worlds",
+	.Journal_Worlds                         = "Worlds stood on",
+	.Journal_No_Worlds                      = "None yet",
+	.Journal_Here                           = "You are here",
+	.Journal_Found_None                     = "Nothing found there yet",
 	.Quests_Open                            = "Under way",
 	.Quests_Done                            = "Done",
 	.Quests_None                            = "No quest under way",
@@ -695,6 +715,21 @@ destination_line :: proc(a: starmap.Address) -> string {
 	class := worldgen.world_class(a)
 	if class == .None {return life}
 	return tr(.Gate_Destination, tr(Text(int(Text.Class_Temperate) + int(class) - 1)), life)
+}
+
+// world_title: a world of the logbook as players read it: home, or what its class is
+// ("A jungle world under a tall canopy").
+world_title :: proc(w: game.Logbook_World) -> string {
+	if w.home {return tr(.World_Home)}
+	if w.class == 0 || int(w.class) >= len(worldgen.World_Class) {return tr(.World_No_Class)}
+	return tr(Text(int(Text.Class_Temperate) + int(w.class) - 1))
+}
+
+// symbols_text: an address's symbols as one run of text (the UI draws each symbol's rune).
+symbols_text :: proc(symbols: []u8) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	for s in symbols {strings.write_rune(&b, starmap.symbol_rune(s))}
+	return strings.to_string(b)
 }
 
 // life_line: what lives on a world, in one line: "Plants and animals; three

@@ -13,13 +13,16 @@ import "common:starmap"
 // address of a world of this galaxy from the board of symbols, one a press
 // (none twice; Backspace or Erase takes the last back), and Open (or Enter)
 // sends it once it is whole. The server says what came of it: a notice, or
-// the void gathering in the gate's opening.
+// the void gathering in the gate's opening. The worlds of this galaxy the
+// player has stood on (its logbook's) are a row of buttons over the board:
+// one writes that world's address whole, to open the gate onto it again.
 
 // The board: a row for each of the symbols' bodies, a column for each set
 // of marks (starmap.symbol_strokes), so alike symbols stand together.
 GATE_BOARD_COLUMNS :: 8
 GATE_BOARD_BUTTON :: ui.Vec2{48, 48}
 GATE_ADDRESS_HEIGHT :: 56
+GATE_KNOWN_MOST :: 4 // worlds stood on the known row offers (the latest)
 
 // is_gate_block: a block of a gate's frame, by which one uses it.
 is_gate_block :: proc(b: game.Block) -> bool {
@@ -71,17 +74,21 @@ gate_entry_send :: proc(app: ^engine.App) -> bool {
 	return true
 }
 
+// gate_known: the worlds of this galaxy the player has stood on but the one it is on, the
+// latest GATE_KNOWN_MOST, oldest first (temporary memory).
+gate_known :: proc(s: ^engine.Session) -> []starmap.Address {
+	here := s.welcome.address
+	j := &s.logbook.logbook
+	out := make([dynamic]starmap.Address, context.temp_allocator)
+	for w in j.worlds[:j.world_count] {
+		if w.world.galaxy == here.galaxy && w.world != s.logbook.here {append(&out, w.world)}
+	}
+	return out[max(len(out) - GATE_KNOWN_MOST, 0):]
+}
+
 symbol_text :: proc(symbol: u8) -> string {
 	bytes, n := utf8.encode_rune(starmap.symbol_rune(symbol))
 	return strings.clone(string(bytes[:n]), context.temp_allocator)
-}
-
-// symbols_text: symbols as one run of text.
-@(private)
-symbols_text :: proc(symbols: []u8) -> string {
-	b := strings.builder_make(context.temp_allocator)
-	for s in symbols {strings.write_rune(&b, starmap.symbol_rune(s))}
-	return strings.to_string(b)
 }
 
 // Gate_Layout: the panel, the address as written so far, and each button.
@@ -90,14 +97,17 @@ Gate_Layout :: struct {
 	panel:   ui.Rect,
 	address: ui.Rect,
 	life:    ui.Rect, // what lives on the world the address names (or would, one symbol on)
+	known:   [GATE_KNOWN_MOST]ui.Rect, // the worlds stood on, the first `known` of them
 	symbols: [starmap.SYMBOLS]ui.Rect,
 	erase:   ui.Rect,
 	cancel:  ui.Rect,
 	open:    ui.Rect,
 }
 
+// gate_layout: where everything goes, with a row for `known` worlds stood on (none: no
+// row).
 @(private)
-gate_layout :: proc(ctx: ^ui.Context) -> (l: Gate_Layout) {
+gate_layout :: proc(ctx: ^ui.Context, known := 0) -> (l: Gate_Layout) {
 	t := &ctx.theme
 	gap := t.spacing
 	rows := (starmap.SYMBOLS + GATE_BOARD_COLUMNS - 1) / GATE_BOARD_COLUMNS
@@ -105,12 +115,23 @@ gate_layout :: proc(ctx: ^ui.Context) -> (l: Gate_Layout) {
 	grid_h := f32(rows) * (GATE_BOARD_BUTTON.y + gap) - gap
 	w := grid_w + 2 * t.padding
 	h := 4 * t.row_height + GATE_ADDRESS_HEIGHT + grid_h + 4 * gap + 2 * t.padding
+	if known > 0 {h += 2 * t.row_height + gap}
 	l.panel = ui.rect_center(ctx.screen, w, h)
 	inner := ui.rect_shrink(l.panel, t.padding)
 	ui.cut_top(&inner, 2 * t.row_height) // the title, this galaxy
 	l.address = ui.cut_top(&inner, GATE_ADDRESS_HEIGHT)
 	l.life = ui.cut_top(&inner, t.row_height)
 	ui.cut_top(&inner, 2 * gap)
+	if known > 0 {
+		ui.cut_top(&inner, t.row_height) // (its label)
+		row := ui.cut_top(&inner, t.row_height)
+		ui.cut_top(&inner, gap)
+		each := (row.w - f32(GATE_KNOWN_MOST - 1) * gap) / GATE_KNOWN_MOST
+		for i in 0 ..< min(known, GATE_KNOWN_MOST) {
+			l.known[i] = ui.cut_left(&row, each)
+			ui.cut_left(&row, gap)
+		}
+	}
 	for i in 0 ..< starmap.SYMBOLS {
 		row, col := i / GATE_BOARD_COLUMNS, i % GATE_BOARD_COLUMNS
 		l.symbols[i] = {
@@ -150,14 +171,15 @@ gate_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		for k in e.symbols[:e.count] {if int(k) == i {return true}}
 		return false
 	}
-	l := gate_layout(ctx)
+	known := gate_known(s)
+	l := gate_layout(ctx, len(known))
 	ui.panel(ctx, l.panel)
 	inner := ui.rect_shrink(l.panel, t.padding)
 	ui.label(ctx, engine.tr(.Gate_Title), ui.cut_top(&inner, t.row_height), .Center)
 	here := s.welcome.address
 	ui.label(
 		ctx,
-		engine.tr(.Gate_Galaxy, symbols_text(here.galaxy[:])),
+		engine.tr(.Gate_Galaxy, engine.symbols_text(here.galaxy[:])),
 		ui.cut_top(&inner, t.row_height),
 		.Center,
 		t.text_muted,
@@ -168,7 +190,14 @@ gate_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	ui.fill_rect(ctx, field, t.slot_fill)
 	ui.stroke_rect(ctx, field, 2 if whole else 1, t.text if whole else t.faint_border)
 	writing := ui.rect_shrink(field, t.padding)
-	ui.draw_text(ctx, writing, symbols_text(e.symbols[:e.count]), t.font_size * 2.5, t.text, .Left)
+	ui.draw_text(
+		ctx,
+		writing,
+		engine.symbols_text(e.symbols[:e.count]),
+		t.font_size * 2.5,
+		t.text,
+		.Left,
+	)
 	ui.draw_text(
 		ctx,
 		writing,
@@ -196,6 +225,25 @@ gate_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	}
 	if a, has := life_at.?; has {
 		ui.label(ctx, engine.destination_line(a), l.life, .Center, t.text_muted)
+	}
+	// The worlds stood on: one pressed writes its address whole.
+	if len(known) > 0 {
+		label := l.known[0]
+		label.y -= t.row_height
+		label.w = l.panel.w
+		ui.draw_text(ctx, label, engine.tr(.Gate_Known), t.font_size, t.text_muted)
+	}
+	for &w, i in known {
+		ui.push_id_int(ctx, 100 + i)
+		if ui.button(
+			ctx,
+			engine.symbols_text(w.world[:]),
+			l.known[i],
+			text_size = t.font_size * 1.4,
+		) {
+			e.symbols, e.count = w.world, starmap.WORLD_LENGTH
+		}
+		ui.pop_id(ctx)
 	}
 	// A pad's focus starts on, and after a symbol is taken goes to, the next
 	// free one; on Open once the address is whole.

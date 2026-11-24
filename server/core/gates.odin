@@ -116,8 +116,13 @@ gates_tick :: proc(w: ^World) {
 		for &c in s.clients {
 			if c.state != .Playing || c.world != w || !in_opening(g, c.player.position) {continue}
 			front, yaw := worldgen.gate_front(g.far)
-			notice_if(s, &c, travel(s, &c, g.to, Place{g.to, front, {yaw, 0}}))
+			why := travel(s, &c, g.to, Place{g.to, front, {yaw, 0}})
+			notice_if(s, &c, why)
 			record(s, &c, .Teleport, "gate")
+			if why == "" { 	// (the gate arrived at, in its world's place of the logbook)
+				centre := worldgen.gate_at(g.far, 5, 5)
+				logbook_place(s, &c, .Gate, {centre.x, centre.y, centre.z})
+			}
 		}
 	}
 }

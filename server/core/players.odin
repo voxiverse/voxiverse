@@ -88,7 +88,8 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		kit_give(s, c) // the mode's first: it lays out the hotbar (survival: the weapons)
 		give_kit(s, c) // then the world's, what is still lacking
 	}
-	c.inv_changed = true
+	c.inv_changed = true // (and so its quests settle)
+	logbook_world(s, c)
 	c.chat_tokens, c.chat_tick = CHAT_BURST, s.tick
 	if m, ok := worldgen_variables(w); ok {state_put(s, c, .Variables, &m)}
 	log.infof("server player joined player=%d name=%q", player_id(s, c), name)

@@ -194,6 +194,8 @@ local SCHEMA = {
     { name = "logbook.place_count", t = "u8" },
     { name = "logbook.met", t = "array", scalar = true, count = 64, elem = { t = "u16" } },
     { name = "logbook.met_count", t = "u8" },
+    { name = "logbook.worlds", t = "array", scalar = false, count = 16, elem = { t = "struct", fields = { { name = "world", t = "struct", fields = { { name = "galaxy", t = "array", scalar = true, count = 8, elem = { t = "u8" } }, { name = "world", t = "array", scalar = true, count = 7, elem = { t = "u8" } }, } }, { name = "class", t = "u8" }, { name = "home", t = "bool" }, } } },
+    { name = "logbook.world_count", t = "u8" },
   } },
   { id = 21, name = "quests", key = "none", lane = "reliable", fields = {
     { name = "log.quests", t = "array", scalar = false, count = 32, elem = { t = "struct", fields = { { name = "step", t = "u8" }, { name = "count", t = "u16" }, } } },

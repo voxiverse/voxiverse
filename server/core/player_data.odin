@@ -90,6 +90,13 @@ File_Quest :: struct {
 File_Logbook :: struct {
 	places: []File_Place,
 	met:    []string, // creature kinds' ids
+	worlds: []File_World `json:"worlds,omitempty"`, // the worlds stood on (a member a reader of format 7 from before skips: the format stays 7)
+}
+
+File_World :: struct {
+	world: string, // its address (directory form)
+	class: string, // its world class's name (worldgen.CLASS_NAMES)
+	home:  bool `json:"home,omitempty"`,
 }
 
 File_Place :: struct {
@@ -108,6 +115,7 @@ PLACE_KIND_NAMES := [game.Logbook_Place_Kind]string {
 	.Beacon     = "beacon",
 	.Remains    = "remains",
 	.Settlement = "settlement",
+	.Landmark   = "landmark",
 }
 
 @(private = "file")
@@ -318,8 +326,9 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record, character: typeid) -
 		items    = file_stacks(reg, &r.inventory),
 	}
 	if aside, set_aside := r.aside.?; set_aside {f.aside = file_stacks(reg, &aside)}
-	if r.logbook.place_count > 0 ||
-	   r.logbook.met_count > 0 {f.logbook = logbook_file(reg, &r.logbook)}
+	if r.logbook.place_count > 0 || r.logbook.met_count > 0 || r.logbook.world_count > 0 {
+		f.logbook = logbook_file(reg, &r.logbook)
+	}
 	if qs := quests_file(reg, &r.quests); len(qs) > 0 {f.quests = qs}
 	if sk := skills_file(reg, &r.skills); len(sk) > 0 {f.skills = sk}
 	data, _ := json.marshal(
@@ -563,7 +572,13 @@ logbook_file :: proc(reg: ^game.Registry, lb: ^game.Logbook) -> File_Logbook {
 	for k in lb.met[:lb.met_count] {
 		if info := game.kind_info(reg, k); info != nil {append(&met, info.id)}
 	}
-	return {places, met[:]}
+	worlds := make([]File_World, lb.world_count, context.temp_allocator)
+	for w, i in lb.worlds[:lb.world_count] {
+		class :=
+			worldgen.World_Class(w.class) if int(w.class) < len(worldgen.World_Class) else .None
+		worlds[i] = {starmap.address_dir(w.world), worldgen.CLASS_NAMES[class], w.home}
+	}
+	return {places, met[:], worlds}
 }
 
 // logbook_read: a player file's logbook into lb; a place of a kind or world it cannot
@@ -588,6 +603,19 @@ logbook_read :: proc(reg: ^game.Registry, f: File_Logbook, lb: ^game.Logbook) {
 		}
 		game.logbook_meet(lb, kind)
 	}
+	for w in f.worlds {
+		world, valid := starmap.address_parse(w.world, {})
+		class, known := worldgen.class_by_name(w.class)
+		if !valid || !known {
+			log.warnf(
+				"server player file logbook world skipped world=%q class=%q",
+				w.world,
+				w.class,
+			)
+			continue
+		}
+		game.logbook_world(lb, {world, u8(class), w.home})
+	}
 }
 
 // logbook_place notes a place in c's logbook (a gate it opened; a game's places, such as
@@ -606,6 +634,17 @@ logbook_place :: proc(
 		experience_gain(s, c, u64(s.registry.progression.find[kind]))
 		quests_settle(s, c)
 	}
+}
+
+// logbook_world notes the world c stands on in its logbook (as it joins and travels): its
+// class, and whether it is the home world.
+@(private)
+logbook_world :: proc(s: ^Server, c: ^Client) {
+	w := c.world
+	game.logbook_world(
+		&c.logbook,
+		{w.address, u8(worldgen.world_class_of(&w.params)), w == s.home},
+	)
 }
 
 // skills_file: the skills learnt as a player file keeps them (temporary memory).
