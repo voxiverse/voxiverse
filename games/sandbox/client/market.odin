@@ -59,14 +59,17 @@ received :: proc(s: ^engine.Session, r: protocol.Received) {
 	if v, ok := engine.game_value(s, r, sandbox.Made); ok && v != nil {craft_made(s, v^)}
 	if v, ok := engine.game_value(s, r, sandbox.Ruin_Fight); ok && v != nil {ruin_received(s, v)}
 	if v, ok := engine.game_value(s, r, sandbox.Talk); ok && v != nil {talk_received(s, v)}
+	if v, ok := engine.game_value(s, r, sandbox.Delve_Fight); ok && v != nil {delve_received(s, v)}
 }
 
 // hud: a conversation whose screen was closed left (talk.odin); the ruin's fight while the
-// player is in one (ruin.odin); `Market of <town>` and the
+// player is in one (ruin.odin); a custodian's while it fights one (delve.odin); `Market of
+// <town>` and the
 // key that opens it, near the top, while in a town and the screen is closed.
 hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	talk_hud(s)
 	ruin_hud(s, ctx)
+	delve_hud(s, ctx)
 	craft_hud(s, ctx)
 	m := &view(s).market
 	if m.town_len == 0 || engine.game_screen_shown(s) {return}

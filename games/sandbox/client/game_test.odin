@@ -52,6 +52,33 @@ test_sandbox_ruin_bar :: proc(t: ^testing.T) {
 	testing.expect(t, playtest.drawn(rig, "RUIN   wave 2 of 5 held   the next in 6 s"))
 }
 
+// A delve's custodian shows as a line across the top with its health in it while the
+// player fights it, the line saying when its casing is open; nothing shows while it fights
+// none.
+@(test)
+test_sandbox_delve_boss_bar :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	testing.expect(t, !playtest.drawn(rig, "THE CUSTODIAN"), "a bar with no fight")
+	view(rig.s).delve = {
+		phase  = 2,
+		phases = 3,
+		health = 200,
+		most   = 360,
+	}
+	testing.expect(t, playtest.drawn(rig, "THE CUSTODIAN   phase 2 of 3   200 / 360"))
+	view(rig.s).delve.open = true
+	testing.expect(
+		t,
+		playtest.drawn(
+			rig,
+			"THE CUSTODIAN   phase 2 of 3   200 / 360   its casing is open: strike now",
+		),
+	)
+}
+
 // The crafting screen: its action opens it; every recipe shows what it makes and what it
 // takes against what is carried, and the side says no fabricator is near and what the
 // world's outposts are.
