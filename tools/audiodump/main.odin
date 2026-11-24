@@ -20,6 +20,7 @@ import "common:base"
 //	build audiodump <capture> -bus:Music -wav:out.wav     one bus (or Master) as a WAV
 //	build audiodump <capture> -bus:Music -spectrogram:out.png     ... or as a spectrogram
 //	build audiodump <capture> -from:2 -to:5 -sound:Stone  a part, one sound
+//	build audiodump -sounds [-sound:Step] [-wav:<dir>]   every synthesized sound measured (sounds.odin)
 //
 // The replay needs the game's own sounds (client.sounds_init) to match the
 // capture's table; when they do not (a capture of another build) the timeline
@@ -36,11 +37,16 @@ Options :: struct {
 	to:          f64 `usage:"only up to this many seconds into the capture"`,
 	sound:       string `usage:"only sounds whose name contains this"`,
 	quiet:       bool `usage:"no timeline: the decisions and summaries only"`,
+	sounds:      bool `usage:"no capture: measure every sound the game synthesizes (with -wav:<dir>, write each there)"`,
 }
 
 main :: proc() {
 	opts: Options
 	flags.parse_or_exit(&opts, os.args, .Odin)
+	if opts.sounds {
+		sounds_report(opts.sound, opts.wav)
+		return
+	}
 	if opts.file == "" {
 		fmt.eprintln("audiodump: which capture? (build audiodump <file>)")
 		os.exit(1)

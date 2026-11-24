@@ -281,7 +281,9 @@ a file that does not match, and skips files already present. A test parses every
   snapshot every 15 s, and writes `captures/audio-<n>.vxac` on F9, with the `audio_capture`
   console command, and when the mixer underruns (rate-limited). `build audiodump` reads one:
   the timeline, the engine's decision for each voice, loudness, offline throughput and DSP timing benchmark, any bus as a WAV (`-report`,
-  `-bench`, `-bus:`, `-wav:`).
+  `-bench`, `-bus:`, `-wav:`). With `-sounds` and no capture it measures every sound the game
+  synthesizes instead (peak, RMS, crest, loudness, rise, length, decay, centroid, energy above
+  4 kHz; `-wav:<dir>` writes each there).
 - The **freeze-and-solo inspector** (dev builds, F8) replays the newest capture window through
   a mixer of its own and loops the last half second in place of the live output, listing the
   buses and the frozen voices with what the engine decided about each, a spectrum of Master
