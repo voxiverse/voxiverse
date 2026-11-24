@@ -101,7 +101,7 @@ spawn as before.
 
 **The pressure.** The night's creatures (below) and a death that drops what you carry, far
 from where you were: an outpost is where you stand again and where nothing comes for you.
-There is no hunger or thirst, no experience or levels from the loop.
+There is no hunger or thirst; what a survivor does earns it levels and skills (below).
 
 **The first hour.** Break leaves for fibre and gravel for flint, logs for wood; by hand make
 planks, cord, a flint knife and a flint pick (and padded armour). With the pick, stone and
@@ -157,20 +157,20 @@ craft does; a quest done gives its reward. A step that needs a place points the 
 the map at it once the logbook has it (a fallen tower, a sealed vault, the ruin, the court).
 Nothing counts in creative.
 
-| Quest | After | Steps | Reward |
-|---|---|---|---|
-| Waking at the Gate | | carry 6 fibre, 5 flint, 4 logs | 2 cord |
-| Edge and Point | Waking | make 4 planks, 2 cord, a flint knife, a flint pick | field dressing |
-| The Court of Remains | Edge and Point | find a fallen tower; break open a remains cache | salvage |
-| Under the Turf | Edge and Point | carry 8 stone, 3 coal, 4 raw copper | 4 coal |
-| A Workshop | Under the Turf | make a fabricator; set it down; make 3 copper ingots | 2 copper ingots |
-| Patch and Mend | A Workshop | make a field dressing; use one | 2 field dressings |
-| Meat and Hide | Patch and Mend | kill a loper; make a trail ration; eat one | padded vest |
-| A Light to Return To | Meat and Hide | make a copper pick; carry 3 raw iron; make an outpost beacon; place it | 4 lamps |
-| What the Keepers Left | A Light, The Court | carry 2 salvage, 3 ancient alloy; make a circuit board, 3 alloy plate | charge cell |
-| The Sealed Vault | What the Keepers Left | find a sealed vault; make an alloy drill; kill a sentry; break the relic vault | 2 med gel |
-| The Ruin Wakes | The Sealed Vault | find the ruin; win its fight (`sandbox:ruin`) | regen ampoule |
-| An Address | The Ruin Wakes | write an address on a gate | data shard |
+| Quest | After | Steps | Reward | XP |
+|---|---|---|---|---|
+| Waking at the Gate | | carry 6 fibre, 5 flint, 4 logs | 2 cord | 40 |
+| Edge and Point | Waking | make 4 planks, 2 cord, a flint knife, a flint pick | field dressing | 60 |
+| The Court of Remains | Edge and Point | find a fallen tower; break open a remains cache | salvage | 80 |
+| Under the Turf | Edge and Point | carry 8 stone, 3 coal, 4 raw copper | 4 coal | 80 |
+| A Workshop | Under the Turf | make a fabricator; set it down; make 3 copper ingots | 2 copper ingots | 100 |
+| Patch and Mend | A Workshop | make a field dressing; use one | 2 field dressings | 80 |
+| Meat and Hide | Patch and Mend | kill a loper; make a trail ration; eat one | padded vest | 120 |
+| A Light to Return To | Meat and Hide | make a copper pick; carry 3 raw iron; make an outpost beacon; place it | 4 lamps | 160 |
+| What the Keepers Left | A Light, The Court | carry 2 salvage, 3 ancient alloy; make a circuit board, 3 alloy plate | charge cell | 200 |
+| The Sealed Vault | What the Keepers Left | find a sealed vault; make an alloy drill; kill a sentry; break the relic vault | 2 med gel | 300 |
+| The Ruin Wakes | The Sealed Vault | find the ruin; win its fight (`sandbox:ruin`) | regen ampoule | 400 |
+| An Address | The Ruin Wakes | write an address on a gate | data shard | 250 |
 
 The engine sees most of it (what a player carries, places, breaks, finds, kills, uses up, an
 address written on a gate); the sandbox tells it what its crafting made
@@ -178,6 +178,51 @@ address written on a gate); the sandbox tells it what its crafting made
 by `core.quest_note`. `server/quests_test.odin` holds the chain to the world: every step can be
 done from real ids with what the steps before gave (a tool of a block's tier, a fabricator
 standing), every quest opens in turn, and progress is kept with the character.
+
+## Levels and skills
+
+A survivor grows by what it does (`pack/data/levels/survivor.json`, `pack/data/skills/survivor.json`,
+the engine's levels and skills: [docs/packs.md](../../docs/packs.md#levels-and-skills)). Its
+experience shows as a bar over the hotbar with its level beside the health bar; the
+Character section (C) holds its skills. Nothing is earned in creative. Every number is the
+pack's, a first guess to tune there.
+
+| Deed | Experience |
+|---|---|
+| A creature killed (by its threat, the creatures' table below) | 4 a point of threat |
+| A creature met for the first time | 10 |
+| A place found: a gate opened, the ruin, a site of the remains, a town | 50, 150, 40, 60 |
+| A thing made for the first time | 8 |
+| The ruin's fight won | 300 |
+| A quest done | its XP (the quests' table above, 1870 in all) |
+| A sheep sheared, a sheep fed | 5, 2 |
+
+The levels run to 30, each costing 40 more than the one before (60 for level 2, 17980 in all
+for 30), and each gives a skill point. A skill's rank costs its points once its branch has
+had what it needs spent in it; every skill and every rank takes 36 points, so a survivor
+chooses. Unlearning every skill is free within 6 blocks of an outpost beacon (the Character
+section's Unlearn, or `/skill reset`; `/skill <name>` learns a rank, `/skill` lists them).
+
+| Skill | Title | Branch | Each rank | Ranks | Cost | Needs |
+|---|---|---|---|---|---|---|
+| `sandbox:quick_hands` | Quick Hands | Survival | breaks a tenth faster | 3 | 1 | 0 |
+| `sandbox:hardy` | Hardy | Survival | 2 more health | 3 | 1 | 0 |
+| `sandbox:sure_footing` | Sure Footing | Survival | 15% of a fall's harm turned aside | 2 | 1 | 2 |
+| `sandbox:trapper` | Trapper | Survival | 10% likelier drops from creatures | 2 | 1 | 2 |
+| `sandbox:second_wind` | Second Wind | Survival | regenerates a quarter faster | 2 | 2 | 4 |
+| `sandbox:heavy_blows` | Heavy Blows | Combat | a swung weapon 12% harder | 3 | 1 | 0 |
+| `sandbox:steady_aim` | Steady Aim | Combat | a shot's cone 15% tighter | 2 | 1 | 0 |
+| `sandbox:quick_reload` | Quick Reload | Combat | a reload 12% quicker | 2 | 1 | 2 |
+| `sandbox:hardened` | Hardened | Combat | 4% of every harm turned aside | 3 | 1 | 3 |
+| `sandbox:fast_fabrication` | Fast Fabrication | Engineering | making takes a tenth less time | 3 | 1 | 0 |
+| `sandbox:prospector` | Prospector | Engineering | stone, ore and relics give one more 10% of the time | 3 | 1 | 0 |
+| `sandbox:field_chemistry` | Field Chemistry | Engineering | consumables heal 15% more | 2 | 1 | 2 |
+| `sandbox:surplus` | Surplus | Engineering | making gives one more 10% of the time | 2 | 2 | 4 |
+
+The sandbox reads the two of its own (`server/survival.odin`, through `core.skill_value`):
+a recipe's time and the chance of one more made; the crafting screen shows the time as the
+skills make it. Where a dead survivor stands again (its outpost, how far off, or the world's
+spawn) is the sandbox's word on the death screen (`respawn_where`: `server/outposts.odin`).
 
 ## Its sheep
 
@@ -215,24 +260,28 @@ the server's (`server/wild.odin`), made of `server:play`'s (`mind.odin`): what e
 its state, and what a player sees of it (asleep, warning, winding up a blow, aloft) is the
 look of that state, drawn by its model.
 
-| Creature | Where and when | What it does | Health |
-|---|---|---|---|
-| loper | grass, by day, herds of 3 to 5 | grazes with its herd, watches a player from 10 blocks, runs with the herd from one within 5 | 8 |
-| twitchet | open ground, day and dusk, 1 or 2 | freezes, ears up, at a player within 9 blocks; bolts from one within 5 | 2 |
-| wheelwing | open ground, by day, 1 to 3 | pecks on the ground, wheels over its ground 6 to 12 blocks up, lands again; takes off from a player within 7 | 3 |
-| glassfin | in water over sand, gravel, dirt or clay, any hour, schools of 2 to 4 | swims with its school, darts from a player within 5, never leaves the water | 2 |
-| domeback | open ground, by day, alone | browses slowly, minds no one; hurt, shuts itself in its shell for 6 seconds (a quarter of any harm gets through) | 20 |
-| hacklebird | open ground, by day | guards its ground: a player within 9 blocks sees its crest and ruff go up; one who stays within 5, or hits it, is kicked (3) until 16 blocks from its ground | 12 |
-| snouter | grass in the woods, by day | roots about; a player within 6 sees its back bristle and dust fly; one who stays within 4, or hits it, is charged (4) | 16 |
-| pitmaw | the floor of caves, any hour, never within 48 blocks of the spawn | lies buried with its eye stalks out; rises in a spray of grit (a second) at a player within 5 blocks and bites (4); slow, so walking away escapes it; buries itself again | 14 |
-| barbcaster | sand or gravel by the water, dusk to dawn | keeps 6 to 10 blocks off and flings barbs (2) from its tail, drawing it back for most of a second first | 9 |
-| duskrunner | open ground in the woods, by night, packs of 3 or 4 | the pack circles a player 6 blocks off; one at a time, its markings flaring first, darts in to bite (2); one badly hurt runs | 6 |
-| cragmaul | open ground and bare rock, by night, alone | slow and heavy: lifts both fists over its head for more than a second before each blow (7); cannot run | 40 |
-| sentry | posted at the remains | folded at its post until a player comes within 10 blocks of the post; wakes (sparks, a second and a half), shoots bolts (3) charging each first, folds again at its post, whole, once the player has gone | 24 |
-| tender | posted at the remains | a mending drone that hovers from stone to stone 1 to 3 blocks up, working sparks into each; minds no one; hurt, flies off up | 8 |
-| watcher | near the remains, by day | hovers 10 to 16 blocks from a player and 5 up, keeping it in sight for most of a minute, then rises and goes; never attacks; hurt, goes at once | 10 |
-| bulwark | posted at the ruin's north gate | the guardian, kneeling until a player comes within 7 blocks of its post; rises (two and a half seconds) and fights with both fists, raising them for a second and a half before each blow (9); gives up 16 blocks from its post and kneels again, whole | 160 |
-| longstrider | grass, by day, rare, alone, 40 to 60 blocks off | a giant as tall as the trees, to walk toward: walks slowly where it likes, grazing, and minds no one; hurt, walks away | 300 |
+| Creature | Where and when | What it does | Health | Threat |
+|---|---|---|---|---|
+| loper | grass, by day, herds of 3 to 5 | grazes with its herd, watches a player from 10 blocks, runs with the herd from one within 5 | 8 | 1 |
+| twitchet | open ground, day and dusk, 1 or 2 | freezes, ears up, at a player within 9 blocks; bolts from one within 5 | 2 | 1 |
+| wheelwing | open ground, by day, 1 to 3 | pecks on the ground, wheels over its ground 6 to 12 blocks up, lands again; takes off from a player within 7 | 3 | 1 |
+| glassfin | in water over sand, gravel, dirt or clay, any hour, schools of 2 to 4 | swims with its school, darts from a player within 5, never leaves the water | 2 | 1 |
+| domeback | open ground, by day, alone | browses slowly, minds no one; hurt, shuts itself in its shell for 6 seconds (a quarter of any harm gets through) | 20 | 2 |
+| hacklebird | open ground, by day | guards its ground: a player within 9 blocks sees its crest and ruff go up; one who stays within 5, or hits it, is kicked (3) until 16 blocks from its ground | 12 | 3 |
+| snouter | grass in the woods, by day | roots about; a player within 6 sees its back bristle and dust fly; one who stays within 4, or hits it, is charged (4) | 16 | 4 |
+| pitmaw | the floor of caves, any hour, never within 48 blocks of the spawn | lies buried with its eye stalks out; rises in a spray of grit (a second) at a player within 5 blocks and bites (4); slow, so walking away escapes it; buries itself again | 14 | 4 |
+| barbcaster | sand or gravel by the water, dusk to dawn | keeps 6 to 10 blocks off and flings barbs (2) from its tail, drawing it back for most of a second first | 9 | 3 |
+| duskrunner | open ground in the woods, by night, packs of 3 or 4 | the pack circles a player 6 blocks off; one at a time, its markings flaring first, darts in to bite (2); one badly hurt runs | 6 | 2 |
+| cragmaul | open ground and bare rock, by night, alone | slow and heavy: lifts both fists over its head for more than a second before each blow (7); cannot run | 40 | 8 |
+| sentry | posted at the remains | folded at its post until a player comes within 10 blocks of the post; wakes (sparks, a second and a half), shoots bolts (3) charging each first, folds again at its post, whole, once the player has gone | 24 | 5 |
+| tender | posted at the remains | a mending drone that hovers from stone to stone 1 to 3 blocks up, working sparks into each; minds no one; hurt, flies off up | 8 | 1 |
+| watcher | near the remains, by day | hovers 10 to 16 blocks from a player and 5 up, keeping it in sight for most of a minute, then rises and goes; never attacks; hurt, goes at once | 10 | 1 |
+| bulwark | posted at the ruin's north gate | the guardian, kneeling until a player comes within 7 blocks of its post; rises (two and a half seconds) and fights with both fists, raising them for a second and a half before each blow (9); gives up 16 blocks from its post and kneels again, whole | 160 | 20 |
+| longstrider | grass, by day, rare, alone, 40 to 60 blocks off | a giant as tall as the trees, to walk toward: walks slowly where it likes, grazing, and minds no one; hurt, walks away | 300 | 5 |
+
+A creature's threat (its kind's `threat`; the sheep's is 1, the night's creatures' come
+from their health and blow) is what its kill's experience counts by and what the target
+frame shows beside its name.
 
 Every attack is wound up first (`play.fight_fair`): a player who sees it coming can step out
 of reach or behind something. The creatures that fight go for a player who can be hurt (not
@@ -482,7 +531,9 @@ world's address), `home.at`): absent in older files, so read as none.
 `block_tags/creatures.json`, the grounds they come on, and `items/creature_drops.json` and
 `models/creature_drops.json`, what they leave;
 `pack/data/entities/hostile.json`, the nights' spawn rules; `pack/data/blocks/kit.json`, a
-block of every material; `pack/data/quests/first_hour.json`, the first hour's quests),
+block of every material; `pack/data/quests/first_hour.json`, the first hour's quests;
+`pack/data/levels/survivor.json` and `pack/data/skills/survivor.json`, a survivor's levels
+and skills),
 the markets' model (above), `records.odin` (what it replicates) and `text.odin`
 (what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
 and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and

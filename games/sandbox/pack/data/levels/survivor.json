@@ -1,0 +1,19 @@
+{
+	// A survivor's levels (README.md, "Levels and skills"): the total experience each level
+	// from 2 takes (level 30 at the end; each level costs 40 more than the one before), a
+	// skill point a level, what a deed earns and where skills are unlearnt for nothing.
+	// First guesses, all of them: tune here.
+	"survivor": {
+		"levels": [
+			60, 160, 300, 480, 700, 960, 1260, 1600, 1980, 2400,
+			2860, 3360, 3900, 4480, 5100, 5760, 6460, 7200, 7980, 8800,
+			9660, 10560, 11500, 12480, 13500, 14560, 15660, 16800, 17980
+		],
+		"points": 1,
+		// kill: for each point of the creature's threat (its kind's `threat`).
+		"xp": {"kill": 4, "meet": 10, "make": 8, "win": 300},
+		"find": {"gate": 50, "ruin": 150, "remains": 40, "town": 60},
+		"respec": "sandbox:outpost_beacon",
+		"respec_reach": 6
+	}
+}

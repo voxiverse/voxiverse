@@ -46,6 +46,7 @@ GAME :: core.Game {
 	left           = left,
 	died           = ruin_died,
 	respawned      = respawned,
+	respawn_where  = outpost_respawn_where,
 	action         = action,
 	request        = request,
 	entity_use     = entity_use,

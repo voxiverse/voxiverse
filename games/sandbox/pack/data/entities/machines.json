@@ -9,7 +9,7 @@
 	// until the player has gone; then it folds again at its post, whole.
 	"sentry": {
 		"voice": "whir",
-		"box": [0.9, 1.6], "health": 24, "hittable": true, "summonable": true, "saved": true,
+		"box": [0.9, 1.6], "health": 24, "threat": 5, "hittable": true, "summonable": true, "saved": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 1.2, "run_speed": 1.2, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -49,7 +49,7 @@
 	// then to work sparks into a stone. It minds no one; hurt, it rises out of reach.
 	"tender": {
 		"voice": "whir",
-		"box": [0.6, 0.6], "health": 8, "hittable": true, "summonable": true, "saved": true,
+		"box": [0.6, 0.6], "health": 8, "threat": 1, "hittable": true, "summonable": true, "saved": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 2.0, "run_speed": 5.0, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -77,7 +77,7 @@
 	// hurt, it goes at once.
 	"watcher": {
 		"voice": "whir",
-		"box": [0.7, 0.7], "health": 10, "hittable": true, "summonable": true,
+		"box": [0.7, 0.7], "health": 10, "threat": 1, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 4.0, "run_speed": 8.0, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -106,7 +106,7 @@
 	// post and kneels again, whole.
 	"bulwark": {
 		"voice": "whir",
-		"box": [2.0, 3.6], "health": 160, "hittable": true, "summonable": true, "saved": true,
+		"box": [2.0, 3.6], "health": 160, "threat": 20, "hittable": true, "summonable": true, "saved": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 1.1, "run_speed": 1.1, "jump": 1.2, "step": 0},
 		"brain": "game",

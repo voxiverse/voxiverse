@@ -12,7 +12,8 @@
 			{"text": "Break gravel for flint", "goal": "have", "item": "sandbox:flint", "count": 5},
 			{"text": "Fell a tree for logs", "goal": "have", "item": "voxiverse:log", "count": 4}
 		],
-		"reward": [{"item": "sandbox:cord", "count": 2}]
+		"reward": [{"item": "sandbox:cord", "count": 2}],
+		"xp": 40
 	},
 	"edge_and_point": {
 		"title": "Edge and Point",
@@ -24,7 +25,8 @@
 			{"text": "Make a flint knife", "goal": "make", "item": "sandbox:flint_knife"},
 			{"text": "Make a flint pick", "goal": "make", "item": "sandbox:flint_pick"}
 		],
-		"reward": [{"item": "sandbox:field_dressing", "count": 1}]
+		"reward": [{"item": "sandbox:field_dressing", "count": 1}],
+		"xp": 60
 	},
 	"court_of_remains": {
 		"title": "The Court of Remains",
@@ -34,7 +36,8 @@
 			{"text": "Find a fallen tower", "goal": "find", "place": "remains", "name": "Fallen tower"},
 			{"text": "Break open a remains cache with the pick", "goal": "break", "block": "sandbox:remains_cache", "way": {"place": "remains", "name": "Fallen tower"}}
 		],
-		"reward": [{"item": "sandbox:salvage", "count": 1}]
+		"reward": [{"item": "sandbox:salvage", "count": 1}],
+		"xp": 80
 	},
 	"under_the_turf": {
 		"title": "Under the Turf",
@@ -45,7 +48,8 @@
 			{"text": "Mine coal", "goal": "have", "item": "sandbox:coal", "count": 3},
 			{"text": "Mine copper ore", "goal": "have", "item": "sandbox:raw_copper", "count": 4}
 		],
-		"reward": [{"item": "sandbox:coal", "count": 4}]
+		"reward": [{"item": "sandbox:coal", "count": 4}],
+		"xp": 80
 	},
 	"a_workshop": {
 		"title": "A Workshop",
@@ -56,7 +60,8 @@
 			{"text": "Set the fabricator down", "goal": "place", "block": "sandbox:fabricator"},
 			{"text": "Smelt copper ingots at the fabricator", "goal": "make", "item": "sandbox:copper_ingot", "count": 3}
 		],
-		"reward": [{"item": "sandbox:copper_ingot", "count": 2}]
+		"reward": [{"item": "sandbox:copper_ingot", "count": 2}],
+		"xp": 100
 	},
 	"patch_and_mend": {
 		"title": "Patch and Mend",
@@ -66,7 +71,8 @@
 			{"text": "Make a field dressing", "goal": "make", "item": "sandbox:field_dressing"},
 			{"text": "Apply a field dressing", "goal": "use", "item": "sandbox:field_dressing"}
 		],
-		"reward": [{"item": "sandbox:field_dressing", "count": 2}]
+		"reward": [{"item": "sandbox:field_dressing", "count": 2}],
+		"xp": 80
 	},
 	"meat_and_hide": {
 		"title": "Meat and Hide",
@@ -77,7 +83,8 @@
 			{"text": "Make a trail ration from raw meat", "goal": "make", "item": "sandbox:trail_ration"},
 			{"text": "Eat a trail ration", "goal": "use", "item": "sandbox:trail_ration"}
 		],
-		"reward": [{"item": "sandbox:padded_vest", "count": 1}]
+		"reward": [{"item": "sandbox:padded_vest", "count": 1}],
+		"xp": 120
 	},
 	"a_light_to_return_to": {
 		"title": "A Light to Return To",
@@ -89,7 +96,8 @@
 			{"text": "Make an outpost beacon", "goal": "make", "item": "sandbox:outpost_beacon"},
 			{"text": "Raise the beacon where you mean to camp", "goal": "place", "block": "sandbox:outpost_beacon"}
 		],
-		"reward": [{"item": "voxiverse:lamp", "count": 4}]
+		"reward": [{"item": "voxiverse:lamp", "count": 4}],
+		"xp": 160
 	},
 	"what_the_keepers_left": {
 		"title": "What the Keepers Left",
@@ -101,7 +109,8 @@
 			{"text": "Make a circuit board", "goal": "make", "item": "sandbox:circuit_board"},
 			{"text": "Make alloy plate", "goal": "make", "item": "sandbox:alloy_plate", "count": 3}
 		],
-		"reward": [{"item": "sandbox:charge_cell", "count": 1}]
+		"reward": [{"item": "sandbox:charge_cell", "count": 1}],
+		"xp": 200
 	},
 	"the_sealed_vault": {
 		"title": "The Sealed Vault",
@@ -113,7 +122,8 @@
 			{"text": "Disable the sentry at its door", "goal": "kill", "creature": "sandbox:sentry", "way": {"place": "remains", "name": "Sealed vault"}},
 			{"text": "Drill open the relic vault", "goal": "break", "block": "sandbox:relic_vault", "way": {"place": "remains", "name": "Sealed vault"}}
 		],
-		"reward": [{"item": "sandbox:med_gel", "count": 2}]
+		"reward": [{"item": "sandbox:med_gel", "count": 2}],
+		"xp": 300
 	},
 	"the_ruin_wakes": {
 		"title": "The Ruin Wakes",
@@ -123,7 +133,8 @@
 			{"text": "Follow the old road to the ruin", "goal": "find", "place": "ruin"},
 			{"text": "Wake the altar and hold the ruin through five waves", "goal": "win", "name": "sandbox:ruin", "way": {"place": "ruin"}}
 		],
-		"reward": [{"item": "sandbox:regen_ampoule", "count": 1}]
+		"reward": [{"item": "sandbox:regen_ampoule", "count": 1}],
+		"xp": 400
 	},
 	"an_address": {
 		"title": "An Address",
@@ -132,6 +143,7 @@
 		"steps": [
 			{"text": "Write an address on the gate's board", "goal": "address", "way": {"place": "remains", "name": "Gate court"}}
 		],
-		"reward": [{"item": "sandbox:data_shard", "count": 1}]
+		"reward": [{"item": "sandbox:data_shard", "count": 1}],
+		"xp": 250
 	}
 }

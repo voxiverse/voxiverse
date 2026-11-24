@@ -4,7 +4,7 @@
   "sheep": {
     "voice": "bleat",
     "box": [0.8, 0.9],
-    "health": 4,
+    "health": 4, "threat": 1,
     "saved": true,
     "summonable": true,
     "hittable": true,

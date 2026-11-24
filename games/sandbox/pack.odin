@@ -6,8 +6,8 @@ import "common:game"
 // world's other creatures (its wildlife, predators and the remains' machines, with the
 // grounds they come on and what they leave), the hours the base pack's hostile creatures
 // come out, a block of every material of the kit, the ruined site's altar, ward, rounds
-// and the mode its fighters are in, and the first hour's quests. Loaded only where the
-// sandbox is played.
+// and the mode its fighters are in, the first hour's quests, and a survivor's levels and
+// skills. Loaded only where the sandbox is played.
 PACK :: game.Pack_Source {
 	namespace = "sandbox",
 	files     = {
@@ -31,6 +31,8 @@ PACK :: game.Pack_Source {
 		{"data/blocks/survival.json", #load("pack/data/blocks/survival.json")},
 		{"data/recipes/survival.json", #load("pack/data/recipes/survival.json")},
 		{"data/quests/first_hour.json", #load("pack/data/quests/first_hour.json")},
+		{"data/levels/survivor.json", #load("pack/data/levels/survivor.json")},
+		{"data/skills/survivor.json", #load("pack/data/skills/survivor.json")},
 	},
 }
 

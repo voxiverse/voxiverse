@@ -7,7 +7,7 @@
 	// under once the player has been gone a while. Slow: walking away escapes it.
 	"pitmaw": {
 		"voice": "chitter",
-		"box": [1.0, 0.9], "health": 14, "hittable": true, "summonable": true,
+		"box": [1.0, 0.9], "health": 14, "threat": 4, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 2.0, "run_speed": 2.0, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -45,7 +45,7 @@
 	// off and flings barbs from its tail, which it draws back for most of a second first.
 	"barbcaster": {
 		"voice": "chitter",
-		"box": [0.9, 0.8], "health": 9, "hittable": true, "summonable": true,
+		"box": [0.9, 0.8], "health": 9, "threat": 3, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 1.8, "run_speed": 1.8, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -90,7 +90,7 @@
 	// One badly hurt runs.
 	"duskrunner": {
 		"voice": "growl",
-		"box": [0.7, 0.8], "health": 6, "hittable": true, "summonable": true,
+		"box": [0.7, 0.8], "health": 6, "threat": 2, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 4.0, "run_speed": 5.0, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -124,7 +124,7 @@
 	// more than a second before it brings them down; it cannot run.
 	"cragmaul": {
 		"voice": "growl",
-		"box": [1.6, 2.2], "health": 40, "hittable": true, "summonable": true,
+		"box": [1.6, 2.2], "health": 40, "threat": 8, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 1.3, "run_speed": 1.3, "jump": 1.2, "step": 0},
 		"brain": "game",

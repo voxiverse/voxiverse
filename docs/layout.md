@@ -139,6 +139,8 @@ package** is enforced by the `layout` lint (see above).
 | `assets/packs/voxiverse/data/sim` | Simulation rules (fluids) | `*.json` |
 | `assets/packs/voxiverse/data/entities` | Entity kinds (animals, the engine's own) | `*.json` |
 | `assets/packs/voxiverse/data/quests` | Quests (the base pack has none: a game's pack brings them, `games/sandbox/pack/data/quests`) | `*.json` |
+| `assets/packs/voxiverse/data/skills` | Skills (the base pack has none: a game's pack brings them, `games/sandbox/pack/data/skills`) | `*.json` |
+| `assets/packs/voxiverse/data/levels` | A level curve (the base pack has none: a game's pack brings one, `games/sandbox/pack/data/levels`) | `*.json` |
 | `assets/packs/voxiverse/server/structures` | Structures | `*.vxs` |
 | `assets/shaders` | GLSL sources | `*.vert`, `*.frag`, `*.comp`, `*.glsl` |
 | `client/audio` | Mixer, voices, effects, spatialization | `*.odin` |

@@ -8,7 +8,7 @@
 	// player from 10 blocks and runs, with the whole herd, from one within 5.
 	"loper": {
 		"voice": "bellow",
-		"box": [0.9, 1.5], "health": 8, "hittable": true, "summonable": true,
+		"box": [0.9, 1.5], "health": 8, "threat": 1, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 2.0, "run_speed": 5.5, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -39,7 +39,7 @@
 	// is within 9 blocks and bolts from one within 5.
 	"twitchet": {
 		"voice": "squeak",
-		"box": [0.4, 0.4], "health": 2, "hittable": true, "summonable": true,
+		"box": [0.4, 0.4], "health": 2, "threat": 1, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 2.5, "run_speed": 6.5, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -70,7 +70,7 @@
 	// blocks up, lands again, and takes off from a player within 7 blocks.
 	"wheelwing": {
 		"voice": "chirp",
-		"box": [0.5, 0.4], "health": 3, "hittable": true, "summonable": true,
+		"box": [0.5, 0.4], "health": 3, "threat": 1, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 1.0, "run_speed": 7.0, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -99,7 +99,7 @@
 	// darts from a player within 5 blocks, never out of the water.
 	"glassfin": {
 		"voice": "none",
-		"box": [0.5, 0.3], "health": 2, "hittable": true, "summonable": true,
+		"box": [0.5, 0.3], "health": 2, "threat": 1, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 1.5, "run_speed": 4.5, "jump": 0, "step": 0},
 		"brain": "game",
@@ -122,7 +122,7 @@
 	// shuts itself in its shell (a quarter of any harm gets through) for a while.
 	"domeback": {
 		"voice": "grunt",
-		"box": [1.1, 0.9], "health": 20, "hittable": true, "summonable": true,
+		"box": [1.1, 0.9], "health": 20, "threat": 2, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 0.6, "run_speed": 0.6, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -156,7 +156,7 @@
 	// 5, or hits it, is kicked and pecked until it is 16 blocks from the bird's ground.
 	"hacklebird": {
 		"voice": "croak",
-		"box": [0.7, 1.9], "health": 12, "hittable": true, "summonable": true,
+		"box": [0.7, 1.9], "health": 12, "threat": 3, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 2.2, "run_speed": 4.5, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -192,7 +192,7 @@
 	// is charged until it is 14 blocks off.
 	"snouter": {
 		"voice": "growl",
-		"box": [1.0, 1.0], "health": 16, "hittable": true, "summonable": true,
+		"box": [1.0, 1.0], "health": 16, "threat": 4, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 1.8, "run_speed": 4.6, "jump": 1.2, "step": 0},
 		"brain": "game",
@@ -230,7 +230,7 @@
 	// one; hurt, it walks away.
 	"longstrider": {
 		"voice": "bellow",
-		"box": [3.0, 4.0], "health": 300, "hittable": true, "summonable": true,
+		"box": [3.0, 4.0], "health": 300, "threat": 5, "hittable": true, "summonable": true,
 		"physics": "walker",
 		"walker": {"walk_speed": 0.9, "run_speed": 1.8, "jump": 1.2, "step": 0},
 		"brain": "game",

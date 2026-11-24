@@ -1,0 +1,70 @@
+{
+	// A survivor's skills (README.md, "Levels and skills"): three branches, each skill a
+	// plain number over a rule the engine or the sandbox already has. Maxing every one
+	// takes 36 points; level 30 gives 29. First guesses, all of them: tune here.
+	"quick_hands": {
+		"title": "Quick Hands", "branch": "Survival",
+		"text": "Blocks give way a tenth sooner a rank, whatever is in your hand.",
+		"effect": "break_speed", "amount": 0.1, "ranks": 3
+	},
+	"hardy": {
+		"title": "Hardy", "branch": "Survival",
+		"text": "Two more health a rank.",
+		"effect": "max_health", "amount": 2, "ranks": 3
+	},
+	"sure_footing": {
+		"title": "Sure Footing", "branch": "Survival",
+		"text": "A fall hurts less: fifteen parts in a hundred of its harm turned aside a rank.",
+		"effect": "fall_guard", "amount": 0.15, "ranks": 2, "needs": 2
+	},
+	"trapper": {
+		"title": "Trapper", "branch": "Survival",
+		"text": "What a creature leaves is a tenth likelier a rank.",
+		"effect": "drop_chance", "amount": 0.1, "ranks": 2, "needs": 2
+	},
+	"second_wind": {
+		"title": "Second Wind", "branch": "Survival",
+		"text": "Wounds close by themselves a quarter faster a rank.",
+		"effect": "regen", "amount": 0.25, "ranks": 2, "cost": 2, "needs": 4
+	},
+	"heavy_blows": {
+		"title": "Heavy Blows", "branch": "Combat",
+		"text": "A swung weapon strikes twelve parts in a hundred harder a rank.",
+		"effect": "melee_damage", "amount": 0.12, "ranks": 3
+	},
+	"steady_aim": {
+		"title": "Steady Aim", "branch": "Combat",
+		"text": "A shot's cone is fifteen parts in a hundred tighter a rank.",
+		"effect": "spread", "amount": -0.15, "ranks": 2
+	},
+	"quick_reload": {
+		"title": "Quick Reload", "branch": "Combat",
+		"text": "A reload takes twelve parts in a hundred less time a rank.",
+		"effect": "reload_time", "amount": -0.12, "ranks": 2, "needs": 2
+	},
+	"hardened": {
+		"title": "Hardened", "branch": "Combat",
+		"text": "Four parts in a hundred of every harm turned aside a rank, beside what you wear.",
+		"effect": "defence", "amount": 0.04, "ranks": 3, "needs": 3
+	},
+	"fast_fabrication": {
+		"title": "Fast Fabrication", "branch": "Engineering",
+		"text": "Whatever you make takes a tenth less time a rank.",
+		"effect": "craft_time", "amount": -0.1, "ranks": 3
+	},
+	"prospector": {
+		"title": "Prospector", "branch": "Engineering",
+		"text": "Stone, ore and relics give one more a tenth of the time a rank.",
+		"effect": "yield_chance", "amount": 0.1, "ranks": 3
+	},
+	"field_chemistry": {
+		"title": "Field Chemistry", "branch": "Engineering",
+		"text": "Dressings, rations and ampoules heal fifteen parts in a hundred more a rank.",
+		"effect": "consume_strength", "amount": 0.15, "ranks": 2, "needs": 2
+	},
+	"surplus": {
+		"title": "Surplus", "branch": "Engineering",
+		"text": "Whatever you make gives one more a tenth of the time a rank.",
+		"effect": "craft_yield", "amount": 0.1, "ranks": 2, "cost": 2, "needs": 4
+	}
+}

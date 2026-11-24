@@ -3,6 +3,7 @@ package sandbox_server
 import "core:encoding/endian"
 import "core:fmt"
 import "core:hash"
+import "core:math"
 
 import "common:game"
 import "common:starmap"
@@ -180,6 +181,16 @@ outpost_home :: proc(s: ^core.Server, c: ^core.Client) -> (core.Place, bool) {
 		}
 	}
 	return {home.world, {f64(at.x) + 0.5, f64(at.y) + 1, f64(at.z) + 0.5}, {}}, true
+}
+
+// outpost_respawn_where: where c, just dead, will stand again, as its death screen says it
+// (the respawn_where hook): at its outpost, and how far off; "" for the world's spawn.
+outpost_respawn_where :: proc(s: ^core.Server, c: ^core.Client) -> string {
+	place, ok := outpost_home(s, c)
+	if !ok {return ""}
+	if place.world != c.world.address {return "your outpost, on another world"}
+	d := place.position - c.player.position
+	return fmt.tprintf("your outpost, %d blocks away", int(math.sqrt(d.x * d.x + d.z * d.z)))
 }
 
 // outpost_respawned: one who died stands at its outpost, when it has one.

@@ -197,7 +197,8 @@ craft_ask :: proc(s: ^core.Server, c: ^core.Client, ask: sandbox.Craft) {
 		at := 0
 		for k in 0 ..< n {take(s, c, needs[k], tags[k], ss.taken[:], &at)}
 		ss.making, ss.began = i + 1, s.tick
-		ss.done = s.tick + u64(math.ceil(f64(r.time) * game.TICK_RATE))
+		seconds := core.skill_value(s, c, .Craft_Time, r.time) // (its craft_time skills)
+		ss.done = s.tick + u64(math.ceil(f64(seconds) * game.TICK_RATE))
 	}
 }
 
@@ -256,6 +257,9 @@ survival_tick :: proc(s: ^core.Server) {
 			r := &s.registry.recipes[ss.making - 1]
 			ss.making = 0
 			out := r.output
+			// One more, a draw of its craft_yield skills (no draw without one).
+			if more := core.skill_value(s, &c, .Craft_Yield, 0);
+			   more > 0 && base.rng_f32(&state(s).rng) < more {out.count += 1}
 			if given := core.item_give(s, &c, out.item, out.count); given < out.count {
 				core.item_drop(s, c.world, c.player.position, {out.item, out.count - given, 0, 0})
 			}
