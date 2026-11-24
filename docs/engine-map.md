@@ -186,6 +186,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 - `entity_show :: proc(w: ^World, h: game.Entity_Handle, look: string, on: bool) -> bool`: a look of the entity's kind (its pack's "looks", by name) shown or not: told to the players who know it, drawn as the kind's model says (a part shown or hidden, a colour, a size).
 - `entity_known :: proc(c: ^Client, id: u32) -> bool`: c has been told about entity id (it is in its view).
 - `entity_harm :: proc(w: ^World, h: game.Entity_Handle, harm: Entity_Harm) -> (died: bool)`: entity_harm takes harm.amount from an entity's health.
+- `player_harm :: proc(s: ^Server, c: ^Client, amount: f32, by: game.Entity_Handle = 0, from: Maybe([3]f64) = nil) -> Damage_Result`: a game's own harm to a player (a trap it springs, a boss's blow to all round it): amount through the damage pipeline as the game's (`.Game`), credited to the creature `by` of the player's world (0: none; a death names its kind) and coming from `from` (a slam's middle: the hit's side on the player's screen).
 - `entity_go :: proc(w: ^World, h: game.Entity_Handle, target: [3]f64) -> bool`: the walker heads for target (the bottom centre of its box there) by a path of its own; false for an entity that is not a steered walker.
 - `entity_follow :: proc(w: ^World, h: game.Entity_Handle, route: Route_Handle) -> bool`: the walker follows the route to its goal; false for an entity that is not a steered walker, or a route that is gone.
 - `entity_stand :: proc(w: ^World, h: game.Entity_Handle)`: the walker stops where it is.
@@ -231,6 +232,7 @@ a game's client part (docs/games.md): what the client does for the game its sess
 The types these name:
 
 - `Bulk_Result :: enum u8 {Done, Too_Big, Not_Loaded}`
+- `Damage_Result :: enum u8 {Ignored, Blocked, Hurt, Killed}`
 - `Entity_Iter :: struct {...}`: Entity_Iter walks a snapshot of the entities, lowest id first.
 - `Mode_Result :: enum u8 {Ok, Unknown_Mode, Same}`
 - `Strike :: enum u8 {Not_Ready, Too_Far, Refused, Hit, Killed}`: what an attack came to.

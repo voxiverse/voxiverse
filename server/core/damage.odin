@@ -123,6 +123,27 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 	return .Hurt
 }
 
+// player_harm: a game's own harm to a player (a trap it springs, a boss's blow to all round
+// it): amount through the damage pipeline as the game's (`.Game`), credited to the creature
+// `by` of the player's world (0: none; a death names its kind) and coming from `from` (a
+// slam's middle: the hit's side on the player's screen). What became of it.
+player_harm :: proc(
+	s: ^Server,
+	c: ^Client,
+	amount: f32,
+	by: game.Entity_Handle = 0,
+	from: Maybe([3]f64) = nil,
+) -> Damage_Result {
+	source := Damage_Source {
+		kind = .Game,
+	}
+	if by != 0 && c.world != nil {
+		source.creature, source.kind_of = entity_id(c.world, by), entity_kind(c.world, by)
+	}
+	if p, placed := from.?; placed {source.pos, source.placed = p, true}
+	return damage(s, c, amount, source)
+}
+
 // guarded: the fraction of a harm of this kind c's gear and consumables take off: what it
 // wears (its defence, and its fall guard against a fall) and what it used up (its effect's
 // defence), at most all of a fall and MAX_DEFENCE of the rest.

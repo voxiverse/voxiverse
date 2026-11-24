@@ -467,3 +467,61 @@ test_a_rocket_outlived_by_its_shooters_seat_is_nobodys :: proc(t: ^testing.T) {
 	testing.expect(t, host.dead, "the rocket did not kill")
 	testing.expect_value(t, newcomer.stats["kills"] or_else 0, u64(0))
 }
+
+// A game's own harm to a player (player_harm): through the pipeline, what the player's
+// mode allows, credited to the creature that did it.
+@(private = "file")
+Game_Harm :: struct {
+	hurt, blocked, killed: Damage_Result,
+	health_after:          f32,
+}
+
+@(private = "file")
+game_harm_scenario :: proc(s: ^Server, data: rawptr) {
+	r := (^Game_Harm)(data)
+	alice := client_by_name(s, "alice")
+	if alice == nil {return}
+	w := alice.world
+	survival, _ := game.mode_find(s.registry, "survival")
+	creative, _ := game.mode_find(s.registry, "creative")
+	set_game_mode(s, alice, survival, {"test", ""})
+	alice.max_health, alice.health, alice.dead = 20, 20, false
+	s.tick += 20_000 // (past any spawn protection)
+	by := entity_spawn(w, s.registry.engine.dummy, alice.player.position + {3, 0, 0}, false)
+	r.hurt = player_harm(s, alice, 5, by, entity_pos(w, by))
+	r.health_after = alice.health
+	set_game_mode(s, alice, creative, {"test", ""})
+	r.blocked = player_harm(s, alice, 5)
+	set_game_mode(s, alice, survival, {"test", ""})
+	r.killed = player_harm(s, alice, 50, by)
+}
+
+@(test)
+test_a_games_harm_goes_through_the_pipeline :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	config := harness_world()
+	config.mode, config.listen = "survival", true
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	alice := new(Net_Client)
+	defer free(alice)
+	net_connect(alice, 0, "alice", h = h)
+	defer net_close(alice)
+	ok := net_wait(t, []^Net_Client{alice}, proc(cs: []^Net_Client) -> bool {
+		return cs[0].welcomed && cs[0].mode != ""
+	})
+	if !testing.expect(t, ok, "never joined") {return}
+	r: Game_Harm
+	call(&h.srv, game_harm_scenario, &r)
+	testing.expect_value(t, r.hurt, Damage_Result.Hurt)
+	testing.expect_value(t, r.health_after, f32(15))
+	testing.expect_value(t, r.blocked, Damage_Result.Blocked)
+	testing.expect_value(t, r.killed, Damage_Result.Killed)
+	ok = net_wait(t, []^Net_Client{alice}, proc(cs: []^Net_Client) -> bool {
+		return cs[0].health.dead
+	})
+	if !testing.expect(t, ok, "the death was not told") {return}
+	testing.expect_value(t, alice.death_cause, "game")
+	testing.expect_value(t, alice.death_attacker, "dummy")
+}
