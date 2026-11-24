@@ -222,12 +222,52 @@ entity_place :: proc(s: ^Session, id: u32) -> (at: [3]f64, ok: bool) {
 // engine gives a game's HUD only the screen below F3 while it is open).
 
 // top_bar: a line of text centred across the top of rest, on the HUD's backing, cut
-// from rest (what is under it is left for the rest of the HUD).
+// from rest (what is under it is left for the rest of the HUD) and claimed
+// (ui.claim_top: the target frame and the quest tracker keep under it).
 top_bar :: proc(ctx: ^ui.Context, rest: ^ui.Rect, text: string) {
 	t := &ctx.theme
 	bar := ui.cut_top(rest, t.row_height + t.padding)
+	ui.claim_top(ctx, bar)
 	ui.fill_rect(ctx, bar, t.hud_fill)
 	ui.draw_text(ctx, bar, text, t.font_size, t.text, .Center)
+}
+
+// BOSS_BAR_WIDTH: the widest a foe's bar is (the compass's width).
+BOSS_BAR_WIDTH :: 400
+
+// boss_bar: the foe of a fight (a boss) at the top of rest, centred and as wide as the
+// compass at most: its name, a word at the right (its phase: detail, "" for none), its
+// health as a bar with the number and, under it, a line in the warning's colour (note, ""
+// for none). Cut from rest and claimed (ui.claim_top), so the target frame and the quest
+// tracker keep under it; hud_boss keeps the target frame from showing the foe again.
+boss_bar :: proc(
+	ctx: ^ui.Context,
+	rest: ^ui.Rect,
+	name, detail: string,
+	health, most: int,
+	note := "",
+) {
+	t := &ctx.theme
+	small := t.font_size * 0.7
+	name_h := t.row_height - 16
+	bar_h: f32 = 16
+	note_h := small + 6 if note != "" else 0
+	w := min(f32(BOSS_BAR_WIDTH), rest.w - 2 * t.spacing)
+	r := ui.Rect{rest.x + (rest.w - w) / 2, rest.y + t.spacing, w, 8 + name_h + bar_h + note_h}
+	ui.cut_top(rest, r.y + r.h - rest.y)
+	ui.claim_top(ctx, r)
+	ui.fill_rect(ctx, r, t.hud_fill)
+	ui.stroke_rect(ctx, r, 1, t.faint_border)
+	inner := ui.rect_shrink(r, 4)
+	name_row := ui.cut_top(&inner, name_h)
+	ui.draw_text(ctx, name_row, name, t.font_size, t.text, .Center)
+	if detail != "" {ui.draw_text(ctx, name_row, detail, small, t.text_muted, .Right)}
+	bar := ui.rect_shrink(ui.cut_top(&inner, bar_h), 2)
+	fraction := f32(health) / f32(max(most, 1))
+	ui.fill_rect(ctx, bar, t.health_empty)
+	ui.fill_rect(ctx, {bar.x, bar.y, bar.w * clamp(fraction, 0, 1), bar.h}, t.health_full)
+	ui.draw_text(ctx, bar, tr(.Hud_Health, health, most), small, t.text, .Center)
+	if note != "" {ui.draw_text(ctx, inner, note, small, t.warning, .Center)}
 }
 
 // BANNER_HEIGHT: the screen height banners are laid out for.

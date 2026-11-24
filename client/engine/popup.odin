@@ -46,7 +46,12 @@ Hud_State :: struct {
 	quest_news:   Tween, // a step of a quest done: the tracker eases its new step in
 	level_news:   Tween, // a level gained: the level beside the health bar pops
 	heartbeat:    f64, // the feel clock at the low-health warning's last beat
+	boss:         Maybe(game.Kind_Id), // a fight's foe a game shows its own bar of (hud_boss): the target frame leaves it out
 }
+
+// hud_boss: the kind of a fight's foe the game shows a bar of its own for while the fight
+// is on (boss_bar; nil: none), which the target frame leaves out, so it is not shown twice.
+hud_boss :: proc(s: ^Session, kind: Maybe(game.Kind_Id)) {s.hud.boss = kind}
 
 // feed_experience: a line of the pickup feed for experience earned ("+25 XP": item
 // NO_ITEM), or more on the newest such line while it is recent.

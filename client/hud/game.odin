@@ -31,12 +31,12 @@ game_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	player_list_draw(app, ctx)
 }
 
-// hud_draw: what F1 hides (hud_keys): the compass along the top, the crosshair and the
-// target frame under it; at the top right the quest tracker; along the bottom the hotbar
-// with the health bar, the experience bar and the effects over it, the held item's name,
-// the magazine; the
-// pickup feed at the right; the feel kit's and the game's HUD, the game's given the screen
-// below the compass (and F3).
+// hud_draw: what F1 hides (hud_keys): the compass along the top and the game's HUD under it
+// (given the screen below the compass and F3, and laid out first, so what it claims across
+// the top, ui.claim_top, is known), the crosshair, and the target frame under both; at the
+// top right the quest tracker; along the bottom the hotbar with the health bar, the
+// experience bar and the effects over it, the held item's name, the magazine; the pickup
+// feed at the right; the feel kit's.
 hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if app.hud_hidden {return}
 	s := app.session
@@ -47,6 +47,7 @@ hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, t.crosshair)
 	}
 	top := compass(ctx, s, app.debug_bottom)
+	engine.game_hud(s, ctx, top) // the game's (its client part's), below the compass and F3
 	if !engine.session_ability(s, .Bodiless) { 	// (no body: nothing in hand, no health)
 		hotbar(ctx, s, &app.item_icons)
 		engine.weapon_hud(ctx, s)
@@ -59,7 +60,6 @@ hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		tracker(app, ctx, app.debug_bottom)
 	}
 	engine.feel_hud(s, ctx) // the feel kit's floating texts and the edge's pulse
-	engine.game_hud(s, ctx, top) // the game's (its client part's), below the compass and F3
 }
 
 // game_menu: over the game (alone in our own world, the world stands still

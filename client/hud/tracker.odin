@@ -21,7 +21,7 @@ TRACKER_EASE :: 0.35 // seconds the new step takes to ease in
 TRACKER_SLIDE :: 24 // UI units it comes in from
 
 // tracker: the box, under top (F3's bottom; 0: the screen's), clear of the compass
-// (compass_rect).
+// (compass_rect) and of what the game laid across the top (ui.claim_top).
 tracker :: proc(app: ^engine.App, ctx: ^ui.Context, top: f32) {
 	s := app.session
 	q := engine.quest_tracked(s)
@@ -34,6 +34,9 @@ tracker :: proc(app: ^engine.App, ctx: ^ui.Context, top: f32) {
 	x := ctx.screen.x + ctx.screen.w - w - TRACKER_MARGIN
 	y := max(top, ctx.screen.y) + TRACKER_MARGIN
 	if c := compass_rect(ctx, top); x < c.x + c.w + t.spacing {y = c.y + c.h + t.spacing}
+	if c := ctx.top_claimed; c.h > 0 && x < c.x + c.w && x + w > c.x && y < c.y + c.h {
+		y = c.y + c.h + t.spacing // (under a game's line or a foe's bar)
+	}
 
 	small := t.font_size * 0.8
 	inner_w := w - 2 * t.padding

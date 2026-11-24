@@ -411,7 +411,9 @@ The types these name:
 
 ## `client/engine` (`engine.`): What a game's HUD is made of
 
-- `top_bar :: proc(ctx: ^ui.Context, rest: ^ui.Rect, text: string)`: a line of text centred across the top of rest, on the HUD's backing, cut from rest (what is under it is left for the rest of the HUD).
+- `top_bar :: proc(ctx: ^ui.Context, rest: ^ui.Rect, text: string)`: a line of text centred across the top of rest, on the HUD's backing, cut from rest (what is under it is left for the rest of the HUD) and claimed (ui.claim_top: the target frame and the quest tracker keep under it).
+- `boss_bar :: proc(ctx: ^ui.Context, rest: ^ui.Rect, name, detail: string, health, most: int, note := "")`: the foe of a fight (a boss) at the top of rest, centred and as wide as the compass at most: its name, a word at the right (its phase: detail, "" for none), its health as a bar with the number and, under it, a line in the warning's colour (note, "" for none).
+- `hud_boss :: proc(s: ^Session, kind: Maybe(game.Kind_Id))`: the kind of a fight's foe the game shows a bar of its own for while the fight is on (boss_bar; nil: none), which the target frame leaves out, so it is not shown twice.
 - `banner :: proc(ctx: ^ui.Context, at: f32, text: string, scale: f32, color: ui.Color)`: a line of big text across the screen, its middle `at` pixels from the screen's (negative: above it), `scale` times the title's size, with a shadow.
 - `Flash :: struct {...}`: a banner shown for a while, kept in the game's view (it outlives the frame its news came in).
 - `flash :: proc(f: ^Flash, s: ^Session, text: string, tone := Tone.Plain, seconds := FLASH_SECONDS)`: show text as a banner from now for seconds (it replaces the one shown).

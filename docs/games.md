@@ -502,7 +502,7 @@ the frame.
 | `started(s)` | The session plays the game: welcomed, its state zero (look up the pack's names in `s.reg` here) |
 | `ended(s)` | The session ends (only after `started`; its state still there) |
 | `received(s, r)` | A record of the game's kinds came, changed or went, or one of its events came, in the order sent: `engine.game_value(s, r, T)` is its value as `^T` when it is of the kind whose type is `T` (nil for a removal) |
-| `hud(s, ctx)` | Every frame in the world, after the engine's HUD (F1 hides both), with the `ui.Context`; while F3 is open, `ctx.screen` is the screen below the overlay |
+| `hud(s, ctx)` | Every frame in the world, with the `ui.Context` whose `ctx.screen` is the screen below the compass (and below the overlay while F3 is open), drawn after the compass and before the rest of the engine's HUD, so the target frame and the quest tracker keep under what it laid across the top (`top_bar`, `boss_bar`: `ui.claim_top`); F1 hides both |
 | `debug(s) -> string` | Every frame with F3 open: one line of the overlay, shown as `game <id>: <line>` ("": none) |
 | `scoreboard(s, board)` | Every frame the player list's key (<kbd>P</kbd>) is held: the game fills `board` (`scoreboard_columns(board, "Frags", ...)`, at most `SCOREBOARD_COLUMNS`, and `scoreboard_row(board, name, cells..., you = mine)` per player, in order), shown in place of the engine's |
 | `commands` | Console commands (`engine.Command_Spec`), there while a world plays the game: `help` lists them and Tab completes them |
@@ -558,6 +558,7 @@ inventory does, so every screen has one look:
 | Name | What it is for |
 |---|---|
 | `top_bar(ctx, &rest, text)` | A line of status across the top of the screen, on the HUD's backing, cut from `rest` |
+| `boss_bar(ctx, &rest, name, detail, health, most, note)`, `hud_boss(s, kind)` | A fight's foe (a boss) at the top of `rest`, as wide as the compass: its name, a word at the right (its phase), its health as a bar with the number and a warning line under it (`""`: none); and the foe's kind while the fight is on (nil: none), which the target frame then leaves out, so the foe is not shown twice |
 | `banner(ctx, at, text, scale, color)` | Big text across the screen with a shadow, its middle `at` pixels from the screen's (laid out for 720 high and shrunk with a smaller screen, as under F3), `scale` times the title's size |
 | `Flash`, `flash(&f, s, text, tone, seconds)`, `flash_draw(ctx, &f, s, at, scale)`, `Tone` | A banner that stands a few seconds after the news that brought it (a wave set out, a level gained), kept in the game's view, coloured by its tone (`.Good`, `.Warn`, `.Bad`); it pops in and fades out on the feel clock ([feel](#feel)) |
 | `world_point(s, ctx, p)`, `world_label(s, ctx, p, text)`, `world_bar(s, ctx, p, fraction)` | Where a point of the world is on the screen (false behind the eyes or past `MARK_DISTANCE`); a plate of text there; a bar |

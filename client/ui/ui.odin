@@ -188,6 +188,7 @@ Context :: struct {
 	widgets:        [dynamic]Widget, // every interactive widget this frame
 	panels:         [dynamic]Rect, // the areas drawn as the UI's this frame (panel, block_pointer)
 	texts:          [dynamic]string, // every text drawn this frame (tests: what a player reads)
+	top_claimed:    Rect, // what the HUD laid across its top this frame (claim_top; zero: nothing)
 	modal_drawn:    bool,
 	keyboard_drawn: bool,
 	nav:            bit_set[Nav], // this frame's: the pad's and the keyboard's
@@ -261,6 +262,7 @@ begin_frame :: proc(ctx: ^Context, input: Input, screen_pixels: Vec2, scale: f32
 	ctx.widgets = make([dynamic]Widget, 0, 64, ctx.frame_alloc)
 	ctx.panels = make([dynamic]Rect, 0, 16, ctx.frame_alloc)
 	ctx.texts = make([dynamic]string, 0, 64, ctx.frame_alloc)
+	ctx.top_claimed = {}
 	ctx.modal_drawn = false
 	ctx.keyboard_drawn = false
 	ctx.tip_hit = false
@@ -684,6 +686,19 @@ pointer_over :: proc(ctx: ^Context) -> bool {
 
 rect_contains :: proc(r: Rect, p: Vec2) -> bool {
 	return p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h
+}
+
+// claim_top: r is laid across the top of the HUD this frame (a game's line, a foe's bar):
+// what is laid out after it there keeps under it (top_claimed, the union of every claim).
+claim_top :: proc(ctx: ^Context, r: Rect) {
+	c := &ctx.top_claimed
+	if c.w <= 0 || c.h <= 0 {
+		c^ = r
+		return
+	}
+	x0, y0 := min(c.x, r.x), min(c.y, r.y)
+	x1, y1 := max(c.x + c.w, r.x + r.w), max(c.y + c.h, r.y + r.h)
+	c^ = {x0, y0, x1 - x0, y1 - y0}
 }
 
 rect_intersect :: proc(a, b: Rect) -> Rect {

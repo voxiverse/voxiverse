@@ -9,7 +9,9 @@ import "common:game"
 // The target frame: the creature under the crosshair (within engine.TARGET_RANGE, in
 // sight: Hud_State.aimed), its name with its threat at the right (game.kind_threat, the
 // colour of its danger: threat_color) and its health as a bar with the number, under the
-// compass; it stays TARGET_HOLD seconds after the crosshair leaves it, fading.
+// compass and anything the game laid across the top (ui.claim_top); it stays TARGET_HOLD
+// seconds after the crosshair leaves it, fading. A fight's foe whose bar the game shows
+// (engine.hud_boss) is left to that bar.
 
 // threat_color: how a threat reads: muted for the harmless (2 and under), the text's to
 // 5, orange to 10, red past it.
@@ -44,18 +46,16 @@ target_frame :: proc(ctx: ^ui.Context, s: ^engine.Session, top: f32) {
 		h.target = nil
 		return
 	}
+	if boss, on := h.boss.?; on && e.kind == boss {return}
 	t := &ctx.theme
 	faded := ctx.theme
 	faded.opacity *= clamp((TARGET_HOLD - age) / TARGET_FADE, 0, 1)
 	ui.theme_scope(ctx, faded)
 	hurt := e.max_health > 0
 	height := t.row_height - 8 + (18 if hurt else 0)
-	r := ui.Rect {
-		ctx.screen.x + (ctx.screen.w - TARGET_WIDTH) / 2,
-		top + TARGET_GAP,
-		TARGET_WIDTH,
-		height,
-	}
+	y := top + TARGET_GAP
+	if c := ctx.top_claimed; c.h > 0 {y = max(y, c.y + c.h + t.spacing)}
+	r := ui.Rect{ctx.screen.x + (ctx.screen.w - TARGET_WIDTH) / 2, y, TARGET_WIDTH, height}
 	ui.fill_rect(ctx, r, t.hud_fill)
 	ui.stroke_rect(ctx, r, 1, t.faint_border)
 	inner := ui.rect_shrink(r, 4)
