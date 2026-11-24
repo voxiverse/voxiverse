@@ -48,6 +48,43 @@ test_world_kinds :: proc(t: ^testing.T) {
 	testing.expect(t, w1.rules.gravity >= gravity[0] && w1.rules.gravity <= gravity[1])
 }
 
+// A world class's weather: none at all on an airless moon (a storm set there brings
+// nothing), a storm where there is air, its rain by the class's climate.
+@(test)
+test_world_class_weather :: proc(t: ^testing.T) {
+	s: Server
+	s.config.seed = 5
+	for class in ([]worldgen.World_Class{.Moon, .Canyon}) {
+		w := World {
+			server  = &s,
+			address = class_address(class),
+		}
+		world_kind(&w)
+		world_weather_set(&w, game.Weather_Kind.Storm)
+		now := world_weather(&w)
+		if class == .Moon {
+			testing.expect_value(t, now, game.Weather{})
+		} else {
+			testing.expect_value(t, now, game.WEATHER_OF[.Storm])
+			kind, _ := game.precipitation_of(
+				now,
+				worldgen.CLASSES[class].climate.? or_else .Temperate,
+			)
+			testing.expect_value(t, kind, game.Precipitation.None) // (a canyon is dry)
+		}
+	}
+}
+
+// class_address: the first address (address_derive) of class c.
+@(private = "file")
+class_address :: proc(c: worldgen.World_Class) -> starmap.Address {
+	for i in u64(0) ..< 100_000 {
+		a := starmap.address_derive(i)
+		if worldgen.world_class(a) == c {return a}
+	}
+	return {}
+}
+
 // A world keeps the class it was saved with, and one saved before world classes (its
 // world.cfg without worldgen.class) is none: Earth's generator as it was, so the chunks
 // made from now on meet those it saved.

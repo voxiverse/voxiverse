@@ -433,8 +433,13 @@ record, `server/core/weather.odin`). Stopping the daylight cycle stops the weath
   whole in low ground (up to 16 blocks above the sea) and thins it to nothing by 56.
 - **Climate.** What falls depends on where the player stands, from the generator's biome:
   snow in the cold (tundra, frozen ocean, ice sheet, mountains, cold desert), nothing in a
-  desert (the cloud still comes), rain elsewhere. The server works it out again when the
-  player crosses a 32-block cell.
+  desert (the cloud still comes), rain elsewhere. A world class may have one climate
+  everywhere ([World classes](#world-classes), `Class_Def.climate`): a canyon and a volcanic
+  world dry, a frozen world cold, and an airless moon none at all (`Airless`:
+  `game.weather_in` gives no cloud, no rain, no fog, no wind there, on the server and the
+  client alike). The server works it out again when the player crosses a 32-block cell. On
+  a class's world the weather's sky is drawn over the class's (`engine.world_look`, then the
+  weather).
 - **Lightning.** In a storm, each 3-second slot of world time has a chance of a strike (30 in
   100 in a full storm) at a moment, distance (150 to 3000 blocks) and bearing drawn from the
   seed: the same strike on every machine. The client flashes the sky and the light (a soft

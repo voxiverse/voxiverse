@@ -37,7 +37,11 @@ world_weather_seed :: proc(w: ^World) -> u64 {
 // world_weather: the weather in w now: for a game (rain puts out fires, a storm
 // keeps creatures in), the same the players see.
 world_weather :: proc(w: ^World) -> game.Weather {
-	return game.weather_at(world_weather_seed(w), w.clock, w.weather_forced)
+	now := game.weather_at(world_weather_seed(w), w.clock, w.weather_forced)
+	if c, has := worldgen.CLASSES[worldgen.world_class_of(&w.params)].climate.?; has {
+		return game.weather_in(now, c)
+	}
+	return now
 }
 
 // world_weather_set: w's weather stands at kind (nil: the spells again), told to its
@@ -59,11 +63,13 @@ world_hum :: proc(w: ^World, at: game.Block_Pos, strength: f32) {
 	if k > 0 {append(&w.hums, Hum_Place{at, k})}
 }
 
-// climate_at: the climate of block column (x, z) of w, from its generator's biome
-// (an Earth world's; the others are temperate).
+// climate_at: the climate of block column (x, z) of w: a world class's own where it has one
+// (worldgen.CLASSES: a canyon dry, a frozen world cold, a moon airless), else from its
+// generator's biome (an Earth world's; the others are temperate).
 climate_at :: proc(w: ^World, x, z: i32) -> game.Climate {
 	gen := &w.chunks.gen
 	if gen.kind != .Earth {return .Temperate}
+	if c, has := worldgen.CLASSES[worldgen.world_class_of(&gen.params)].climate.?; has {return c}
 	#partial switch worldgen.earth_biome(gen, x, z) {
 	case .Frozen_Ocean, .Tundra, .Ice_Sheet, .Mountains, .Cold_Desert:
 		return .Cold

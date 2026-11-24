@@ -136,6 +136,7 @@ Class_Def :: struct {
 	no_clouds:                                                             bool,
 	no_ice:                                                                bool, // its water never freezes over
 	no_buildings:                                                          bool, // no towers, ruins, wells or dungeons stand (only its gates)
+	climate:                                                               Maybe(game.Climate), // its weather's climate everywhere (nil: each place's, by its biome)
 }
 
 // The engine's ores, as Earth places them (ore_at).
@@ -200,6 +201,7 @@ CLASSES := [World_Class]Class_Def {
 		horizon = {0.75, 0.45, 0.25},
 		cloud = {0.95, 0.80, 0.66},
 		no_ice = true,
+		climate = game.Climate.Dry,
 	},
 	.Frozen = {
 		sea_level = {-6, 4},
@@ -228,6 +230,7 @@ CLASSES := [World_Class]Class_Def {
 		unique = "voxiverse:cryolite_ore",
 		zenith = {0.14, 0.32, 0.75},
 		horizon = {0.62, 0.75, 0.90},
+		climate = game.Climate.Cold,
 	},
 	.Ocean = {
 		sea_level = {2, 10},
@@ -255,21 +258,21 @@ CLASSES := [World_Class]Class_Def {
 		no_ice = true,
 	},
 	.Volcanic = {
-		sea_level = {-8, 2},
+		sea_level       = {-8, 2},
 		continent_scale = {1200, 2400},
 		mountain_height = {50, 110},
-		hill_height = {8, 20},
-		ocean_depth = {14, 30},
-		overhang = {6, 16},
-		river_width = {0, 0},
-		cave_size = {0.08, 0.14},
-		tree_density = {0.15, 0.35},
-		plant_density = {0, 0},
-		warmth = {0.1, 0.3},
-		wetness = {0.2, 0.4},
-		gravity = {36, 44},
-		day_length = {600, 1200},
-		swaps = {
+		hill_height     = {8, 20},
+		ocean_depth     = {14, 30},
+		overhang        = {6, 16},
+		river_width     = {0, 0},
+		cave_size       = {0.08, 0.14},
+		tree_density    = {0.15, 0.35},
+		plant_density   = {0, 0},
+		warmth          = {0.1, 0.3},
+		wetness         = {0.2, 0.4},
+		gravity         = {36, 44},
+		day_length      = {600, 1200},
+		swaps           = {
 			{.Grass, "voxiverse:ash"},
 			{.Dirt, "voxiverse:ash"},
 			{.Sand, "voxiverse:obsidian"},
@@ -280,14 +283,15 @@ CLASSES := [World_Class]Class_Def {
 			{.Ice, "voxiverse:obsidian"},
 			{.Clay, "voxiverse:ash"},
 		},
-		liquid = "voxiverse:magma",
-		ores = {IRON, COPPER, {"voxiverse:sulfur_ore", 0.004, -30, 120}},
-		unique = "voxiverse:sulfur_ore",
-		parts = {"voxiverse:magma", "", "", ""},
-		zenith = {0.10, 0.035, 0.02},
-		horizon = {0.40, 0.14, 0.05},
-		cloud = {0.10, 0.07, 0.06},
-		no_buildings = true,
+		liquid          = "voxiverse:magma",
+		ores            = {IRON, COPPER, {"voxiverse:sulfur_ore", 0.004, -30, 120}},
+		unique          = "voxiverse:sulfur_ore",
+		parts           = {"voxiverse:magma", "", "", ""},
+		zenith          = {0.10, 0.035, 0.02},
+		horizon         = {0.40, 0.14, 0.05},
+		cloud           = {0.10, 0.07, 0.06},
+		no_buildings    = true,
+		climate         = game.Climate.Dry, // (ash would fall here: dry until the sky can draw it)
 	},
 	.Fungal = {
 		sea_level = {-4, 4},
@@ -350,6 +354,7 @@ CLASSES := [World_Class]Class_Def {
 		stars = 0.9,
 		no_clouds = true,
 		no_buildings = true,
+		climate = game.Climate.Airless,
 	},
 	.Jungle = {
 		sea_level = {-2, 6},

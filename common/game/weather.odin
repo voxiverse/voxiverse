@@ -49,6 +49,7 @@ Climate :: enum u8 {
 	Temperate, // rain falls as rain
 	Cold, // ... as snow
 	Dry, // nothing falls (the clouds still come)
+	Airless, // no air, so no weather at all: no cloud, nothing falls, no wind (an airless moon's)
 }
 
 Precipitation :: enum u8 {
@@ -174,11 +175,16 @@ weather_kind_by_name :: proc(name: string) -> (Weather_Kind, bool) {
 	return {}, false
 }
 
+// weather_in: the weather w as it is in a climate: none at all where there is no air.
+weather_in :: proc(w: Weather, climate: Climate) -> Weather {
+	return {} if climate == .Airless else w
+}
+
 // precipitation_of: what falls, and how hard (0..1), in a climate.
 precipitation_of :: proc(w: Weather, climate: Climate) -> (Precipitation, f32) {
 	if w.rain <= 0 {return .None, 0}
 	switch climate {
-	case .Dry:
+	case .Dry, .Airless:
 		return .None, 0
 	case .Cold:
 		return .Snow, w.rain

@@ -128,7 +128,8 @@ apply_weather :: proc(s: ^Session, g: protocol.Received) {
 // (game.weather_at from the world's seed and the clock), and the climate there.
 session_weather :: proc(s: ^Session) -> (game.Weather, game.Climate) {
 	w := game.weather_at(s.weather.seed, s.clock, protocol.weather_forced(s.weather))
-	return w, game.Climate(s.weather.climate)
+	climate := game.Climate(s.weather.climate)
+	return game.weather_in(w, climate), climate
 }
 
 @(private)

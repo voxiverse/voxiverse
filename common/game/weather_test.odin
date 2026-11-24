@@ -109,6 +109,12 @@ test_precipitation_by_climate :: proc(t: ^testing.T) {
 	testing.expect(t, p == .None && k == 0)
 	p, _ = precipitation_of(WEATHER_OF[.Overcast], .Temperate)
 	testing.expect_value(t, p, Precipitation.None)
+	// Where there is no air there is no weather at all.
+	storm := WEATHER_OF[.Storm]
+	testing.expect_value(t, weather_in(storm, .Airless), Weather{})
+	testing.expect_value(t, weather_in(storm, .Dry), storm)
+	p, k = precipitation_of(storm, .Airless)
+	testing.expect(t, p == .None && k == 0)
 }
 
 // Lightning comes only in storms, about as often as STRIKE_CHANCE says, and the same
