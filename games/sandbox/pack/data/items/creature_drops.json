@@ -48,5 +48,36 @@
 		"model": "sandbox:lens",
 		"description": "An ancient machine's eye, clear and faintly lit.",
 		"rarity": "rare"
+	},
+	// What the gate worlds' own creatures leave (entities/natives.json).
+	"thistle_horn": {
+		"model": "sandbox:thistle_horn",
+		"description": "A thistlebuck's antler tine, hard and barbed.",
+		"rarity": "uncommon"
+	},
+	"sail_membrane": {
+		"model": "sandbox:sail_membrane",
+		"description": "The skin of a sailback's sail, thin and tough as canvas.",
+		"rarity": "uncommon"
+	},
+	"frost_pelt": {
+		"model": "sandbox:frost_pelt",
+		"description": "A rimeclaw's white pelt. Nothing cold gets through it.",
+		"rarity": "rare"
+	},
+	"ember_gland": {
+		"model": "sandbox:ember_gland",
+		"description": "The gland that lights a cinderhound's cracks. It smoulders still.",
+		"rarity": "uncommon"
+	},
+	"spore_sac": {
+		"model": "sandbox:spore_sac",
+		"description": "A sporemaw's sac of spores, soft and faintly warm.",
+		"rarity": "uncommon"
+	},
+	"fang": {
+		"model": "sandbox:fang",
+		"description": "A striper's fang, long as a finger and keen.",
+		"rarity": "rare"
 	}
 }

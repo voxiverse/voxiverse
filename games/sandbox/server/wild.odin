@@ -18,7 +18,8 @@ import "server:play"
 // thinks once in play.FAR_THINK ticks; no more come by themselves round a player who has
 // WILD_MOST of them within WILD_CROWD blocks. The machines keep to the remains
 // (remains_machines.odin); the delves' keep to their depths (delve.odin), the custodian to
-// its chamber (delve_boss.odin).
+// its chamber (delve_boss.odin). The gate worlds' own creatures (natives.odin: one class's
+// each) are of the roster too, their minds made of the same pieces.
 
 Wild :: enum u8 {
 	Loper, // a herd grazer
@@ -41,6 +42,17 @@ Wild :: enum u8 {
 	Spire, // a delve's turret, fixed where it stands
 	Carapace, // a delve's shielded heavy
 	Custodian, // the delve's boss
+	// The gate worlds' own (natives.odin; games/sandbox/worlds.odin, CLASS_NATIVES).
+	Thistlebuck, // a temperate world's herd grazer
+	Sailback, // a canyon's basking lizard that guards its rock
+	Rimeclaw, // a frozen world's stalker
+	Surfclaw, // an ocean world's shore crab that guards its beach
+	Driftray, // an ocean world's ray
+	Cinderhound, // a volcanic world's pack hunter by night
+	Sporemaw, // a fungal world's ambusher passing for a toadstool
+	Lanternmoth, // a fungal world's glowing moth
+	Striper, // a jungle's great hunter under the trees
+	Leafwing, // a jungle's gliding lizard
 }
 
 WILD_KINDS :: [Wild]string {
@@ -64,6 +76,16 @@ WILD_KINDS :: [Wild]string {
 	.Spire       = "sandbox:spire",
 	.Carapace    = "sandbox:carapace",
 	.Custodian   = "sandbox:custodian",
+	.Thistlebuck = "sandbox:thistlebuck",
+	.Sailback    = "sandbox:sailback",
+	.Rimeclaw    = "sandbox:rimeclaw",
+	.Surfclaw    = "sandbox:surfclaw",
+	.Driftray    = "sandbox:driftray",
+	.Cinderhound = "sandbox:cinderhound",
+	.Sporemaw    = "sandbox:sporemaw",
+	.Lanternmoth = "sandbox:lanternmoth",
+	.Striper     = "sandbox:striper",
+	.Leafwing    = "sandbox:leafwing",
 }
 
 // Wild_Group: some of the roster, as /creatures names them.
@@ -72,7 +94,8 @@ Wild_Group :: struct {
 	kinds: bit_set[Wild],
 }
 
-// WILD_GROUPS: the roster by group.
+// WILD_GROUPS: the roster by group (`all`, for /creatures, is the home world's: every group
+// but the natives).
 WILD_GROUPS :: [?]Wild_Group {
 	{"wildlife", {.Loper, .Twitchet, .Wheelwing, .Glassfin, .Domeback}},
 	{"guards", {.Hacklebird, .Snouter}},
@@ -80,6 +103,7 @@ WILD_GROUPS :: [?]Wild_Group {
 	{"machines", {.Sentry, .Tender, .Watcher, .Bulwark}},
 	{"giant", {.Longstrider}},
 	{"delve", {.Scuttler, .Spire, .Carapace, .Custodian}},
+	{"natives", NATIVES},
 }
 
 WILD_NEAR :: 48 // blocks: a player this near has a creature think every tick
@@ -285,6 +309,26 @@ wild_think :: proc(s: ^core.Server, w: ^core.World, which: Wild, h: game.Entity_
 		sleeper_think(s, w, h, m, CARAPACE_TEMPER, .Dormant)
 	case .Custodian:
 		boss_think(s, w, h, d)
+	case .Thistlebuck:
+		loper_think(s, w, h, m)
+	case .Sailback:
+		guard_think(s, w, h, m, SAIL_TEMPER, 4, 0.4)
+	case .Rimeclaw:
+		guard_think(s, w, h, m, RIME_TEMPER, 8, 1.0)
+		if m.state == .Fight {core.entity_set_speed(w, h, run_speed(s, w, h))}
+	case .Surfclaw:
+		guard_think(s, w, h, m, SURF_TEMPER, 4, 0.8)
+	case .Driftray:
+		glassfin_think(s, w, h, m)
+	case .Cinderhound:
+		duskrunner_think(s, w, h, m)
+	case .Sporemaw:
+		sleeper_think(s, w, h, m, SPORE_TEMPER, .Hidden)
+	case .Lanternmoth, .Leafwing:
+		wheelwing_think(s, w, h, m)
+	case .Striper:
+		guard_think(s, w, h, m, STRIPE_TEMPER, 8, 0.9)
+		if m.state == .Fight {core.entity_set_speed(w, h, run_speed(s, w, h))}
 	}
 	wild_show(w, h, d)
 }
@@ -629,9 +673,9 @@ wild_begin :: proc(s: ^core.Server, w: ^core.World, which: Wild, h: game.Entity_
 	m := &d.mind
 	play.mind_settle(w, h, m)
 	#partial switch which {
-	case .Pitmaw:
+	case .Pitmaw, .Sporemaw:
 		play.mind_set(m, .Hidden, 0)
-	case .Wheelwing:
+	case .Wheelwing, .Lanternmoth, .Leafwing:
 		play.mind_set(m, .Rest, i32(base.rng_int_range(r, 5, 20)) * game.TICK_RATE)
 	case .Watcher:
 		play.mind_set(m, .Follow, i32(base.rng_int_range(r, 40, 60)) * game.TICK_RATE)
@@ -654,9 +698,9 @@ wild_spawned :: proc(s: ^core.Server, w: ^core.World, which: Wild, h: game.Entit
 		return false
 	}
 	#partial switch which {
-	case .Barbcaster:
+	case .Barbcaster, .Surfclaw:
 		if !near_water(w, pos, 6) {return false}
-	case .Duskrunner, .Snouter:
+	case .Duskrunner, .Snouter, .Striper:
 		if !near_trees(w, pos, 8) {return false}
 	case .Watcher:
 		if !remains_near(s, w, pos, REMAINS_WATCHED) {return false}
@@ -712,17 +756,17 @@ wild_hurt :: proc(
 	m := &d.mind
 	from := harm.from
 	switch which {
-	case .Loper:
+	case .Loper, .Thistlebuck:
 		herd_fright(s, w, h, from)
 	case .Twitchet:
 		play.scare(w, h, m, r, from, 12, run_speed(s, w, h), WILD_FLEE_TICKS)
 	case .Longstrider:
 		play.scare(w, h, m, r, from, 20, run_speed(s, w, h), WILD_FLEE_TICKS * 2)
-	case .Wheelwing, .Tender:
+	case .Wheelwing, .Tender, .Lanternmoth, .Leafwing:
 		if play.fly_flee(s, w, h, r, from, 12, 6, 10, run_speed(s, w, h)) {
 			play.mind_set(m, .Flee, WILD_FLEE_TICKS)
 		}
-	case .Glassfin:
+	case .Glassfin, .Driftray:
 		if play.swim_flee(s, w, h, r, from, 6, run_speed(s, w, h)) {
 			play.mind_set(m, .Flee, game.TICK_RATE * 3)
 		}
@@ -751,7 +795,17 @@ wild_hurt :: proc(
 		play.provoke(m, CARAPACE_TEMPER)
 	case .Custodian:
 		boss_hurt(s, w, h, harm)
-	case .Duskrunner:
+	case .Sailback:
+		play.provoke(m, SAIL_TEMPER)
+	case .Rimeclaw:
+		play.provoke(m, RIME_TEMPER)
+	case .Surfclaw:
+		play.provoke(m, SURF_TEMPER)
+	case .Sporemaw:
+		play.provoke(m, SPORE_TEMPER)
+	case .Striper:
+		play.provoke(m, STRIPE_TEMPER)
+	case .Duskrunner, .Cinderhound:
 		if core.entity_health_of(w, h) * 2 <= core.entity_max_health(w, h) {
 			m.wind = 0
 			play.scare(w, h, m, r, from, 16, run_speed(s, w, h), WILD_FLEE_TICKS)
@@ -787,6 +841,8 @@ wild_harming :: proc(s: ^core.Server, hm: ^core.Harming) {
 		}
 	case .Custodian:
 		boss_harming(s, hm)
+	case .Surfclaw:
+		if d.mind.state != .Fight {hm.amount *= SURF_SHELL} 	// (its claw up, the shell open)
 	}
 }
 
@@ -795,7 +851,7 @@ wild_harming :: proc(s: ^core.Server, hm: ^core.Harming) {
 // they stand for a picture, showing how each looks at its most telling (a bird aloft, a
 // guard warning, the giant grown). The summoning permission.
 creatures_command :: proc(s: ^core.Server, c: ^core.Client, args: []string) -> bool {
-	USAGE :: "Usage: creatures wildlife|guards|predators|machines|giant|delve|all [still]"
+	USAGE :: "Usage: creatures wildlife|guards|predators|machines|giant|delve|natives|all [still]"
 	if !core.allowed(s, c, "world.summon") {
 		core.notice(s, c, "You may not summon here")
 		return true
@@ -805,7 +861,7 @@ creatures_command :: proc(s: ^core.Server, c: ^core.Client, args: []string) -> b
 		return true
 	}
 	kinds: bit_set[Wild]
-	if args[0] == "all" {kinds = ~bit_set[Wild]{}}
+	if args[0] == "all" {kinds = ~NATIVES} 	// (the home world's)
 	groups := WILD_GROUPS
 	for group in groups {if group.name == args[0] {kinds = group.kinds}}
 	if kinds == {} {
@@ -844,18 +900,19 @@ wild_pose :: proc(s: ^core.Server, w: ^core.World, which: Wild, h: game.Entity_H
 	d.still = true
 	pose := play.Mind_State.Idle
 	#partial switch which {
-	case .Wheelwing:
+	case .Wheelwing, .Lanternmoth, .Leafwing:
 		pose = .Wander
-	case .Hacklebird:
+	case .Hacklebird, .Sailback, .Rimeclaw, .Surfclaw:
 		pose = .Warn
-	case .Snouter:
+	case .Snouter, .Striper:
 		pose = .Fight
 	}
 	d.mind.state = pose
 	wild_show(w, h, d)
 	#partial switch which {
-	case .Wheelwing, .Tender, .Watcher, .Glassfin:
-		up := core.entity_pos(w, h) + {0, 2 if which != .Glassfin else 0, 0}
+	case .Wheelwing, .Tender, .Watcher, .Glassfin, .Lanternmoth, .Leafwing, .Driftray:
+		swims := which == .Glassfin || which == .Driftray
+		up := core.entity_pos(w, h) + {0, 2 if !swims else 0, 0}
 		core.entity_glide(w, h, []game.Block_Pos{play.block_of(up)})
 	}
 }

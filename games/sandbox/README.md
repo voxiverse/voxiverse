@@ -118,16 +118,20 @@ walks what yields what):
   ancient alloy and data shards (rare); from the creatures (below) hide, raw meat, feathers,
   raw fish and chitin, shell plates and venom glands (uncommon), and the machines' scrap
   (uncommon), power cells and lenses (rare), and the delves' servo bundles (uncommon), keeper
-  coils (rare) and the custodian's core (epic). What the creatures leave makes padding, trail
+  coils (rare) and the custodian's core (epic); from the gate worlds' own creatures thistle
+  horns, sail membranes, ember glands and spore sacs (uncommon), frost pelts and fangs
+  (rare). What the creatures leave makes padding, trail
   rations (meat by hand, fish cooked at a fabricator), flechettes, climbing spikes, stim
-  patches, charge cells, optics, salvage, padded boots and a plate cuirass another way.
+  patches, charge cells, optics, salvage, padded boots and a plate cuirass another way, and
+  the gate worlds' leave a machete, spark cartridges, lamps, regen ampoules and spore tonics
+  another way and the sail cloak, the rimefur hood and the fang blade of their own.
 - **Refined**: cord, padding, copper and iron ingots, wire, charge cells, optics, circuit
   boards, alloy plate; and the base pack's planks, glass, stone bricks, lamps, chest and hoe.
 - **Tools**: flint pick (tier 1), copper pick (tier 2), alloy drill (tier 3, one more of each),
   keeper drill (an alloy drill upgraded with the custodian's core: the fastest; epic).
 - **Melee**: flint knife (quick, short), machete (a wide sweep), survey maul (slow, heavy,
-  long), shock baton (fast, hard), relic blade (the remains': epic), arc lance (the delves':
-  long and heavy; epic).
+  long), shock baton (fast, hard), fang blade (a striper's fangs: quick, rare), relic blade
+  (the remains': epic), arc lance (the delves': long and heavy; epic).
 - **Ranged**, each loading its own: rivet driver (eight heavy shots, rivets), flechette
   caster (six darts close in, flechettes), arc repeater (automatic, forty light bolts, spark
   cartridges), coil rifle (three scoped long shots, coil charges; epic).
@@ -135,8 +139,8 @@ walks what yields what):
   turned aside, 0.8 at most): padded (common; its boots take a quarter off a fall), plate
   (uncommon; the cuirass slows), exo (rare; the harness quickens, the legs jump, the striders
   take four fifths off a fall), keeper helm and cuirass (the delves': rare, epic); climbing
-  spikes (jump higher, land softer).
-- **Trinkets** (the two trinket slots; the offhand takes one too): stride coil (faster), gyro stabiliser (half a fall's harm),
+  spikes (jump higher, land softer); the rimefur hood (a rimeclaw's pelt: rare).
+- **Trinkets** (the two trinket slots; the offhand takes one too): stride coil (faster), gyro stabiliser (half a fall's harm), sail cloak (a sailback's sail: a third of a fall's harm, a little faster),
   heart regulator (more health), ward emitter (the remains': defence) and the phase lattice
   (a vault's: faster, one more jump in the air; legendary), and below the keeper sigil
   (defence, health) and servo spring (higher, faster).
@@ -348,8 +352,32 @@ the open ground the small creatures come on, is the plant soil and red sand, ash
 The delves keep theirs the same way (below, "Its delves"): posted as a delve is built, kept
 with the world, asleep at their posts; the custodian is set down by its delve each session.
 
-`/creatures wildlife|guards|predators|machines|giant|delve|all [still]` sets a group down in a row
-in front of you (the summoning permission), `still` standing for a picture.
+**The gate worlds' own.** Each class of gate world but the moon has one or two creatures
+found nowhere else (`pack/data/entities/natives.json`; `worlds.odin`'s `CLASS_NATIVES`, which
+`spawned` holds them to: never on the home world, never on another class), on its own ground
+(`block_tags/creatures.json`: `canyon_rock`, `ash_ground`, `jungle_floor` beside the others).
+Their minds are the roster's pieces (`server/natives.odin`), and what they leave makes things
+of its own or known things another way (`items/creature_drops.json`, `recipes/survival.json`):
+
+| Creature | Class, where and when | What it does | Health | Threat | Leaves, and what it makes |
+|---|---|---|---|---|---|
+| thistlebuck | temperate; grass, by day, herds of 2 to 4 | a mossy grazer with thorny antlers: grazes with its herd, watches from 10 blocks, runs with the herd from a player within 5 | 12 | 1 | hide, meat, thistle horn: a machete (2 horns, planks, cord), 16 flechettes (with flint) |
+| sailback | canyon; red rock and sand, by day | basks on the mesas; a player within 10 sees its sail flare red, one who stays within 5, or hits it, is bitten (4) until 18 blocks from its rock | 16 | 4 | hide, sail membrane: the sail cloak (trinket: 0.35 fall guard, a little faster), 2 padding |
+| rimeclaw | frozen; snow, any hour, alone | a white stalker: its crest rises at a player within 14 blocks; one who stays within 7, or hits it, is run down, claws raised before each blow (5), until 28 blocks off | 26 | 6 | hide, meat, frost pelt: the rimefur hood (helm: defence 0.07, +3 health), 3 padding |
+| surfclaw | ocean; shore sand and gravel by the water, any hour | a crab as broad as a man is tall: lifts its claw at a player within 8, pinches (4) one within 4 until 12 blocks off; half of any harm through its shell unless it is fighting | 18 | 4 | chitin, shell plates, fish |
+| driftray | ocean; in the sea, any hour, in pairs | glides in the water, slides away from a player within 6 | 6 | 1 | fish |
+| cinderhound | volcanic; ash and basalt, dusk to dawn, packs of 2 to 4 | its cracks glow like coals: the pack circles a player 6 blocks off and, one at a time, its glow flaring white, darts in to bite (3); one badly hurt runs | 9 | 3 | hide, ember gland: 24 spark cartridges (with copper), 3 lamps (with glass) |
+| sporemaw | fungal; mycelium, any hour | passes for a toadstool: heaves out of the ground in a burst of spores at a player within 5 and lashes (4); slow, so walking away escapes it | 16 | 4 | spore sac, glow spores: a regen ampoule (with med gel), 2 spore tonics (with fibre) |
+| lanternmoth | fungal; mycelium, dusk to dawn | a great moth glowing teal: rests, flutters over its ground, lands again; takes off from a player within 7 | 4 | 1 | glow spores, feathers |
+| striper | jungle; grass and mud under the trees, any hour, alone | a great striped hunter: crouches, stripes darkening, at a player within 12; runs down one who stays within 6, or hits it, mauling (6) until 24 blocks off | 30 | 7 | hide, meat, fang: the fang blade (melee 7, quick, rare), 24 flechettes (with iron) |
+| leafwing | jungle; grass and mud, by day | a green lizard that glides on flaps of skin; takes off from a player within 7 | 3 | 1 | meat, feathers |
+
+The moon has none living: its keepers' machines (sentries) stand folded at its places (below,
+"The gate worlds' places").
+
+`/creatures wildlife|guards|predators|machines|giant|delve|natives|all [still]` sets a group
+down in a row in front of you (the summoning permission; `all` is the home world's and the
+delves', `natives` the gate worlds' own), `still` standing for a picture.
 
 ## Its nights
 

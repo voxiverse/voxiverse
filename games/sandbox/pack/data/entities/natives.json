@@ -1,0 +1,367 @@
+// The gate worlds' own creatures: each lives on one world class alone (games/sandbox/
+// worlds.odin, CLASS_NATIVES: never on the home world, never on another class), on that
+// class's ground. Their minds are the home world's creatures' (games/sandbox/server/wild.odin,
+// made of server/play's minds); what a player sees of one is the look of its mind's state,
+// drawn by these models. At least one of each living class but the temperate fights.
+{
+	// Temperate: a grazer of the meadows by day in herds of two to four, mossy, with a
+	// rack of thorny antlers; it watches a player from 10 blocks and runs with its herd from
+	// one within 5.
+	"thistlebuck": {
+		"voice": "bellow",
+		"box": [1.0, 1.8], "health": 12, "threat": 1, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 2.0, "run_speed": 5.0, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"drops": [
+			{"item": "sandbox:hide", "count": [1, 2]},
+			{"item": "sandbox:raw_meat", "count": [1, 2]},
+			{"item": "sandbox:thistle_horn", "chance": 0.5}
+		],
+		"model": {"parts": [
+			{"box": [-0.35, 0.8, -0.6, 0.35, 1.3, 0.55], "color": [104, 112, 74]},
+			{"box": [-0.36, 0.8, -0.35, 0.36, 0.9, 0.35], "color": [204, 196, 156]},
+			{"box": [-0.22, 1.3, -0.5, 0.22, 1.4, 0.45], "color": [74, 126, 62]},
+			{"box": [-0.13, 1.05, -0.92, 0.13, 1.5, -0.55], "color": [104, 112, 74], "swing": "pitch", "hinge": [0, 1.15, -0.6]},
+			{"box": [-0.15, 1.35, -1.18, 0.15, 1.6, -0.86], "color": [118, 126, 86], "skin": "head", "swing": "pitch", "hinge": [0, 1.15, -0.6]},
+			{"box": [-0.34, 1.6, -1.02, -0.1, 1.66, -0.96], "color": [128, 60, 52], "swing": "pitch", "hinge": [0, 1.15, -0.6]},
+			{"box": [-0.34, 1.6, -1.02, -0.28, 1.92, -0.96], "color": [128, 60, 52], "swing": "pitch", "hinge": [0, 1.15, -0.6]},
+			{"box": [-0.24, 1.66, -1.02, -0.18, 1.82, -0.96], "color": [200, 196, 120], "swing": "pitch", "hinge": [0, 1.15, -0.6]},
+			{"box": [0.1, 1.6, -1.02, 0.34, 1.66, -0.96], "color": [128, 60, 52], "swing": "pitch", "hinge": [0, 1.15, -0.6]},
+			{"box": [0.28, 1.6, -1.02, 0.34, 1.92, -0.96], "color": [128, 60, 52], "swing": "pitch", "hinge": [0, 1.15, -0.6]},
+			{"box": [0.18, 1.66, -1.02, 0.24, 1.82, -0.96], "color": [200, 196, 120], "swing": "pitch", "hinge": [0, 1.15, -0.6]},
+			{"box": [-0.3, 0, -0.5, -0.15, 0.82, -0.35], "color": [72, 62, 46], "skin": "legs", "swing": "walk"},
+			{"box": [0.15, 0, -0.5, 0.3, 0.82, -0.35], "color": [72, 62, 46], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.3, 0, 0.35, -0.15, 0.82, 0.5], "color": [72, 62, 46], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.15, 0, 0.35, 0.3, 0.82, 0.5], "color": [72, 62, 46], "skin": "legs", "swing": "walk"},
+			{"box": [-0.06, 0.95, 0.55, 0.06, 1.22, 0.68], "color": [74, 126, 62]}
+		]},
+		"spawn": {
+			"on": "voxiverse:grass", "day": [0.25, 0.75], "every": 140, "chance": 0.3, "cap": 6,
+			"within": 64, "distance": [24, 48], "group": [2, 4], "sky": true
+		}
+	},
+	// Canyon: a lizard of the red rock that basks on the mesas by day; a player within 10
+	// blocks sees the sail along its back flare red, and one who stays within 5, or hits it,
+	// is bitten (4) until 18 blocks from its rock.
+	"sailback": {
+		"voice": "croak",
+		"box": [0.9, 1.0], "health": 16, "threat": 4, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.6, "run_speed": 4.5, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 4, "reach": 1.0, "cooldown": 1.5, "keep": [0, 0.8], "notice": 10},
+		"looks": ["warn", "fight", "winding", "striking"],
+		"drops": [
+			{"item": "sandbox:hide", "count": [1, 2]},
+			{"item": "sandbox:sail_membrane", "count": [1, 2], "chance": 0.6}
+		],
+		"model": {"parts": [
+			{"box": [-0.28, 0.2, -0.5, 0.28, 0.5, 0.45], "color": [176, 104, 66]},
+			{"box": [-0.29, 0.2, -0.3, 0.29, 0.27, 0.3], "color": [226, 184, 132]},
+			{"box": [-0.17, 0.24, -0.82, 0.17, 0.46, -0.5], "color": [190, 116, 74], "skin": "head", "swing": "strike", "hinge": [0, 0.35, -0.5]},
+			{"box": [-0.15, 0.2, -0.86, 0.15, 0.26, -0.6], "color": [240, 210, 150], "swing": "strike", "hinge": [0, 0.35, -0.5]},
+			{"box": [-0.08, 0.38, 0.45, 0.08, 0.5, 1.05], "color": [160, 92, 58]},
+			{"box": [-0.05, 0.5, -0.35, 0.05, 0.75, 0.35], "color": [120, 78, 60], "hidden": ["warn", "fight"]},
+			{"box": [-0.05, 0.5, -0.4, 0.05, 1.05, 0.4], "color": [214, 62, 40], "shown": ["warn"]},
+			{"box": [-0.05, 0.5, -0.4, 0.05, 1.05, 0.4], "color": [214, 62, 40], "shown": ["fight"]},
+			{"box": [-0.055, 0.7, -0.3, 0.055, 0.95, 0.3], "color": [250, 200, 70], "shown": ["fight"]},
+			{"box": [-0.48, 0, -0.42, -0.28, 0.25, -0.26], "color": [140, 82, 52], "skin": "legs", "swing": "walk"},
+			{"box": [0.28, 0, -0.42, 0.48, 0.25, -0.26], "color": [140, 82, 52], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.48, 0, 0.22, -0.28, 0.25, 0.38], "color": [140, 82, 52], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.28, 0, 0.22, 0.48, 0.25, 0.38], "color": [140, 82, 52], "skin": "legs", "swing": "walk"},
+			{"box": [-0.12, 0.36, -0.8, -0.06, 0.42, -0.74], "color": [30, 28, 24], "swing": "strike", "hinge": [0, 0.35, -0.5]},
+			{"box": [0.06, 0.36, -0.8, 0.12, 0.42, -0.74], "color": [30, 28, 24], "swing": "strike", "hinge": [0, 0.35, -0.5]}
+		]},
+		"spawn": {
+			"on": "#sandbox:canyon_rock", "day": [0.25, 0.75], "every": 200, "chance": 0.3, "cap": 3,
+			"within": 64, "distance": [24, 44], "group": [1, 2], "sky": true, "safe": 48
+		}
+	},
+	// Frozen: a white stalker of the snow, any hour, alone: a player within 14 blocks sees
+	// its pale crest rise, and one who stays within 7, or hits it, is run down, its claws
+	// raised a half second before each blow (5), until 28 blocks from its ground.
+	"rimeclaw": {
+		"voice": "growl",
+		"box": [1.1, 1.3], "health": 26, "threat": 6, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 2.2, "run_speed": 5.2, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 5, "reach": 1.2, "cooldown": 1.4, "keep": [0, 1.0], "notice": 14},
+		"looks": ["warn", "fight", "winding", "striking"],
+		"drops": [
+			{"item": "sandbox:hide", "count": [1, 2]},
+			{"item": "sandbox:raw_meat", "count": [1, 3]},
+			{"item": "sandbox:frost_pelt", "chance": 0.7}
+		],
+		"model": {"parts": [
+			{"box": [-0.4, 0.55, -0.6, 0.4, 1.15, 0.55], "color": [222, 230, 236]},
+			{"box": [-0.3, 1.15, -0.45, 0.3, 1.25, 0.35], "color": [196, 210, 222]},
+			{"box": [-0.24, 0.75, -0.95, 0.24, 1.15, -0.6], "color": [232, 238, 244], "skin": "head"},
+			{"box": [-0.16, 0.75, -1.1, 0.16, 0.95, -0.95], "color": [180, 196, 212]},
+			{"box": [-0.18, 1.0, -0.98, -0.1, 1.06, -0.94], "color": [60, 140, 200]},
+			{"box": [0.1, 1.0, -0.98, 0.18, 1.06, -0.94], "color": [60, 140, 200]},
+			{"box": [-0.08, 1.15, -0.85, 0.08, 1.45, -0.55], "color": [150, 200, 230], "shown": ["warn"]},
+			{"box": [-0.08, 1.15, -0.85, 0.08, 1.45, -0.55], "color": [150, 200, 230], "shown": ["fight"]},
+			{"box": [-0.4, 0, -0.55, -0.18, 0.6, -0.33], "color": [200, 210, 220], "skin": "legs", "swing": "strike", "hinge": [-0.29, 0.6, -0.44]},
+			{"box": [0.18, 0, -0.55, 0.4, 0.6, -0.33], "color": [200, 210, 220], "skin": "legs", "swing": "strike", "hinge": [0.29, 0.6, -0.44]},
+			{"box": [-0.42, -0.02, -0.62, -0.16, 0.08, -0.5], "color": [70, 76, 90], "swing": "strike", "hinge": [-0.29, 0.6, -0.44]},
+			{"box": [0.16, -0.02, -0.62, 0.42, 0.08, -0.5], "color": [70, 76, 90], "swing": "strike", "hinge": [0.29, 0.6, -0.44]},
+			{"box": [-0.4, 0, 0.3, -0.18, 0.6, 0.52], "color": [200, 210, 220], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.18, 0, 0.3, 0.4, 0.6, 0.52], "color": [200, 210, 220], "skin": "legs", "swing": "walk"},
+			{"box": [-0.1, 0.8, 0.55, 0.1, 1.0, 1.0], "color": [222, 230, 236]}
+		]},
+		"spawn": {
+			"on": "voxiverse:snow", "day": [0, 1], "every": 300, "chance": 0.3, "cap": 2,
+			"within": 64, "distance": [28, 48], "group": [1, 1], "sky": true, "safe": 64
+		}
+	},
+	// Ocean: a crab of the island shores as broad as a man is tall, any hour: a player within
+	// 8 blocks sees it lift its great claw; one who stays within 4, or hits it, is pinched (4)
+	// until 12 blocks from its beach. Hard to hurt through its shell.
+	"surfclaw": {
+		"voice": "chitter",
+		"box": [1.2, 0.9], "health": 18, "threat": 4, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.5, "run_speed": 3.0, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 4, "reach": 1.1, "cooldown": 1.8, "keep": [0, 0.9], "notice": 8},
+		"looks": ["warn", "fight", "winding", "striking"],
+		"drops": [
+			{"item": "sandbox:chitin", "count": [1, 3]},
+			{"item": "sandbox:shell_plate", "chance": 0.5},
+			{"item": "sandbox:raw_fish", "chance": 0.5}
+		],
+		"model": {"parts": [
+			{"box": [-0.5, 0.3, -0.4, 0.5, 0.7, 0.4], "color": [196, 84, 58]},
+			{"box": [-0.42, 0.7, -0.3, 0.42, 0.78, 0.3], "color": [224, 120, 80]},
+			{"box": [-0.25, 0.7, -0.45, -0.17, 0.9, -0.37], "color": [40, 30, 30]},
+			{"box": [0.17, 0.7, -0.45, 0.25, 0.9, -0.37], "color": [40, 30, 30]},
+			{"box": [0.45, 0.35, -0.85, 0.85, 0.65, -0.4], "color": [214, 96, 64], "hidden": ["warn", "fight"]},
+			{"box": [0.45, 0.65, -0.95, 0.85, 1.15, -0.55], "color": [214, 96, 64], "shown": ["warn"]},
+			{"box": [0.45, 0.65, -0.95, 0.85, 1.15, -0.55], "color": [214, 96, 64], "shown": ["fight"], "swing": "strike", "hinge": [0.65, 0.65, -0.4]},
+			{"box": [0.5, 0.4, -1.0, 0.8, 0.6, -0.85], "color": [240, 220, 200], "hidden": ["warn", "fight"]},
+			{"box": [-0.7, 0.35, -0.6, -0.45, 0.55, -0.35], "color": [214, 96, 64]},
+			{"box": [-0.75, 0, -0.3, -0.5, 0.35, -0.2], "color": [170, 70, 50], "skin": "legs", "swing": "walk"},
+			{"box": [0.5, 0, -0.3, 0.75, 0.35, -0.2], "color": [170, 70, 50], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.75, 0, -0.05, -0.5, 0.35, 0.05], "color": [170, 70, 50], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.5, 0, -0.05, 0.75, 0.35, 0.05], "color": [170, 70, 50], "skin": "legs", "swing": "walk"},
+			{"box": [-0.75, 0, 0.2, -0.5, 0.35, 0.3], "color": [170, 70, 50], "skin": "legs", "swing": "walk"},
+			{"box": [0.5, 0, 0.2, 0.75, 0.35, 0.3], "color": [170, 70, 50], "skin": "legs", "swing": "walk_back"}
+		]},
+		"spawn": {
+			"on": "#sandbox:shore", "day": [0, 1], "every": 200, "chance": 0.35, "cap": 3,
+			"within": 48, "distance": [20, 40], "group": [1, 2], "sky": true, "safe": 48
+		}
+	},
+	// Ocean: a broad ray of the open sea, any hour, gliding in pairs; it slides away from a
+	// player within 6 blocks and never leaves the water.
+	"driftray": {
+		"voice": "none",
+		"box": [1.2, 0.3], "health": 6, "threat": 1, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.4, "run_speed": 4.0, "jump": 0, "step": 0},
+		"brain": "game",
+		"drops": [{"item": "sandbox:raw_fish", "count": [1, 2]}],
+		"model": {"parts": [
+			{"box": [-0.25, 0.08, -0.4, 0.25, 0.24, 0.35], "color": [52, 88, 120]},
+			{"box": [-0.26, 0.07, -0.3, 0.26, 0.1, 0.3], "color": [220, 230, 236]},
+			{"box": [-0.6, 0.12, -0.25, -0.25, 0.18, 0.25], "color": [60, 100, 134], "swing": "flap", "hinge": [-0.25, 0.15, 0]},
+			{"box": [0.25, 0.12, -0.25, 0.6, 0.18, 0.25], "color": [60, 100, 134], "swing": "flap", "hinge": [0.25, 0.15, 0]},
+			{"box": [-0.75, 0.13, -0.12, -0.6, 0.17, 0.15], "color": [90, 170, 190], "swing": "flap", "hinge": [-0.25, 0.15, 0]},
+			{"box": [0.6, 0.13, -0.12, 0.75, 0.17, 0.15], "color": [90, 170, 190], "swing": "flap", "hinge": [0.25, 0.15, 0]},
+			{"box": [-0.03, 0.12, 0.35, 0.03, 0.17, 0.95], "color": [40, 64, 90], "swing": "walk", "hinge": [0, 0.15, 0.35]},
+			{"box": [-0.18, 0.2, -0.38, -0.1, 0.26, -0.3], "color": [230, 220, 120]},
+			{"box": [0.1, 0.2, -0.38, 0.18, 0.26, -0.3], "color": [230, 220, 120]}
+		]},
+		"spawn": {
+			"on": "#sandbox:water_bed", "place": "water", "day": [0, 1], "every": 160,
+			"chance": 0.35, "cap": 4, "within": 48, "distance": [14, 40], "group": [1, 2]
+		}
+	},
+	// Volcanic: a lean hound of the ash from dusk to dawn, in packs of two to four, its
+	// cracks glowing like coals: the pack circles a player 6 blocks off, and one at a time,
+	// its glow flaring white first, darts in to bite (3). One badly hurt runs.
+	"cinderhound": {
+		"voice": "growl",
+		"box": [0.8, 0.9], "health": 9, "threat": 3, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 4.0, "run_speed": 5.5, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 3, "reach": 0.9, "cooldown": 1.2, "keep": [0, 0.7], "notice": 16},
+		"looks": ["winding", "striking"],
+		"drops": [
+			{"item": "sandbox:hide"},
+			{"item": "sandbox:ember_gland", "chance": 0.5}
+		],
+		"model": {
+			"parts": [
+				{"box": [-0.22, 0.5, -0.5, 0.22, 0.8, 0.45], "color": [40, 36, 38]},
+				{"box": [-0.23, 0.62, -0.35, 0.23, 0.66, 0.3], "color": [240, 110, 30], "hidden": ["winding"]},
+				{"box": [-0.23, 0.62, -0.35, 0.23, 0.66, 0.3], "color": [255, 236, 170], "shown": ["winding"]},
+				{"box": [-0.16, 0.55, -0.8, 0.16, 0.82, -0.5], "color": [50, 44, 46], "skin": "head", "swing": "strike", "hinge": [0, 0.68, -0.5]},
+				{"box": [-0.09, 0.55, -0.98, 0.09, 0.68, -0.8], "color": [60, 52, 54], "swing": "strike", "hinge": [0, 0.68, -0.5]},
+				{"box": [-0.12, 0.72, -0.86, -0.06, 0.78, -0.8], "color": [255, 160, 40], "swing": "strike", "hinge": [0, 0.68, -0.5]},
+				{"box": [0.06, 0.72, -0.86, 0.12, 0.78, -0.8], "color": [255, 160, 40], "swing": "strike", "hinge": [0, 0.68, -0.5]},
+				{"box": [-0.14, 0.82, -0.68, -0.06, 0.96, -0.6], "color": [30, 28, 30], "swing": "strike", "hinge": [0, 0.68, -0.5]},
+				{"box": [0.06, 0.82, -0.68, 0.14, 0.96, -0.6], "color": [30, 28, 30], "swing": "strike", "hinge": [0, 0.68, -0.5]},
+				{"box": [-0.2, 0, -0.42, -0.09, 0.54, -0.31], "color": [34, 30, 32], "skin": "legs", "swing": "walk"},
+				{"box": [0.09, 0, -0.42, 0.2, 0.54, -0.31], "color": [34, 30, 32], "skin": "legs", "swing": "walk_back"},
+				{"box": [-0.2, 0, 0.3, -0.09, 0.54, 0.41], "color": [34, 30, 32], "skin": "legs", "swing": "walk_back"},
+				{"box": [0.09, 0, 0.3, 0.2, 0.54, 0.41], "color": [34, 30, 32], "skin": "legs", "swing": "walk"},
+				{"box": [-0.05, 0.66, 0.45, 0.05, 0.76, 0.85], "color": [200, 80, 26]}
+			],
+			"puffs": {"winding": {"color": [90, 80, 76], "chance": 0.5, "height": 0.7}}
+		},
+		"spawn": {
+			"on": "#sandbox:ash_ground", "day": [0.75, 0.25], "every": 300, "chance": 0.3,
+			"cap": 4, "within": 64, "distance": [28, 44], "group": [2, 4], "sky": true,
+			"safe": 64
+		}
+	},
+	// Fungal: a thing that passes for a toadstool on the mycelium, any hour: only its
+	// speckled cap shows until a player comes within 5 blocks, when it heaves up out of the
+	// ground in a burst of spores (a second) and lashes (4); slow, so walking away escapes it;
+	// it sinks back once the player has gone.
+	"sporemaw": {
+		"voice": "groan",
+		"box": [1.0, 1.3], "health": 16, "threat": 4, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.4, "run_speed": 1.6, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 4, "reach": 1.2, "cooldown": 1.8, "keep": [0, 1.0], "notice": 5},
+		"looks": ["hidden", "wake", "winding", "striking"],
+		"drops": [
+			{"item": "sandbox:spore_sac", "count": [1, 2]},
+			{"item": "sandbox:glow_spores", "chance": 0.4}
+		],
+		"model": {
+			"parts": [
+				{"box": [-0.45, 0, -0.45, 0.45, 0.22, 0.45], "color": [200, 90, 140], "shown": ["hidden"]},
+				{"box": [-0.3, 0.22, -0.3, 0.3, 0.3, 0.3], "color": [236, 200, 220], "shown": ["hidden"]},
+				{"box": [-0.25, 0, -0.25, 0.25, 0.8, 0.25], "color": [212, 196, 170], "hidden": ["hidden"]},
+				{"box": [-0.5, 0.8, -0.5, 0.5, 1.15, 0.5], "color": [200, 90, 140], "hidden": ["hidden"]},
+				{"box": [-0.35, 1.15, -0.35, 0.35, 1.25, 0.35], "color": [226, 130, 176], "hidden": ["hidden"]},
+				{"box": [-0.2, 0.45, -0.32, 0.2, 0.7, -0.25], "color": [80, 20, 40], "hidden": ["hidden"]},
+				{"box": [-0.15, 0.5, -0.34, 0.15, 0.55, -0.31], "color": [240, 240, 220], "hidden": ["hidden"]},
+				{"box": [-0.62, 0.3, -0.06, -0.25, 0.4, 0.06], "color": [170, 150, 130], "swing": "strike", "hinge": [-0.25, 0.4, 0], "hidden": ["hidden"]},
+				{"box": [0.25, 0.3, -0.06, 0.62, 0.4, 0.06], "color": [170, 150, 130], "swing": "strike", "hinge": [0.25, 0.4, 0], "hidden": ["hidden"]},
+				{"box": [-0.3, 0.9, -0.52, -0.2, 1.0, -0.5], "color": [250, 240, 160], "hidden": ["hidden"]},
+				{"box": [0.2, 0.95, -0.52, 0.3, 1.05, -0.5], "color": [250, 240, 160], "hidden": ["hidden"]},
+				{"box": [-0.1, 0.22, 0.1, 0.0, 0.26, 0.2], "color": [250, 240, 160], "shown": ["hidden"]},
+				{"box": [0.15, 0.22, -0.2, 0.25, 0.26, -0.1], "color": [250, 240, 160], "shown": ["hidden"]}
+			],
+			"puffs": {"wake": {"color": [210, 240, 200], "chance": 0.9, "height": 1.0}}
+		},
+		"spawn": {
+			"on": "voxiverse:mycelium", "day": [0, 1], "every": 240, "chance": 0.3, "cap": 3,
+			"within": 48, "distance": [16, 40], "group": [1, 1], "sky": true, "safe": 48
+		}
+	},
+	// Fungal: a moth as wide as a man's arms, from dusk to dawn, its body glowing teal; it
+	// rests on the mycelium, flutters over its ground 6 to 12 blocks up and lands again, and
+	// takes off from a player within 7.
+	"lanternmoth": {
+		"voice": "whir",
+		"box": [0.6, 0.5], "health": 4, "threat": 1, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 0.8, "run_speed": 6.0, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"looks": ["idle", "rest", "wander", "flee", "return"],
+		"drops": [
+			{"item": "sandbox:glow_spores", "count": [1, 2], "chance": 0.6},
+			{"item": "sandbox:feather", "chance": 0.5}
+		],
+		"model": {"parts": [
+			{"box": [-0.08, 0.14, -0.2, 0.08, 0.28, 0.25], "color": [60, 210, 200]},
+			{"box": [-0.07, 0.18, -0.3, 0.07, 0.3, -0.2], "color": [80, 70, 90], "skin": "head"},
+			{"box": [-0.1, 0.3, -0.3, -0.06, 0.48, -0.26], "color": [200, 190, 150]},
+			{"box": [0.06, 0.3, -0.3, 0.1, 0.48, -0.26], "color": [200, 190, 150]},
+			{"box": [-0.45, 0.28, -0.25, -0.08, 0.3, 0.15], "color": [150, 120, 190], "hidden": ["wander", "flee", "return"]},
+			{"box": [0.08, 0.28, -0.25, 0.45, 0.3, 0.15], "color": [150, 120, 190], "hidden": ["wander", "flee", "return"]},
+			{"box": [-0.7, 0.26, -0.3, -0.08, 0.28, 0.2], "color": [150, 120, 190], "swing": "flap", "hinge": [-0.08, 0.27, 0], "hidden": ["idle", "rest"]},
+			{"box": [-0.55, 0.265, -0.15, -0.35, 0.285, 0.05], "color": [240, 220, 120], "swing": "flap", "hinge": [-0.08, 0.27, 0], "hidden": ["idle", "rest"]},
+			{"box": [0.08, 0.26, -0.3, 0.7, 0.28, 0.2], "color": [150, 120, 190], "swing": "flap", "hinge": [0.08, 0.27, 0], "hidden": ["idle", "rest"]},
+			{"box": [0.35, 0.265, -0.15, 0.55, 0.285, 0.05], "color": [240, 220, 120], "swing": "flap", "hinge": [0.08, 0.27, 0], "hidden": ["idle", "rest"]},
+			{"box": [-0.06, 0, -0.06, -0.03, 0.14, -0.03], "color": [80, 70, 90], "skin": "legs", "swing": "walk"},
+			{"box": [0.03, 0, -0.06, 0.06, 0.14, -0.03], "color": [80, 70, 90], "skin": "legs", "swing": "walk_back"}
+		]},
+		"spawn": {
+			"on": "voxiverse:mycelium", "day": [0.7, 0.3], "every": 140, "chance": 0.3, "cap": 5,
+			"within": 48, "distance": [16, 40], "group": [1, 3], "sky": true
+		}
+	},
+	// Jungle: a great striped hunter of the deep jungle, any hour, under the trees: a player
+	// within 12 blocks sees it crouch, its stripes darkening, and one who stays within 6, or
+	// hits it, is run down and mauled (6), each swipe drawn back first, until 24 blocks
+	// from its ground.
+	"striper": {
+		"voice": "growl",
+		"box": [1.0, 1.2], "health": 30, "threat": 7, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 2.2, "run_speed": 5.8, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"attack": {"damage": 6, "reach": 1.2, "cooldown": 1.5, "keep": [0, 1.0], "notice": 12},
+		"looks": ["warn", "fight", "winding", "striking"],
+		"drops": [
+			{"item": "sandbox:hide", "count": [2, 3]},
+			{"item": "sandbox:raw_meat", "count": [1, 3]},
+			{"item": "sandbox:fang", "count": [1, 2], "chance": 0.6}
+		],
+		"model": {"parts": [
+			{"box": [-0.32, 0.55, -0.65, 0.32, 1.0, 0.6], "color": [196, 146, 60], "hidden": ["warn", "fight"]},
+			{"box": [-0.32, 0.45, -0.65, 0.32, 0.9, 0.6], "color": [196, 146, 60], "shown": ["warn"]},
+			{"box": [-0.32, 0.45, -0.65, 0.32, 0.9, 0.6], "color": [196, 146, 60], "shown": ["fight"]},
+			{"box": [-0.33, 0.78, -0.4, 0.33, 0.86, -0.3], "color": [44, 34, 30], "colors": {"warn": [20, 14, 12]}},
+			{"box": [-0.33, 0.78, -0.05, 0.33, 0.86, 0.05], "color": [44, 34, 30], "colors": {"warn": [20, 14, 12]}},
+			{"box": [-0.33, 0.78, 0.3, 0.33, 0.86, 0.4], "color": [44, 34, 30], "colors": {"warn": [20, 14, 12]}},
+			{"box": [-0.24, 0.6, -1.0, 0.24, 1.0, -0.62], "color": [210, 160, 70], "skin": "head", "swing": "strike", "hinge": [0, 0.8, -0.62]},
+			{"box": [-0.14, 0.6, -1.1, 0.14, 0.78, -0.98], "color": [236, 226, 200], "swing": "strike", "hinge": [0, 0.8, -0.62]},
+			{"box": [-0.22, 1.0, -0.82, -0.12, 1.12, -0.72], "color": [44, 34, 30], "swing": "strike", "hinge": [0, 0.8, -0.62]},
+			{"box": [0.12, 1.0, -0.82, 0.22, 1.12, -0.72], "color": [44, 34, 30], "swing": "strike", "hinge": [0, 0.8, -0.62]},
+			{"box": [-0.3, 0, -0.55, -0.14, 0.6, -0.39], "color": [176, 128, 52], "skin": "legs", "swing": "strike", "hinge": [-0.22, 0.6, -0.47]},
+			{"box": [0.14, 0, -0.55, 0.3, 0.6, -0.39], "color": [176, 128, 52], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.3, 0, 0.38, -0.14, 0.6, 0.54], "color": [176, 128, 52], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.14, 0, 0.38, 0.3, 0.6, 0.54], "color": [176, 128, 52], "skin": "legs", "swing": "walk"},
+			{"box": [-0.05, 0.8, 0.6, 0.05, 0.9, 1.2], "color": [196, 146, 60]},
+			{"box": [-0.055, 0.79, 1.0, 0.055, 0.91, 1.22], "color": [44, 34, 30]}
+		]},
+		"spawn": {
+			"on": "#sandbox:jungle_floor", "day": [0, 1], "every": 400, "chance": 0.25, "cap": 1,
+			"within": 64, "distance": [28, 48], "group": [1, 1], "safe": 64
+		}
+	},
+	// Jungle: a green lizard that glides from crown to crown by day on flaps of skin; on the
+	// ground it hunts insects, and it takes off from a player within 7 blocks.
+	"leafwing": {
+		"voice": "chirp",
+		"box": [0.5, 0.35], "health": 3, "threat": 1, "hittable": true, "summonable": true,
+		"physics": "walker",
+		"walker": {"walk_speed": 1.2, "run_speed": 6.5, "jump": 1.2, "step": 0},
+		"brain": "game",
+		"looks": ["idle", "rest", "wander", "flee", "return"],
+		"drops": [
+			{"item": "sandbox:raw_meat", "chance": 0.6},
+			{"item": "sandbox:feather", "chance": 0.5}
+		],
+		"model": {"parts": [
+			{"box": [-0.08, 0.1, -0.2, 0.08, 0.22, 0.2], "color": [70, 150, 70]},
+			{"box": [-0.07, 0.12, -0.34, 0.07, 0.24, -0.2], "color": [90, 170, 80], "skin": "head", "swing": "pitch", "hinge": [0, 0.18, -0.2]},
+			{"box": [-0.02, 0.14, 0.2, 0.02, 0.18, 0.6], "color": [60, 120, 60]},
+			{"box": [-0.12, 0.16, -0.12, -0.08, 0.2, 0.12], "color": [60, 130, 60], "hidden": ["wander", "flee", "return"]},
+			{"box": [0.08, 0.16, -0.12, 0.12, 0.2, 0.12], "color": [60, 130, 60], "hidden": ["wander", "flee", "return"]},
+			{"box": [-0.5, 0.17, -0.14, -0.08, 0.19, 0.14], "color": [200, 220, 80], "swing": "flap", "hinge": [-0.08, 0.18, 0], "hidden": ["idle", "rest"]},
+			{"box": [0.08, 0.17, -0.14, 0.5, 0.19, 0.14], "color": [200, 220, 80], "swing": "flap", "hinge": [0.08, 0.18, 0], "hidden": ["idle", "rest"]},
+			{"box": [-0.1, 0, -0.14, -0.06, 0.1, -0.1], "color": [50, 100, 50], "skin": "legs", "swing": "walk"},
+			{"box": [0.06, 0, -0.14, 0.1, 0.1, -0.1], "color": [50, 100, 50], "skin": "legs", "swing": "walk_back"},
+			{"box": [-0.1, 0, 0.1, -0.06, 0.1, 0.14], "color": [50, 100, 50], "skin": "legs", "swing": "walk_back"},
+			{"box": [0.06, 0, 0.1, 0.1, 0.1, 0.14], "color": [50, 100, 50], "skin": "legs", "swing": "walk"},
+			{"box": [-0.05, 0.2, -0.32, -0.02, 0.23, -0.29], "color": [240, 200, 40], "swing": "pitch", "hinge": [0, 0.18, -0.2]},
+			{"box": [0.02, 0.2, -0.32, 0.05, 0.23, -0.29], "color": [240, 200, 40], "swing": "pitch", "hinge": [0, 0.18, -0.2]}
+		]},
+		"spawn": {
+			"on": "#sandbox:jungle_floor", "day": [0.22, 0.8], "every": 120, "chance": 0.3,
+			"cap": 5, "within": 48, "distance": [16, 40], "group": [1, 3], "sky": true
+		}
+	}
+}

@@ -1,5 +1,41 @@
 {
 	// The creatures' drops (items/creature_drops.json), each a small side view.
+	"thistle_horn": {
+		"size": [3, 5, 1],
+		"palette": ["#80403a", "#c8c478", "#5a2c26"],
+		"slices": [["1.2", "1.1", "11.", "1..", "3.."]],
+		"grip": [0, 4, 0]
+	},
+	"sail_membrane": {
+		"size": [4, 3, 1],
+		"palette": ["#d63e28", "#fac846", "#8c4e3c"],
+		"slices": [[".11.", "1211", "3333"]],
+		"grip": [0, 2, 0]
+	},
+	"frost_pelt": {
+		"size": [4, 3, 1],
+		"palette": ["#dee6ec", "#c4d2de", "#96c8e6"],
+		"slices": [["1111", "1221", "3113"]],
+		"grip": [0, 1, 0]
+	},
+	"ember_gland": {
+		"size": [3, 3, 1],
+		"palette": ["#f06e1e", "#ffeca8", "#28242a"],
+		"slices": [[".1.", "121", "313"]],
+		"grip": [1, 2, 0]
+	},
+	"spore_sac": {
+		"size": [3, 3, 1],
+		"palette": ["#c85a8c", "#ecc8dc", "#faf0a0"],
+		"slices": [[".3.", "121", ".1."]],
+		"grip": [1, 2, 0]
+	},
+	"fang": {
+		"size": [2, 4, 1],
+		"palette": ["#ece2c8", "#c4b48c", "#2c221e"],
+		"slices": [["31", "11", "12", "2."]],
+		"grip": [0, 0, 0]
+	},
 	"hide": {
 		"size": [4, 3, 1],
 		"palette": ["#8a5a3a", "#b07a52", "#5e3c26"],

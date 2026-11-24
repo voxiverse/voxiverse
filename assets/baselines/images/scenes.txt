@@ -52,6 +52,10 @@ swing_third: look -90 0; camera behind 30; set debug.swing_at 0.14
 # standing still as it looks at its most telling, the fliers held aloft), from the
 # wildlife on the left to the giant on the right.
 creatures: @1280x720 /fill 6 10 -12 44 10 18 grass; /fill 6 11 -12 44 28 18 air; ticks 20; wait_world; /tp 25 11 4 0 0; ticks 10; /creatures all still; ticks 30; /tp 25 11 26 0 0; ticks 30; wait_world; camera at 26 14.5 11 0 7
+# The gate worlds' own creatures in a row on the same field (`/creatures natives still`:
+# games/sandbox/pack/data/entities/natives.json), each as it looks at its most telling (a
+# guard warning, a flier aloft, the sporemaw risen).
+natives: @1280x720 /fill 6 10 -12 44 10 18 grass; /fill 6 11 -12 44 28 18 air; ticks 20; wait_world; /tp 25 11 4 0 0; ticks 10; /creatures natives still; ticks 30; /tp 25 11 26 0 0; ticks 30; wait_world; camera at 25.5 12.6 4.5 0 2
 # The player interfaces (client/hud, client/menu), at 1280x720 in survival: the HUD with
 # jump boots and the feather charm put on in the inventory (shift-clicks) and the rifle in
 # hand, `ticks` letting the pickup feed's lines go (the target frame is a unit test's);

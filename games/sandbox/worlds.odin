@@ -108,8 +108,35 @@ SHAMBLER :: "voxiverse:shambler"
 @(private = "file")
 SKITTER :: "voxiverse:skitter"
 
-// class_has_creature: a creature of kind (its id) may come by itself on a world of class.
+// CLASS_NATIVES: the creatures each world class has of its own (pack/data/entities/
+// natives.json), by kind id: one comes by itself on a world of its class and on no other,
+// the home world neither. The moon has none living: its keepers' machines stand at its
+// places (server/beyond.odin).
+CLASS_NATIVES := [worldgen.World_Class][]string {
+	.None      = nil,
+	.Temperate = {"sandbox:thistlebuck"},
+	.Canyon    = {"sandbox:sailback"},
+	.Frozen    = {"sandbox:rimeclaw"},
+	.Ocean     = {"sandbox:surfclaw", "sandbox:driftray"},
+	.Volcanic  = {"sandbox:cinderhound"},
+	.Fungal    = {"sandbox:sporemaw", "sandbox:lanternmoth"},
+	.Moon      = nil,
+	.Jungle    = {"sandbox:striper", "sandbox:leafwing"},
+}
+
+// native_class: the world class a creature of kind is native to (false: none, it is the
+// home world's).
+native_class :: proc(kind: string) -> (worldgen.World_Class, bool) {
+	for natives, class in CLASS_NATIVES {
+		for k in natives {if k == kind {return class, true}}
+	}
+	return .None, false
+}
+
+// class_has_creature: a creature of kind (its id) may come by itself on a world of class: a
+// native on its own class alone, any other as CLASS_CREATURES lists it.
 class_has_creature :: proc(class: worldgen.World_Class, kind: string) -> bool {
+	if home, native := native_class(kind); native {return class == home}
 	if class == .None {return true}
 	for k in CLASS_CREATURES[class] {if k == kind {return true}}
 	return false

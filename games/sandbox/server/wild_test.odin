@@ -427,7 +427,8 @@ test_what_may_come_by_itself :: proc(t: ^testing.T) {
 	testing.expect(t, !come(s, w, .Loper, {0.5, 0, 6.5}), "a loper came into a crowd")
 }
 
-// `/creatures all still` sets the whole roster down in a row, standing still.
+// `/creatures all still` sets the home world's roster down in a row, `natives still` the gate
+// worlds' own: the whole roster, standing still.
 @(test)
 test_the_roster_lines_up :: proc(t: ^testing.T) {
 	rig := new(Rig)
@@ -437,6 +438,9 @@ test_the_roster_lines_up :: proc(t: ^testing.T) {
 	s := playtest.srv(rig)
 	w := s.home
 	playtest.say(rig, "creatures all still")
+	core.teleport(s, playtest.host(rig), {0.5, 0, 6.5}, {0, 0}) // (the next row 6 blocks on)
+	playtest.step(rig, 10)
+	playtest.say(rig, "creatures natives still")
 	playtest.step(rig, 2 * game.TICK_RATE) // (the fliers rise to where they hold)
 	n := 0
 	at: [len(Wild)][3]f64

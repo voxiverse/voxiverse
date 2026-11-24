@@ -4,7 +4,7 @@ import "common:game"
 
 // The game's pack (games/sandbox/pack, docs/games.md): its animals, the sheep and the home
 // world's other creatures (its wildlife, predators and the remains' machines, with the
-// grounds they come on and what they leave), the hours the base pack's hostile creatures
+// grounds they come on and what they leave), the gate worlds' own creatures, the hours the base pack's hostile creatures
 // come out, a block of every material of the kit, the ruined site's altar, ward, rounds
 // and the mode its fighters are in, the delves' machines, blocks, finds and recipes, the
 // first hour's quests, a survivor's levels and skills, and the camps' people with their
@@ -18,6 +18,7 @@ PACK :: game.Pack_Source {
 		{"data/entities/wildlife.json", #load("pack/data/entities/wildlife.json")},
 		{"data/entities/predators.json", #load("pack/data/entities/predators.json")},
 		{"data/entities/machines.json", #load("pack/data/entities/machines.json")},
+		{"data/entities/natives.json", #load("pack/data/entities/natives.json")},
 		{"data/block_tags/creatures.json", #load("pack/data/block_tags/creatures.json")},
 		{"data/items/creature_drops.json", #load("pack/data/items/creature_drops.json")},
 		{"data/models/creature_drops.json", #load("pack/data/models/creature_drops.json")},

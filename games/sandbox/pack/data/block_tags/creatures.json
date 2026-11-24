@@ -39,6 +39,17 @@
 	"shore": {
 		"values": ["voxiverse:sand", "voxiverse:gravel", "voxiverse:red_sand"]
 	},
+	// The gate worlds' own creatures' grounds (data/entities/natives.json): a canyon's red
+	// rock and sand, a volcanic world's ash and basalt, a jungle's floor.
+	"canyon_rock": {
+		"values": ["voxiverse:red_rock", "voxiverse:red_sand", "voxiverse:sandstone"]
+	},
+	"ash_ground": {
+		"values": ["voxiverse:ash", "voxiverse:basalt"]
+	},
+	"jungle_floor": {
+		"values": ["voxiverse:grass", "voxiverse:mud"]
+	},
 	"open_ground": {
 		"values": [
 			"voxiverse:grass",
