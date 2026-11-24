@@ -100,3 +100,12 @@ xp_bar: @1280x720 set experience_bar 1; set reduce_motion 1; /gamemode survival;
 skills: @1280x720 /gamemode survival; /xp @s 700; /skill quick_hands; /skill quick_hands; /skill hardy; /skill heavy_blows; ticks 150; wait_world; key c down; wait 2; key c up; pointer 1240 700
 skills_small: @640x360 /gamemode survival; /xp @s 700; /skill quick_hands; /skill quick_hands; /skill hardy; /skill heavy_blows; ticks 150; wait_world; key c down; wait 2; key c up
 death: @1280x720 /gamemode survival; /give @s sandbox:fibre 6; ticks 150; /damage @s 100; ticks 30; wait_world
+# A survivors' camp (games/sandbox: server/settlement.odin, `/settlement ring 1` setting the
+# first camp's layout and people down at the player's feet on a cleared field; its people
+# stand still in a scene) from outside; a conversation with its trader opened by using it
+# (the right button), at 1280x720 and in a small window (640x360); and the trader's market
+# opened by its first reply (1 typed).
+camp_outside: @1280x720 /fill -20 10 -20 20 10 20 grass; /fill -20 11 -20 20 30 20 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /settlement ring 1; ticks 30; wait_world; camera at 0.5 19 27 0 -22
+talk_open: @1280x720 /fill -20 10 -20 20 10 20 grass; /fill -20 11 -20 20 30 20 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /settlement ring 1; ticks 30; /tp -5.5 11 10 0 -18; ticks 10; wait_world; key mouse_right down; wait 2; key mouse_right up; ticks 10; wait 3; pointer 1240 700
+talk_small: @640x360 /fill -20 10 -20 20 10 20 grass; /fill -20 11 -20 20 30 20 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /settlement ring 1; ticks 30; /tp -5.5 11 10 0 -18; ticks 10; wait_world; key mouse_right down; wait 2; key mouse_right up; ticks 10; wait 3; pointer 620 350
+trader_market: @1280x720 /fill -20 10 -20 20 10 20 grass; /fill -20 11 -20 20 30 20 air; ticks 10; /tp 0 11 0 0 0; ticks 20; /settlement ring 1; ticks 30; /tp -5.5 11 10 0 -18; ticks 10; wait_world; key mouse_right down; wait 2; key mouse_right up; ticks 10; wait 3; type 1; ticks 10; wait 3; pointer 1240 700
