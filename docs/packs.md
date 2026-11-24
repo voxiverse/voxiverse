@@ -15,7 +15,7 @@ every change in [journal.md](journal.md).
   pack.json        format, namespace, version, title, description, requires, renamed
   assets/          client-only: textures (PNG), sounds (Ogg)
   data/            both sides: blocks, items, tags, recipes, shapes, models, game modes,
-                   channels, simulation rules, quests
+                   channels, simulation rules, quests, skills, a level curve
   server/          server-only: structures (.vxs)
 ```
 
@@ -34,6 +34,7 @@ Each registry kind has one directory and one JSON object of named definitions pe
 | Block, Item, Block tag, Item tag, Recipe | `data/blocks`, `data/items`, `data/block_tags`, `data/item_tags`, `data/recipes` |
 | Shape, Model, Game mode | `data/shapes`, `data/models`, `data/game_modes` |
 | Channel, Sim rule, Entity, Quest | `data/channels`, `data/sim`, `data/entities`, `data/quests` |
+| Skill, Level curve | `data/skills`, `data/levels` |
 | Structure | `server/structures` |
 
 A file elsewhere in a pack is refused with the layout above in the message. Pack JSON is RFC 8259
@@ -157,6 +158,10 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
 (a `Pack_Error` at the value, saying the fix):
 
 - `box` `[width, height]`, each 0.1..4; `health` (default 1); `saved`, `summonable`, `hittable`.
+- `threat` (0..99, default 0): how dangerous one is, what a kill's experience counts by and
+  the target frame shows ([below](#levels-and-skills)); 0 works it out from its health and
+  its blow (`game.kind_threat`: a tenth of its health and four for each point of its
+  `attack`'s damage, rounded up, 1 at least).
 - `physics` (`none`, `walker`, `item`, `projectile`) with its block of numbers (`walker`, `item`
   or `projectile`), required with it and refused without it.
 - `brain` (`none`, `steered`, `game`; each but `none` needs `walker`): `steered`, the walker
@@ -241,7 +246,8 @@ A kind in a pack that is a walker with no brain falls and stands still; nothing 
 A quest is a `data/quests/*.json` entry (`common/game/quest.odin`, read by
 `registry_quests.odin`): a `title`, a line or two of `text` (why, in the world's voice), its
 `steps` in order (1 to 8), a `reward` (at most 4 `{"item", "count"}`, given when its last step
-is done) and `after`, the quests (by id, at most 4) done before it opens. A registry holds at
+is done), `xp`, the experience it gives then (0 when none: [below](#levels-and-skills)), and
+`after`, the quests (by id, at most 4) done before it opens. A registry holds at
 most 32 (`MAX_QUESTS`); the base pack has none, a game's pack brings them (the sandbox's first
 hour: `games/sandbox/pack/data/quests`).
 
@@ -277,6 +283,62 @@ refused, as is a field its goal does not take or a `count` on a step that counts
 file, [saves.md](saves.md)) and sends it to its player (the `quests` record), and nothing
 counts for a player who cannot be hurt (creative, a watcher); the journal (J) lists the quests
 under way and done, and the HUD's tracker shows the step of the one followed.
+
+## Levels and skills
+
+What a character grows by (`common/game/skill.odin`, read by `registry_skills.odin`): a level
+curve, `data/levels/*.json` (one entry in a registry at most), and a skill sheet,
+`data/skills/*.json` (at most 32 skills, `MAX_SKILLS`, in at most 4 branches; skills need a
+curve). The base pack has neither; a game's pack brings them (the sandbox's:
+`games/sandbox/pack/data/levels`, `data/skills`).
+
+```json
+"survivor": {"levels": [100, 250, 450], "points": 1,
+             "xp": {"kill": 3, "meet": 5, "make": 10, "win": 150},
+             "find": {"ruin": 100, "remains": 30},
+             "respec": "sandbox:outpost_beacon", "respec_reach": 6}
+```
+
+`levels` is the total experience each level from 2 takes, rising (so the highest level is
+one more than their count, at most 100); `points` the skill points each level gives (1 when
+none). `xp` is what each deed earns: `kill` for each point of the creature's `threat`,
+`meet` a creature met for the first time (into the logbook), `make` an item made for the
+first time (a game's crafting, `core.quest_note`), `win` an encounter won; `find` what a
+logbook place of each kind found earns (a kind it does not name: none); a quest's own `xp`
+comes with it. `respec` is the block a player stands within `respec_reach` blocks of (5 when
+none) to unlearn every skill for nothing (none: anywhere).
+
+```json
+"quick_hands": {"title": "Quick Hands", "text": "Blocks give way a tenth sooner a rank.",
+                "branch": "Survival", "effect": "break_speed", "amount": 0.1,
+                "ranks": 3, "cost": 1, "needs": 0}
+```
+
+A skill is a plain number over one rule the engine already has: its `effect`, `amount` what
+each of its `ranks` (1..5, 1 when none) adds, `cost` the points a rank costs (1..5, 1 when
+none), `needs` the points its `branch` must have had spent in it before it opens (0 when
+none). The branches are the skills' `branch` names in the order they first come. An effect
+adds its amounts to the rule, or (a factor) multiplies it by one plus them, never under a
+tenth (`SKILL_EFFECTS`):
+
+| Effect | Rule | How |
+|---|---|---|
+| `break_speed` | how fast a block breaks (a factor on the tool's speed) | factor |
+| `yield_chance` | the chance a block of tier 1 or above leaves one more of its drop | added |
+| `drop_chance` | added to the chance of each of a killed creature's drops | added |
+| `max_health` | health points on the most | added |
+| `defence` | a fraction of every harm taken off, beside what is worn (at most 0.8 together) | added |
+| `fall_guard` | a fraction of a fall's harm taken off, beside what is worn | added |
+| `regen` | health coming back by itself | factor |
+| `consume_strength` | what a consumable heals, at once and over time | factor |
+| `melee_damage` | a swung weapon's damage | factor |
+| `reload_time` | a reload's time (negative: quicker) | factor |
+| `spread` | a shot's cone (negative: tighter) | factor |
+| `craft_time` | a recipe's time (a game's crafting) | factor |
+| `craft_yield` | the chance a recipe made gives one more of what it makes (a game's crafting) | added |
+
+Every rule reads the ranks through one pure function, `game.skill_value(reg, ranks,
+effect, base)`; with no ranks it is `base`.
 
 ## Simulation rules
 

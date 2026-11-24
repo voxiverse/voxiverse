@@ -234,6 +234,8 @@ Content_Kind :: enum u8 {
 	Sim_Rule,
 	Entity,
 	Quest,
+	Skill,
+	Level,
 }
 
 Block_Flag :: enum u8 {
@@ -535,27 +537,29 @@ renamed_id :: proc(reg: ^Registry, full: string) -> string {
 }
 
 Registry :: struct {
-	arena:      ^virtual.Arena, // its own allocation, so a swap of two registries (registry_swap) moves it with the contents
-	blocks:     Block_Table,
-	items:      Item_Table,
-	textures:   []Texture_Def,
-	images:     []Texture_Image, // the pixels of the textures that are images, in layer order
-	sounds:     []Sound_Def,
-	block_tags: []Tag_Def,
-	item_tags:  []Tag_Def,
-	recipes:    []Recipe_Def,
-	structures: []Structure_Def,
-	game_modes: []Mode_Def,
-	models:     []Model_Def,
-	channels:   []Channel_Info, // by channel id; 0 is voxiverse:light
-	sim:        Sim_Rules,
-	kinds:      []Kind_Info, // entity kinds: a Kind_Id is the index + 1
-	quests:     []Quest_Def, // at most MAX_QUESTS (quest.odin)
-	engine:     Engine_Kinds, // the kinds the engine's code names (0: this registry has none)
-	packs:      []Pack_Info,
-	ids:        [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
-	hash:       u64,
-	allocator:  runtime.Allocator,
+	arena:       ^virtual.Arena, // its own allocation, so a swap of two registries (registry_swap) moves it with the contents
+	blocks:      Block_Table,
+	items:       Item_Table,
+	textures:    []Texture_Def,
+	images:      []Texture_Image, // the pixels of the textures that are images, in layer order
+	sounds:      []Sound_Def,
+	block_tags:  []Tag_Def,
+	item_tags:   []Tag_Def,
+	recipes:     []Recipe_Def,
+	structures:  []Structure_Def,
+	game_modes:  []Mode_Def,
+	models:      []Model_Def,
+	channels:    []Channel_Info, // by channel id; 0 is voxiverse:light
+	sim:         Sim_Rules,
+	kinds:       []Kind_Info, // entity kinds: a Kind_Id is the index + 1
+	quests:      []Quest_Def, // at most MAX_QUESTS (quest.odin)
+	skills:      []Skill_Def, // the skill sheet, at most MAX_SKILLS (skill.odin)
+	progression: Progression, // the level curve and what earns experience (none: no levels)
+	engine:      Engine_Kinds, // the kinds the engine's code names (0: this registry has none)
+	packs:       []Pack_Info,
+	ids:         [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
+	hash:        u64,
+	allocator:   runtime.Allocator,
 }
 
 registry_destroy :: proc(reg: ^Registry) {
@@ -995,7 +999,34 @@ registry_text_of :: proc(
 	for q in reg.quests {
 		fmt.sbprintf(&b, "quest %s after=%v reward=%v", q.id, q.after, q.reward)
 		for st in q.steps {fmt.sbprintf(&b, " step=%v way=%v", st.objective, st.way)}
-		strings.write_byte(&b, '\n')
+		fmt.sbprintf(&b, " xp=%d\n", q.xp)
+	}
+	if p := &reg.progression; progression_on(reg) {
+		fmt.sbprintf(
+			&b,
+			"levels %s %v points=%d xp=%v find=%v respec=%d/%d branches=%v\n",
+			p.id,
+			p.levels,
+			p.points,
+			p.xp,
+			p.find,
+			p.respec,
+			p.respec_reach,
+			p.branches,
+		)
+	}
+	for s in reg.skills {
+		fmt.sbprintf(
+			&b,
+			"skill %s branch=%d effect=%v amount=%v ranks=%d cost=%d needs=%d\n",
+			s.id,
+			s.branch,
+			s.effect,
+			s.amount,
+			s.ranks,
+			s.cost,
+			s.needs,
+		)
 	}
 	for p in reg.packs {for r in p.renamed {fmt.sbprintf(&b, "renamed %s %s\n", r.from, r.to)}}
 	if all {

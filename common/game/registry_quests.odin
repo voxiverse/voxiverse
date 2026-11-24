@@ -17,7 +17,7 @@ import "core:fmt"
 // id is checked; one quest may come after another (`after`) but never round in a circle.
 
 @(private)
-QUEST_FIELDS := []string{"title", "text", "after", "steps", "reward", "override"}
+QUEST_FIELDS := []string{"title", "text", "after", "steps", "reward", "xp", "override"}
 @(private)
 STEP_FIELDS := []string {
 	"text",
@@ -79,6 +79,7 @@ read_quest :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Quest_Def {
 	}
 	q.title = quest_text(b, m, "title", QUEST_TITLE_MAX, true)
 	q.text = quest_text(b, m, "text", QUEST_TEXT_MAX, false)
+	q.xp = u32(rd_int(b, m, "xp", 0, 0, MAX_XP))
 	if f := field_of(m, "after"); f != nil {
 		if f.value.kind != .Array || len(f.value.items) > MAX_QUEST_AFTER {
 			fail_field(

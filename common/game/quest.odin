@@ -65,6 +65,7 @@ Quest_Def :: struct {
 	text:   string, // a line or two of why, in the world's voice
 	steps:  []Quest_Step, // 1 ..= MAX_QUEST_STEPS
 	reward: []Stack, // given when its last step is done
+	xp:     u32, // the experience it gives then (its `xp`; skill.odin)
 	after:  []int, // the quests (indices in the registry's) done before it opens
 }
 

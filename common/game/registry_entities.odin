@@ -245,6 +245,7 @@ Kind_Info :: struct {
 	id:         string,
 	box:        [2]f32, // width (x and z), height
 	health:     int,
+	threat:     int, // how dangerous it is (its `threat`; 0: kind_threat works it out)
 	saved:      bool, // kept with the world
 	summonable: bool, // `/summon` makes one
 	hittable:   bool, // players, rockets and explosions hit it
@@ -321,6 +322,7 @@ ENTITY_FIELDS := []string {
 	"spawn",
 	"attack",
 	"drops",
+	"threat",
 	"override",
 }
 @(private)
@@ -467,6 +469,7 @@ read_entity_kind :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> Kind_
 		need(b, m, "\"box\": [width, height]")
 	}
 	info.health = rd_int(b, m, "health", 1, 1, 10000)
+	info.threat = rd_int(b, m, "threat", 0, 0, MAX_THREAT)
 	info.saved = rd_bool(b, m, "saved", false)
 	info.summonable = rd_bool(b, m, "summonable", false)
 	info.hittable = rd_bool(b, m, "hittable", false)
