@@ -5,8 +5,9 @@ import "common:game"
 // The game's pack (games/sandbox/pack, docs/games.md): its animals, the sheep and the home
 // world's other creatures (its wildlife, predators and the remains' machines, with the
 // grounds they come on and what they leave), the hours the base pack's hostile creatures
-// come out, a block of every material of the kit, and the ruined site's altar, ward, rounds
-// and the mode its fighters are in. Loaded only where the sandbox is played.
+// come out, a block of every material of the kit, the ruined site's altar, ward, rounds
+// and the mode its fighters are in, and the first hour's quests. Loaded only where the
+// sandbox is played.
 PACK :: game.Pack_Source {
 	namespace = "sandbox",
 	files     = {
@@ -29,6 +30,7 @@ PACK :: game.Pack_Source {
 		{"data/models/survival.json", #load("pack/data/models/survival.json")},
 		{"data/blocks/survival.json", #load("pack/data/blocks/survival.json")},
 		{"data/recipes/survival.json", #load("pack/data/recipes/survival.json")},
+		{"data/quests/first_hour.json", #load("pack/data/quests/first_hour.json")},
 	},
 }
 

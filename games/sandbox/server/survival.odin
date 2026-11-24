@@ -262,6 +262,7 @@ survival_tick :: proc(s: ^core.Server) {
 			ss.taken = {}
 			made := sandbox.Made{u16(out.item), u16(out.count)}
 			core.game_event(s, &c, &made)
+			core.quest_note(s, &c, {goal = .Make, item = out.item, count = out.count})
 		}
 		if (s.tick + u64(core.player_id(s, &c))) % SURVIVAL_EVERY != 0 {continue}
 		shown := sandbox.Survival {

@@ -1,0 +1,137 @@
+{
+	// The first hour on the home world (README.md, "Quests"): from bare hands at the dead
+	// gate to the ruin's altar and back to the gate's board, by the loop the game already
+	// has. Each quest opens when those it comes after are done; the HUD's tracker follows
+	// the first one under way, in this order. A way points the compass at a place only once
+	// the player's logbook has it.
+	"waking": {
+		"title": "Waking at the Gate",
+		"text": "The gate behind you is dark and nothing answers it. Whatever comes next starts with what grows here.",
+		"steps": [
+			{"text": "Strip leaves for fibre", "goal": "have", "item": "sandbox:fibre", "count": 6},
+			{"text": "Break gravel for flint", "goal": "have", "item": "sandbox:flint", "count": 5},
+			{"text": "Fell a tree for logs", "goal": "have", "item": "voxiverse:log", "count": 4}
+		],
+		"reward": [{"item": "sandbox:cord", "count": 2}]
+	},
+	"edge_and_point": {
+		"title": "Edge and Point",
+		"text": "A blade for the brush, a point for the rock. Both can be made by hand.",
+		"after": ["sandbox:waking"],
+		"steps": [
+			{"text": "Saw logs into planks", "goal": "make", "item": "voxiverse:planks", "count": 4},
+			{"text": "Twist fibre into cord", "goal": "make", "item": "sandbox:cord", "count": 2},
+			{"text": "Make a flint knife", "goal": "make", "item": "sandbox:flint_knife"},
+			{"text": "Make a flint pick", "goal": "make", "item": "sandbox:flint_pick"}
+		],
+		"reward": [{"item": "sandbox:field_dressing", "count": 1}]
+	},
+	"court_of_remains": {
+		"title": "The Court of Remains",
+		"text": "Someone kept this gate before you. Their towers lie broken in the grass around the court, and some still hold sealed caches.",
+		"after": ["sandbox:edge_and_point"],
+		"steps": [
+			{"text": "Find a fallen tower", "goal": "find", "place": "remains", "name": "Fallen tower"},
+			{"text": "Break open a remains cache with the pick", "goal": "break", "block": "sandbox:remains_cache", "way": {"place": "remains", "name": "Fallen tower"}}
+		],
+		"reward": [{"item": "sandbox:salvage", "count": 1}]
+	},
+	"under_the_turf": {
+		"title": "Under the Turf",
+		"text": "The pick bites stone. Coal burns hot and copper carries current; both run in seams through the rock.",
+		"after": ["sandbox:edge_and_point"],
+		"steps": [
+			{"text": "Quarry stone", "goal": "have", "item": "voxiverse:stone", "count": 8},
+			{"text": "Mine coal", "goal": "have", "item": "sandbox:coal", "count": 3},
+			{"text": "Mine copper ore", "goal": "have", "item": "sandbox:raw_copper", "count": 4}
+		],
+		"reward": [{"item": "sandbox:coal", "count": 4}]
+	},
+	"a_workshop": {
+		"title": "A Workshop",
+		"text": "Hands only go so far. A fabricator smelts ore, draws wire and grinds glass for whoever stands near it.",
+		"after": ["sandbox:under_the_turf"],
+		"steps": [
+			{"text": "Make a fabricator", "goal": "make", "item": "sandbox:fabricator"},
+			{"text": "Set the fabricator down", "goal": "place", "block": "sandbox:fabricator"},
+			{"text": "Smelt copper ingots at the fabricator", "goal": "make", "item": "sandbox:copper_ingot", "count": 3}
+		],
+		"reward": [{"item": "sandbox:copper_ingot", "count": 2}]
+	},
+	"patch_and_mend": {
+		"title": "Patch and Mend",
+		"text": "Cuts fester out here, and nothing heals by itself. Carry a dressing and use it before it is too late.",
+		"after": ["sandbox:a_workshop"],
+		"steps": [
+			{"text": "Make a field dressing", "goal": "make", "item": "sandbox:field_dressing"},
+			{"text": "Apply a field dressing", "goal": "use", "item": "sandbox:field_dressing"}
+		],
+		"reward": [{"item": "sandbox:field_dressing", "count": 2}]
+	},
+	"meat_and_hide": {
+		"title": "Meat and Hide",
+		"text": "Lopers graze in herds on open grass by day. What they leave behind keeps a survivor fed and padded.",
+		"after": ["sandbox:patch_and_mend"],
+		"steps": [
+			{"text": "Bring down a loper", "goal": "kill", "creature": "sandbox:loper"},
+			{"text": "Make a trail ration from raw meat", "goal": "make", "item": "sandbox:trail_ration"},
+			{"text": "Eat a trail ration", "goal": "use", "item": "sandbox:trail_ration"}
+		],
+		"reward": [{"item": "sandbox:padded_vest", "count": 1}]
+	},
+	"a_light_to_return_to": {
+		"title": "A Light to Return To",
+		"text": "The nights bring worse than lopers. A beacon keeps hunters at a distance and marks where you stand again after a fall.",
+		"after": ["sandbox:meat_and_hide"],
+		"steps": [
+			{"text": "Make a copper pick", "goal": "make", "item": "sandbox:copper_pick"},
+			{"text": "Mine iron ore", "goal": "have", "item": "sandbox:raw_iron", "count": 3},
+			{"text": "Make an outpost beacon", "goal": "make", "item": "sandbox:outpost_beacon"},
+			{"text": "Raise the beacon where you mean to camp", "goal": "place", "block": "sandbox:outpost_beacon"}
+		],
+		"reward": [{"item": "voxiverse:lamp", "count": 4}]
+	},
+	"what_the_keepers_left": {
+		"title": "What the Keepers Left",
+		"text": "The old keepers built with an alloy no seam yields. Their pylons and towers still hold it, and scrap worth working.",
+		"after": ["sandbox:a_light_to_return_to", "sandbox:court_of_remains"],
+		"steps": [
+			{"text": "Pull salvage from the heaps in the remains", "goal": "have", "item": "sandbox:salvage", "count": 2, "way": {"place": "remains", "name": "Fallen pylon"}},
+			{"text": "Break alloy relics for ancient alloy", "goal": "have", "item": "sandbox:ancient_alloy", "count": 3, "way": {"place": "remains", "name": "Fallen tower"}},
+			{"text": "Make a circuit board", "goal": "make", "item": "sandbox:circuit_board"},
+			{"text": "Make alloy plate", "goal": "make", "item": "sandbox:alloy_plate", "count": 3}
+		],
+		"reward": [{"item": "sandbox:charge_cell", "count": 1}]
+	},
+	"the_sealed_vault": {
+		"title": "The Sealed Vault",
+		"text": "Under a grassed mound lies a chamber of riveted iron. Its door still has a keeper, and the vault inside yields only to a drill.",
+		"after": ["sandbox:what_the_keepers_left"],
+		"steps": [
+			{"text": "Find a sealed vault", "goal": "find", "place": "remains", "name": "Sealed vault"},
+			{"text": "Make an alloy drill", "goal": "make", "item": "sandbox:alloy_drill"},
+			{"text": "Disable the sentry at its door", "goal": "kill", "creature": "sandbox:sentry", "way": {"place": "remains", "name": "Sealed vault"}},
+			{"text": "Drill open the relic vault", "goal": "break", "block": "sandbox:relic_vault", "way": {"place": "remains", "name": "Sealed vault"}}
+		],
+		"reward": [{"item": "sandbox:med_gel", "count": 2}]
+	},
+	"the_ruin_wakes": {
+		"title": "The Ruin Wakes",
+		"text": "The old road runs from the court to a walled ruin. Its altar wakes what sleeps beneath, and the ruin pays whoever holds it.",
+		"after": ["sandbox:the_sealed_vault"],
+		"steps": [
+			{"text": "Follow the old road to the ruin", "goal": "find", "place": "ruin"},
+			{"text": "Wake the altar and hold the ruin through five waves", "goal": "win", "name": "sandbox:ruin", "way": {"place": "ruin"}}
+		],
+		"reward": [{"item": "sandbox:regen_ampoule", "count": 1}]
+	},
+	"an_address": {
+		"title": "An Address",
+		"text": "The gate's board holds the symbols of every world it can reach. Write one and see what answers.",
+		"after": ["sandbox:the_ruin_wakes"],
+		"steps": [
+			{"text": "Write an address on the gate's board", "goal": "address", "way": {"place": "remains", "name": "Gate court"}}
+		],
+		"reward": [{"item": "sandbox:data_shard", "count": 1}]
+	}
+}

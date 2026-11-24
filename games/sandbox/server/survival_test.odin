@@ -341,36 +341,10 @@ test_survival_every_item_is_obtainable :: proc(t: ^testing.T) {
 	defer playtest.stop(rig)
 	s := playtest.srv(rig)
 	reg := s.registry
-	had := make(map[game.Item]bool, context.temp_allocator)
-	// The world: what its natural blocks leave, and the farm's wheat.
-	WORLD :: []string {
-		"log",
-		"spruce_log",
-		"leaves",
-		"spruce_leaves",
-		"gravel",
-		"sand",
-		"stone",
-		"dirt",
-		"coal_ore",
-		"copper_ore",
-		"iron_ore",
-		"sandbox:salvage_heap",
-		"sandbox:alloy_relic",
-		"sandbox:relic_vault",
-	}
-	for name in WORLD {
-		b, ok := game.registry_block(reg, name)
-		if !testing.expectf(t, ok, "no block %s", name) {continue}
-		if d := game.block_drop(reg, b); d != game.NO_ITEM {had[d] = true}
-	}
-	had[game.item_of_material(.Wheat)] = true // (seeds from tall grass, farmed with a hoe)
-	for l in CACHE_LOOT {had[survival_of(s).loot[l.what]] = true}
-	for l in VAULT_LOOT {had[survival_of(s).loot[l.what]] = true}
-	had[survival_of(s).loot[.Salvage]] = true
+	had := obtainable(t, s)
 	dropped := make(map[game.Item]bool, context.temp_allocator)
 	for &kind in reg.kinds {
-		for d in kind.drops {had[d.item], dropped[d.item] = true, true}
+		for d in kind.drops {dropped[d.item] = true}
 	}
 	for item in dropped {
 		used := false
@@ -382,16 +356,6 @@ test_survival_every_item_is_obtainable :: proc(t: ^testing.T) {
 		testing.expectf(t, used, "no recipe takes %s", game.item_id(reg, item))
 	}
 	testing.expectf(t, len(dropped) >= 10, "the creatures leave %d things", len(dropped))
-	for grew := true; grew; {
-		grew = false
-		for &r in reg.recipes {
-			if _, ours := sandbox.recipe_station(&r); !ours || had[r.output.item] {continue}
-			needs, _, n := game.recipe_needs(&r)
-			all := true
-			for k in 0 ..< n {all &&= had[needs[k].item]}
-			if all {had[r.output.item], grew = true, true}
-		}
-	}
 	for f in sandbox.PACK.files {
 		switch f.path {
 		case "data/items/survival.json",
@@ -410,4 +374,55 @@ test_survival_every_item_is_obtainable :: proc(t: ^testing.T) {
 			testing.expectf(t, had[item], "nothing yields %s", id)
 		}
 	}
+}
+
+// WORLD_BLOCKS: the blocks a survivor finds in the world to break (the land's and the
+// remains'), by id.
+WORLD_BLOCKS :: []string {
+	"log",
+	"spruce_log",
+	"leaves",
+	"spruce_leaves",
+	"gravel",
+	"sand",
+	"stone",
+	"dirt",
+	"coal_ore",
+	"copper_ore",
+	"iron_ore",
+	"sandbox:salvage_heap",
+	"sandbox:alloy_relic",
+	"sandbox:relic_vault",
+	"sandbox:remains_cache",
+}
+
+// obtainable: every item a survivor can come by: what the world's blocks leave, the farm's
+// wheat, the remains' finds, what the creatures leave, and all the sandbox's recipes make
+// of those (temporary memory).
+obtainable :: proc(t: ^testing.T, s: ^core.Server) -> map[game.Item]bool {
+	reg := s.registry
+	had := make(map[game.Item]bool, context.temp_allocator)
+	for name in WORLD_BLOCKS {
+		b, ok := game.registry_block(reg, name)
+		if !testing.expectf(t, ok, "no block %s", name) {continue}
+		if d := game.block_drop(reg, b); d != game.NO_ITEM {had[d] = true}
+	}
+	had[game.item_of_material(.Wheat)] = true // (seeds from tall grass, farmed with a hoe)
+	for l in CACHE_LOOT {had[survival_of(s).loot[l.what]] = true}
+	for l in VAULT_LOOT {had[survival_of(s).loot[l.what]] = true}
+	had[survival_of(s).loot[.Salvage]] = true
+	for &kind in reg.kinds {
+		for d in kind.drops {had[d.item] = true}
+	}
+	for grew := true; grew; {
+		grew = false
+		for &r in reg.recipes {
+			if _, ours := sandbox.recipe_station(&r); !ours || had[r.output.item] {continue}
+			needs, _, n := game.recipe_needs(&r)
+			all := true
+			for k in 0 ..< n {all &&= had[needs[k].item]}
+			if all {had[r.output.item], grew = true, true}
+		}
+	}
+	return had
 }

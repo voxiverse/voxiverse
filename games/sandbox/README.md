@@ -145,6 +145,40 @@ What it tells its players: `sandbox.survival` (whether a fabricator is in reach,
 being made and how far, the world's outposts) and the event `sandbox.made`; what they ask:
 `sandbox.craft`.
 
+## Quests
+
+A new survivor has a first hour with a direction: twelve quests that walk it through the loop
+above, from bare hands at the dead gate to the ruin's altar and back to the gate's board
+(`pack/data/quests/first_hour.json`, the engine's quests: [docs/packs.md](../../docs/packs.md#quests)).
+Each opens when those it comes after are done; the journal (J) lists those under way and done
+with their steps and rewards, and the HUD's tracker (top right) shows the step of the first
+under way, or of the one picked there with Track. A step done chimes and says so in gold, as a
+craft does; a quest done gives its reward. A step that needs a place points the compass and
+the map at it once the logbook has it (a fallen tower, a sealed vault, the ruin, the court).
+Nothing counts in creative.
+
+| Quest | After | Steps | Reward |
+|---|---|---|---|
+| Waking at the Gate | | carry 6 fibre, 5 flint, 4 logs | 2 cord |
+| Edge and Point | Waking | make 4 planks, 2 cord, a flint knife, a flint pick | field dressing |
+| The Court of Remains | Edge and Point | find a fallen tower; break open a remains cache | salvage |
+| Under the Turf | Edge and Point | carry 8 stone, 3 coal, 4 raw copper | 4 coal |
+| A Workshop | Under the Turf | make a fabricator; set it down; make 3 copper ingots | 2 copper ingots |
+| Patch and Mend | A Workshop | make a field dressing; use one | 2 field dressings |
+| Meat and Hide | Patch and Mend | kill a loper; make a trail ration; eat one | padded vest |
+| A Light to Return To | Meat and Hide | make a copper pick; carry 3 raw iron; make an outpost beacon; place it | 4 lamps |
+| What the Keepers Left | A Light, The Court | carry 2 salvage, 3 ancient alloy; make a circuit board, 3 alloy plate | charge cell |
+| The Sealed Vault | What the Keepers Left | find a sealed vault; make an alloy drill; kill a sentry; break the relic vault | 2 med gel |
+| The Ruin Wakes | The Sealed Vault | find the ruin; win its fight (`sandbox:ruin`) | regen ampoule |
+| An Address | The Ruin Wakes | write an address on a gate | data shard |
+
+The engine sees most of it (what a player carries, places, breaks, finds, kills, uses up, an
+address written on a gate); the sandbox tells it what its crafting made
+(`server/survival.odin`) and who won the ruin's fight (`server/ruin.odin`, `RUIN_ENCOUNTER`),
+by `core.quest_note`. `server/quests_test.odin` holds the chain to the world: every step can be
+done from real ids with what the steps before gave (a tool of a block's tier, a fabricator
+standing), every quest opens in turn, and progress is kept with the character.
+
 ## Its sheep
 
 The sandbox's animals are its own: the sheep (`sandbox:sheep`, its pack's creature, whose mind
@@ -428,6 +462,8 @@ character was in before it fought at the ruin, zero-padded: given back with its 
 when it fights nothing). Universes from before (save format 8) had these as the
 engine's files and the character's `trader`: the save migration made them the sandbox's.
 
+A character's quests are the engine's (its file's `quests`, [docs/saves.md](../../docs/saves.md)).
+
 - `sandbox.outposts.vxo`: the world's outposts, in the order placed: `"VXOP"`, `u32 version`
   (1), `u32 count` (at most 32), then per outpost its beacon's place (3 x `i32`) and its
   placer's name (`u8` length, bytes), and last the CRC-32 of everything before it (all
@@ -446,7 +482,7 @@ world's address), `home.at`): absent in older files, so read as none.
 `block_tags/creatures.json`, the grounds they come on, and `items/creature_drops.json` and
 `models/creature_drops.json`, what they leave;
 `pack/data/entities/hostile.json`, the nights' spawn rules; `pack/data/blocks/kit.json`, a
-block of every material),
+block of every material; `pack/data/quests/first_hour.json`, the first hour's quests),
 the markets' model (above), `records.odin` (what it replicates) and `text.odin`
 (what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
 and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and

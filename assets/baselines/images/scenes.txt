@@ -56,12 +56,24 @@ creatures: @1280x720 /fill 6 10 -12 44 10 18 grass; /fill 6 11 -12 44 28 18 air;
 # jump boots and the feather charm put on in the inventory (shift-clicks) and the rifle in
 # hand, `ticks` letting the pickup feed's lines go (the target frame is a unit test's);
 # the inventory with the boots and the charm worn and jump boots' tooltip compared with
-# the boots; a chest with two things moved into it; the journal with the gate opened (its
-# address written as gate_angle's is) and the dummy met.
+# the boots; a chest with two things moved into it; the journal's places and creatures
+# (its second page) with the gate opened (its address written as gate_angle's is) and the
+# dummy met. In survival the quest tracker shows at the top right (the first quest's first
+# step).
 hud: @1280x720 /gamemode survival; /give @s jump_boots; /give @s feather_charm; /give @s rifle; ticks 10; wait_world; key e down; wait 2; key e up; wait 2; key left_shift down; pointer 776 588; wait 2; key mouse_left down; wait 2; key mouse_left up; wait 2; pointer 830 588; wait 2; key mouse_left down; wait 2; key mouse_left up; wait 2; key left_shift up; key e down; wait 2; key e up; wait 2; key num_4 down; wait 2; key num_4 up; look 90 -10; ticks 150; wait_world
 inventory: @1280x720 /gamemode survival; /give @s jump_boots; /give @s boots; /give @s feather_charm; /give @s dirt 40; ticks 150; wait_world; key e down; wait 2; key e up; wait 2; key left_shift down; pointer 830 588; wait 2; key mouse_left down; wait 2; key mouse_left up; wait 2; pointer 884 588; wait 2; key mouse_left down; wait 2; key mouse_left up; wait 2; key left_shift up; pointer 776 588; wait 3
 chest: @1280x720 /gamemode survival; /setblock 24 11 11 chest; /tp 24.5 11 13.5 0 -35; /give @s boots; /give @s dirt 40; ticks 150; wait_world; key mouse_right down; wait 2; key mouse_right up; ticks 10; wait 3; key left_shift down; pointer 776 588; wait 2; key mouse_left down; wait 2; key mouse_left up; wait 2; pointer 830 588; wait 2; key mouse_left down; wait 2; key mouse_left up; wait 2; key left_shift up; pointer 342 219; wait 3
-journal: @1280x720 /gate wake; /locate gate; sleep 1; wait_world; ticks 60; wait_world; look 50 0; wait 3; key mouse_right down; wait 3; key mouse_right up; ticks 10; wait 3; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; ticks 10; wait_world; sleep 2; /summon dummy; ticks 30; wait_world; key j down; wait 2; key j up; wait 3
+journal: @1280x720 /gate wake; /locate gate; sleep 1; wait_world; ticks 60; wait_world; look 50 0; wait 3; key mouse_right down; wait 3; key mouse_right up; ticks 10; wait 3; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; wait 2; key enter down; wait 2; key enter up; ticks 10; wait_world; sleep 2; /summon dummy; ticks 30; wait_world; key j down; wait 2; key j up; pointer 493 184; wait 2; key mouse_left down; wait 2; key mouse_left up; pointer 1240 700
 # The player menu in a small window (640x360): the UI is scaled down while it is open so
 # all of it fits.
 inventory_small: @640x360 /gamemode survival; /give @s boots; ticks 150; wait_world; key e down; wait 2; key e up; wait 3
+# The quests (games/sandbox: pack/data/quests), at 1280x720 in survival, the pointer off
+# the panels: the journal's Quests page once the planks are made at the crafting screen's
+# Make (X), Waking at the Gate done (its fibre, flint and logs carried) and Edge
+# and Point on its second step; the HUD's tracker with Waking at the Gate's second step
+# under way (3 of 5 flint), `ticks` letting the pickup feed's lines go, and the same in a
+# small window (640x360), where it sits under the compass (the benchmarks' settings have
+# the tracker off: `set` turns it on).
+quests: @1280x720 /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 5; /give @s log 4; ticks 150; wait_world; key x down; wait 2; key x up; pointer 851 269; wait 2; key mouse_left down; wait 2; key mouse_left up; ticks 30; key x down; wait 2; key x up; key j down; wait 2; key j up; pointer 1240 700
+tracker: @1280x720 set quest_tracker 1; /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 3; ticks 150; wait_world; look 90 -10
+tracker_small: @640x360 set quest_tracker 1; /gamemode survival; /give @s sandbox:fibre 6; /give @s sandbox:flint 3; ticks 150; wait_world; look 90 -10

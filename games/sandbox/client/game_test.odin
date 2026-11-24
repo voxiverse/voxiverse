@@ -6,6 +6,7 @@ import "core:testing"
 import "client:engine"
 import "client:menu"
 import "client:playtest"
+import "client:ui"
 import "common:game"
 import sandbox_server "games:sandbox/server"
 import "server:core"
@@ -147,4 +148,71 @@ test_sandbox_creature_names :: proc(t: ^testing.T) {
 			name,
 		)
 	}
+}
+
+// The quest tracker: in survival, the first quest under way and its step at the top right,
+// with how far along it is; a step done says so (made's chime and gold words) and the next
+// shows; Options' Quest tracker hides it, and a player in creative is shown none.
+@(test)
+test_sandbox_quest_tracker :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	c := playtest.client(rig)
+	fibre, _ := game.registry_item(s.registry, "sandbox:fibre")
+	core.game_mode(s, c, "creative")
+	playtest.step(rig, 4)
+	testing.expect(t, !playtest.drawn(rig, "Waking at the Gate"), "a tracker in creative")
+	core.game_mode(s, c, "survival")
+	core.item_give(s, c, fibre, 2)
+	playtest.step(rig, 4)
+	testing.expect(t, playtest.drawn(rig, "Waking at the Gate"))
+	testing.expect(t, playtest.drawn(rig, "Strip leaves for fibre"))
+	testing.expect(t, playtest.drawn(rig, "2/6"))
+	core.item_give(s, c, fibre, 4)
+	playtest.step(rig, 4)
+	testing.expect(t, playtest.drawn(rig, "Break gravel for flint"))
+	said := false
+	for &f in rig.s.feel.floats {said ||= string(f.text[:f.len]) == "Done: Strip leaves for fibre"}
+	testing.expect(t, said, "the step done not said")
+	rig.app.settings.quest_tracker = false
+	testing.expect(t, !playtest.drawn(rig, "Break gravel for flint"), "a tracker turned off")
+}
+
+// The journal's Quests page, first where the registry has quests: those under way, then
+// those done, and the one picked with its steps done, the one it is on and its reward.
+@(test)
+test_sandbox_journal_quests :: proc(t: ^testing.T) {
+	rig := new(playtest.Rig)
+	defer free(rig)
+	if !playtest.start(t, rig, sandbox_server.GAME, GAME, {name = "builder"}) {return}
+	defer playtest.stop(rig)
+	s := playtest.srv(rig)
+	c := playtest.client(rig)
+	core.game_mode(s, c, "survival")
+	fibre, _ := game.registry_item(s.registry, "sandbox:fibre")
+	flint, _ := game.registry_item(s.registry, "sandbox:flint")
+	log_item, _ := game.registry_item(s.registry, "voxiverse:log")
+	core.item_give(s, c, fibre, 6)
+	core.item_give(s, c, flint, 5)
+	core.item_give(s, c, log_item, 4)
+	playtest.step(rig, 6)
+	app := rig.app
+	menu.player_menu_show(app, .Journal)
+	drew :: proc(rig: ^playtest.Rig, prefix: string) -> (found: bool) {
+		app := rig.app
+		ui.begin_frame(&app.ui, {}, {playtest.WIDTH, playtest.HEIGHT}, 1)
+		menu.player_menu_ui(app, &app.ui, true)
+		for x in app.ui.texts {found ||= strings.has_prefix(x, prefix)}
+		ui.end_frame(&app.ui)
+		return
+	}
+	testing.expect(t, drew(rig, "Edge and Point"))
+	testing.expect(t, drew(rig, "Waking at the Gate"))
+	testing.expect(t, drew(rig, "Saw logs into planks"))
+	testing.expect(t, drew(rig, "+1 field dressing")) // (its reward, in its slot)
+	testing.expect(t, drew(rig, "Tracked"))
+	testing.expect(t, !drew(rig, "Twist fibre into cord"), "a step to come shown")
 }

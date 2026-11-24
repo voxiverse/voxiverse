@@ -353,7 +353,7 @@ They are part of the gate: `./build.sh test` with no package named (and no `-o:`
 `-sanitize:` or `-test-name:`) renders them beside the unit tests, `./build.sh images` as
 one of its jobs from the start, and fails if any scene does. On a machine of few cores the
 unit tests' last minutes are a few tests waiting on the disk (server/core's crash points
-sync every write), and the rendering fills them. On this 8-core machine the 38 scenes take
+sync every write), and the rendering fills them. On this 8-core machine the 41 scenes take
 about ten minutes (four at once; lavapipe draws on the CPU). A narrowed run
 (`test <package>`) does not render them, and on Windows and macOS `test` says they were not
 run.

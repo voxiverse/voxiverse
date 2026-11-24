@@ -65,6 +65,7 @@ RUIN_LAIRS :: [4][2]i32 {
 
 // RUIN_REWARD: what the altar gives each fighter standing when the last wave dies.
 RUIN_REWARD :: [3]string{"voxiverse:sniper", "voxiverse:jump_boots", "voxiverse:feather_charm"}
+RUIN_ENCOUNTER :: "sandbox:ruin" // the fight's name in a quest's win step (pack/data/quests)
 
 // Ruin: the home world's ruined site and its fight (the session's: a fight does not outlive
 // it, while what a fighter set aside does).
@@ -287,6 +288,7 @@ ruin_end :: proc(s: ^core.Server, won: bool) {
 		core.notice(s, &c, "The ruin is quiet: the altar gives you its reward")
 		above := ruin_point(r.site, {RUIN_MID, RUIN_MID}) + {0, 1.5, 0}
 		for item in r.reward {core.item_drop(s, w, above, {item = item, count = 1})}
+		core.quest_note(s, &c, {goal = .Win, name = RUIN_ENCOUNTER, count = 1})
 	}
 	play.crowd_clear(&r.crowd, w)
 	ruin_ward(s, w, false)

@@ -39,7 +39,9 @@ directly in it, not its sub-folders: each sub-folder has its own row. A row whos
    with its tests beside it. Its pack, if it has one, is `games/<game>/pack`, laid out as a
    pack ([packs.md](packs.md)): each of its folders follows the base pack's row of the same
    path (`games/<game>/pack/data/game_modes` is `assets/packs/voxiverse/data/game_modes`), so
-   a game's pack adds no row either (`layout_folder` in the `layout` lint). The packages are
+   a game's pack adds no row either (`layout_folder` in the `layout` lint; such a row is in
+   use while a game's pack has a file under it, though the base pack has none there, as
+   `data/quests`). The packages are
    named for the game, `package <game>`, `package <game>_server` and `package <game>_client`
    (as `server/steam` is `steam_server`), so no two games' parts share a name, and code
    names an import of one by it: `stopwatch.seconds(...)`, and in the lists of games
@@ -136,6 +138,7 @@ package** is enforced by the `layout` lint (see above).
 | `assets/packs/voxiverse/data/recipes` | Recipes (the crafting grid's; a game's machines' processes) | `*.json` |
 | `assets/packs/voxiverse/data/sim` | Simulation rules (fluids) | `*.json` |
 | `assets/packs/voxiverse/data/entities` | Entity kinds (animals, the engine's own) | `*.json` |
+| `assets/packs/voxiverse/data/quests` | Quests (the base pack has none: a game's pack brings them, `games/sandbox/pack/data/quests`) | `*.json` |
 | `assets/packs/voxiverse/server/structures` | Structures | `*.vxs` |
 | `assets/shaders` | GLSL sources | `*.vert`, `*.frag`, `*.comp`, `*.glsl` |
 | `client/audio` | Mixer, voices, effects, spatialization | `*.odin` |
