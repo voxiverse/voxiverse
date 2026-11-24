@@ -200,7 +200,7 @@ bench_config :: proc(party: bool) -> core.Config {
 		view_height       = 4 if party else 6,
 		workers           = max(1, base.cpu_count() / 2),
 		everyone_cheats   = !party, // (the teleport up, flying)
-		mode              = "survival" if party else "",
+		mode              = "survival" if party else "creative", // (the sandbox plays survival by default: the server scenario flies)
 		max_players       = BENCH_BOTS,
 		listen            = true,
 		port              = 0, // any free one
