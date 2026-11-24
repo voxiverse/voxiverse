@@ -269,7 +269,7 @@ stat_count :: proc(s: ^Server, c: ^Client, name: string, amount := 1) {
 	e.has_pos, e.pos = true, {i32(c.position.x), i32(c.position.y), i32(c.position.z)}
 	emit_event(s, e)
 	stat_add(c, counter, u64(amount))
-	award_xp_amount(s, c, stat.xp * u64(amount))
+	experience_gain(s, c, stat.xp * u64(amount))
 }
 
 // stat_world: amount added to one of the game's statistics for world w, with no player to
@@ -305,7 +305,6 @@ record :: proc(
 	e.has_pos, e.pos = true, {p.x, p.y, p.z}
 	emit_event(s, e)
 	count_event(c, kind, text, n0)
-	award_xp(s, c, kind)
 }
 
 // record_world: something happened in w with no player to credit.

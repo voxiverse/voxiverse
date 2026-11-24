@@ -58,6 +58,7 @@ held_weapon :: proc(
 	stack = &c.inventory.slots[clamp(c.inventory.selected, 0, game.HOTBAR_SLOTS - 1)]
 	if game.stack_empty(stack^) {return}
 	info, ok = game.weapon_of(s.registry, c.mode, stack.item)
+	info = game.skill_weapon(s.registry, &c.skills, info) // (its reload's time and its cone)
 	name = game.item_name(s.registry, stack.item)
 	return
 }

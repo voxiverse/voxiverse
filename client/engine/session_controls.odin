@@ -345,7 +345,7 @@ break_hold :: proc(s: ^Session, down: bool) -> bool {
 	}
 	b, _ := world_block(&s.world, hit.block)
 	abilities := game.derive_abilities(s.reg, s.mode, &s.inventory)
-	need := game.break_ticks(s.reg, &s.rules, b, held(s), abilities)
+	need := game.break_ticks(s.reg, &s.rules, b, held(s), abilities, &s.progress.skills)
 	if need == 0 {
 		s.breaking = {}
 		return false

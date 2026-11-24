@@ -96,6 +96,7 @@ Client :: struct {
 	character_data:  game.Character_Data, // the game's record on its character (character_data; player_data.odin)
 	logbook:         game.Logbook, // its character's places found and creatures met (logbook_place; player_data.odin)
 	quests:          game.Quest_Log, // its character's progress in the registry's quests (quest_note; player_data.odin)
+	skills:          game.Skill_Ranks, // its character's rank in each skill of the registry (skill_learn; health.odin); its experience is the counter `xp`
 	stats:           Counters, // its character's counters (stats.odin; heap, keys owned)
 	joined_tick:     u64, // when it joined (session length)
 	last_position:   [3]f64, // for distance counters

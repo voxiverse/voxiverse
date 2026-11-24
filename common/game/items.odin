@@ -140,18 +140,21 @@ TOOL_KIND_NAMES := [Tool_Kind]string {
 // break_ticks: the ticks a player holding `held` takes to break b, its button held on
 // it (0: at once). At once where the rules say breaking takes no time (break_time 0) or
 // the mode breaks at once (instant_break); else its hardness times break_time over the
-// held tool's speed on it (gather_speed), rounded up. The client counts its inputs to it
-// and the server judges the same count (server/core/actions.odin).
+// held tool's speed on it (gather_speed) as the character's skills make it (its
+// break_speed: skill_value), rounded up. The client counts its inputs to it and the
+// server judges the same count (server/core/actions.odin), each with the same ranks.
 break_ticks :: proc(
 	reg: ^Registry,
 	rules: ^Rules,
 	b: Block,
 	held: Stack,
 	abilities: Abilities,
+	skills: ^Skill_Ranks = nil,
 ) -> int {
 	if !(rules.break_time > 0) || .Instant_Break in abilities {return 0}
 	if !block_valid(&reg.blocks, u16(b)) {return 0}
-	seconds := reg.blocks.defs[b].hardness * rules.break_time / gather_speed(reg, b, held)
+	speed := skill_value(reg, skills, .Break_Speed, gather_speed(reg, b, held))
+	seconds := reg.blocks.defs[b].hardness * rules.break_time / speed
 	if !(seconds > 0) {return 0}
 	return int(math.ceil(f64(seconds) * TICK_RATE - 1e-6))
 }

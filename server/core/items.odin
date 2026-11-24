@@ -78,6 +78,8 @@ broken_drop :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Blo
 	more := 0
 	if game.block_tier(s.registry, block) >= 1 {
 		more = int(game.gather_of(s.registry, game.inventory_held(&c.inventory)).yield)
+		chance := game.skill_value(s.registry, &c.skills, .Yield_Chance, 0) // (no draw without the skill)
+		if chance > 0 && base.rng_f32(&c.world.entities.rng) < chance {more += 1}
 	}
 	block_drop(c.world, pos, block, more)
 }

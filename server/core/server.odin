@@ -125,6 +125,7 @@ Game :: struct {
 	hurt:           proc(s: ^Server, c: ^Client, harm: Harm), // c was hurt and lives (its health already less)
 	died:           proc(s: ^Server, c: ^Client, harm: Harm), // c died of harm (already told, counted and its things dropped)
 	respawned:      proc(s: ^Server, c: ^Client), // c stands again: at the world's spawn, full health, the mode's kit (the game may move it, change what it holds)
+	respawn_where:  proc(s: ^Server, c: ^Client) -> string, // c just died: where it will stand again, as its death screen says it ("": the world's spawn)
 	editing:        proc(
 		s: ^Server,
 		c: ^Client,

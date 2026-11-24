@@ -45,6 +45,7 @@ APPLY := [protocol.State_Kind]Apply_Proc {
 	.Quests        = apply_quests,
 	.Weather       = apply_weather,
 	.Hum           = apply_hum,
+	.Progress      = apply_progress,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -202,6 +203,18 @@ apply_quests :: proc(s: ^Session, g: protocol.Received) {
 		}
 		tween_start(&s.hud.quest_news, s)
 	}
+}
+
+// apply_progress: the player's experience and skills (the HUD's bar, the Character
+// section; break_hold and the weapons predict with its ranks).
+@(private)
+apply_progress :: proc(s: ^Session, g: protocol.Received) {
+	if g.op == .Remove {
+		s.progress, s.progress_heard = {}, false
+		return
+	}
+	s.progress = (^protocol.Progress_State)(g.value)^
+	s.progress_heard = true
 }
 
 @(private)

@@ -45,6 +45,7 @@ State_Kind :: enum u8 {
 	Quests,
 	Weather,
 	Hum,
+	Progress,
 }
 
 Event_Kind :: enum u8 {
@@ -206,11 +207,24 @@ Quest_State :: struct {
 	log: game.Quest_Log,
 }
 
-// Player_Died: the player died, of cause (sent before they land at the spawn).
+// Progress_State: the player's experience and its rank in each skill of the registry
+// (kept with the character), from which the HUD's experience bar and level, the Character
+// section's skills and the client's prediction of the rules a skill changes read (the
+// level and the points are the registry's curve's: game.level_of, game.skill_points).
+Progress_State :: struct {
+	xp:     u32,
+	skills: game.Skill_Ranks,
+}
+
+// Player_Died: the player died, of cause (sent before they land at the spawn): where it
+// will stand again as its game says it ("": the world's spawn) and whether what it carried
+// was dropped where it fell (its mode's and the world's rules).
 Player_Died :: struct {
 	cause:    string `net:"max=32"`, // a Source_Kind's name
 	attacker: string `net:"max=16"`, // the player who did it ("" if none)
 	weapon:   string `net:"max=32"`,
+	respawn:  string `net:"max=64"`, // the game's words for where (Game.respawn_where; "": the world's spawn)
+	dropped:  bool,
 }
 
 // Damage_Hit: the player was hurt by something at a place: the direction the
@@ -336,6 +350,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		max_records = MAX_HUM_SOURCES,
 		check = check_hum,
 	},
+	.Progress = {name = "progress", value = Progress_State, check = check_progress},
 }
 
 @(rodata)
@@ -439,6 +454,11 @@ check_logbook :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 @(private = "file")
 check_quests :: proc(reg: ^game.Registry, v: rawptr) -> bool {
 	return game.quest_log_valid(reg, &(^Quest_State)(v).log)
+}
+
+@(private = "file")
+check_progress :: proc(reg: ^game.Registry, v: rawptr) -> bool {
+	return game.skill_ranks_valid(reg, &(^Progress_State)(v).skills)
 }
 
 @(private = "file")

@@ -338,7 +338,17 @@ tenth (`SKILL_EFFECTS`):
 | `craft_yield` | the chance a recipe made gives one more of what it makes (a game's crafting) | added |
 
 Every rule reads the ranks through one pure function, `game.skill_value(reg, ranks,
-effect, base)`; with no ranks it is `base`.
+effect, base)`; with no ranks it is `base`. Where it is played, the server reads it where it
+reads each rule (`server/core`: a break's ticks, a block's drop, a creature's drops, the
+most health, defence and fall guard, regeneration, a consumable, a swing, a gun's reload and
+cone; a game's own rules through `core.skill_value`), and the client, where it predicts a
+rule (a break's ticks, a reload, a shot's rays), from the ranks the server sends it (the
+`progress` record), so both count alike. Experience is earned only by a survivor (not in
+creative, not watching) and kept as the character's counter `xp`, its level as `level`;
+the skills learnt are kept in its file ([saves.md](saves.md)). A player learns a rank with
+`/skill <id or name>`, sees its points with `/skill`, and unlearns them all with `/skill
+reset` within the curve's `respec_reach` of its `respec` block; `/xp <player> <amount>` (the
+`player.xp` permission) gives experience.
 
 ## Simulation rules
 

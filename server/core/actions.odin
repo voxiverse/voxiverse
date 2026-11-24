@@ -307,6 +307,8 @@ attack :: proc(s: ^Server, c: ^Client, a: protocol.Attack) {
 swing :: proc(s: ^Server, c: ^Client, held: game.Stack, melee: game.Melee_Info) -> (struck: int) {
 	if c.dead || s.tick < c.swing_due {return}
 	c.swing_due = s.tick + u64(max(math.round(melee.cooldown * game.TICK_RATE), 1))
+	melee := melee
+	melee.damage = game.skill_value(s.registry, &c.skills, .Melee_Damage, melee.damage)
 	w := c.world
 	eye := game.player_eye(c.player)
 	name := game.item_name(s.registry, held.item)
@@ -472,7 +474,7 @@ break_held_long_enough :: proc(
 	held: game.Stack,
 ) -> bool {
 	abilities := game.derive_abilities(s.registry, c.mode, &c.inventory)
-	need := game.break_ticks(s.registry, &c.world.rules, current, held, abilities)
+	need := game.break_ticks(s.registry, &c.world.rules, current, held, abilities, &c.skills)
 	begin := c.breaking
 	c.breaking = {}
 	if need == 0 {return true}

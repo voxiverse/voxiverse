@@ -108,6 +108,9 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 		hit.yaw = f32(math.atan2(-d.x, -d.z)) // (a yaw: 0 looks down -z)
 	}
 	event_send(s, target, .Damage_Hit, &hit)
+	if source.kind == .Hit &&
+	   source.placed &&
+	   target.health > 0 {knock_back(s, target, source.pos)}
 	session_damage(s, target, taken, source, target.health <= 0)
 	harm := Harm{taken, source.kind, attacker(s, source), source.creature, source.weapon}
 	g := &s.config.game
@@ -126,9 +129,24 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 @(private = "file")
 guarded :: proc(s: ^Server, c: ^Client, kind: game.Source_Kind) -> f32 {
 	m := character_mods(s, c)
-	defence := min(m.defence + effect_defence(s, c), game.MAX_DEFENCE)
+	worn := game.skill_value(s.registry, &c.skills, .Defence, m.defence)
+	defence := clamp(worn + effect_defence(s, c), 0, game.MAX_DEFENCE)
 	if kind != .Fall {return defence}
-	return 1 - (1 - defence) * (1 - m.fall_guard)
+	guard := clamp(game.skill_value(s.registry, &c.skills, .Fall_Guard, m.fall_guard), 0, 1)
+	return 1 - (1 - defence) * (1 - guard)
+}
+
+// knock_back: a blow struck from `from` throws c away from it and up, as a player's blow
+// throws a creature (game.ATTACK_KNOCKBACK, entity_attack): one rule for every blow.
+@(private = "file")
+knock_back :: proc(s: ^Server, c: ^Client, from: [3]f64) {
+	away := c.player.position - from
+	l := math.sqrt(away.x * away.x + away.z * away.z)
+	if l > 1e-6 {away /= l} else {away = {1, 0, 0}}
+	kb := game.ATTACK_KNOCKBACK
+	c.player.velocity = {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]}
+	c.player.on_ground = false
+	disturb(s, c)
 }
 
 // attacker: the playing client the source names (nil for none).
@@ -160,7 +178,12 @@ die :: proc(s: ^Server, c: ^Client, source: Damage_Source) {
 	if id, ok := source.attacker.?; ok && killer != "" && int(id) != int(player_id(s, c)) {
 		stat_add(&s.clients[id], "kills", 1)
 	}
-	died := protocol.Player_Died{cause, killer, source.weapon}
+	w := c.world
+	drops :=
+		.Drop_On_Death in game.derive_abilities(s.registry, c.mode, &c.inventory) &&
+		!w.rules.keep_inventory
+	died := protocol.Player_Died{cause, killer, source.weapon, "", drops}
+	if g := &s.config.game; g.respawn_where != nil {died.respawn = g.respawn_where(s, c)}
 	event_send(s, c, .Player_Died, &died)
 	chat_system(
 		s,
@@ -169,9 +192,7 @@ die :: proc(s: ^Server, c: ^Client, source: Damage_Source) {
 			game.death_text(source.kind, client_name(c), killer, source.weapon, false),
 		),
 	)
-	w := c.world
-	if .Drop_On_Death in game.derive_abilities(s.registry, c.mode, &c.inventory) &&
-	   !w.rules.keep_inventory {
+	if drops {
 		at := c.player.position + {0, 0.5, 0}
 		for &st in c.inventory.slots {
 			if !game.stack_empty(st) {spawn_item(w, at, st, {}, -1)}
@@ -263,7 +284,10 @@ regenerate :: proc(s: ^Server, c: ^Client) {
 	if .Regenerate not_in game.derive_abilities(s.registry, c.mode, &c.inventory) {return}
 	delay := u64(math.round(f64(r.regen_delay) * f64(game.TICK_RATE)))
 	if s.tick - c.last_damage < delay {return}
-	heal_player(c, r.regen_rate / f32(game.TICK_RATE))
+	heal_player(
+		c,
+		game.skill_value(s.registry, &c.skills, .Regen, r.regen_rate) / f32(game.TICK_RATE),
+	)
 }
 
 // admin_damage: damage <player> <amount>: hurt a player by a command (a source

@@ -79,7 +79,8 @@ pause :: proc(t: ^testing.T, clients: []^Net_Client, seconds: f64) {
 // The server half: a fall costs a point a block past three; an explosion by
 // its nearness; death sends a player to the spawn with full health, their
 // things dropped by the rule; rules.damage off hurts nothing; the client is
-// told; experience and level come from events and are kept.
+// told; experience is earned only where the registry has a level curve (the base pack
+// has none: games/sandbox's tests hold what earns it), and what a character has is kept.
 @(test)
 test_damage_death_and_xp :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "health"}, context.temp_allocator) or_else ""
@@ -201,20 +202,16 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	// (nothing of what they held: respawn gives the survival kit: six items in the slots, the boots worn)
 	testing.expect_value(t, probe(srv, "a").items, 6)
 
-	// Experience: 100 points of mining is level 2 (one level up, and only one).
+	// Experience: with no level curve, mining a hundred blocks and a deed of the game's
+	// earn none; what the character has (here a hundred, given) is kept.
 	xp0 := probe(srv, "a").xp
 	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		for _ in 0 ..< 100 {record(s, c, .Block_Mined, "stone")}
+		experience_gain(s, c, 50)
+		stat_add(c, "xp", 100)
 	})
 	grown := probe(srv, "a")
 	testing.expect_value(t, grown.xp, xp0 + 100)
-	testing.expect_value(t, grown.level, level_of(xp0 + 100))
-	testing.expect(t, level_of(xp0 + 100) >= 2)
-	testing.expect_value(t, level_of(0), 1)
-	testing.expect_value(t, level_of(99), 1)
-	testing.expect_value(t, level_of(100), 2)
-	testing.expect_value(t, level_of(299), 2)
-	testing.expect_value(t, level_of(300), 3)
 
 	// The events carry the causes; the log has them.
 	call(srv, proc(s: ^Server, data: rawptr) {telemetry.sink_flush(&s.sink)}, nil)
@@ -225,10 +222,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		strings.contains(log_text, `"cause":"fall"`) &&
 		strings.contains(log_text, `"cause":"explosion"`),
 	)
-	testing.expect(
-		t,
-		strings.contains(log_text, `"k":"death"`) && strings.contains(log_text, `"k":"level_up"`),
-	)
+	testing.expect(t, strings.contains(log_text, `"k":"death"`))
 
 	// Kept: the experience through save and load.
 	net_close(a)

@@ -64,6 +64,9 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"packs", "", {0, 0}, admin_packs, "info.packs"},
 	{"pack", "reload", {1, 1}, admin_pack, "server.packs"},
 	{"wear", "", {0, 0}, admin_wear, "items.wear"},
+	// Experience and skills (health.odin).
+	{"skill", "[<skill> | reset]", {0, 1}, admin_skill, ""},
+	{"xp", "<player> <amount>", {2, 2}, admin_xp, "player.xp"},
 	{"help", "[command]", {0, 1}, admin_help, "info.help"},
 	// World editing: on the selection (selection.odin), or coordinates given.
 	{

@@ -27,6 +27,7 @@ weapon_in_hand :: proc(s: ^Session) -> (stack: game.Stack, w: game.Weapon_Info, 
 	stack = held(s)
 	if game.stack_empty(stack) {return}
 	w, ok = game.weapon_of(s.reg, s.mode, stack.item)
+	w = game.skill_weapon(s.reg, &s.progress.skills, w) // (as the server reloads and aims it)
 	return
 }
 

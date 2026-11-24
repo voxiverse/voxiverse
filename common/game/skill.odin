@@ -106,6 +106,7 @@ Progression :: struct {
 	xp:           [Xp_Source]u32,
 	find:         [Logbook_Place_Kind]u32, // a place of the kind found (into the logbook)
 	respec:       Block_Type, // the block a player stands near to unlearn its skills for nothing (0: anywhere)
+	respec_name:  string, // ... its id, as data names it
 	respec_reach: int, // ... within this many blocks
 	branches:     []string, // the skill sheet's branches, in the order its skills name them
 }

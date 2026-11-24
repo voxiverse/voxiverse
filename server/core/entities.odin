@@ -451,24 +451,27 @@ entity_harm :: proc(w: ^World, h: game.Entity_Handle, harm: Entity_Harm) -> (die
 	hp.health = 0
 	dead := Dead_Entity{entity_id(w, h), entity_kind(w, h), entity_pos(w, h)}
 	entity_died(w, h)
-	entity_drops(w, dead)
+	entity_drops(w, dead, harm.by)
 	if harm.by != nil {quest_note(s, harm.by, {goal = .Kill, creature = dead.kind, count = 1})}
 	if g.entity_died != nil {g.entity_died(s, w, dead, harm)}
 	return true
 }
 
 // entity_drops: what a creature that died leaves where it fell, by its kind's drops: of
-// each, on a draw of its chance, a count drawn between its least and its most, from the
-// world's entities' randomness (so the same in every run), booked as a creature's drop.
-// One gone without dying (entity_gone, despawned, a command's kill) leaves nothing.
-entity_drops :: proc(w: ^World, dead: Dead_Entity) {
+// each, on a draw of its chance (as the skills of the player who killed it, `by`, make it:
+// its drop_chance), a count drawn between its least and its most, from the world's
+// entities' randomness (so the same in every run), booked as a creature's drop. One gone
+// without dying (entity_gone, despawned, a command's kill) leaves nothing.
+entity_drops :: proc(w: ^World, dead: Dead_Entity, by: ^Client = nil) {
 	s := w.server
 	info := game.kind_info(s.registry, dead.kind)
 	if info == nil {return}
 	r := &w.entities.rng
 	at := dead.position + {0, f64(info.box[1]) * 0.5, 0}
 	for d in info.drops {
-		if base.rng_f32(r) >= d.chance {continue}
+		chance := d.chance
+		if by != nil {chance = game.skill_value(s.registry, &by.skills, .Drop_Chance, chance)}
+		if base.rng_f32(r) >= chance {continue}
 		n := base.rng_int_range(r, d.count[0], d.count[1] + 1)
 		for n > 0 {
 			st := game.Stack {
@@ -691,7 +694,9 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 		}
 		state_put(s, c, .Entity, &record, key)
 		if info := game.kind_info(s.registry, record.kind); info != nil && info.hittable {
-			game.logbook_meet(&c.logbook, record.kind) // (a creature in its view: met)
+			if game.logbook_meet(&c.logbook, record.kind) { 	// (a creature in its view: met)
+				experience_gain(s, c, u64(s.registry.progression.xp[.Meet]))
+			}
 		}
 		motion := protocol.Entity_Motion {
 			entity_pos(w, h),

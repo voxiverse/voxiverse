@@ -253,6 +253,18 @@ changes and an older build loses only the progress. A file before has none: no q
 begun. A quest the registry no longer has is skipped (and logged), a step past a quest's last
 reads as done and a count past its step's as one short of it.
 
+### Experience and skills
+
+A character's experience is its counter `xp` and its level the counter `level` (with its
+other counters, last in the file), so a file of any format keeps what it had; a file from
+before the level curves keeps the experience it earned then (by the old table: a point a
+block mined, ten a kill) and reads it on the curve. A character file may have `skills`:
+each skill the character learnt, by its `id` (the registry's, [packs.md](packs.md#levels-and-skills))
+and its `rank`. It came with format 7 still, as `quests` did: an older reader skips it and
+loses only the ranks. A file before has none: nothing is learnt. A skill the registry no
+longer has is skipped (and logged), its points free again; a rank past a skill's reads as
+its last.
+
 ### The edit journal
 
 The edit journal stores block numbers, which are fixed for a universe. A universe's packs are

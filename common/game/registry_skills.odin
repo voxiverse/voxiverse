@@ -156,6 +156,7 @@ read_levels :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def) -> (p: Progre
 			fail_field(b, rf, rf.value, "respec is a block id")
 		} else if at, known := registry_block(reg, rf.value.s); known {
 			p.respec = block_type_of(&reg.blocks, at)
+			p.respec_name = rf.value.s
 		} else {
 			fail_field(b, rf, rf.value, fmt.aprintf("\"%s\" is not a block", rf.value.s))
 		}

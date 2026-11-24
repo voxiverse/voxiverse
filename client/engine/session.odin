@@ -107,6 +107,8 @@ Session :: struct {
 	quests:           protocol.Quest_State, // the player's quests, as the server last said (the journal's Quests, the HUD's tracker, the compass)
 	quests_heard:     bool, // ... a value came (the first is no news)
 	quest_pick:       int, // the quest the player picked to track in the journal, + 1 (0: the first under way; quest_tracked)
+	progress:         protocol.Progress_State, // the player's experience and skills, as the server last said (the HUD's bar, the Character section, the prediction of what a skill changes)
+	progress_heard:   bool, // ... a value came (the first is no news)
 	world_map:        Minimap, // the player menu's map (marks.odin; its cells in the arena, made when first shown)
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen:     bool,

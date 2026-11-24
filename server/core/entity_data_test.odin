@@ -367,14 +367,22 @@ test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
 			cs[0].welcomed &&
 			cs[0].update.state.on_ground \
 		)}
+	// The creatures game's pack with a level curve beside its creatures.
+	curve := `{"curve": {"levels": [100, 300]}}`
+	files := [?]game.Pack_File {
+		{"pack.json", #load("creatures_pack/pack.json")},
+		{"data/entities/creatures.json", #load("creatures_pack/data/entities/creatures.json")},
+		{"data/levels/curve.json", transmute([]u8)curve},
+	}
 	for round in 0 ..< 2 {
-		if !testing.expect(t, start_counting(h, dir)) {return}
+		if !testing.expect(t, start_counting(h, dir, files[:])) {return}
 		c := new(Net_Client)
 		net_connect(c, 0, "herder", h = h)
 		if testing.expect(t, net_wait(t, {c}, standing), "never stood") {
 			s := &h.srv
 			player := client_by_name(s, "herder")
 			if round == 0 {
+				game_mode(s, player, "survival") // (a survivor earns experience)
 				xp := player.stats["xp"]
 				stat_count(s, player, "herded", 3)
 				testing.expect_value(t, player.stats["xp"], xp + 6)
@@ -396,17 +404,19 @@ test_a_games_statistics_are_kept_with_the_character :: proc(t: ^testing.T) {
 // that returns before they are counted (the session keeps its own copy of the game's
 // list, not the caller's).
 @(private = "file")
-start_counting :: proc(h: ^Harness, dir: string) -> bool {
+start_counting :: proc(h: ^Harness, dir: string, files: []game.Pack_File) -> bool {
 	config := harness_world()
 	config.listen = true
 	config.save_dir = dir
 	config.game = harness_creatures()
+	config.game.pack.files = files // (with a level curve: experience is earned)
 	config.game.stats = {
 		{name = "herded", kind = .Count, xp = 2},
 		{name = "trotted", kind = .Distance},
 	}
 	return harness_start(h, config)
 }
+
 
 // A creature that dies leaves its kind's drops where it fell, each by its chance, booked
 // as a creature's drop; one that goes without dying leaves nothing.

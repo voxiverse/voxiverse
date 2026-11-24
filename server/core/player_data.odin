@@ -42,6 +42,7 @@ Player_Record :: struct {
 	character_data: game.Character_Data, // the game's record on the character (Game.character_data)
 	logbook:        game.Logbook, // the places it found and the creatures it met (logbook_place)
 	quests:         game.Quest_Log, // how far it is in each quest (quest_note)
+	skills:         game.Skill_Ranks, // its rank in each skill (skill_learn)
 	dirty:          bool, // changed since its file was written
 	stats:          Counters, // its counters (heap; stats.odin)
 	overflow:       [MAX_OVERFLOW]game.Stack, // read but with no room (an older, bigger inventory): dropped at their feet on joining
@@ -65,6 +66,14 @@ Player_File :: struct {
 	game:     json.Value `json:"game,omitempty"`, // format 5: the game's record, a field by its path (written by hand: player_json)
 	logbook:  Maybe(File_Logbook) `json:"logbook,omitempty"`, // format 7: the places found (each in its world) and the creatures met, by name
 	quests:   Maybe([]File_Quest) `json:"quests,omitempty"`, // the quests begun, by id (a member a reader of format 7 from before skips: the format stays 7)
+	skills:   Maybe([]File_Skill) `json:"skills,omitempty"`, // the skills learnt, by id (a member a reader of format 7 from before skips: the format stays 7)
+}
+
+// File_Skill: a character's rank in a skill, as its file keeps it (by id: a skill's number
+// is the registry's of the day).
+File_Skill :: struct {
+	id:   string,
+	rank: int,
 }
 
 // File_Quest: how far a character is in a quest, as its file keeps it (by id: a quest's
@@ -234,6 +243,7 @@ player_parse :: proc(
 	}
 	if lb, has := f.logbook.?; has {logbook_read(reg, lb, &r.logbook)}
 	if qs, has := f.quests.?; has {quests_read(reg, qs, &r.quests)}
+	if sk, has := f.skills.?; has {skills_read(reg, sk, &r.skills)}
 	n := stacks_read(reg, f.format, f.items, &r.inventory, r.overflow[:])
 	if stacks, set_aside := f.aside.?; set_aside {
 		aside: game.Inventory
@@ -309,6 +319,7 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record, character: typeid) -
 	if r.logbook.place_count > 0 ||
 	   r.logbook.met_count > 0 {f.logbook = logbook_file(reg, &r.logbook)}
 	if qs := quests_file(reg, &r.quests); len(qs) > 0 {f.quests = qs}
+	if sk := skills_file(reg, &r.skills); len(sk) > 0 {f.skills = sk}
 	data, _ := json.marshal(
 		f,
 		{pretty = true, use_spaces = true, spaces = 2},
@@ -464,6 +475,7 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 		character_data = c.character_data,
 		logbook        = c.logbook,
 		quests         = c.quests,
+		skills         = c.skills,
 		mode           = mode_record_text(s, c),
 		dirty          = true,
 		stats          = counters_clone(c.stats),
@@ -588,7 +600,34 @@ logbook_place :: proc(
 	at: [3]i32,
 	name := "",
 ) {
-	if game.logbook_place(&c.logbook, kind, c.world.address, at, name) {quests_settle(s, c)}
+	if game.logbook_place(&c.logbook, kind, c.world.address, at, name) {
+		experience_gain(s, c, u64(s.registry.progression.find[kind]))
+		quests_settle(s, c)
+	}
+}
+
+// skills_file: the skills learnt as a player file keeps them (temporary memory).
+@(private = "file")
+skills_file :: proc(reg: ^game.Registry, r: ^game.Skill_Ranks) -> []File_Skill {
+	out := make([dynamic]File_Skill, context.temp_allocator)
+	for &def, i in reg.skills[:min(len(reg.skills), game.MAX_SKILLS)] {
+		if r.ranks[i] > 0 {append(&out, File_Skill{def.id, int(r.ranks[i])})}
+	}
+	return out[:]
+}
+
+// skills_read: a player file's skills into r. A skill the registry no longer has is left
+// out (and logged), its points free again; a rank past a skill's is its last.
+@(private = "file")
+skills_read :: proc(reg: ^game.Registry, f: []File_Skill, r: ^game.Skill_Ranks) {
+	for fs in f {
+		at, found := game.skill_by_id(reg, fs.id)
+		if !found || at >= game.MAX_SKILLS {
+			log.warnf("server player file skill skipped skill=%q", fs.id)
+			continue
+		}
+		r.ranks[at] = u8(clamp(fs.rank, 0, reg.skills[at].ranks))
+	}
 }
 
 // quests_file: the quests begun as a player file keeps them (temporary memory).
@@ -627,6 +666,7 @@ quests_read :: proc(reg: ^game.Registry, f: []File_Quest, ql: ^game.Quest_Log) {
 // quest finished gives c its reward. Nothing counts for a player who cannot be hurt
 // (creative, a watcher): the quests are a survivor's.
 quest_note :: proc(s: ^Server, c: ^Client, e: game.Quest_Event) {
+	experience_note(s, c, e)
 	if !quests_count(s, c) || !game.quest_wants(s.registry, &c.quests, e.goal) {return}
 	quests_moved(s, c, game.quest_note(s.registry, &c.quests, e, &c.inventory, &c.logbook))
 }
@@ -639,12 +679,10 @@ quests_settle :: proc(s: ^Server, c: ^Client) {
 	quests_moved(s, c, game.quest_settle(s.registry, &c.quests, &c.inventory, &c.logbook))
 }
 
-// quests_count: whether c's deeds count for its quests (playing, alive, able to be hurt).
+// quests_count: whether c's deeds count for its quests (a survivor's, where there are any).
 @(private = "file")
 quests_count :: proc(s: ^Server, c: ^Client) -> bool {
-	if c.state != .Playing || c.dead || len(s.registry.quests) == 0 {return false}
-	a := game.derive_abilities(s.registry, c.mode, &c.inventory)
-	return .Health in a && .Invulnerable not_in a && .Bodiless not_in a && .Spectate not_in a
+	return len(s.registry.quests) > 0 && survivor(s, c)
 }
 
 // quests_moved: steps moved on: each quest finished gives its reward (into c's slots, the
@@ -654,6 +692,7 @@ quests_moved :: proc(s: ^Server, c: ^Client, changes: game.Quest_Changes) {
 	for q in changes.done {
 		def := &s.registry.quests[q]
 		log.infof("server quest done name=%s quest=%s", client_name(c), def.id)
+		experience_gain(s, c, u64(def.xp))
 		for st in def.reward {
 			size := game.item_stack_size(s.registry, st.item)
 			for left := st.count; left > 0 && size > 0; {
