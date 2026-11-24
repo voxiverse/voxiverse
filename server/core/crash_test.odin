@@ -17,7 +17,10 @@ import "server:store"
 // The crash harness. Faults injected into the disk layer (not real kills),
 // so every point is reproducible: a save is run with the "process" dying at one
 // operation, then the universe is recovered and checked, and must be exactly
-// the generation before the save or the one it wrote, never a mix.
+// the generation before the save or the one it wrote, never a mix. The faults'
+// syncs ask nothing of the OS (base.Disk_Faults.flush): what a power cut keeps
+// is their own bookkeeping, and a thousand runs' flushes cost minutes on a
+// spinning disk for the same outcomes. The clean run of each setup flushes.
 
 CRASH_POINTS :: #config(VX_CRASH_POINTS, 1000)
 
@@ -131,7 +134,9 @@ crash_setup :: proc(t: ^testing.T, tag: string) -> (cs: Crash_Setup, ok: bool) {
 	// A clean run: the second generation's digest and the number of operations.
 	os.remove_all(cs.run)
 	copy_tree(cs.base, cs.run)
-	faults := base.Disk_Faults{}
+	faults := base.Disk_Faults {
+		flush = true,
+	}
 	d := base.Disk {
 		faults = &faults,
 	}
@@ -184,7 +189,10 @@ crash_run :: proc(
 	rb.dir, rb.disk = cs.run, &d
 	store.batch_run(&rb)
 	delete(rb.problem, runtime.heap_allocator())
-	clean := base.Disk{}
+	quiet := base.Disk_Faults{} // (never fails; its syncs are booked, not flushed)
+	clean := base.Disk {
+		faults = &quiet,
+	}
 	why := store.store_recover(cs.run, &clean)
 	testing.expectf(t, why == "", "countdown %d seed %d: recovery says %s", countdown, seed, why)
 	rep := universe_check(cs.run)
@@ -279,7 +287,10 @@ test_backup_and_restore_survive_crashes :: proc(t: ^testing.T) {
 	if !ok {return}
 	run_dir := fmt.tprintf("%s_br", cs.run)
 	defer os.remove_all(run_dir)
-	clean := base.Disk{}
+	quiet := base.Disk_Faults{} // (never fails; its syncs are booked, not flushed)
+	clean := base.Disk {
+		faults = &quiet,
+	}
 	// Backups: the generation-1 state, backed up with the process dying.
 	counter := base.Disk_Faults{}
 	cd := base.Disk {
@@ -312,7 +323,10 @@ test_backup_and_restore_survive_crashes :: proc(t: ^testing.T) {
 	prepare := proc(dir: string, cs: ^Crash_Setup) {
 		os.remove_all(dir)
 		copy_tree(cs.base, dir)
-		c := base.Disk{}
+		quiet := base.Disk_Faults{}
+		c := base.Disk {
+			faults = &quiet,
+		}
 		store.backup_make(dir, "g00000001-t", &c)
 		rb := cs.batch^
 		rb.dir, rb.disk = dir, &c

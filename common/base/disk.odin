@@ -30,12 +30,20 @@ Disk :: struct {
 // a seeded prefix of its piece, a rename or remove happens or not by a seeded
 // coin) and every later one does nothing. With power_loss, the crash also
 // cuts every file written since its last sync to a seeded length.
+//
+// What a sync makes safe is the faults' own bookkeeping (unsynced: what a power
+// cut keeps), so a sync on a Disk with faults is counted and booked but asks
+// nothing of the OS unless `flush` is set: the OS's flush would make the same
+// files and the same outcomes, at the cost of a disk's seek each (on a spinning
+// disk, most of a crash test's time). A test that wants the real flushes on that
+// path sets it.
 Disk_Faults :: struct {
 	countdown:  int, // the operation to tear (1 = the first); 0: none
 	ops:        int, // operations so far
 	crashed:    bool,
 	rng:        Rng,
 	power_loss: bool,
+	flush:      bool, // its syncs flush to the disk too, as production's do
 	unsynced:   [dynamic]Unsynced,
 }
 
@@ -160,13 +168,20 @@ disk_sync_file :: proc(d: ^Disk, file: ^os.File, path: string) -> Disk_Error {
 	torn, err := disk_count(d)
 	if err != .None {return err}
 	if torn {return disk_die(d)}
-	if serr := file_sync(file); serr != nil {
-		disk_log("sync", path, serr)
-		return .Failed
+	if disk_flushes(d) {
+		if serr := file_sync(file); serr != nil {
+			disk_log("sync", path, serr)
+			return .Failed
+		}
 	}
 	if d.faults != nil {disk_untrack(d, path)}
 	return .None
 }
+
+// disk_flushes: a sync asks the OS to flush: always in production, with faults only
+// when they say so (Disk_Faults.flush).
+@(private = "file")
+disk_flushes :: proc(d: ^Disk) -> bool {return d.faults == nil || d.faults.flush}
 
 // disk_sync_path makes a file's data safe by its path (the save worker syncs the
 // journal segment the server thread has open).
@@ -288,7 +303,7 @@ disk_sync_dir :: proc(d: ^Disk, path: string) -> Disk_Error {
 	torn, err := disk_count(d)
 	if err != .None {return err}
 	if torn {return disk_die(d)}
-	if !dir_sync(path) {
+	if disk_flushes(d) && !dir_sync(path) {
 		disk_log("sync directory", path, nil)
 		return .Failed
 	}

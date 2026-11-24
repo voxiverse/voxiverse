@@ -29,8 +29,8 @@ test_disk_replace_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, !os.exists(fmt.tprintf("%s.tmp", path)), "a temporary file is left")
 }
 
-// Torn at every operation, with and without a power cut: the old file or the
-// new one, whole.
+// Torn at every operation, with and without a power cut, with the OS's flushes
+// (every other countdown) and without: the old file or the new one, whole.
 @(test)
 test_disk_replace_is_atomic :: proc(t: ^testing.T) {
 	dir := disk_scratch("atomic")
@@ -52,6 +52,7 @@ test_disk_replace_is_atomic :: proc(t: ^testing.T) {
 				countdown  = countdown,
 				rng        = rng_make(u64(countdown * 2 + power)),
 				power_loss = power == 1,
+				flush      = countdown % 2 == 0,
 			}
 			d.faults = &faults
 			err := disk_replace(&d, path, fresh)
