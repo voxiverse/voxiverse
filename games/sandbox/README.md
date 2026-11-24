@@ -253,6 +253,25 @@ pack's model.
 The statistics it keeps of a player: `sheep.sheared` (5 experience each) and `sheep.fed` (2),
 and of a world `sheep.born`, shown with the engine's.
 
+**The world classes' rare resources.** Each class of gate world (docs/world.md, "World
+classes") has one resource no other has; the pack says what tool it asks for, what it
+leaves and what it makes (`blocks/survival.json`, `items/survival.json`,
+`recipes/survival.json`), so going there is worth it:
+
+| Class | Block (tier) | Leaves | Makes |
+|---|---|---|---|
+| Temperate | amber ore (1) | amber (uncommon) | amber charm (trinket: +3 health, a little defence), amber salve (heals 6, then 1 a second) |
+| Canyon | opal ore (2) | opal (rare) | opal visor (helm: defence 0.1, +4 health), 3 optics from one |
+| Frozen | cryolite ore (2) | cryolite (rare) | 4 iron ingots from 2 raw iron (a flux), frost striders (boots: 0.6 fall guard, faster) |
+| Ocean | nacre (1) | nacre shard (rare) | nacre greaves (legs: defence 0.1, jump higher), 2 optics |
+| Volcanic | sulfur ore (1) | sulfur (uncommon) | 30 spark cartridges, 2 stim patches |
+| Fungal | glow cap (a blade) | glow spores (uncommon) | 4 lamps, spore tonic (heals 6, then 1 a second for 20) |
+| Moon | ilmenite ore (3) | ilmenite (epic) | the titan drill (the best tool: two more of each ore and stone, speed 12), the titan cuirass (defence 0.2, +4 health) |
+| Jungle | jade ore (2) | jade (rare) | jade talisman (trinket: faster, +3 health), jade tonic (heals 4, then 3 a second) |
+
+The classes' rock (basalt, slate, limestone, red rock) asks for tier 1 like stone, obsidian
+for tier 2. `test_survival_every_item_is_obtainable` reaches every one of them.
+
 ## Its creatures
 
 Beside the sheep the home world has sixteen creatures of its own (`pack/data/entities`:

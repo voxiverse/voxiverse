@@ -23,5 +23,20 @@
 	"voxiverse:spruce_leaves": {"override": true, "hardness": 0.3, "tool": "blade", "drop": "sandbox:fibre"},
 	"voxiverse:spruce_log": {"override": true, "hardness": 2, "tool": "blade"},
 	"voxiverse:chest": {"override": true, "hardness": 1.5, "tool": "blade"},
-	"voxiverse:gravel": {"override": true, "drop": "sandbox:flint"}
+	"voxiverse:gravel": {"override": true, "drop": "sandbox:flint"},
+	// The world classes' rock (as stone) and rare resources: the tool tier each asks for
+	// and the item each leaves.
+	"voxiverse:basalt": {"override": true, "tier": 1},
+	"voxiverse:slate": {"override": true, "tier": 1},
+	"voxiverse:limestone": {"override": true, "tier": 1},
+	"voxiverse:red_rock": {"override": true, "tier": 1},
+	"voxiverse:obsidian": {"override": true, "tier": 2, "hardness": 8},
+	"voxiverse:amber_ore": {"override": true, "tier": 1, "hardness": 4, "tool": "pick", "drop": "sandbox:amber"},
+	"voxiverse:sulfur_ore": {"override": true, "tier": 1, "hardness": 3, "tool": "pick", "drop": "sandbox:sulfur"},
+	"voxiverse:nacre": {"override": true, "tier": 1, "hardness": 3, "tool": "pick", "drop": "sandbox:nacre_shard"},
+	"voxiverse:opal_ore": {"override": true, "tier": 2, "hardness": 5, "tool": "pick", "drop": "sandbox:opal"},
+	"voxiverse:cryolite_ore": {"override": true, "tier": 2, "hardness": 5, "tool": "pick", "drop": "sandbox:cryolite"},
+	"voxiverse:jade_ore": {"override": true, "tier": 2, "hardness": 6, "tool": "pick", "drop": "sandbox:jade"},
+	"voxiverse:ilmenite_ore": {"override": true, "tier": 3, "hardness": 7, "tool": "pick", "drop": "sandbox:ilmenite"},
+	"voxiverse:glow_cap": {"override": true, "hardness": 1, "tool": "blade", "drop": "sandbox:glow_spores"}
 }

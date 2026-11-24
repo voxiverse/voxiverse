@@ -63,5 +63,25 @@
 	"survey_scanner": {"model": "sandbox:survey_scanner", "description": "Use it: the nearest ore, salvage or relic within 32 blocks, and which way.", "stack": 1, "rarity": "uncommon"},
 	"tether_hook": {"model": "sandbox:tether_hook", "description": "Hold use: hook a block up to 18 blocks off. Short, quick to fire again.", "stack": 1, "rarity": "uncommon", "grapple": {"range": 18, "speed": 15, "cooldown": 0.8}},
 	"long_hook": {"model": "sandbox:long_hook", "description": "Hold use: hook a block up to 60 blocks off, pulled fast.", "stack": 1, "rarity": "rare", "grapple": {"range": 60, "speed": 28, "cooldown": 4}},
-	"recall_unit": {"model": "sandbox:recall_unit", "description": "Use it: you are taken to your outpost. Used up.", "stack": 4, "rarity": "rare"}
+	"recall_unit": {"model": "sandbox:recall_unit", "description": "Use it: you are taken to your outpost. Used up.", "stack": 4, "rarity": "rare"},
+	// The world classes' rare resources (common/worldgen/classes.odin: one each, on no other
+	// class of world) and what they make that nothing else does.
+	"amber": {"model": "sandbox:amber", "description": "Old resin turned to stone, from a temperate world's rock.", "stack": 64, "rarity": "uncommon"},
+	"opal": {"model": "sandbox:opal", "description": "A stone full of coloured fire, from a canyon world's red rock.", "stack": 64, "rarity": "rare"},
+	"cryolite": {"model": "sandbox:cryolite", "description": "An icy mineral from a frozen world's slate. A flux: iron refines richer with it.", "stack": 64, "rarity": "rare"},
+	"sulfur": {"model": "sandbox:sulfur", "description": "Yellow crust from a volcanic world's basalt. It burns bright.", "stack": 64, "rarity": "uncommon"},
+	"ilmenite": {"model": "sandbox:ilmenite", "description": "Black titanium ore, found only in an airless moon's rock.", "stack": 64, "rarity": "epic"},
+	"jade": {"model": "sandbox:jade", "description": "Hard green stone from deep under a jungle world.", "stack": 64, "rarity": "rare"},
+	"nacre_shard": {"model": "sandbox:nacre_shard", "description": "Mother-of-pearl from an ocean world's sea floor.", "stack": 64, "rarity": "rare"},
+	"glow_spores": {"model": "sandbox:glow_spores", "description": "Spores of a fungal world's glowing caps. They give light and heal.", "stack": 64, "rarity": "uncommon"},
+	"amber_charm": {"model": "sandbox:amber_charm", "description": "A warm stone worn close: more health, a little harm turned aside.", "stack": 1, "rarity": "uncommon", "equip": "trinket", "modifiers": [{"stat": "max_health", "amount": 3}, {"stat": "defence", "amount": 0.03}]},
+	"amber_salve": {"model": "sandbox:amber_salve", "description": "Heals 6 at once, then 1 a second for 10 seconds.", "stack": 16, "rarity": "uncommon", "consume": {"heal": 6, "regen": 1, "defence": 0, "seconds": 10}},
+	"opal_visor": {"model": "sandbox:opal_visor", "description": "Opal set over iron: the best helm short of the remains' alloy.", "stack": 1, "rarity": "rare", "equip": "head", "modifiers": [{"stat": "defence", "amount": 0.1}, {"stat": "max_health", "amount": 4}]},
+	"frost_striders": {"model": "sandbox:frost_striders", "description": "Cryolite-shod boots: quick, and a fall barely hurts.", "stack": 1, "rarity": "rare", "equip": "feet", "modifiers": [{"stat": "fall_guard", "amount": 0.6}, {"stat": "speed", "amount": 0.1}]},
+	"titan_drill": {"model": "sandbox:titan_drill", "description": "A titanium drill: breaks anything, faster than any, and gets two more of each ore and stone.", "stack": 1, "rarity": "epic", "gather": {"tier": 3, "yield": 2, "speed": 12, "kind": "pick"}, "melee": {"damage": 5, "reach": 3, "arc": 40, "cooldown": 0.5}},
+	"titan_cuirass": {"model": "sandbox:titan_cuirass", "description": "Titanium plate, light as padding: the strongest body armour made.", "stack": 1, "rarity": "epic", "equip": "chest", "modifiers": [{"stat": "defence", "amount": 0.2}, {"stat": "max_health", "amount": 4}]},
+	"jade_talisman": {"model": "sandbox:jade_talisman", "description": "Faster on foot, and more health.", "stack": 1, "rarity": "rare", "equip": "trinket", "modifiers": [{"stat": "speed", "amount": 0.1}, {"stat": "max_health", "amount": 3}]},
+	"jade_tonic": {"model": "sandbox:jade_tonic", "description": "Heals 4 at once, then 3 a second for 15 seconds.", "stack": 16, "rarity": "rare", "consume": {"heal": 4, "regen": 3, "defence": 0, "seconds": 15}},
+	"nacre_greaves": {"model": "sandbox:nacre_greaves", "description": "Mother-of-pearl scales: light legs that jump higher.", "stack": 1, "rarity": "rare", "equip": "legs", "modifiers": [{"stat": "defence", "amount": 0.1}, {"stat": "jump", "amount": 0.15}]},
+	"spore_tonic": {"model": "sandbox:spore_tonic", "description": "Heals 6 at once, then 1 a second for 20 seconds.", "stack": 16, "rarity": "uncommon", "consume": {"heal": 6, "regen": 1, "defence": 0, "seconds": 20}}
 }

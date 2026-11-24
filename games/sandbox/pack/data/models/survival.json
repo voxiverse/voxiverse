@@ -60,5 +60,24 @@
 	"survey_scanner": {"size": [3, 4, 1], "palette": ["#2a3440", "#4a5c6e", "#7ad07a"], "slices": [["323", "111", ".2.", ".2."]], "grip": [1, 3, 0]},
 	"tether_hook": {"size": [5, 5, 1], "palette": ["#8c8e94", "#c4c7cc", "#5a5c62"], "slices": [["3...3", "33.33", ".333.", "..2..", "..1.."]], "grip": [2, 4, 0]},
 	"long_hook": {"size": [5, 5, 1], "palette": ["#4a5c6e", "#8fb6cc", "#2a3440"], "slices": [["3...3", "33.33", ".333.", "..2..", "..1.."]], "grip": [2, 4, 0]},
-	"recall_unit": {"size": [3, 3, 2], "palette": ["#5a5c62", "#8c8e94", "#9ef0de"], "slices": [["131", "323", "121"], ["111", "121", "111"]], "grip": [1, 1, 0]}
+	"recall_unit": {"size": [3, 3, 2], "palette": ["#5a5c62", "#8c8e94", "#9ef0de"], "slices": [["131", "323", "121"], ["111", "121", "111"]], "grip": [1, 1, 0]},
+	// The world classes' resources and what they make.
+	"amber": {"size": [2, 3, 1], "palette": ["#c8761e", "#f8c46a", "#6a3e10"], "slices": [[".1", "12", "3."]], "grip": [1, 1, 0]},
+	"opal": {"size": [2, 3, 1], "palette": ["#c8d4e0", "#f4f8fc", "#e07a8a"], "slices": [[".1", "12", "3."]], "grip": [1, 1, 0]},
+	"cryolite": {"size": [2, 3, 1], "palette": ["#a8c8dc", "#f0faff", "#6a8aa0"], "slices": [[".1", "12", "3."]], "grip": [1, 1, 0]},
+	"sulfur": {"size": [2, 3, 1], "palette": ["#d8c020", "#fcf090", "#8a7a10"], "slices": [[".1", "12", "3."]], "grip": [1, 1, 0]},
+	"ilmenite": {"size": [2, 3, 1], "palette": ["#24242c", "#7a7a8a", "#101014"], "slices": [[".1", "12", "3."]], "grip": [1, 1, 0]},
+	"jade": {"size": [2, 3, 1], "palette": ["#2c7a52", "#7ac49a", "#184a30"], "slices": [[".1", "12", "3."]], "grip": [1, 1, 0]},
+	"nacre_shard": {"size": [2, 3, 1], "palette": ["#d8d0e0", "#fcf8ff", "#9a90b0"], "slices": [[".1", "12", "3."]], "grip": [1, 1, 0]},
+	"glow_spores": {"size": [3, 2, 1], "palette": ["#b8d84a", "#f0fca8", "#6a8a2a"], "slices": [["1.2", ".31"]], "grip": [1, 0, 0]},
+	"amber_charm": {"size": [3, 3, 1], "palette": ["#d0842a", "#fcd07a", "#7a5430"], "slices": [[".3.", "121", ".1."]], "grip": [1, 0, 0]},
+	"amber_salve": {"size": [2, 3, 2], "palette": ["#d0842a", "#fcd07a", "#d0d0d0"], "slices": [["33", "11", "22"], ["33", "12", "11"]], "grip": [0, 1, 0]},
+	"opal_visor": {"size": [4, 3, 1], "palette": ["#8c8e94", "#c4c7cc", "#e0f0f8"], "slices": [[".11.", "1331", "1111"]], "grip": [1, 2, 0]},
+	"frost_striders": {"size": [3, 2, 2], "palette": ["#9ab8cc", "#e8f4fc", "#4a5c6e"], "slices": [["1..", "123"], ["1..", "123"]], "grip": [0, 0, 0]},
+	"titan_drill": {"size": [6, 3, 2], "palette": ["#1e1e24", "#4a4a58", "#c4c8d4"], "slices": [["3322..", "222221", "....11"], ["3322..", "222221", "....11"]], "grip": [5, 2, 0]},
+	"titan_cuirass": {"size": [4, 4, 1], "palette": ["#3a3a44", "#8c90a0", "#1e1e24"], "slices": [["1..1", "1111", "1211", "1131"]], "grip": [1, 3, 0]},
+	"jade_talisman": {"size": [3, 3, 1], "palette": ["#30805a", "#78c49a", "#c4a050"], "slices": [[".3.", "121", ".1."]], "grip": [1, 0, 0]},
+	"jade_tonic": {"size": [2, 3, 2], "palette": ["#30805a", "#78c49a", "#d0d0d0"], "slices": [["33", "11", "22"], ["33", "12", "11"]], "grip": [0, 1, 0]},
+	"nacre_greaves": {"size": [3, 4, 1], "palette": ["#d8d0e0", "#f8f4fc", "#a8a0b8"], "slices": [["111", "1.1", "1.1", "2.2"]], "grip": [1, 3, 0]},
+	"spore_tonic": {"size": [2, 3, 2], "palette": ["#7a4a9a", "#c4a0e0", "#b8d84a"], "slices": [["33", "11", "22"], ["33", "12", "11"]], "grip": [0, 1, 0]}
 }
