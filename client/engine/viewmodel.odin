@@ -165,13 +165,20 @@ mat_rot :: proc(angle: f32, axis: [3]f32) -> Mat4 {
 // item's front along the arm's length. A gun or a block points the way the arm
 // does, a flat item's diagonal runs along it with its picture facing outward.
 held_in_arm :: proc(kind: Held_Kind) -> Mat4 {
-	hand := mat_translate({0, -0.55, 0})
+	hand := mat_translate(held_grip(kind))
 	switch kind {
 	case .Flat:
 		return hand * mat_rot(math.PI / 2, {0, 1, 0}) * mat_rot(1.25 * math.PI, {0, 0, 1})
 	case .Block, .Model, .None:
 	}
 	return hand * mat_rot(-math.PI / 2, {1, 0, 0})
+}
+
+// held_grip: where in the arm's space the item's grip is: in the hand, and for a
+// block further down, at the fingers, so the hand turned up into it in first
+// person (VIEW_ARM_SINK) stays inside it and no sliver of skin shows through its top.
+held_grip :: proc(kind: Held_Kind) -> [3]f32 {
+	return {0, -0.60, 0} if kind == .Block else {0, -0.55, 0}
 }
 
 // view_rest: where the item's grip rests in view space (before any

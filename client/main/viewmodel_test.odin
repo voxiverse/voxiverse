@@ -208,6 +208,42 @@ test_the_arm_is_the_avatars :: proc(t: ^testing.T) {
 	testing.expect_value(t, skin, 36)
 }
 
+// The hand closes round a held block from below and inside it: no corner of the hand rises
+// through the block's top face (once a sliver of the fingers did, a thin line of skin across
+// the top), and the fingers' end stays within the block.
+@(test)
+test_the_hand_stays_inside_a_held_block :: proc(t: ^testing.T) {
+	arm_to_item := engine.view_arm_matrix(.Block, 1)
+	half := f32(engine.HELD_BLOCK_SCALE / 2)
+	lo, hi := engine.ARM_HAND_LO, engine.ARM_HAND_HI
+	for i in 0 ..< 8 {
+		corner := [3]f32 {
+			hi.x if i & 1 != 0 else lo.x,
+			hi.y if i & 2 != 0 else lo.y,
+			hi.z if i & 4 != 0 else lo.z,
+		}
+		p := arm_to_item * [4]f32{corner.x, corner.y, corner.z, 1}
+		testing.expectf(
+			t,
+			p.y <= half,
+			"the hand's corner %v rises to %.3f, over the top %.3f",
+			corner,
+			p.y,
+			half,
+		)
+		if corner.y == lo.y {
+			testing.expectf(
+				t,
+				abs(p.x) <= half && abs(p.y) <= half && abs(p.z) <= half,
+				"the fingers' corner %v is at %v, outside the block (%.3f)",
+				corner,
+				p.xyz,
+				half,
+			)
+		}
+	}
+}
+
 @(test)
 test_the_view_model_projection_ignores_the_fov :: proc(t: ^testing.T) {
 	// On the heap: a Session is far past the 512 KB a test thread has on macOS (#104).
@@ -400,11 +436,13 @@ test_the_hand_holds_each_kind :: proc(t: ^testing.T) {
 
 @(test)
 test_the_arm_follows_the_item_in_the_view :: proc(t: ^testing.T) {
-	// The item's grip is the hand: the arm's hand end (0, -0.55, 0) is at the grip.
+	// The item's grip is the hand: the arm's grip (held_grip: its hand, a block at its
+	// fingers) is at the item's.
 	for kind in ([]engine.Held_Kind{.Model, .Block, .Flat}) {
 		item := engine.view_pose_matrix(kind, {})
 		arm := engine.view_arm_matrix(kind, item)
-		hand := arm * [4]f32{0, -0.55, 0, 1}
+		g := engine.held_grip(kind)
+		hand := arm * [4]f32{g.x, g.y, g.z, 1}
 		grip := item * [4]f32{0, 0, 0, 1}
 		testing.expectf(
 			t,
