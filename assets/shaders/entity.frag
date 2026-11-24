@@ -3,7 +3,8 @@
 #include "scene.glsl"
 
 // Entities: crunchy texels (8 across a face, each a little lighter or
-// darker), two pixel eyes on a face, the sky's light and the world's fog.
+// darker), two pixel eyes on a face, the sky's light (a glowing part its own) and the
+// world's fog.
 
 layout(push_constant) uniform Push {
 	Scene scene;
@@ -17,6 +18,7 @@ layout(location = 4) in vec3 in_pos;
 layout(location = 0) out vec4 out_color;
 
 const uint FACE = 3u; // render/entity_pass.odin: Entity_Part.Face
+const uint GLOW = 4u; // ... Entity_Part.Glow: lit by itself
 
 float texel_noise(uvec2 t, uint part) {
 	uint h = t.x * 0x8da6b343u ^ t.y * 0xd8163841u ^ part * 0xcb1ab31fu;
@@ -32,6 +34,7 @@ void main() {
 	vec3 albedo = in_color * (0.82 + 0.18 * texel_noise(t, in_part));
 	if (in_part == FACE && t.y == 3u && (t.x == 2u || t.x == 5u)) albedo = vec3(0.02);
 	vec3 light = max(s.sky_light.rgb + s.ambient.rgb, s.figure.rgb) * in_shade;
+	if (in_part == GLOW) light = vec3(1.0);
 	vec3 color = albedo * light;
 	color = fog_mix(s, color, in_pos - s.camera.xyz);
 	out_color = vec4(graded(s, color, gl_FragCoord.xy), 1.0);

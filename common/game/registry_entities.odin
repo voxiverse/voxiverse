@@ -92,15 +92,16 @@ Entity_Model :: enum u8 {
 	Parts, // boxes of its own (Kind_Info.parts): a body, a head, limbs that swing
 }
 
-MAX_MODEL_PARTS :: 16
+MAX_MODEL_PARTS :: 32
 
 // Part_Skin: how a part of a shaped model is shaded (the entity pass's parts).
 Part_Skin :: enum u8 {
 	Body,
 	Legs,
 	Head, // its front has eyes
+	Glow, // lit by itself (a lamp, a core): drawn in its own colour, never shaded
 }
-PART_SKIN_LIST := [?]string{"body", "legs", "head"}
+PART_SKIN_LIST := [?]string{"body", "legs", "head", "glow"}
 #assert(len(PART_SKIN_LIST) == len(Part_Skin))
 
 // Part_Swing: how a part moves, turning about its hinge (the middle of its top unless it
@@ -1066,13 +1067,13 @@ read_color :: proc(v: Json_Value) -> (color: [3]u8, ok: bool) {
 }
 
 // read_model_parts: a shaped model's parts, [{"box": [x0, y0, z0, x1, y1, z1], "color":
-// [r, g, b], "skin": "body" | "legs" | "head", "swing": "none" | "walk" | "walk_back" |
+// [r, g, b], "skin": "body" | "legs" | "head" | "glow", "swing": "none" | "walk" | "walk_back" |
 // "strike" | "pitch", "hinge": [x, y, z], "shown": [looks], "hidden": [looks], "colors":
 // {"<look>": [r, g, b]}}, ...] (all but box and color optional: body, none, the middle of
 // its top, always shown, its own colour).
 @(private)
 read_model_parts :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, info: ^Kind_Info) {
-	USAGE :: `parts is a list of at most 16 {"box": [x0, y0, z0, x1, y1, z1], "color": [r, g, b], "skin", "swing", "hinge", "shown", "hidden", "colors"}`
+	USAGE :: `parts is a list of at most 32 {"box": [x0, y0, z0, x1, y1, z1], "color": [r, g, b], "skin", "swing", "hinge", "shown", "hidden", "colors"}`
 	if v.kind != .Array || len(v.items) == 0 || len(v.items) > MAX_MODEL_PARTS {
 		fail_field(b, f, v, USAGE)
 		return

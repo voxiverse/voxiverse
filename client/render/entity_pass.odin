@@ -21,6 +21,7 @@ Entity_Part :: enum u8 {
 	Legs,
 	Head,
 	Face, // a head's front: has eyes
+	Glow, // lit by itself (a lamp, a core): its colour as it is
 }
 
 Entity_Draw :: struct {

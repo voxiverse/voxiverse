@@ -203,10 +203,11 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
   ledger as `drop_mob`). Only a death leaves them: one that goes (despawned, a command's
   kill, `entity_gone`) leaves nothing.
 - `model`: `rocket`, `item`, `player`, `{"box": [r, g, b]}` (one box, the kind's size)
-  or `{"parts": [...]}`, a shape of at most 16 boxes in the creature's own space (blocks from
+  or `{"parts": [...]}`, a shape of at most 32 boxes in the creature's own space (blocks from
   the middle of its feet, `-z` its front): each `{"box": [x0, y0, z0, x1, y1, z1], "color":
   [r, g, b]}` with an optional `skin` (`body`, `legs`, `head`: the entity pass's shading; a
-  head has eyes), `swing` (`none`; `walk` and `walk_back`, to and fro with the stride, the
+  head has eyes; `glow`: lit by itself, its colour as it is in any light, a lamp or a core),
+  `swing` (`none`; `walk` and `walk_back`, to and fro with the stride, the
   other leg the other way; `strike`, forward while the kind shows `striking`, else as `walk`;
   `pitch`, up and down as the server's pitch says: a grazing head; `flap`, up and down across
   the body with the stride, a part left of the middle mirroring one right of it: a wing whose

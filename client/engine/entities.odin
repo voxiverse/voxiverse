@@ -168,6 +168,7 @@ shaped :: proc(
 			.Body = .Body,
 			.Legs = .Legs,
 			.Head = .Head,
+			.Glow = .Glow,
 		}
 		render.entity_box(
 			d,
