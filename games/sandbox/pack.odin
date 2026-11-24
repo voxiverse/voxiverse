@@ -41,6 +41,8 @@ PACK :: game.Pack_Source {
 		{"data/levels/survivor.json", #load("pack/data/levels/survivor.json")},
 		{"data/skills/survivor.json", #load("pack/data/skills/survivor.json")},
 		{"data/quests/folk.json", #load("pack/data/quests/folk.json")},
+		{"data/quests/gate_worlds.json", #load("pack/data/quests/gate_worlds.json")},
+		{"data/item_tags/beyond.json", #load("pack/data/item_tags/beyond.json")},
 		{"data/entities/folk.json", #load("pack/data/entities/folk.json")},
 		{"data/dialogues/trader.json", #load("pack/data/dialogues/trader.json")},
 		{"data/dialogues/mechanic.json", #load("pack/data/dialogues/mechanic.json")},

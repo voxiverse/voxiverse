@@ -161,7 +161,8 @@ being made and how far, the world's outposts) and the event `sandbox.made`; what
 A new survivor has a first hour with a direction: thirteen quests that walk it through the loop
 above, from bare hands at the dead gate to the nearest camp's elder, the ruin's altar and back to
 the gate's board (`pack/data/quests/first_hour.json`, the engine's quests:
-[docs/packs.md](../../docs/packs.md#quests)), three after it lead down into a delve, and the
+[docs/packs.md](../../docs/packs.md#quests)), three after it lead down into a delve, five
+through the gate to the worlds beyond and back (`pack/data/quests/gate_worlds.json`), and the
 camps' people give seven more (below, "Its camps and their people").
 Each opens when those it comes after are done; the journal (J) lists those under way and done
 with their steps and rewards, and the HUD's tracker (top right) shows the step of the first
@@ -188,6 +189,11 @@ Nothing counts in creative.
 | The Sunken Stair | An Address | find a sunken stair; break open a keepers' cache | keeper's key | 250 |
 | The Deep Works | The Sunken Stair | kill a carapace; reach a delve's third depth | restorer | 350 |
 | The Custodian | The Deep Works | win the custodian's fight (`sandbox:delve`) | keeper sigil | 500 |
+| Through the Gate | An Address | stand on another world (`visit`) | 2 trail rations | 200 |
+| A Far Landmark | Through the Gate | find a gate world's landmark | 2 charge cells | 250 |
+| Something to Bring Back | Through the Gate | carry any world's rare resource (`#sandbox:rare_resources`) | med gel | 250 |
+| Far Game | Through the Gate, Smoke on the Horizon | agree with a scout; carry a trophy of a gate world's own creature (`#sandbox:native_trophies`); show it to the scout | regen ampoule, 10 silver | 300 |
+| The Way Home | A Far Landmark, Something to Bring Back | come home (`visit home`) | data shard | 300 |
 
 The engine sees most of it (what a player carries, places, breaks, finds, kills, uses up, an
 address written on a gate); the sandbox tells it what its crafting made
@@ -214,7 +220,7 @@ pack's, a first guess to tune there.
 | A place found: a gate opened, the ruin, a site of the remains (a delve's stair head too), a town; a delve's third depth (as the ruin) | 50, 150, 40, 60; 150 |
 | A thing made for the first time | 8 |
 | The ruin's fight won, a custodian's | 300 |
-| A quest done | its XP (the quests' table above, 1870 in all) |
+| A quest done | its XP (the quests' table above, 4420 in all; the camps' below, 1170) |
 | A sheep sheared, a sheep fed | 5, 2 |
 
 The levels run to 30, each costing 40 more than the one before (60 for level 2, 17980 in all
@@ -741,7 +747,7 @@ blocks off, dies, or the person is gone.
 | Trader | opens the camp's market (below) | |
 | Mechanic | sells wire (3 silver for 4), a charge cell (6), a circuit board (12); trades a flint pick and 8 silver up for a copper pick (there is no durability to repair) | Parts for the Workshop; ends Medicine Run |
 | Medic | heals whole for 3 silver (offered while hurt); sells a field dressing (2) | Hides for the Healer, Medicine Run |
-| Scout | sells where the nearest remains site not yet found is (5), the ruin (8), the nearest camp not yet found (4), each marked in the logbook (refused, and not paid, when there is none left) | Quiet the Sentries, Eyes on the Ruin |
+| Scout | sells where the nearest remains site not yet found is (5), the ruin (8), the nearest camp not yet found (4), each marked in the logbook (refused, and not paid, when there is none left) | Quiet the Sentries, Eyes on the Ruin, Far Game |
 | Elder | welcomes the survivor the first hour sends; the camp's story | Keep the Fires; ends Smoke on the Horizon |
 | Guard | | Duskrunner Trouble |
 

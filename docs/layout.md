@@ -130,6 +130,7 @@ package** is enforced by the `layout` lint (see above).
 | `assets/planet` | The home world's relief and climate files and their source notes | `*.bin`, `README.md` |
 | `assets/sounds` | Sound recipes and the targets of their classes | `*.recipe`, `targets.txt` |
 | `assets/packs/voxiverse/data/block_tags` | Block tags | `*.json` |
+| `assets/packs/voxiverse/data/item_tags` | Item tags (the base pack has none: a game's pack brings them, `games/sandbox/pack/data/item_tags`) | `*.json` |
 | `assets/packs/voxiverse/data/blocks` | Blocks | `*.json` |
 | `assets/packs/voxiverse/data/game_modes` | Game modes | `*.json` |
 | `assets/packs/voxiverse/data/items` | Items | `*.json` |

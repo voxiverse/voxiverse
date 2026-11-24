@@ -1,0 +1,57 @@
+{
+	// The quests through the gate (README.md, "Quests"): opened by An Address, each a step
+	// onto another world and what is there: its landmark, its rare resource, its own creatures,
+	// and the way home. The scout gives the hunt and takes its trophy (dialogues/scout.json).
+	"through_the_gate": {
+		"title": "Through the Gate",
+		"text": "The gate answers now. Whatever stands at the far end has stood there a long time. Go and look.",
+		"after": ["sandbox:an_address"],
+		"steps": [
+			{"text": "Step through the gate onto another world", "goal": "visit", "way": {"place": "remains", "name": "Gate court"}}
+		],
+		"reward": [{"item": "sandbox:trail_ration", "count": 2}],
+		"xp": 200
+	},
+	"a_far_landmark": {
+		"title": "A Far Landmark",
+		"text": "Every world the gates reach has one great work of the keepers near its gate, and it still hums.",
+		"after": ["sandbox:through_the_gate"],
+		"steps": [
+			{"text": "Find the landmark of a world beyond the gate", "goal": "find", "place": "landmark"}
+		],
+		"reward": [{"item": "sandbox:charge_cell", "count": 2}],
+		"xp": 250
+	},
+	"something_to_bring_back": {
+		"title": "Something to Bring Back",
+		"text": "Each kind of world holds one stone or growth found on no other. Bring one home and the fabricator will know what to do with it.",
+		"after": ["sandbox:through_the_gate"],
+		"steps": [
+			{"text": "Carry a world's rare resource", "goal": "have", "item": "#sandbox:rare_resources"}
+		],
+		"reward": [{"item": "sandbox:med_gel", "count": 1}],
+		"xp": 250
+	},
+	"far_game": {
+		"title": "Far Game",
+		"text": "The scout wants proof that what lives beyond the gate can bleed.",
+		"after": ["sandbox:through_the_gate", "sandbox:smoke_on_the_horizon"],
+		"steps": [
+			{"text": "Ask the scout about the worlds beyond", "goal": "talk", "name": "sandbox:far_game_accept"},
+			{"text": "Bring back a trophy of a gate world's own creature", "goal": "have", "item": "#sandbox:native_trophies"},
+			{"text": "Show the trophy to the scout", "goal": "talk", "name": "sandbox:far_game_done", "way": {"place": "settlement"}}
+		],
+		"reward": [{"item": "sandbox:regen_ampoule", "count": 1}],
+		"xp": 300
+	},
+	"the_way_home": {
+		"title": "The Way Home",
+		"text": "A gate opens both ways. Write the home world's address on the far gate and come back with what you found.",
+		"after": ["sandbox:a_far_landmark", "sandbox:something_to_bring_back"],
+		"steps": [
+			{"text": "Come home through a gate", "goal": "visit", "name": "home"}
+		],
+		"reward": [{"item": "sandbox:data_shard", "count": 1}],
+		"xp": 300
+	}
+}

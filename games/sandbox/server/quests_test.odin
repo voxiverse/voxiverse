@@ -109,7 +109,7 @@ test_quests_chain :: proc(t: ^testing.T) {
 	reg := s.registry
 	testing.expectf(
 		t,
-		len(reg.quests) >= 18 && len(reg.quests) <= 24,
+		len(reg.quests) >= 26 && len(reg.quests) <= game.MAX_QUESTS,
 		"%d quests",
 		len(reg.quests),
 	)
@@ -139,13 +139,28 @@ test_quests_chain :: proc(t: ^testing.T) {
 			where_ := strings.concatenate({def.id, ": ", st.text}, context.temp_allocator)
 			switch o.goal {
 			case .Have, .Use:
-				testing.expectf(t, had[o.item], "%s: nothing yields it", where_)
-				testing.expectf(
-					t,
-					tool_before(reg, earlier, least_tier(reg, o.item)),
-					"%s: no tool of its tier made before",
-					where_,
-				)
+				// (any of a tag: each of its items, every one had)
+				items := []game.Item{o.item}
+				if o.any_of > 0 {
+					members := reg.item_tags[o.any_of - 1].members
+					items = make([]game.Item, len(members), context.temp_allocator)
+					for m, i in members {items[i] = game.Item(m)}
+				}
+				for item in items {
+					testing.expectf(
+						t,
+						had[item],
+						"%s: nothing yields %s",
+						where_,
+						game.item_id(reg, item),
+					)
+					testing.expectf(
+						t,
+						tool_before(reg, earlier, least_tier(reg, item)),
+						"%s: no tool of its tier made before",
+						where_,
+					)
+				}
 				if o.goal == .Use {
 					info, _ := game.item_info(reg, o.item)
 					_, consumable := info.consume.?
@@ -201,6 +216,7 @@ test_quests_chain :: proc(t: ^testing.T) {
 					t,
 					(o.place == .Ruin && (o.name == "" || o.name == DELVE_DEEP)) ||
 					(o.place == .Settlement && o.name == "") ||
+					(o.place == .Landmark && o.name == "") ||
 					(o.place == .Remains && named),
 					"%s: no place the sandbox notes",
 					where_,

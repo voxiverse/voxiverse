@@ -1,0 +1,27 @@
+{
+	// What the quests through the gate ask for as "any of" (quests/gate_worlds.json): each world
+	// class's rare resource (README.md, "The world classes' rare resources"), and what the
+	// gate worlds' own creatures leave that no home creature does (entities/natives.json).
+	"rare_resources": {
+		"values": [
+			"sandbox:amber",
+			"sandbox:opal",
+			"sandbox:cryolite",
+			"sandbox:nacre_shard",
+			"sandbox:sulfur",
+			"sandbox:glow_spores",
+			"sandbox:ilmenite",
+			"sandbox:jade"
+		]
+	},
+	"native_trophies": {
+		"values": [
+			"sandbox:thistle_horn",
+			"sandbox:sail_membrane",
+			"sandbox:frost_pelt",
+			"sandbox:ember_gland",
+			"sandbox:spore_sac",
+			"sandbox:fang"
+		]
+	}
+}

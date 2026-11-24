@@ -5,6 +5,7 @@
 		"start": [
 			{"if": [{"quest": "sandbox:quiet_the_sentries", "step": 3}], "go": "sentries_back"},
 			{"if": [{"quest": "sandbox:eyes_on_the_ruin", "step": 3}], "go": "eyes_back"},
+			{"if": [{"quest": "sandbox:far_game", "step": 3}], "go": "far_back"},
 			{"go": "hello"}
 		],
 		"nodes": {
@@ -17,6 +18,7 @@
 			"work": {"text": "Two jobs, if you have the nerve and the legs.", "replies": [
 				{"text": "The sentries on the road.", "if": [{"quest": "sandbox:quiet_the_sentries", "step": 1}], "do": [{"talk": "sandbox:sentries_accept"}], "go": "sentries_given"},
 				{"text": "Scout the ruin for you.", "if": [{"quest": "sandbox:eyes_on_the_ruin", "step": 1}], "do": [{"talk": "sandbox:eyes_accept"}], "go": "eyes_given"},
+				{"text": "I've been through the gate.", "if": [{"quest": "sandbox:far_game", "step": 1}], "do": [{"talk": "sandbox:far_game_accept"}], "go": "far_given"},
 				{"text": "Back.", "go": "hello"}
 			]},
 			"sentries_given": {"text": "Sentries keep the ruin's corners and shoot at anything that walks. Put two of them down.", "replies": [
@@ -24,6 +26,13 @@
 			]},
 			"eyes_given": {"text": "The old road ends at a walled ruin. Find it, and come back to tell me you did.", "replies": [
 				{"text": "I'll find it."}
+			]},
+			"far_given": {"text": "Then you've seen what lives over there. Bring me something off one of their beasts, so I know it's not a story.", "replies": [
+				{"text": "I'll bring you a trophy."}
+			]},
+			"far_back": {"text": "Back from the far side? Show me.", "replies": [
+				{"text": "Here: off one of the far worlds' beasts.", "do": [{"talk": "sandbox:far_game_done"}, {"pay": 10}], "go": "thanks"},
+				{"text": "Not yet."}
 			]},
 			"sentries_back": {"text": "Well? Is the road any quieter?", "replies": [
 				{"text": "Two sentries are down.", "do": [{"talk": "sandbox:sentries_done"}, {"pay": 8}], "go": "thanks"},

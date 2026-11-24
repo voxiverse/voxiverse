@@ -358,3 +358,63 @@ test_beyond_left_on_a_gate_world :: proc(t: ^testing.T) {
 	d := c.player.position - at
 	testing.expectf(t, d.x * d.x + d.z * d.z < 1, "back at %v, left at %v", c.player.position, at)
 }
+
+// The quests through the gate done as a survivor does them, the first hour's behind it: a
+// step onto another world, a landmark found there, its rare resource carried, and home again.
+@(test)
+test_beyond_quests_through_the_gate :: proc(t: ^testing.T) {
+	g := GAME
+	sess := new(core.Session)
+	defer free(sess)
+	w, ok := beyond_session(t, sess, g, .Temperate)
+	if !ok {return}
+	defer core.session_stop(sess)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	core.game_mode(s, c, "survival")
+	reg := s.registry
+	ours := []string {
+		"sandbox:through_the_gate",
+		"sandbox:a_far_landmark",
+		"sandbox:something_to_bring_back",
+		"sandbox:far_game",
+		"sandbox:the_way_home",
+	}
+	quest :: proc(reg: ^game.Registry, id: string) -> int {q, _ := game.quest_by_id(reg, id)
+		return q}
+	for &def, q in reg.quests {
+		mine := false
+		for id in ours {mine ||= def.id == id}
+		if !mine {c.quests.quests[q] = {u8(len(def.steps)), 0}}
+	}
+	// Home, then through to the temperate world again: the first step holds.
+	testing.expect_value(t, core.travel(s, c, s.home.address), "")
+	testing.expect(t, !game.quest_done(reg, &c.quests, quest(reg, "sandbox:through_the_gate")))
+	testing.expect_value(t, core.travel(s, c, w.address), "")
+	testing.expect(
+		t,
+		game.quest_done(reg, &c.quests, quest(reg, "sandbox:through_the_gate")),
+		"the gate's quest not done",
+	)
+	amber, _ := game.registry_item(reg, "sandbox:amber")
+	core.item_give(s, c, amber, 1)
+	core.harness_step(&sess.h, 2)
+	testing.expect(
+		t,
+		game.quest_done(reg, &c.quests, quest(reg, "sandbox:something_to_bring_back")),
+		"the resource's quest not done",
+	)
+	core.logbook_place(s, c, .Landmark, {100, 10, 100}, "Standing ring")
+	testing.expect(
+		t,
+		game.quest_done(reg, &c.quests, quest(reg, "sandbox:a_far_landmark")),
+		"the landmark's quest not done",
+	)
+	testing.expect(t, game.quest_open(reg, &c.quests, quest(reg, "sandbox:the_way_home")))
+	testing.expect_value(t, core.travel(s, c, s.home.address), "")
+	testing.expect(
+		t,
+		game.quest_done(reg, &c.quests, quest(reg, "sandbox:the_way_home")),
+		"the way home not done",
+	)
+}
