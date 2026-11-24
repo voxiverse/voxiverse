@@ -163,6 +163,9 @@ generated with the class's authored rules (`common/worldgen/classes.odin`, `CLAS
   resource among them; an ore no pack defines is left out, the hook for ores added later),
   its trees (`class_tree`) and its plants. Class none takes none of these paths: the home
   world and Earth generate exactly as before (the golden hashes and image baselines).
+- **What lives there.** A game says which creatures live on each class: the sandbox's
+  `CLASS_CREATURES` (`games/sandbox/worlds.odin`), by kind id, which its `spawned` hook
+  enforces; a world of no class takes every kind.
 
 ## Items
 

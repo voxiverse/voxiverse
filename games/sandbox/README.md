@@ -660,10 +660,12 @@ block of every material; `pack/data/quests/first_hour.json`, the first hour's qu
 `pack/data/levels/survivor.json` and `pack/data/skills/survivor.json`, a survivor's levels
 and skills; `pack/data/entities/folk.json`, `dialogues/*.json` and `quests/folk.json`, the
 camps' people, what they say and the quests they give),
-the markets' model (above), `records.odin` (what it replicates) and `text.odin`
-(what its HUD and screen say); `server/` chooses the world (`configure`: the Earth generator
+the markets' model (above), `records.odin` (what it replicates), `text.odin`
+(what its HUD and screen say) and `worlds.odin` (which creatures live on each world class:
+`CLASS_CREATURES`, by kind id; [docs/world.md](../../docs/world.md#world-classes)); `server/` chooses the world (`configure`: the Earth generator
 and the starter kit), keeps the sheep (`sheep.odin`: their minds, `think`; their shearing and
-feeding, `entity_use`; their wild genes, `spawned`; their flight, `entity_hurt`), each sheep's
+feeding, `entity_use`; their wild genes, `spawned`, which also turns away a creature of a
+kind its world's class has not; their flight, `entity_hurt`), each sheep's
 record (`Creature`) kept on its entity, the other creatures' minds (`wild.odin`) and
 the remains' machines (`remains_machines.odin`), and runs the markets (`economy.odin`, each world's
 economy, its `world_state` and file; `trader.odin`, the character's `Trader_Record` and the

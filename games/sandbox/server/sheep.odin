@@ -4,6 +4,7 @@ import "core:math"
 
 import "common:base"
 import "common:game"
+import "common:worldgen"
 import "games:sandbox"
 import "server:core"
 import "server:play"
@@ -305,10 +306,14 @@ entity_use :: proc(
 	return ""
 }
 
-// spawned: a creature that fights is refused near a beacon or a camp; a sheep that came by
-// itself has wild genes; a creature of the roster begins, or is refused (wild_spawned)
+// spawned: a creature that came by itself on a world of a class its kind does not live on
+// goes (games/sandbox/worlds.odin; a world of no class, the home world, takes every kind);
+// a creature that fights is refused near a beacon or a camp; a sheep that came by itself
+// has wild genes; a creature of the roster begins, or is refused (wild_spawned)
 // (Game.spawned).
 spawned :: proc(s: ^core.Server, w: ^core.World, h: game.Entity_Handle) -> bool {
+	kind := game.kind_info(s.registry, core.entity_kind(w, h)).id
+	if !sandbox.class_has_creature(worldgen.world_class_of(&w.params), kind) {return false} 	// (games/sandbox/worlds.odin)
 	if !outpost_spawned(s, w, h) {return false} 	// (outposts.odin)
 	if !settlement_spawned(s, w, h) {return false} 	// (settlement.odin)
 	if d := sheep(s, w, h); d != nil {
