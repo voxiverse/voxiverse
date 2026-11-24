@@ -401,6 +401,7 @@ Block_Def :: struct {
 	tier:      u8, // the tier of tool that breaks it (its `tier`, 0..MAX_TIER; 0: hands do)
 	hardness:  f32, // seconds bare hands take to break it where breaking takes time (its `hardness`; a material's default)
 	breaker:   Tool_Kind, // the kind of tool quick on it (its `tool`; a material's default)
+	harm:      f32, // health a second it takes from a player touching it (its `harm`: magma's; 0: none)
 	tags:      []u16, // the block tags it is in, ascending
 }
 

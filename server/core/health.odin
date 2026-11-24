@@ -12,7 +12,8 @@ import "common:protocol"
 // Health, damage, death and what a character grows by. A player has health
 // points (BASE_HEALTH, plus what they wear: common/game/mods.odin); a fall of more
 // than 3 blocks onto ground costs a point a block, an explosion costs by how
-// near it was; at nought a player dies (a Death event, the inventory dropped
+// near it was, a block that harms (magma: its `harm`) by the second while touched;
+// at nought a player dies (a Death event, the inventory dropped
 // where they fell if the character's mode drops them and keep_inventory is off);
 // they wait at the death screen and the Respawn button wakes them at the world's
 // spawn once the world's respawn_delay is over (or they wake by themselves then,
@@ -63,6 +64,12 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 		c.airborne, c.fall_peak = true, p.position.y
 	} else {
 		c.fall_peak = max(c.fall_peak, p.position.y)
+	}
+	// A block that harms what touches it (magma), twice a second.
+	if s.tick % (game.TICK_RATE / 2) == 0 {
+		if harm := game.touch_harm(query, p.position); harm > 0 {
+			damage(s, c, harm / 2, {kind = .Contact})
+		}
 	}
 	health := protocol.Health{c.health, c.max_health, false, game.NO_ITEM, 0}
 	if c.effect != {} && s.tick < c.effect.until {

@@ -4,7 +4,9 @@
 	// them by id; a class's world is made of them where Earth has grass, dirt, sand and stone.
 	"basalt": {"material": "basalt"},
 	"obsidian": {"material": "obsidian"},
-	"magma": {"material": "magma"},
+	// A volcanic world's sea: still, solid, and it burns (4 health a second) whoever
+	// stands on or in it.
+	"magma": {"material": "magma", "harm": 4},
 	"slate": {"material": "slate"},
 	"limestone": {"material": "limestone"},
 	"packed_ice": {"material": "packed_ice"},

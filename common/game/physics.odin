@@ -459,6 +459,26 @@ in_water :: proc(q: Block_Query, position: [3]f64, height: f64) -> bool {
 	return loaded && water
 }
 
+// touch_harm: the most health a second the blocks a player at position touches take from
+// it (Block_Def.harm): the blocks under its feet and those its body stands in, at each
+// corner of its box. 0: none harms.
+touch_harm :: proc(q: Block_Query, position: [3]f64) -> f32 {
+	most: f32
+	half := f64(PLAYER_WIDTH) / 2 - 0.001
+	for corner in ([4][2]f64{{-half, -half}, {half, -half}, {-half, half}, {half, half}}) {
+		for up in ([3]f64{-0.05, 0.1, f64(PLAYER_HEIGHT) / 2}) {
+			p := Block_Pos {
+				i32(math.floor(position.x + corner.x)),
+				i32(math.floor(position.y + up)),
+				i32(math.floor(position.z + corner.y)),
+			}
+			b, loaded := q.get(q.data, p)
+			if loaded && block_valid(q.table, u16(b)) {most = max(most, q.table.defs[b].harm)}
+		}
+	}
+	return most
+}
+
 // against_wall: a collision box stands just ahead of the player (the way
 // they move) at their feet: a ledge to climb out onto.
 @(private = "file")

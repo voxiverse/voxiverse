@@ -346,7 +346,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 					},
 				},
 			),
-			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "material", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "connect", "use", "entity", "tier", "hardness", "tool", "override"`,
+			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "material", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "connect", "use", "entity", "tier", "hardness", "tool", "harm", "override"`,
 		},
 		{
 			"light out of range",

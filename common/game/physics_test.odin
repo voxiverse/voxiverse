@@ -639,3 +639,28 @@ test_bodiless_moves_through_everything :: proc(t: ^testing.T) {
 	for _ in 0 ..< 100 * TICK_RATE {player_step(&s, up, &rules, test_world_query(&w), DT, mods)}
 	testing.expect_value(t, s.position.y, f64(WORLD_MAX_Y))
 }
+
+// A player standing on magma, or in it to the knees, is harmed by its `harm`; one beside
+// it, or above it in the air, is not.
+@(test)
+test_touch_harm :: proc(t: ^testing.T) {
+	magma, ok := registry_block(test_reg(), "voxiverse:magma")
+	if !testing.expect(t, ok) {return}
+	testing.expect_value(t, test_reg().blocks.defs[magma].harm, f32(4))
+	At :: struct {
+		at:    Block_Pos,
+		magma: Block,
+	}
+	w := At{{0, 0, 0}, magma}
+	q := Block_Query{&w, proc(data: rawptr, p: Block_Pos) -> (Block, bool) {
+			w := (^At)(data)
+			return w.magma if p == w.at else .Air, true
+		}, test_blocks(), {}}
+	testing.expect_value(t, touch_harm(q, {0.5, 1, 0.5}), f32(4)) // standing on it
+	testing.expect_value(t, touch_harm(q, {0.5, 0.3, 0.5}), f32(4)) // sunk in it
+	testing.expect_value(t, touch_harm(q, {1.25, 1, 0.5}), f32(4)) // a corner of the box over it
+	testing.expect_value(t, touch_harm(q, {1.5, 1, 0.5}), f32(0)) // beside it
+	testing.expect_value(t, touch_harm(q, {0.5, 1.5, 0.5}), f32(0)) // above it
+	stone, _ := registry_block(test_reg(), "voxiverse:stone")
+	testing.expect_value(t, test_reg().blocks.defs[stone].harm, f32(0))
+}

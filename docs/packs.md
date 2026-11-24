@@ -146,6 +146,15 @@ same inputs between the begin and the break and refuses one sent sooner (inputs 
 tick and capped, so a client cannot count faster than the server ticks). Let go, or aim at
 another block, and it starts again.
 
+### Harm on touch
+
+A block's `harm` (0..100, health a second; none by default) is what it takes from a player
+touching it: standing on it or in it, at any corner of the player's box
+(`game.touch_harm`). The server takes half of it twice a second (`health_tick`), through the
+damage pipeline as a `contact` harm ("You were burned"), so armour, effects, modes and
+spawn protection count as for any harm. The base pack's magma has 4 (a volcanic world's
+sea, common/worldgen/classes.odin).
+
 ## Entity kinds
 
 Entity kinds are `data/entities/*.json` entries (`common/game/registry_entities.odin`); the base

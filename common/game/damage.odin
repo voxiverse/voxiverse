@@ -14,6 +14,7 @@ Source_Kind :: enum u8 {
 	Void,
 	Hit, // a blow by hand (a player hitting a creature)
 	Game, // the game's own rules: a tower's shot, a trap (core.entity_harm)
+	Contact, // a block that harms what touches it (its `harm`: magma)
 }
 
 damage_source_name :: proc(kind: Source_Kind) -> string {
@@ -32,6 +33,8 @@ damage_source_name :: proc(kind: Source_Kind) -> string {
 		return "hit"
 	case .Game:
 		return "game"
+	case .Contact:
+		return "contact"
 	}
 	return "command"
 }
@@ -97,6 +100,12 @@ DEATH_LINES := [Source_Kind]Death_Line {
 		you = "You were struck down",
 		by = "{0} was struck down by {1}",
 		by_you = "You were struck down by {1}",
+	},
+	.Contact = {
+		others = "{0} was burned",
+		you = "You were burned",
+		by = "{0} was burned escaping {1}",
+		by_you = "You were burned escaping {1}",
 	},
 }
 

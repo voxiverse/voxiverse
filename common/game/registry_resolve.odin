@@ -864,6 +864,13 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 	if f := field_of(m, "tool"); f != nil {
 		d.breaker = Tool_Kind(choice_of(b, f, f.value, "tool", TOOL_KIND_LIST, 0))
 	}
+	if f := field_of(m, "harm"); f != nil {
+		if x, ok := json_number(f.value); ok && x >= 0 && x <= 100 {
+			d.harm = f32(x)
+		} else {
+			fail_field(b, f, f.value, "harm is health a second, 0..100")
+		}
+	}
 	d.id = m.id
 	d.render = render
 	d.layer = layer
