@@ -6,9 +6,9 @@ import "common:game"
 // world's other creatures (its wildlife, predators and the remains' machines, with the
 // grounds they come on and what they leave), the hours the base pack's hostile creatures
 // come out, a block of every material of the kit, the ruined site's altar, ward, rounds
-// and the mode its fighters are in, the first hour's quests, a survivor's levels and skills,
-// and the camps' people with their dialogues and the quests they give. Loaded only where the
-// sandbox is played.
+// and the mode its fighters are in, the delves' machines, blocks, finds and recipes, the
+// first hour's quests, a survivor's levels and skills, and the camps' people with their
+// dialogues and the quests they give. Loaded only where the sandbox is played.
 PACK :: game.Pack_Source {
 	namespace = "sandbox",
 	files     = {
@@ -31,6 +31,11 @@ PACK :: game.Pack_Source {
 		{"data/models/survival.json", #load("pack/data/models/survival.json")},
 		{"data/blocks/survival.json", #load("pack/data/blocks/survival.json")},
 		{"data/recipes/survival.json", #load("pack/data/recipes/survival.json")},
+		{"data/entities/delve.json", #load("pack/data/entities/delve.json")},
+		{"data/blocks/delve.json", #load("pack/data/blocks/delve.json")},
+		{"data/items/delve.json", #load("pack/data/items/delve.json")},
+		{"data/models/delve.json", #load("pack/data/models/delve.json")},
+		{"data/recipes/delve.json", #load("pack/data/recipes/delve.json")},
 		{"data/quests/first_hour.json", #load("pack/data/quests/first_hour.json")},
 		{"data/levels/survivor.json", #load("pack/data/levels/survivor.json")},
 		{"data/skills/survivor.json", #load("pack/data/skills/survivor.json")},

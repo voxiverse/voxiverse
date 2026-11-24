@@ -1,0 +1,16 @@
+{
+	// What the delves give (games/sandbox/README.md, "Its delves"): the keepers' parts their
+	// machines leave and their caches hold, the key their locked doors take, and what the
+	// parts make at a fabricator (recipes/delve.json): a lance, plate for the head and body,
+	// a drill past the alloy one; two trinkets found only below.
+	"servo_bundle": {"model": "sandbox:servo_bundle", "description": "Fine actuators pulled from a keepers' machine. They still twitch.", "stack": 64, "rarity": "uncommon"},
+	"keeper_coil": {"model": "sandbox:keeper_coil", "description": "A coil of the keepers' winding, warm to the touch. Found below.", "stack": 64, "rarity": "rare"},
+	"custodian_core": {"model": "sandbox:custodian_core", "description": "The heart of the deepest chamber's keeper. It hums against your palm.", "stack": 16, "rarity": "epic"},
+	"keeper_key": {"model": "sandbox:keeper_key", "description": "Opens one of the keepers' locked doors, and is spent in it.", "stack": 16, "rarity": "uncommon"},
+	"arc_lance": {"model": "sandbox:arc_lance", "description": "A long haft with the custodian's core in its head. Reaches far and bites deep.", "stack": 1, "rarity": "epic", "melee": {"damage": 18, "reach": 4, "arc": 60, "cooldown": 0.9}},
+	"keeper_helm": {"model": "sandbox:keeper_helm", "description": "Plate of the keepers' make, its visor driven by servos.", "stack": 1, "rarity": "rare", "equip": "head", "modifiers": [{"stat": "defence", "amount": 0.11}, {"stat": "max_health", "amount": 4}]},
+	"keeper_cuirass": {"model": "sandbox:keeper_cuirass", "description": "A cuirass of the keepers' plate over a frame of coils.", "stack": 1, "rarity": "epic", "equip": "chest", "modifiers": [{"stat": "defence", "amount": 0.18}, {"stat": "max_health", "amount": 4}]},
+	"keeper_drill": {"model": "sandbox:keeper_drill", "description": "An alloy drill driven by the custodian's core: breaks anything a tool can, faster than any.", "stack": 1, "rarity": "epic", "gather": {"tier": 3, "yield": 1, "speed": 12, "kind": "pick"}, "melee": {"damage": 5, "reach": 3, "arc": 40, "cooldown": 0.5}},
+	"keeper_sigil": {"model": "sandbox:keeper_sigil", "description": "A keepers' seal on a chain. Blows glance from whoever wears it. Found below.", "stack": 1, "rarity": "rare", "equip": "trinket", "modifiers": [{"stat": "defence", "amount": 0.08}, {"stat": "max_health", "amount": 3}]},
+	"servo_spring": {"model": "sandbox:servo_spring", "description": "A servo wound into a spring, worn at the ankle. Higher, and a little faster. Found below.", "stack": 1, "rarity": "rare", "equip": "trinket", "modifiers": [{"stat": "jump", "amount": 0.25}, {"stat": "speed", "amount": 0.05}]}
+}

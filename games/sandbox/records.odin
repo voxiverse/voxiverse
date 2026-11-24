@@ -79,6 +79,17 @@ Ruin_Fight :: struct {
 	left:    u16, // seconds left of the countdown or the break
 }
 
+// Delve_Fight: the boss fight a player is in under a delve (one per player;
+// games/sandbox/server/delve_boss.odin): the custodian's phase (0: it fights none) of its
+// phases, its health and its most, and whether its casing stands open (blows get through).
+Delve_Fight :: struct {
+	phase:  u8,
+	phases: u8,
+	health: u16,
+	most:   u16,
+	open:   bool,
+}
+
 // Outpost_Line: an outpost as a player is shown it: where its beacon stands, whether the
 // player placed it and whether it stands there again after a death there (its respawn).
 Outpost_Line :: struct {
@@ -140,6 +151,7 @@ KINDS :: protocol.Game_Kinds {
 		{name = "sandbox.ruin", value = Ruin_Fight},
 		{name = "sandbox.survival", value = Survival},
 		{name = "sandbox.talk", value = Talk},
+		{name = "sandbox.delve", value = Delve_Fight},
 	},
 	events   = {
 		{name = "sandbox.trade_refused", value = Trade_Refused},

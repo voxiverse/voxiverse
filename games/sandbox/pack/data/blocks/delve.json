@@ -1,0 +1,17 @@
+{
+	// The delves' own blocks (games/sandbox/server/delve.odin); the rest of a delve is the
+	// kit's stone and metal and the remains' finds, and its boss's seal and vault the ruin's
+	// ward. None is placed by a player: a delve's code puts them.
+	// A cache of the keepers': broken open with a tier 1 tool, it spills a draw of what its
+	// depth holds (server/survival.odin, DELVE_LOOT).
+	"delve_cache": {"material": "brass", "light": 2, "placeable": false, "tier": 1, "hardness": 2, "drop": "none"},
+	// A locked door: a machine of no slots whose use is the game's: a keeper's key in hand
+	// opens it (and is spent). Its delve keeps it from being broken.
+	"delve_door": {"material": "riveted_iron", "placeable": false, "breakable": false, "entity": {"kind": "machine", "slots": 0}},
+	// A trip plate in a corridor's floor: whoever steps on it hears a click, and darts fly
+	// from the walls a moment later.
+	"trip_plate": {"material": "polished_basalt", "placeable": false},
+	// A charged grating in a corridor's floor: whoever stands on it is shocked (its harm: 3 a
+	// second, the engine's harm on touch).
+	"arc_grid": {"material": "iron_grating", "light": 3, "placeable": false, "harm": 3}
+}

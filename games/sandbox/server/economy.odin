@@ -49,6 +49,7 @@ Sandbox_World :: struct {
 	remains:             Remains, // (remains.odin)
 	outposts:            Outposts, // its beacons (outposts.odin)
 	settlements:         Settlements, // (the home world's) its camps (settlement.odin)
+	delves:              Delve_Record, // which delves are built (delve.odin)
 }
 
 world_of :: proc(w: ^core.World) -> ^Sandbox_World {return core.world_state(w, Sandbox_World)}

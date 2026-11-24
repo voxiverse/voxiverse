@@ -155,5 +155,37 @@
 		],
 		"reward": [{"item": "sandbox:data_shard", "count": 1}],
 		"xp": 250
+	},
+	"the_sunken_stair": {
+		"title": "The Sunken Stair",
+		"text": "The keepers built down as well as up. Far out from the gate, stair heads still hum over shafts into the rock.",
+		"after": ["sandbox:an_address"],
+		"steps": [
+			{"text": "Find a sunken stair", "goal": "find", "place": "remains", "name": "Sunken stair"},
+			{"text": "Break open a keepers' cache below", "goal": "break", "block": "sandbox:delve_cache", "way": {"place": "remains", "name": "Sunken stair"}}
+		],
+		"reward": [{"item": "sandbox:keeper_key", "count": 1}],
+		"xp": 250
+	},
+	"the_deep_works": {
+		"title": "The Deep Works",
+		"text": "Each depth holds heavier keepers than the last. Whatever they guard lies at the bottom of the stair.",
+		"after": ["sandbox:the_sunken_stair"],
+		"steps": [
+			{"text": "Bring down a carapace", "goal": "kill", "creature": "sandbox:carapace", "way": {"place": "remains", "name": "Sunken stair"}},
+			{"text": "Reach the third depth", "goal": "find", "place": "ruin", "name": "Deep works"}
+		],
+		"reward": [{"item": "sandbox:restorer", "count": 1}],
+		"xp": 350
+	},
+	"the_custodian": {
+		"title": "The Custodian",
+		"text": "Something kneels in the deepest chamber and has kept it since the keepers left. Its vault opens to whoever outlasts it.",
+		"after": ["sandbox:the_deep_works"],
+		"steps": [
+			{"text": "Defeat the custodian in its sealed chamber", "goal": "win", "name": "sandbox:delve", "way": {"place": "ruin", "name": "Deep works"}}
+		],
+		"reward": [{"item": "sandbox:keeper_sigil", "count": 1}],
+		"xp": 500
 	}
 }

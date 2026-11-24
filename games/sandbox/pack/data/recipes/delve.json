@@ -1,0 +1,8 @@
+{
+	// What the delves' parts make at a fabricator (games/sandbox/README.md, "Its delves").
+	"keeper_key": {"type": "process", "machine": "sandbox:fabricator", "time": 4, "inputs": [{"item": "sandbox:ancient_alloy", "count": 1}, {"item": "sandbox:servo_bundle", "count": 1}, {"item": "sandbox:circuit_board", "count": 1}], "output": {"item": "sandbox:keeper_key", "count": 1}},
+	"keeper_helm": {"type": "process", "machine": "sandbox:fabricator", "time": 6, "inputs": [{"item": "sandbox:servo_bundle", "count": 3}, {"item": "sandbox:keeper_coil", "count": 1}, {"item": "sandbox:alloy_plate", "count": 2}], "output": {"item": "sandbox:keeper_helm", "count": 1}},
+	"keeper_cuirass": {"type": "process", "machine": "sandbox:fabricator", "time": 8, "inputs": [{"item": "sandbox:servo_bundle", "count": 4}, {"item": "sandbox:keeper_coil", "count": 2}, {"item": "sandbox:alloy_plate", "count": 3}], "output": {"item": "sandbox:keeper_cuirass", "count": 1}},
+	"arc_lance": {"type": "process", "machine": "sandbox:fabricator", "time": 8, "inputs": [{"item": "sandbox:custodian_core", "count": 1}, {"item": "sandbox:keeper_coil", "count": 2}, {"item": "sandbox:alloy_plate", "count": 2}], "output": {"item": "sandbox:arc_lance", "count": 1}},
+	"keeper_drill": {"type": "process", "machine": "sandbox:fabricator", "time": 8, "inputs": [{"item": "sandbox:alloy_drill", "count": 1}, {"item": "sandbox:custodian_core", "count": 1}, {"item": "sandbox:keeper_coil", "count": 1}], "output": {"item": "sandbox:keeper_drill", "count": 1}}
+}

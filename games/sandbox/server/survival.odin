@@ -57,6 +57,12 @@ Loot :: enum u8 {
 	Ward_Emitter,
 	Phase_Lattice,
 	Coil_Charge,
+	Alloy_Plate,
+	Servo_Bundle, // the delves' (delve.odin)
+	Keeper_Coil,
+	Keeper_Key,
+	Keeper_Sigil,
+	Servo_Spring,
 }
 
 @(rodata)
@@ -75,6 +81,12 @@ LOOT_NAMES := [Loot]string {
 	.Ward_Emitter  = "sandbox:ward_emitter",
 	.Phase_Lattice = "sandbox:phase_lattice",
 	.Coil_Charge   = "sandbox:coil_charge",
+	.Alloy_Plate   = "sandbox:alloy_plate",
+	.Servo_Bundle  = "sandbox:servo_bundle",
+	.Keeper_Coil   = "sandbox:keeper_coil",
+	.Keeper_Key    = "sandbox:keeper_key",
+	.Keeper_Sigil  = "sandbox:keeper_sigil",
+	.Servo_Spring  = "sandbox:servo_spring",
 }
 
 // Loot_Roll: one line of a loot table: what, how many (lo..hi) and its weight.
@@ -113,6 +125,45 @@ VAULT_LOOT := []Loot_Roll {
 	{.Phase_Lattice, 1, 1, 6},
 }
 VAULT_ROLLS :: 2
+
+// DELVE_LOOT: what a delve's cache spills by the depth it stands in (delve.odin: broken open
+// with any tier 1 tool), DELVE_ROLLS draws by weight: the keepers' parts, keys and trinkets
+// the deeper the likelier.
+@(rodata)
+DELVE_LOOT := [DELVE_DEPTHS][]Loot_Roll {
+	{
+		{.Servo_Bundle, 1, 2, 15},
+		{.Ancient_Alloy, 1, 2, 15},
+		{.Charge_Cell, 1, 1, 12},
+		{.Med_Gel, 1, 2, 12},
+		{.Rivets, 8, 16, 10},
+		{.Stim_Patch, 1, 2, 8},
+		{.Circuit_Board, 1, 1, 8},
+	},
+	{
+		{.Servo_Bundle, 1, 3, 15},
+		{.Ancient_Alloy, 2, 3, 12},
+		{.Keeper_Key, 1, 1, 12},
+		{.Keeper_Coil, 1, 1, 10},
+		{.Restorer, 1, 1, 8},
+		{.Data_Shard, 1, 1, 8},
+		{.Coil_Charge, 3, 6, 8},
+		{.Servo_Spring, 1, 1, 4},
+		{.Keeper_Sigil, 1, 1, 3},
+	},
+	{
+		{.Keeper_Coil, 1, 2, 14},
+		{.Servo_Bundle, 2, 3, 12},
+		{.Keeper_Key, 1, 1, 10},
+		{.Alloy_Plate, 1, 2, 10},
+		{.Restorer, 1, 1, 10},
+		{.Servo_Spring, 1, 1, 6},
+		{.Keeper_Sigil, 1, 1, 6},
+		{.Ward_Emitter, 1, 1, 4},
+		{.Phase_Lattice, 1, 1, 3},
+	},
+}
+DELVE_ROLLS :: [DELVE_DEPTHS]int{2, 2, 3}
 
 survival_of :: proc(s: ^core.Server) -> ^Survival_State {return &state(s).survival}
 
@@ -404,9 +455,24 @@ remains_loot :: proc(
 		out[n] = {g.loot[.Salvage], base.rng_int_range(rng, 1, 4), 0, 0}
 		n += 1
 	}
+	return loot_roll(g, rng, table, rolls, out, n)
+}
+
+// loot_roll: rolls draws by weight from a loot table into out after its first n stacks;
+// how many stacks then.
+loot_roll :: proc(
+	g: ^Survival_State,
+	rng: ^base.Rng,
+	table: []Loot_Roll,
+	rolls: int,
+	out: ^[MAX_LOOT]game.Stack,
+	first: int,
+) -> int {
+	n := first
 	total := 0
 	for l in table {total += l.weight}
 	for _ in 0 ..< rolls {
+		if n == MAX_LOOT {break}
 		pick := base.rng_int_max(rng, total)
 		for l in table {
 			if pick < l.weight {

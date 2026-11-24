@@ -231,6 +231,7 @@ TALK_ACTIONS :: [?]string {
 	"mark_ruin",
 	"mark_settlement",
 	"mark_mechanic",
+	"mark_delve",
 }
 
 // talk_can: why the game's action cannot be done for c now ("": it can).
@@ -251,6 +252,9 @@ talk_can :: proc(s: ^core.Server, c: ^core.Client, action: string) -> string {
 	case "mark_settlement":
 		if _, found := unknown_settlement(s, c); !found {return "You know every camp I know"}
 	case "mark_mechanic":
+	case "mark_delve":
+		if _, found := unknown_delve(s, c);
+		   !found {return "I know of no sunken stair you have not seen"}
 	case:
 		return fmt.tprintf("Nobody here can %s", action)
 	}
@@ -287,6 +291,11 @@ talk_do :: proc(s: ^core.Server, c: ^core.Client, action: string) {
 		if c.world != s.home || ss.count < 2 {return}
 		st := &ss.list[1]
 		core.logbook_place(s, c, .Settlement, settlement_place(st), settlement_name(st))
+	case "mark_delve":
+		d, _ := unknown_delve(s, c)
+		at := [3]i32{d.site.middle.x, d.site.floor + 1, d.site.middle.y}
+		core.logbook_place(s, c, .Remains, at, DELVE_STAIR)
+		talk_marked(s, c, DELVE_STAIR, at)
 	}
 }
 

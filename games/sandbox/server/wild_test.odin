@@ -47,9 +47,10 @@ off :: proc(rig: ^Rig, h: game.Entity_Handle) -> f64 {
 }
 
 // Every kind of the roster is in the game's pack as its mind needs it: the game's brain,
-// a model of parts, drops of items the pack has; the posted machines kept with the world
-// and coming only where they are posted; the others coming by themselves at their hours
-// and in their places, the predators clear of the world's spawn.
+// a model of parts, drops of items the pack has; the posted machines (the remains', the
+// delves') kept with the world and coming only where they are posted, the custodian set
+// down by its delve each session and so not kept; the others coming by themselves at their
+// hours and in their places, the predators clear of the world's spawn.
 @(test)
 test_the_roster_is_in_the_pack :: proc(t: ^testing.T) {
 	rig := new(Rig)
@@ -69,7 +70,7 @@ test_the_roster_is_in_the_pack :: proc(t: ^testing.T) {
 		.Watcher,
 	}
 	NIGHT :: bit_set[Wild]{.Barbcaster, .Duskrunner, .Cragmaul}
-	POSTED :: bit_set[Wild]{.Sentry, .Tender, .Bulwark}
+	POSTED :: bit_set[Wild]{.Sentry, .Tender, .Bulwark, .Scuttler, .Spire, .Carapace}
 	for kind, which in g.wild {
 		info := game.kind_info(s.registry, kind)
 		if !testing.expectf(t, info != nil, "%v is not in the pack", which) {continue}
@@ -84,6 +85,10 @@ test_the_roster_is_in_the_pack :: proc(t: ^testing.T) {
 		testing.expectf(t, len(info.drops) > 0, "%v leaves nothing", which)
 		for d in info.drops {testing.expectf(t, d.item != game.NO_ITEM, "%v drops %s", which, d.name)}
 		rule, comes := info.spawn.?
+		if which == .Custodian {
+			testing.expectf(t, !comes && !info.saved, "%v comes by itself, or is kept", which)
+			continue
+		}
 		if which in POSTED {
 			testing.expectf(t, !comes && info.saved, "%v comes by itself, or is not kept", which)
 			continue

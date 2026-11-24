@@ -17,7 +17,8 @@ import "server:play"
 // (wild_show) and drawn by its pack's model. A creature with no player within WILD_NEAR
 // thinks once in play.FAR_THINK ticks; no more come by themselves round a player who has
 // WILD_MOST of them within WILD_CROWD blocks. The machines keep to the remains
-// (remains_machines.odin).
+// (remains_machines.odin); the delves' keep to their depths (delve.odin), the custodian to
+// its chamber (delve_boss.odin).
 
 Wild :: enum u8 {
 	Loper, // a herd grazer
@@ -36,6 +37,10 @@ Wild :: enum u8 {
 	Watcher, // a machine that follows from afar
 	Bulwark, // the great ruin's guardian
 	Longstrider, // the giant
+	Scuttler, // a delve's quick crawler
+	Spire, // a delve's turret, fixed where it stands
+	Carapace, // a delve's shielded heavy
+	Custodian, // the delve's boss
 }
 
 WILD_KINDS :: [Wild]string {
@@ -55,6 +60,10 @@ WILD_KINDS :: [Wild]string {
 	.Watcher     = "sandbox:watcher",
 	.Bulwark     = "sandbox:bulwark",
 	.Longstrider = "sandbox:longstrider",
+	.Scuttler    = "sandbox:scuttler",
+	.Spire       = "sandbox:spire",
+	.Carapace    = "sandbox:carapace",
+	.Custodian   = "sandbox:custodian",
 }
 
 // Wild_Group: some of the roster, as /creatures names them.
@@ -70,6 +79,7 @@ WILD_GROUPS :: [?]Wild_Group {
 	{"predators", {.Pitmaw, .Barbcaster, .Duskrunner, .Cragmaul}},
 	{"machines", {.Sentry, .Tender, .Watcher, .Bulwark}},
 	{"giant", {.Longstrider}},
+	{"delve", {.Scuttler, .Spire, .Carapace, .Custodian}},
 }
 
 WILD_NEAR :: 48 // blocks: a player this near has a creature think every tick
@@ -139,6 +149,37 @@ BULWARK_TEMPER :: play.Temper {
 	post     = true,
 	may      = wild_prey,
 }
+// The delves' machines: asleep at their posts until a player comes near (each wakes the
+// quicker the smaller), and back to them, whole, once it has gone.
+SCUTTLER_TEMPER :: play.Temper {
+	notice   = 8,
+	warn     = game.TICK_RATE / 2,
+	leash    = 24,
+	patience = game.TICK_RATE * 8,
+	wind     = 7,
+	post     = true,
+	may      = wild_prey,
+}
+SPIRE_TEMPER :: play.Temper {
+	notice   = 14,
+	warn     = game.TICK_RATE,
+	leash    = 40,
+	patience = game.TICK_RATE * 6,
+	wind     = 24,
+	post     = true,
+	may      = wild_prey,
+}
+CARAPACE_TEMPER :: play.Temper {
+	notice   = 9,
+	warn     = game.TICK_RATE * 2,
+	leash    = 20,
+	patience = game.TICK_RATE * 10,
+	wind     = 30,
+	post     = true,
+	may      = wild_prey,
+}
+CARAPACE_SHIELD :: 0.15 // of a harm from in front of a carapace that gets through its shield
+CARAPACE_FRONT :: 1.2 // radians either side of its facing its shield covers
 DUSK_WIND :: 15 // ticks a duskrunner's markings flare before it darts in
 DUSK_RING :: 6 // blocks a pack circles its prey at
 
@@ -234,6 +275,16 @@ wild_think :: proc(s: ^core.Server, w: ^core.World, which: Wild, h: game.Entity_
 		sleeper_think(s, w, h, m, BULWARK_TEMPER, .Dormant)
 	case .Longstrider:
 		if !fleeing(w, h, m) {graze(s, w, h, m, 24, 0, 0, 9)}
+	case .Scuttler:
+		sleeper_think(s, w, h, m, SCUTTLER_TEMPER, .Dormant)
+		if m.state == .Fight {core.entity_set_speed(w, h, run_speed(s, w, h))}
+	case .Spire:
+		sleeper_think(s, w, h, m, SPIRE_TEMPER, .Dormant)
+		core.entity_stand(w, h) // (it never leaves where it stands)
+	case .Carapace:
+		sleeper_think(s, w, h, m, CARAPACE_TEMPER, .Dormant)
+	case .Custodian:
+		boss_think(s, w, h, d)
 	}
 	wild_show(w, h, d)
 }
@@ -584,7 +635,7 @@ wild_begin :: proc(s: ^core.Server, w: ^core.World, which: Wild, h: game.Entity_
 		play.mind_set(m, .Rest, i32(base.rng_int_range(r, 5, 20)) * game.TICK_RATE)
 	case .Watcher:
 		play.mind_set(m, .Follow, i32(base.rng_int_range(r, 40, 60)) * game.TICK_RATE)
-	case .Sentry, .Bulwark:
+	case .Sentry, .Bulwark, .Scuttler, .Spire, .Carapace, .Custodian:
 		play.mind_set(m, .Dormant, 0)
 	case .Longstrider:
 		core.entity_show(w, h, "grown", true)
@@ -692,6 +743,14 @@ wild_hurt :: proc(
 		play.provoke(m, SENTRY_TEMPER)
 	case .Bulwark:
 		play.provoke(m, BULWARK_TEMPER)
+	case .Scuttler:
+		play.provoke(m, SCUTTLER_TEMPER)
+	case .Spire:
+		play.provoke(m, SPIRE_TEMPER)
+	case .Carapace:
+		play.provoke(m, CARAPACE_TEMPER)
+	case .Custodian:
+		boss_hurt(s, w, h, harm)
 	case .Duskrunner:
 		if core.entity_health_of(w, h) * 2 <= core.entity_max_health(w, h) {
 			m.wind = 0
@@ -704,7 +763,9 @@ wild_hurt :: proc(
 }
 
 // wild_harming: harm about to be done to a creature of the roster (the harming hook): a
-// domeback shut in its shell lets a quarter of it through, a machine asleep half.
+// domeback shut in its shell lets a quarter of it through, a machine asleep half, a
+// carapace's shield CARAPACE_SHIELD of a player's from in front of it unless it is winding
+// up a blow, the custodian what its phase lets through (boss_harming).
 wild_harming :: proc(s: ^core.Server, hm: ^core.Harming) {
 	if hm.entity == 0 || hm.world == nil {return}
 	which, ours := wild_of(s, core.entity_kind(hm.world, hm.entity))
@@ -713,8 +774,19 @@ wild_harming :: proc(s: ^core.Server, hm: ^core.Harming) {
 	#partial switch which {
 	case .Domeback:
 		if d.mind.state == .Hidden {hm.amount *= 0.25}
-	case .Sentry, .Bulwark:
+	case .Sentry, .Bulwark, .Scuttler, .Spire:
 		if d.mind.state == .Dormant {hm.amount *= 0.5}
+	case .Carapace:
+		if d.mind.state == .Dormant {hm.amount *= 0.5}
+		if hm.by != nil && d.mind.wind == 0 {
+			to := hm.by.player.position - core.entity_pos(hm.world, hm.entity)
+			facing := f64(core.entity_yaw(hm.world, hm.entity))
+			from := math.atan2(-to.x, -to.z) // (a yaw: 0 looks down -z)
+			off := abs(math.mod(from - facing + 3 * math.PI, math.TAU) - math.PI)
+			if off < CARAPACE_FRONT {hm.amount *= CARAPACE_SHIELD}
+		}
+	case .Custodian:
+		boss_harming(s, hm)
 	}
 }
 
@@ -723,7 +795,7 @@ wild_harming :: proc(s: ^core.Server, hm: ^core.Harming) {
 // they stand for a picture, showing how each looks at its most telling (a bird aloft, a
 // guard warning, the giant grown). The summoning permission.
 creatures_command :: proc(s: ^core.Server, c: ^core.Client, args: []string) -> bool {
-	USAGE :: "Usage: creatures wildlife|guards|predators|machines|giant|all [still]"
+	USAGE :: "Usage: creatures wildlife|guards|predators|machines|giant|delve|all [still]"
 	if !core.allowed(s, c, "world.summon") {
 		core.notice(s, c, "You may not summon here")
 		return true

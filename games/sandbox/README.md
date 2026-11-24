@@ -117,24 +117,29 @@ walks what yields what):
 - **Raw**: fibre, flint, coal, raw copper, raw iron; from the remains salvage (uncommon),
   ancient alloy and data shards (rare); from the creatures (below) hide, raw meat, feathers,
   raw fish and chitin, shell plates and venom glands (uncommon), and the machines' scrap
-  (uncommon), power cells and lenses (rare). What the creatures leave makes padding, trail
+  (uncommon), power cells and lenses (rare), and the delves' servo bundles (uncommon), keeper
+  coils (rare) and the custodian's core (epic). What the creatures leave makes padding, trail
   rations (meat by hand, fish cooked at a fabricator), flechettes, climbing spikes, stim
   patches, charge cells, optics, salvage, padded boots and a plate cuirass another way.
 - **Refined**: cord, padding, copper and iron ingots, wire, charge cells, optics, circuit
   boards, alloy plate; and the base pack's planks, glass, stone bricks, lamps, chest and hoe.
-- **Tools**: flint pick (tier 1), copper pick (tier 2), alloy drill (tier 3, one more of each).
+- **Tools**: flint pick (tier 1), copper pick (tier 2), alloy drill (tier 3, one more of each),
+  keeper drill (an alloy drill upgraded with the custodian's core: the fastest; epic).
 - **Melee**: flint knife (quick, short), machete (a wide sweep), survey maul (slow, heavy,
-  long), shock baton (fast, hard), relic blade (the remains': epic).
+  long), shock baton (fast, hard), relic blade (the remains': epic), arc lance (the delves':
+  long and heavy; epic).
 - **Ranged**, each loading its own: rivet driver (eight heavy shots, rivets), flechette
   caster (six darts close in, flechettes), arc repeater (automatic, forty light bolts, spark
   cartridges), coil rifle (three scoped long shots, coil charges; epic).
 - **Armour** by slot, each set more `defence` (the engine's modifier: a fraction of harm
   turned aside, 0.8 at most): padded (common; its boots take a quarter off a fall), plate
   (uncommon; the cuirass slows), exo (rare; the harness quickens, the legs jump, the striders
-  take four fifths off a fall); climbing spikes (jump higher, land softer).
+  take four fifths off a fall), keeper helm and cuirass (the delves': rare, epic); climbing
+  spikes (jump higher, land softer).
 - **Trinkets** (the two trinket slots; the offhand takes one too): stride coil (faster), gyro stabiliser (half a fall's harm),
   heart regulator (more health), ward emitter (the remains': defence) and the phase lattice
-  (a vault's: faster, one more jump in the air; legendary).
+  (a vault's: faster, one more jump in the air; legendary), and below the keeper sigil
+  (defence, health) and servo spring (higher, faster).
 - **Consumables**: field dressing, trail ration, med gel, stim patch, regen ampoule, and the
   remains' restorer.
 - **Gadgets**: survey scanner, tether hook (short and quick) and long hook (the engine's
@@ -150,8 +155,8 @@ being made and how far, the world's outposts) and the event `sandbox.made`; what
 A new survivor has a first hour with a direction: thirteen quests that walk it through the loop
 above, from bare hands at the dead gate to the nearest camp's elder, the ruin's altar and back to
 the gate's board (`pack/data/quests/first_hour.json`, the engine's quests:
-[docs/packs.md](../../docs/packs.md#quests)), and the camps' people give seven more (below,
-"Its camps and their people").
+[docs/packs.md](../../docs/packs.md#quests)), three after it lead down into a delve, and the
+camps' people give seven more (below, "Its camps and their people").
 Each opens when those it comes after are done; the journal (J) lists those under way and done
 with their steps and rewards, and the HUD's tracker (top right) shows the step of the first
 under way, or of the one picked there with Track. A step done chimes and says so in gold, as a
@@ -174,10 +179,14 @@ Nothing counts in creative.
 | The Sealed Vault | What the Keepers Left | find a sealed vault; make an alloy drill; kill a sentry; break the relic vault | 2 med gel | 300 |
 | The Ruin Wakes | The Sealed Vault | find the ruin; win its fight (`sandbox:ruin`) | regen ampoule | 400 |
 | An Address | The Ruin Wakes | write an address on a gate | data shard | 250 |
+| The Sunken Stair | An Address | find a sunken stair; break open a keepers' cache | keeper's key | 250 |
+| The Deep Works | The Sunken Stair | kill a carapace; reach a delve's third depth | restorer | 350 |
+| The Custodian | The Deep Works | win the custodian's fight (`sandbox:delve`) | keeper sigil | 500 |
 
 The engine sees most of it (what a player carries, places, breaks, finds, kills, uses up, an
 address written on a gate); the sandbox tells it what its crafting made
-(`server/survival.odin`), who won the ruin's fight (`server/ruin.odin`, `RUIN_ENCOUNTER`) and
+(`server/survival.odin`), who won the ruin's fight (`server/ruin.odin`, `RUIN_ENCOUNTER`) or a
+custodian's (`server/delve_boss.odin`, `BOSS_ENCOUNTER`) and
 what was said in a conversation (`server/talk.odin`: a dialogue's id as it begins, a reply's
 `talk`), by `core.quest_note`. `server/quests_test.odin` holds the chain to the world: every
 step can be done from real ids with what the steps before gave (a tool of a block's tier, a
@@ -196,9 +205,9 @@ pack's, a first guess to tune there.
 |---|---|
 | A creature killed (by its threat, the creatures' table below) | 4 a point of threat |
 | A creature met for the first time | 10 |
-| A place found: a gate opened, the ruin, a site of the remains, a town | 50, 150, 40, 60 |
+| A place found: a gate opened, the ruin, a site of the remains (a delve's stair head too), a town; a delve's third depth (as the ruin) | 50, 150, 40, 60; 150 |
 | A thing made for the first time | 8 |
-| The ruin's fight won | 300 |
+| The ruin's fight won, a custodian's | 300 |
 | A quest done | its XP (the quests' table above, 1870 in all) |
 | A sheep sheared, a sheep fed | 5, 2 |
 
@@ -274,8 +283,8 @@ for tier 2. `test_survival_every_item_is_obtainable` reaches every one of them.
 
 ## Its creatures
 
-Beside the sheep the home world has sixteen creatures of its own (`pack/data/entities`:
-`wildlife.json`, `predators.json`, `machines.json`), each with its model, its voice, its
+Beside the sheep the home world has twenty creatures of its own (`pack/data/entities`:
+`wildlife.json`, `predators.json`, `machines.json`, `delve.json`), each with its model, its voice, its
 place and hours and what it leaves where it dies (its kind's `drops`: hide, meat, feathers,
 fish, shell plates, chitin, venom glands, and the machines' scrap, power cells and lenses,
 `pack/data/items/creature_drops.json`; the survival loop's recipes make things of them,
@@ -302,6 +311,10 @@ look of that state, drawn by its model.
 | watcher | near the remains, by day | hovers 10 to 16 blocks from a player and 5 up, keeping it in sight for most of a minute, then rises and goes; never attacks; hurt, goes at once | 10 | 1 |
 | bulwark | posted at the ruin's north gate | the guardian, kneeling until a player comes within 7 blocks of its post; rises (two and a half seconds) and fights with both fists, raising them for a second and a half before each blow (9); gives up 16 blocks from its post and kneels again, whole | 160 | 20 |
 | longstrider | grass, by day, rare, alone, 40 to 60 blocks off | a giant as tall as the trees, to walk toward: walks slowly where it likes, grazing, and minds no one; hurt, walks away | 300 | 5 |
+| scuttler | posted in a delve's rooms | folded flat until a player comes within 8 blocks of its post; wakes (half a second) and runs at it (5.5 a second), nipping (2) with its mandibles opening first (a quarter second); folds again at its post, whole, once the player has gone | 10 | 3 |
+| spire | posted in a delve's rooms, fixed where it stands | folded until a player comes within 14 blocks; its head rises (a second) and it shoots bolts (3) at a player in its sight, charging each most of a second; never moves | 18 | 4 |
+| carapace | posted in a delve's deeper rooms | kneels behind its great plate until a player comes within 9 blocks; wakes (two seconds) and walks at it, the plate turning all but 15% of a player's blow from before it aside; lowers it to raise its maul for a second before each blow (6), when blows from the front get through | 60 | 9 |
+| custodian | kneeling in a delve's deepest chamber | the boss: below, "Its delves" | 360 | 30 |
 
 A creature's threat (its kind's `threat`; the sheep's is 1, the night's creatures' come
 from their health and blow) is what its kill's experience counts by and what the target
@@ -332,7 +345,10 @@ duskrunners and pitmaws, a fungal world its small and many-legged ones, a jungle
 a moon none. Their grounds include the classes' (`block_tags/creatures.json`: `wild_ground`,
 the open ground the small creatures come on, is the plant soil and red sand, ash and mud).
 
-`/creatures wildlife|guards|predators|machines|giant|all [still]` sets a group down in a row
+The delves keep theirs the same way (below, "Its delves"): posted as a delve is built, kept
+with the world, asleep at their posts; the custodian is set down by its delve each session.
+
+`/creatures wildlife|guards|predators|machines|giant|delve|all [still]` sets a group down in a row
 in front of you (the summoning permission), `still` standing for a picture.
 
 ## Its nights
@@ -493,6 +509,133 @@ What it tells its players: `sandbox.market` (the market of the town a player sta
 none), the events `sandbox.trade_refused` (why) and `sandbox.market_open`; what they ask:
 `sandbox.trade`.
 
+## Its delves
+
+Under the home world lie the keepers' works: two or three delves a world (2.4 on average over
+60 seeds; at least one in each), the sandbox's second encounter beside the ruin
+(`server/delve.odin` places and builds them, `server/delve_plan.odin` lays them out,
+`server/delve_boss.odin` runs the fight at the bottom). All of it comes from the world's seed:
+
+- **Where.** Each in its own third (or half) of the compass from a direction of the seed's,
+  560 to 880 blocks from the spawn, past the ruin and the remains: the first of 96 spots whose
+  land round the stair head is dry and at most 4 blocks uneven, whose land over the whole delve
+  is dry and nowhere more than 8 blocks under the stair head's floor (so no depth shows in a
+  hillside), and whose 39 by 39 footprint keeps 24 blocks from the ruin's apron, the remains,
+  the camps and the generator's structures (its dungeons too) and 160 from the other delves
+  (site.odin's footprints). One left out there is tried again anywhere round.
+- **The stair head.** On the land: a platform of slate tiles round the opening of a spiral
+  stair, four posts of dark steel under a frame of riveted iron, the ground round it levelled;
+  it hums. A player within 24 blocks has it in its logbook as a "Sunken stair", so the journal
+  lists it, the compass marks it and the map shows it (a camp's scout sells the way to one).
+- **The layout.** Three depths, 9 blocks apart, the first 16 under the stair head: each a grid
+  of 3 by 3 cells of 13 blocks, a room in each, joined by corridors three wide along a random
+  tree of the grid, so every room is reached and by one way only. Each depth's landing is the
+  foot of the stair from above; its descent, the room the most corridors from it, holds the
+  spiral stair down to the next depth's landing straight below (a step a block, round a pillar
+  whose top is a lamp in the floor above). The third depth's descent is the boss's chamber. A
+  leaf of the tree that is neither landing nor descent may be a vault behind a locked door,
+  never on the way down. The rest are guard posts, store rooms, machine halls and collapsed
+  rooms. Slate above, basalt in the second depth, dark bricks at the bottom; moss and mossy
+  bricks here and there; a lamp in each landing and in about a third of the other rooms, the
+  corridors dark.
+- **Shut in.** Every room and corridor has its own shell (walls, floor and ceiling); the rock
+  between is the world's own, so a cave or water running through a delve's box is cut off by
+  the shell and nothing of a delve opens into either. Over 200 seeds every layout is sealed,
+  its boss's post and every room but the locked vaults are walked to from the stair head (a
+  block up at a time, three down at most), each locked vault once its door is gone and the
+  reward vault once its ward is (`delve_plan_test.odin`).
+
+| Room | What it holds | Machines (depths 1, 2, 3) |
+|---|---|---|
+| Landing | the stair from above, a lamp | none |
+| Descent | the stair down, its lamp in the floor | a scuttler, a scuttler, none |
+| Guard post | crates of rusted iron in two corners | 2 scuttlers; 2 and a spire; 1 and 2 spires |
+| Store room | 2 or 3 keepers' caches in its corners, salvage heaps by them | 1; 2; 2 scuttlers and a spire |
+| Machine hall | pillars of dark steel (an alloy relic at the foot of one in four), copper conduits in the floor, a rune stone overhead | a spire; a carapace; a carapace and a spire |
+| Collapsed room | heaps of rubble off the corridors' lines | 1; 2; 2 scuttlers and a carapace |
+| Vault (locked) | a relic vault, 2 caches, a rune stone; a door of riveted iron | a spire; a spire and a carapace (both deeper) |
+| Boss's chamber | a hall 11 by 8 and 6 high, two pillars, lamps and rune stones in the far wall; the reward vault behind a ward, its 2 caches | the custodian |
+
+A delve is built in one paste when a player comes within 96 blocks of its stair head and its
+ground is loaded (kept loaded while one is near, as the ruin's is: `keeps_update`); the
+world's file remembers which are built, and a world saved before there were delves gets none.
+What it posts as it is built is kept with the world (none in a world whose creatures do not
+come by themselves: scenes, benchmarks). Its blocks are not the players' to break, but its
+caches; what is set down in its air is theirs. Laying a delve out and drawing it takes 0.55 ms
+(0.09 ms in a release build), building it (the levelling, the paste and its machines) 22 ms
+(7 ms); with no player near, its tick is a few comparisons a delve (47 ns, 10 ns), and with
+one in it its traps and fight 0.6 µs (0.1 µs) a tick besides what its machines think.
+
+**What hurts.** The machines sleep at their posts until a player comes near, wake (each the
+quicker the smaller) and fight it, and go back whole once it has gone (the creatures' table
+above). Some corridors have a trap across their middle: a row of trip plates (a click, and a
+quarter second later darts take 3 from whoever is still by it; it is quiet a second and a half
+after) or, from the second depth, two rows of charged grating (3 a second while stood on: the block's
+`harm`, the engine's harm on touch). A locked door opens to a keeper's key carried (spent; found in the caches of the
+second and third depths or made at a fabricator), all of it at once.
+
+**What it gives.** A keepers' cache (`sandbox:delve_cache`, any tier 1 tool) spills what its
+depth holds (`server/survival.odin`, `DELVE_LOOT`): the first depth servo bundles, ancient
+alloy, charge cells and med gel; the second keeper coils and keys too, and now and then a
+trinket; the third more coils, alloy plate, restorers and the rarer trinkets. The machines
+leave servo bundles (scuttlers, carapaces) and keeper coils (spires). The keepers' parts make
+at a fabricator (`pack/data/recipes/delve.json`): a keeper's key (ancient alloy, a servo
+bundle, a circuit board), a keeper helm and cuirass (servo bundles, keeper coils, alloy plate),
+the arc lance and the keeper drill (each the custodian's core with coils; the drill an alloy
+drill upgraded: tier 3, the fastest tool).
+
+| Item | Rarity | What it is | Where from |
+|---|---|---|---|
+| servo bundle | uncommon | a part | scuttlers, carapaces, the custodian, caches |
+| keeper coil | rare | a part | spires, the custodian, caches of depths 2 and 3 |
+| custodian core | epic | a part | the custodian |
+| keeper's key | uncommon | opens a locked door, spent | caches of depths 2 and 3, the reward vault; made |
+| arc lance | epic | a blade: 18 a blow, reach 4 | made |
+| keeper helm | rare | head: 0.11 defence, 4 health | made |
+| keeper cuirass | epic | chest: 0.18 defence, 4 health | made |
+| keeper drill | epic | tier 3, speed 12, one more of each | made from an alloy drill |
+| keeper sigil | rare | trinket: 0.08 defence, 3 health | caches of depths 2 and 3, The Custodian's reward |
+| servo spring | rare | trinket: a quarter higher, a little faster | caches of depths 2 and 3, the reward vault |
+
+**The custodian.** It kneels in the middle of its chamber's hall, whole, and takes no harm
+while it kneels. A player who can be hurt stepping into the hall wakes it: it rises (two
+seconds) and the chamber's doorway is sealed with the ruin's ward. Everyone who can be hurt
+inside the hall fights, at any tick (there is no seat to keep), and nobody gets in or out. It
+fights in three phases by the share of its health left (`BOSS_PHASES`):
+
+| Phase | From | Its fists | Its slam (shown, reach, harm at its middle) | Casing shut, open | Calls |
+|---|---|---|---|---|---|
+| 1 | all its health | 6, wound 0.8 s, pace 1.4 | every 9 s, shown 1.5 s, 5 blocks, 7 | half, one and a half | none |
+| 2 | two thirds | wound 0.67 s, pace 1.6 | every 8 s, shown 1.3 s, 5.5 blocks, 8 | 0.4, one and a half | 2 scuttlers every 14 s |
+| 3 | a third | wound 0.53 s, pace 2 | every 6 s, shown 1 s, 6.5 blocks, 9 | 0.35, double | a scuttler every 18 s |
+
+Before a slam its core blazes and its arms rise (the look `charging`); the slam hurts every
+fighter within its reach, half as hard at its edge; after it the custodian stands still with
+its casing open, venting (3 seconds, 4 in the third phase), when blows get through it best.
+At most four scuttlers it called are out at once. Each fighter is shown the fight
+(`sandbox.delve`): a line across the top naming it, its phase, its health and whether its
+casing is open, the line's foot a bar of its health in the target frame's colours.
+
+The fight is won when the custodian dies: every fighter in the hall has the win
+(`sandbox:delve`, its quest's goal, and the win's experience), the seal and the reward vault's
+ward fall, and the vault gives each a keeper's key, a restorer and a servo spring beside what
+the custodian leaves (its core, coils, servo bundles, power cells) and the vault's caches. It
+is lost when no fighter is left in the hall: one who died stands again where any death in the
+sandbox does (what it carried lies in the hall), one who left the server or the hall is out.
+Lost, the seal falls and the custodian is set down whole at its post again, what it called gone.
+Nothing of a fight outlives the session: as a built delve is first loaded in one, anyone
+standing in its hall or vault is set down outside the chamber's door, the seal is down, the
+vault shut and the custodian whole at its post, so a server stopped mid-fight leaves nobody
+sealed in. Won, the vault stays open the rest of the session and the custodian comes again in
+the next. There is no music of its own: the engine's music director picks pieces by the world
+and the hour, not by a game's fight.
+
+`/delve` lists the home world's delves and `/delve go <n>|last [landing|deep|hall]` takes you
+to the n-th's (or the last set down's) stair head, its first or third depth's landing or into
+its custodian's hall (the teleport permission); `/delve here [seed] [still]` sets a delve down
+with its stair head at your feet for the session (the bulk edit permission; `still`: its
+custodian stands still for a picture).
+
 ## Its camps and their people
 
 The home world has three survivors' camps (`server/settlement.odin` places and keeps them,
@@ -649,6 +792,10 @@ staged in the same save transaction when it changed, and checked by `voxiverse-s
   saved before there were remains: none is built in it), or a line `built <x> <z>` for each
   site built, naming its middle column. A line it does not know moves the file aside, and
   nothing more is built.
+- `sandbox.delves.txt`: the home world's delves built, as text: `before` alone (a world saved
+  before there were delves: none is built in it), or a line `built <x> <z>` for each delve
+  built, naming its stair head's middle column. A line it does not know moves the file aside,
+  and nothing more is built.
 
 A character's trader is the sandbox's record on it, in its file's `game` member: `cash`,
 `cargo.<i>` (by the order of `sandbox.Good`), `seen.<i>.cell`, `.price`, `.month` (the month the
@@ -700,12 +847,17 @@ market on the wire; `interventions.odin`), lets the night's creatures hunt
 (`danger.odin`) and keeps the ruined site and its fight (`ruin.odin`: the site from the seed,
 its template, the altar's use, the lock, the waves, the reward and the giving back), builds
 the remains round the home gate (`remains.odin`, `remains_build.odin`) on what the ruin and they
-share (`site.odin`: the land under a site, its levelling), places, builds and keeps the camps
+share (`site.odin`: the land under a site, its levelling, the areas kept loaded), places, lays
+out and builds the delves and runs their traps, doors and fights (`delve.odin`,
+`delve_plan.odin`, `delve_boss.odin`), places, builds and keeps the camps
 (`settlement.odin`, `settlement_build.odin`) with their people (`folk.odin`) and talks with
 them (`talk.odin`: the conversations, their actions and the camps' markets); `client/`
-draws the market's line and screen (`market.odin`), the fight's bar (`ruin.odin`) and the
+draws the market's line and screen (`market.odin`), the fight's bar (`ruin.odin`), the
+custodian's (`delve.odin`) and the
 conversation's screen (`talk.odin`). The pack's
 `pack/data/blocks/ruin.json`, `items/ruin.json`, `models/ruin.json` and
-`game_modes/encounter.json` are the ruin's altar and ward, its rounds and the fighters' mode.
+`game_modes/encounter.json` are the ruin's altar and ward, its rounds and the fighters' mode;
+`entities/delve.json`, `blocks/delve.json`, `items/delve.json`, `models/delve.json` and
+`recipes/delve.json` the delves' machines, blocks, finds and what they make.
 Everything else the sandbox does (worlds and gates, climate, farming) is the engine's, chosen
 through the server's `Config`.

@@ -18,7 +18,11 @@
 				{"text": "Goodbye."}
 			]},
 			"lore": {"text": "We came through the gate while it still answered. Then it went dark, and we stayed. The keepers' remains feed us scrap; the night feeds on us.", "replies": [
+				{"text": "Did the keepers build below, too?", "go": "below"},
 				{"text": "Back.", "go": "hello"}
+			]},
+			"below": {"text": "They dug as deep as they built high. Our scout swears by stairs far out that go down into the rock, and that something still keeps the bottom of them.", "replies": [
+				{"text": "Back.", "go": "lore"}
 			]},
 			"work": {"text": "The fire wants coal, and nobody can be spared for the seams.", "replies": [
 				{"text": "I'll bring coal.", "if": [{"quest": "sandbox:keep_the_fires", "step": 1}], "do": [{"talk": "sandbox:fires_accept"}], "go": "fires_given"},

@@ -12,8 +12,9 @@ import "server:core"
 // economy of a world built on the planet (economy.odin: its towns' markets; trader.odin: the
 // player as a trader; interventions.odin: what players did that the world's history carries
 // forward), lets the base pack's hostile creatures out at night (danger.odin) and keeps the
-// home world's ruined site, where Horde's waves are fought (ruin.odin), and the remains round
-// its home gate that lead there (remains.odin). The rest of that world
+// home world's ruined site, where Horde's waves are fought (ruin.odin), the remains round
+// its home gate that lead there (remains.odin) and the delves under it, where the keepers'
+// custodian is fought (delve.odin, delve_boss.odin). The rest of that world
 // (worlds and gates, climate, farming) is the engine's, chosen by the config.
 
 GAME :: core.Game {
@@ -31,6 +32,7 @@ GAME :: core.Game {
 		{name = REMAINS_FILE, check = remains_check},
 		{name = OUTPOSTS_FILE, check = outposts_check},
 		{name = SETTLEMENTS_FILE, check = settlements_check},
+		{name = DELVE_FILE, check = delves_check},
 	},
 	stats          = {
 		{name = "sheep.sheared", kind = .Count, xp = 5},
@@ -84,6 +86,8 @@ Sandbox :: struct {
 	folk:             [Role]game.Kind_Id, // the camps' people's kinds (folk.odin)
 	dialogues:        [Role]int, // ... and their dialogues (talk.odin)
 	camp_kit:         Camp_Kit, // what the camps are built of (settlement_build.odin)
+	delves:           Delves, // (delve.odin)
+	kept:             Kept, // the areas kept loaded (site.odin)
 }
 
 state :: proc(s: ^core.Server) -> ^Sandbox {return core.game_state(s, Sandbox)}
@@ -105,22 +109,28 @@ start :: proc(s: ^core.Server) -> bool {
 	folk_start(s) or_return
 	talk_start(s) or_return
 	camp_kit_start(s) or_return
-	return ruin_start(s) && remains_start(s)
+	return ruin_start(s) && remains_start(s) && delve_start(s)
 }
 
-// stop: what the survival loop allocated (survival.odin).
-stop :: proc(s: ^core.Server) {survival_stop(s)}
+// stop: what the survival loop and the delves allocated (survival.odin, delve.odin).
+stop :: proc(s: ^core.Server) {
+	survival_stop(s)
+	delve_stop(s)
+}
 
 // tick: the economy (economy.odin), the night's creatures (danger.odin), the ruined site
 // (ruin.odin), the remains (remains.odin: planned once the ruin is placed), the camps
-// (settlement.odin: planned once the remains are), the conversations with their people
-// (talk.odin) and the players' crafting (survival.odin).
+// (settlement.odin: planned once the remains are), the delves (delve.odin: planned once the
+// camps are), the areas they keep loaded (site.odin), the conversations with the camps'
+// people (talk.odin) and the players' crafting (survival.odin).
 tick :: proc(s: ^core.Server) {
 	economy_tick(s)
 	danger_tick(s)
 	ruin_tick(s)
 	remains_tick(s)
 	settlements_tick(s)
+	delve_tick(s)
+	keeps_update(s)
 	talk_tick(s)
 	survival_tick(s)
 }
@@ -140,12 +150,12 @@ respawned :: proc(s: ^core.Server, c: ^core.Client) {
 	outpost_respawned(s, c)
 }
 
-// machine_use: an outpost's beacon makes the user's respawn there (outposts.odin); the
-// ruin's altar wakes it (ruin.odin).
+// machine_use: an outpost's beacon makes the user's respawn there (outposts.odin); a delve's
+// locked door opens to a key (delve.odin); the ruin's altar wakes it (ruin.odin).
 machine_use :: proc(s: ^core.Server, c: ^core.Client, at: game.Block_Pos) -> string {
-	if b, ok := core.block_at(c.world, at); ok && b == survival_of(s).beacon {
-		return outpost_use(s, c, at)
-	}
+	b, _ := core.block_at(c.world, at)
+	if b == survival_of(s).beacon {return outpost_use(s, c, at)}
+	if b == delves_of(s).kit.door {return delve_door_use(s, c, at)}
 	return ruin_use(s, c, at)
 }
 
@@ -155,14 +165,16 @@ block_changed :: proc(s: ^core.Server, w: ^core.World, change: core.Block_Change
 }
 
 // joined: a new trader's purse (trader.odin); one who left a fight at the ruin gets its
-// things back (ruin.odin).
+// things back (ruin.odin); one in a delve's boss's chamber with no fight on is set down
+// outside it (delve.odin).
 joined :: proc(s: ^core.Server, c: ^core.Client) {
 	trader_joined(s, c)
 	ruin_joined(s, c)
+	delve_joined(s, c)
 }
 
-// editing: the ruin's blocks are not the players' (ruin.odin); a beacon is its placer's
-// to take down (outposts.odin).
+// editing: the ruin's blocks and a delve's are not the players' (ruin.odin, delve.odin); a
+// beacon is its placer's to take down (outposts.odin).
 editing :: proc(
 	s: ^core.Server,
 	c: ^core.Client,
@@ -170,10 +182,12 @@ editing :: proc(
 	old, new: game.Block,
 ) -> string {
 	if why := ruin_editing(s, c, at); why != "" {return why}
+	if why := delve_editing(s, c, at, old, new); why != "" {return why}
 	return outpost_editing(s, c, at, old, new)
 }
 
-// entity_died: a creature of the ruin's fight leaves its crowd (ruin.odin).
+// entity_died: a creature of the ruin's fight leaves its crowd (ruin.odin); a delve's
+// custodian killed wins its fight (delve_boss.odin).
 entity_died :: proc(
 	s: ^core.Server,
 	w: ^core.World,
@@ -181,6 +195,7 @@ entity_died :: proc(
 	harm: core.Entity_Harm,
 ) {
 	ruin_entity_died(s, w, dead)
+	boss_entity_died(s, w, dead)
 }
 
 // KIT: what a player new to a sandbox universe is given: one field dressing, and
@@ -224,6 +239,7 @@ world_opened :: proc(s: ^core.Server, w: ^core.World) {
 	remains_load(s, w)
 	settlements_load(s, w)
 	outposts_load(w)
+	delves_load(s, w)
 }
 
 // world_closed: what the sandbox made of a world is freed (its economy's build waited for).
@@ -240,6 +256,7 @@ world_save :: proc(s: ^core.Server, w: ^core.World) {
 	remains_write(s, w)
 	settlements_write(s, w)
 	outposts_write(w)
+	delves_write(s, w)
 }
 
 // action: the market's asks for it (trader.odin); Use uses what is in the hand
@@ -274,6 +291,7 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 	if name == "town" && len(args) == 0 {return town_command(s, c)}
 	if name == "outposts" && len(args) == 0 {return outposts_command(s, c)}
 	if name == "settlement" {return settlement_command(s, c, args)}
+	if name == "delve" {return delve_command(s, c, args)}
 	if name != "sheep" {return false}
 	if !core.allowed(s, c, "world.summon") {
 		core.notice(s, c, "You may not summon here")

@@ -188,21 +188,29 @@ test_quests_chain :: proc(t: ^testing.T) {
 			case .Kill:
 				info := game.kind_info(reg, o.creature)
 				_, comes := info.spawn.?
-				posted := info.id == "sandbox:sentry" || info.id == "sandbox:bulwark" // (the remains' and the ruin's posts)
+				posted := false // (the remains', the ruin's and the delves' posts)
+				for id in ([]string{"sandbox:sentry", "sandbox:bulwark", "sandbox:scuttler", "sandbox:spire", "sandbox:carapace"}) {
+					posted ||= info.id == id
+				}
 				testing.expectf(t, info.hittable && (comes || posted), "%s: never met", where_)
 			case .Find:
-				named := false
+				named := o.name == DELVE_STAIR
 				for name in REMAIN_NAMES {named ||= name != "" && name == o.name}
 				testing.expectf(
 					t,
-					(o.place == .Ruin && o.name == "") ||
+					(o.place == .Ruin && (o.name == "" || o.name == DELVE_DEEP)) ||
 					(o.place == .Settlement && o.name == "") ||
 					(o.place == .Remains && named),
 					"%s: no place the sandbox notes",
 					where_,
 				)
 			case .Win:
-				testing.expect_value(t, o.name, RUIN_ENCOUNTER)
+				testing.expectf(
+					t,
+					o.name == RUIN_ENCOUNTER || o.name == BOSS_ENCOUNTER,
+					"%s: no fight the sandbox has",
+					where_,
+				)
 			case .Address:
 			case .Talk:
 				testing.expectf(
@@ -213,7 +221,7 @@ test_quests_chain :: proc(t: ^testing.T) {
 				)
 			}
 			if way, has := st.way.?; has {
-				named := way.name == ""
+				named := way.name == "" || way.name == DELVE_STAIR || way.name == DELVE_DEEP
 				for name in REMAIN_NAMES {named ||= name != "" && name == way.name}
 				testing.expectf(t, named, "%s: its way names no place there is", where_)
 			}

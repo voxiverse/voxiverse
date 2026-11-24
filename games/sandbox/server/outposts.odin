@@ -150,6 +150,8 @@ outposts_changed :: proc(s: ^core.Server, w: ^core.World, change: core.Block_Cha
 		remains_spill(s, w, at, false)
 	case change.by != nil && change.old == g.relic_vault:
 		remains_spill(s, w, at, true)
+	case change.by != nil && change.old == delves_of(s).kit.cache:
+		delve_spill(s, w, at)
 	}
 }
 

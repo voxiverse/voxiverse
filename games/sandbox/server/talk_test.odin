@@ -202,10 +202,22 @@ test_talk_scout_marks :: proc(t: ^testing.T) {
 	say(rig, 1)
 	testing.expect(t, playtest.told(rig, "You know the way to the ruin already"))
 	testing.expect_value(t, trader(s, h).cash, 22)
+	say(rig, 2) // (what else is out there)
 	before := has(h, .Settlement)
-	say(rig, 2)
+	say(rig, 0)
 	testing.expect_value(t, has(h, .Settlement), before + 1)
 	testing.expect_value(t, trader(s, h).cash, 18)
+	// A delve's stair head: marked for 12 when one is planned that the logbook lacks.
+	stairs := has(h, .Remains)
+	_, unknown := unknown_delve(s, h)
+	say(rig, 1)
+	if unknown {
+		testing.expect_value(t, has(h, .Remains), stairs + 1)
+		testing.expect_value(t, trader(s, h).cash, 6)
+	} else {
+		testing.expect(t, playtest.told(rig, "I know of no sunken stair you have not seen"))
+		testing.expect_value(t, trader(s, h).cash, 18)
+	}
 }
 
 // The camps' quests through their people: the first hour leads to the nearest camp's elder

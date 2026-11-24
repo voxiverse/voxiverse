@@ -360,7 +360,8 @@ test_survival_every_item_is_obtainable :: proc(t: ^testing.T) {
 		switch f.path {
 		case "data/items/survival.json",
 		     "data/blocks/survival.json",
-		     "data/items/creature_drops.json":
+		     "data/items/creature_drops.json",
+		     "data/items/delve.json":
 		case:
 			continue
 		}
@@ -402,10 +403,11 @@ WORLD_BLOCKS :: []string {
 	"sandbox:alloy_relic",
 	"sandbox:relic_vault",
 	"sandbox:remains_cache",
+	"sandbox:delve_cache",
 }
 
 // obtainable: every item a survivor can come by: what the world's blocks leave, the farm's
-// wheat, the remains' finds, what the creatures leave, and all the sandbox's recipes make
+// wheat, the remains' and the delves' finds, what the creatures leave, and all the sandbox's recipes make
 // of those (temporary memory).
 obtainable :: proc(t: ^testing.T, s: ^core.Server) -> map[game.Item]bool {
 	reg := s.registry
@@ -418,6 +420,10 @@ obtainable :: proc(t: ^testing.T, s: ^core.Server) -> map[game.Item]bool {
 	had[game.item_of_material(.Wheat)] = true // (seeds from tall grass, farmed with a hoe)
 	for l in CACHE_LOOT {had[survival_of(s).loot[l.what]] = true}
 	for l in VAULT_LOOT {had[survival_of(s).loot[l.what]] = true}
+	for table in DELVE_LOOT {for l in table {had[survival_of(s).loot[l.what]] = true}}
+	for name in BOSS_REWARD {
+		if item, ok := game.registry_item(reg, name); ok {had[item] = true}
+	}
 	had[survival_of(s).loot[.Salvage]] = true
 	for &kind in reg.kinds {
 		for d in kind.drops {had[d.item] = true}

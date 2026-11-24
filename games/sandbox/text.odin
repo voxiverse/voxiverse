@@ -36,6 +36,8 @@ Text :: enum u8 {
 	Ruin_Countdown, // {0}: seconds to the first wave
 	Ruin_Wave, // {0}: the wave, {1}: the fight's waves, {2}: creatures still to kill
 	Ruin_Break, // {0}: the wave held, {1}: the fight's waves, {2}: seconds to the next
+	Delve_Boss, // {0}: the phase, {1}: the phases, {2}: its health, {3}: its most
+	Delve_Boss_Open, // ... its casing open
 	Craft_Title,
 	Craft_Recipes,
 	Craft_Recipe,
@@ -92,6 +94,8 @@ TEXT_EN := [Text]string {
 	.Ruin_Countdown              = "THE RUIN WAKES   the first wave in {0} s",
 	.Ruin_Wave                   = "RUIN   wave {0} of {1}   {2} creatures left",
 	.Ruin_Break                  = "RUIN   wave {0} of {1} held   the next in {2} s",
+	.Delve_Boss                  = "THE CUSTODIAN   phase {0} of {1}   {2} / {3}",
+	.Delve_Boss_Open             = "THE CUSTODIAN   phase {0} of {1}   {2} / {3}   its casing is open: strike now",
 	.Craft_Title                 = "Fabrication",
 	.Craft_Recipes               = "Recipes",
 	.Craft_Recipe                = "Recipe",

@@ -8,9 +8,10 @@ import "common:worldgen"
 import "server:core"
 
 // Sites: the places the sandbox builds on its home world from the seed alone (the ruin:
-// ruin.odin; the remains round the home gate: remains.odin), and what they share: the land
-// as the world's generator makes it under one (land_at, site_ground), footprints that keep
-// clear of each other (Footprint) and ground levelled to build on (site_level).
+// ruin.odin; the remains round the home gate: remains.odin; the delves: delve.odin), and what
+// they share: the land as the world's generator makes it under one (land_at, site_ground),
+// footprints that keep clear of each other (Footprint), ground levelled to build on
+// (site_level) and the areas kept loaded while they are built or fought in (keeps_update).
 
 // Site: where a levelled site stands: its lowest corner and the floor's layer (who stands
 // on it stands at floor + 1), the lowest and the highest the land stands under it (as the
@@ -102,6 +103,35 @@ site_level :: proc(w: ^core.World, area: core.Box, floor: i32, act: core.Act) {
 	}
 	top := core.Box{{a.lo.x, floor, a.lo.z}, {a.hi.x, floor, a.hi.z}}
 	core.bulk_edit(w, {shape = top, op = .Set, block = .Grass, partial = true}, act)
+}
+
+// Kept: the areas of the home world the sandbox keeps loaded with nobody near (the ruin's
+// while a player is near it or it is awake, each delve's while one is near it), as one set.
+MAX_KEPT :: 1 + MAX_DELVES_HELD
+Kept :: struct {
+	areas: [MAX_KEPT]core.Box,
+	count: int,
+}
+
+// keeps_update: the areas the ruin and the delves want kept (their `kept`) kept; when the set
+// changes the world lets every area go and keeps the new set (core.world_release lets all go).
+keeps_update :: proc(s: ^core.Server) {
+	want: Kept
+	if r := ruin_of(s); r.kept {
+		want.areas[0] = ruin_area(r.site)
+		want.count = 1
+	}
+	dv := delves_of(s)
+	for &d in dv.all[:dv.count] {
+		if !d.kept {continue}
+		want.areas[want.count] = delve_area(&d)
+		want.count += 1
+	}
+	g := state(s)
+	if want == g.kept {return}
+	core.world_release(s.home)
+	for b in want.areas[:want.count] {core.world_keep(s.home, b)}
+	g.kept = want
 }
 
 // Footprint: the columns a site covers, lo..hi inclusive (x, z).

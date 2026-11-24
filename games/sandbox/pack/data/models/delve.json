@@ -1,0 +1,13 @@
+{
+	// The delves' items' looks: a few voxels each, in the keepers' bronze, steel and glow.
+	"servo_bundle": {"size": [3, 3, 1], "palette": ["#6a6e78", "#b0905a", "#3a3c42"], "slices": [["121", "313", "121"]], "grip": [1, 0, 0]},
+	"keeper_coil": {"size": [3, 3, 1], "palette": ["#b0905a", "#e8c070", "#5a4a30"], "slices": [["121", "232", "121"]], "grip": [1, 0, 0]},
+	"custodian_core": {"size": [3, 3, 2], "palette": ["#78e6f0", "#e8ffff", "#3a3c42"], "slices": [["313", "121", "313"], ["313", "111", "313"]], "grip": [1, 0, 0]},
+	"keeper_key": {"size": [5, 2, 1], "palette": ["#b0905a", "#e8c070", "#5a4a30"], "slices": [["11.22", "13.3."]], "grip": [0, 0, 0]},
+	"arc_lance": {"size": [10, 2, 1], "palette": ["#3a3c42", "#6a6e78", "#78e6f0"], "slices": [["22222221.3", "1111111133"]], "grip": [8, 1, 0]},
+	"keeper_helm": {"size": [4, 3, 1], "palette": ["#6a6e78", "#b0905a", "#78e6f0"], "slices": [[".22.", "1111", "1331"]], "grip": [1, 2, 0]},
+	"keeper_cuirass": {"size": [4, 4, 1], "palette": ["#6a6e78", "#b0905a", "#3a3c42"], "slices": [["1..1", "1221", "1331", "1111"]], "grip": [1, 3, 0]},
+	"keeper_drill": {"size": [6, 3, 2], "palette": ["#3a3c42", "#b0905a", "#78e6f0"], "slices": [["3322..", "222221", "....11"], ["3322..", "222221", "....11"]], "grip": [5, 2, 0]},
+	"keeper_sigil": {"size": [3, 3, 1], "palette": ["#b0905a", "#78e6f0", "#5a4a30"], "slices": [[".1.", "121", ".3."]], "grip": [1, 0, 0]},
+	"servo_spring": {"size": [2, 4, 1], "palette": ["#6a6e78", "#b0905a", "#3a3c42"], "slices": [["12", "21", "12", "33"]], "grip": [0, 0, 0]}
+}

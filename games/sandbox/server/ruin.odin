@@ -73,7 +73,7 @@ Ruin :: struct {
 	site:        Site,
 	placed:      bool, // site is worked out
 	built:       bool, // built this session
-	kept:        bool, // its ground is kept loaded
+	kept:        bool, // its ground is kept loaded (keeps_update)
 	phase:       play.Phase(sandbox.Ruin_Phase),
 	fight:       u32, // the fight on now, or the last (0: none yet): a fighter's seat names it
 	wave:        int, // on now, or the last of the fight
@@ -134,16 +134,8 @@ ruin_tick :: proc(s: ^core.Server) {
 		d := c.player.position - ruin_middle(r.site)
 		near ||= d.x * d.x + d.z * d.z <= RUIN_NEAR * RUIN_NEAR
 	}
-	area := ruin_area(r.site)
-	switch {
-	case near && !r.kept:
-		core.world_keep(w, area)
-		r.kept = true
-	case !near && r.kept:
-		core.world_release(w) // (the sandbox keeps nothing else)
-		r.kept = false
-	}
-	if near && !r.built && core.world_ready(w, area) {ruin_build(s, w)}
+	r.kept = near // (keeps_update keeps its area loaded)
+	if near && !r.built && core.world_ready(w, ruin_area(r.site)) {ruin_build(s, w)}
 
 	t := play.phase_seconds(s, &r.phase)
 	switch r.phase.now {
